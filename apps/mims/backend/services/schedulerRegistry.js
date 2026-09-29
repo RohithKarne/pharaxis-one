@@ -25,14 +25,6 @@ module.exports = [
     configRoute:    null,
   },
   {
-    name:           'expiry-alerts',
-    source:         'Case Management',
-    cronExpression: '0 8 * * *',
-    description:    'Runs expiry alert checks for cases approaching deadline',
-    type:           'cron',
-    configRoute:    '/admin-console/sites',
-  },
-  {
     name:           'cm-expiry-alerts',
     source:         'Content Management',
     cronExpression: '0 7 * * *',
@@ -140,7 +132,7 @@ module.exports = [
     name:           'login-audit-archive',
     source:         'Security',
     cronExpression: '0 2 * * *',
-    description:    'Deletes login audit records older than configured retention period',
+    description:    'Deletes login audit records older than the retention period (default 7 years)',
     type:           'cron',
     configRoute:    '/admin-console/audit-login',
   },

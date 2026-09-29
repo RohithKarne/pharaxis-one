@@ -147,8 +147,12 @@ module.exports = [
           vault_doc_id: 'REGRESSION-DOC-1',
           case_id: caseId,
         }, token);
+        // Ingest needs the CM folder to file into (T16); with one given it reaches
+        // the (deliberately unreachable) Vault connection and fails there.
+        const [[folder]] = await pool.execute('SELECT id FROM cm_folders WHERE org_id = ? LIMIT 1', [orgId]).catch(() => [[null]]);
         const ingest = await makeRequest('POST', '/api/admin/vault/ingest', {
           vault_doc_id: 'REGRESSION-DOC-2',
+          folder_id: folder?.id,
         }, token);
 
         return {

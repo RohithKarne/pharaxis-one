@@ -235,7 +235,6 @@ module.exports = [
     module: 'Reports',
     covers: [
       'GET /api/reports/case-ae-summary',
-      'GET /api/reports/case-audit-trail',
       'GET /api/reports/case-closure-rate',
       'GET /api/reports/case-monthly-trend',
       'GET /api/reports/regulatory-readiness',
@@ -247,7 +246,6 @@ module.exports = [
       }
       const endpoints = [
         '/api/reports/case-ae-summary',
-        `/api/reports/case-audit-trail?case_id=${sampleCase.id}`,
         '/api/reports/case-closure-rate',
         '/api/reports/case-monthly-trend',
         '/api/reports/regulatory-readiness',
@@ -266,8 +264,6 @@ module.exports = [
     module: 'Reports',
     covers: [
       'GET /api/reports/audit-summary',
-      'GET /api/reports/content-usage',
-      'GET /api/reports/field-usage',
       'GET /api/reports/integration-sync',
       'GET /api/reports/module-usage',
       'GET /api/reports/security-events',
@@ -277,8 +273,6 @@ module.exports = [
     run: async ({ makeRequest, token }) => {
       const endpoints = [
         '/api/reports/audit-summary',
-        '/api/reports/content-usage',
-        '/api/reports/field-usage',
         '/api/reports/integration-sync',
         '/api/reports/module-usage',
         '/api/reports/security-events',

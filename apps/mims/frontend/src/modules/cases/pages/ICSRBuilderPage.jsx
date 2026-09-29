@@ -64,7 +64,7 @@ export default function ICSRBuilderPage() {
     const submit = await httpFetch(`/api/admin/icsr/${id}/submit`, { method: 'POST', headers, body: JSON.stringify({ password: signature.password, reason: signature.reason }) })
     const submitData = await submit.json().catch(() => ({}))
     const gwLabel = submitData.gateway_mode === 'mock'
-      ? `mock gateway (${(submitData.gateway_key || 'mock').toUpperCase()} — configure credentials for live transport)`
+      ? `a SIMULATED gateway — nothing was sent to a health authority (${(submitData.gateway_key || 'mock').toUpperCase()}; no live transport is configured)`
       : `${(submitData.gateway_key || report?.receiver_id || '').toUpperCase()} gateway`
     setMessage(submit.ok ? `Submitted to ${gwLabel}${submitData.e_sign_manifest?.manifest_id ? ` · Manifest ${submitData.e_sign_manifest.manifest_id}` : ''}` : submitData.error)
     load()
@@ -94,7 +94,7 @@ export default function ICSRBuilderPage() {
       <div className="icsr-builder-page">
         <header className="icsr-builder-header">
           <button type="button" onClick={() => navigate(`/cases/${report.case_id}?section=icsr`)}>Back to Case</button>
-          <div><h1>ICSR Builder</h1><p>{report.sender_safety_report_id} · {report.receiver_id} · {report.status}</p></div>
+          <div><h1>ICSR Builder</h1><p>{report.sender_safety_report_id} · {report.receiver_id} · {report.status}{String(report.gateway_message_id || '').startsWith('MOCK-') ? ' · SIMULATED — not sent to a health authority' : ''}</p></div>
           <div className="icsr-builder-actions">
             <button type="button" onClick={previewXml}>Generate XML</button>
             <select value={submissionType} onChange={e => { setSubmissionType(e.target.value); createLifecycle(e.target.value) }}>

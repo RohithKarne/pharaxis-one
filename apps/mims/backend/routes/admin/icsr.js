@@ -326,13 +326,18 @@ router.post('/icsr/:id/submit', ...adminOnly, async (req, res) => {
     const { key: gatewayName, adapter: gateway } = resolveGateway(requestedGateway);
     const result = await gateway.submit(xml, { ...configured, ...(req.body.config || {}) });
     await pool.execute('UPDATE icsr_reports SET status="submitted", submission_count=submission_count+1, last_submitted_at=CURRENT_TIMESTAMP, gateway_message_id=? WHERE id=?', [result.gateway_id || null, req.params.id]);
+    // No gateway is configured anywhere yet, so transport runs in mock mode and
+    // nothing reaches a health authority. Record that as "simulated" so the
+    // transmission log never reads like a real submission (Vasu/Rohith, T16).
+    const gatewayMode = result.raw_response?.mode || configured.mode || 'mock';
+    const simulated = gatewayMode === 'mock';
     await pool.execute(
       `INSERT INTO transmission_audit_trail (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [data.report.case_id, req.user.userId, req.user.email, `ICSR-${data.report.receiver_id}`, xml.slice(0, 1000), result.status || 'submitted', result.gateway_id || null]
+      [data.report.case_id, req.user.userId, req.user.email, `ICSR-${data.report.receiver_id}`, xml.slice(0, 1000), simulated ? 'simulated' : (result.status || 'submitted'), result.gateway_id || null]
     );
-    await audit(req, 'SUBMIT', 'icsr_report', req.params.id, { gateway: gatewayName, gateway_id: result.gateway_id, manifest_id: manifest.manifest_id || null, pii_redaction_rule_ids: redactedData.applied_rule_ids });
-    res.json({ status: 'submitted', gateway_key: gatewayName, gateway_mode: result.raw_response?.mode || configured.mode || 'mock', gateway: result, e_sign_manifest: manifest });
+    await audit(req, 'SUBMIT', 'icsr_report', req.params.id, { gateway: gatewayName, gateway_id: result.gateway_id, simulated, manifest_id: manifest.manifest_id || null, pii_redaction_rule_ids: redactedData.applied_rule_ids });
+    res.json({ status: 'submitted', simulated, gateway_key: gatewayName, gateway_mode: gatewayMode, gateway: result, e_sign_manifest: manifest });
   } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
