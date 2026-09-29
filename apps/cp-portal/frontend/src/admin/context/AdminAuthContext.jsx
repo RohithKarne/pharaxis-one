@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const AdminAuthContext = createContext(null)
+const PENDING_SIGNOUT = 'cp_admin_signout_pending' // CPPM-40
 
 export function AdminAuthProvider({ children }) {
   const navigate = useNavigate()
@@ -10,6 +11,7 @@ export function AdminAuthProvider({ children }) {
 
   function login(_token, adminData) {
     localStorage.removeItem('cp_admin_token')
+    localStorage.removeItem(PENDING_SIGNOUT)
     localStorage.setItem('cp_admin', JSON.stringify(adminData))
     setAdmin(adminData)
     setAuthLoading(false)
@@ -20,6 +22,21 @@ export function AdminAuthProvider({ children }) {
     localStorage.removeItem('cp_admin')
     setAdmin(null)
     setAuthLoading(false)
+  }
+
+  // CPPM-40: Sign Out and the idle timeout also end the session on the server (the
+  // cookie is httpOnly). Same shape as the portal: an unreachable server is remembered
+  // and finished before the next session check; logout() stays browser-only.
+  function endServerSession() {
+    return fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'same-origin', keepalive: true })
+      .then(res => { if (res.ok) localStorage.removeItem(PENDING_SIGNOUT) })
+      .catch(() => {})
+  }
+
+  function signOut() {
+    localStorage.setItem(PENDING_SIGNOUT, '1')
+    endServerSession()
+    logout()
   }
 
   // AUTH-06: central fetch helper — attaches admin auth header and auto-logs out on 401
@@ -74,7 +91,9 @@ export function AdminAuthProvider({ children }) {
   useEffect(() => {
     setAuthLoading(true)
     localStorage.removeItem('cp_admin_token')
-    fetch('/api/admin/auth/me', { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+    const pending = localStorage.getItem(PENDING_SIGNOUT) ? endServerSession() : Promise.resolve()
+    pending
+      .then(() => fetch('/api/admin/auth/me', { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }))
       .then(async (res) => {
         if (res.status === 200) {
           const d = await res.json()
@@ -100,7 +119,7 @@ export function AdminAuthProvider({ children }) {
   const canPublish  = hasRole('superadmin', 'admin');
 
   return (
-    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
+    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
       {children}
     </AdminAuthContext.Provider>
   )
