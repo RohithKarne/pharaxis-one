@@ -79,4 +79,4 @@ function validateUpload(allowedTypes = []) {
   };
 }
 
-module.exports = { validateUpload, ALLOWED_MIME_TYPES, MAX_SIZE_BYTES };
+module.exports = { validateUpload, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_SIZE_BYTES };

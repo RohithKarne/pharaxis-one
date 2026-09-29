@@ -1224,6 +1224,7 @@ router.put('/alert-email-template', authenticate, requireRole('platform_admin'),
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
+const { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } = require('../middleware/uploadValidation');
 
 const logoStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -1240,8 +1241,14 @@ const logoUpload = multer({
   storage: logoStorage,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed.'));
+    // Refuse before anything is written. This folder is served publicly, and a file
+    // turned away afterwards (by validateUpload) stayed there — an .svg, or an .html
+    // sent as image/png, was then served as-is. The error used to surface as a 500.
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_MIME_TYPES.image.includes(file.mimetype) && ALLOWED_EXTENSIONS.image.includes(ext)) return cb(null, true);
+    const err = new Error('Logo must be a PNG, JPG, GIF or WebP image.');
+    err.statusCode = 400;
+    cb(err);
   },
 });
 
