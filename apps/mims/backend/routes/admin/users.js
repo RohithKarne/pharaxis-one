@@ -108,9 +108,14 @@ router.get('/users/security-groups', authenticate, requireRole('admin', 'platfor
 // GET /api/admin/users/orgs — all organisations for tenant assignment tab
 router.get('/users/orgs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [orgs] = await pool.execute(
+    // An organisation's admin gets only the organisations they belong to — the
+    // same set they may assign users to. Every client's name went to every
+    // admin, and the admin Tenant picker offered them all (M-112).
+    const allowed = await callerAssignableOrgIds(req);
+    const [all] = await pool.execute(
       `SELECT id, name, is_active FROM organisations ORDER BY name ASC`
     );
+    const orgs = allowed ? all.filter(o => allowed.has(Number(o.id))) : all;
     res.json({ orgs });
   } catch (err) {
     console.error('GET /users/orgs error:', err);

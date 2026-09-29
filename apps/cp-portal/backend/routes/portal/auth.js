@@ -415,18 +415,17 @@ router.get('/sso/:provider/callback', async (req, res) => {
         'SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1 LIMIT 1',
         [client.id, identity.email]
       );
+      // CPPM-51: access is by administrator approval only, so single sign-on never
+      // creates an account — an email with no active account is refused. (It did
+      // create one from 29 Jul, contrary to the SSO settings screen.) Only the
+      // email's domain is recorded: the person has no account with us.
       if (!byEmail) {
-        // Auto-provision verified SSO user for seamless onboarding
-        const [resIns] = await pool.execute(
-          `INSERT INTO cp_portal_users (client_id, email, first_name, last_name, email_verified, is_active)
-           VALUES (?, ?, ?, ?, 1, 1)`,
-          [client.id, identity.email, identity.name || 'SSO User', '']
-        );
-        const [[createdUser]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [resIns.insertId]);
-        user = createdUser;
-      } else {
-        user = byEmail;
+        const domain = identity.email.split('@')[1] || '';
+        await systemAudit('portal sign-on', client.id, 'LOGIN_REFUSED', 'portal_user', null,
+          { provider: providerKey, reason: 'no_account', email_domain: domain });
+        return fail('no_account');
       }
+      user = byEmail;
       // Link this IdP identity to the matched account for future logins.
       await pool.execute(
         `INSERT INTO cp_sso_identities (client_id, portal_user_id, provider_key, subject, email, last_login_at)

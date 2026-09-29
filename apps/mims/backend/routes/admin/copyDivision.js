@@ -4,12 +4,39 @@
  * admin/copyDivision.js — Copy Division
  * Platform-admin-only: copies all selected org configuration from one tenant to another.
  * Supports overwrite (delete + re-insert) or skip-existing mode.
+ *
+ * M-113 (29 Sep walk, critical): the routes let any admin role in, so any
+ * organisation's admin could preview and copy between ANY two organisations —
+ * pulling another client's integration keys into their own, or overwriting
+ * (deleting) another client's configuration. Every route now requires
+ * platform-admin scope, and integrations are copied without keys or secrets
+ * and switched off: the target sets its own.
  */
 
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
+
+function requirePlatformAdmin(req, res, next) {
+  if (hasGlobalAdminScope(req.user)) return next();
+  return res.status(403).json({ error: 'Copy Division is for platform admins only.' });
+}
+
+// Columns a copy must never carry: credentials stay with the organisation that
+// set them. SQL expressions replacing the source value.
+const INTEGRATION_SECRET_KEYS = ['api_key', 'client_secret', 'secret', 'password', 'token',
+  'access_token', 'refresh_token', 'webhook_secret'];
+const COPY_OVERRIDES = {
+  org_integrations: {
+    api_key: 'NULL',
+    api_key_hash: 'NULL',
+    enabled: '0',
+    last_sync_at: 'NULL',
+    config: `JSON_REMOVE(\`config\`, ${INTEGRATION_SECRET_KEYS.map(k => `'$.${k}'`).join(', ')})`,
+  },
+};
 
 // ── Category definitions ──────────────────────────────────────────────────────
 // Each entry: { label, tables: [{ name, orgField }], remap? }
@@ -76,7 +103,12 @@ async function copySimpleTable(conn, tableName, sourceOrgId, targetOrgId, overwr
   }
   const allCols  = await getColumns(conn, tableName);
   const copyCols = allCols.filter(c => c !== 'id');
-  const selectList = copyCols.map(c => c === 'org_id' ? `${parseInt(targetOrgId, 10)} AS org_id` : `\`${c}\``).join(', ');
+  const overrides = COPY_OVERRIDES[tableName] || {};
+  const selectList = copyCols.map(c => (
+    c === 'org_id' ? `${parseInt(targetOrgId, 10)} AS org_id`
+      : overrides[c] ? `${overrides[c]} AS \`${c}\``
+        : `\`${c}\``
+  )).join(', ');
   const insertList = copyCols.map(c => `\`${c}\``).join(', ');
   const [result] = await conn.execute(
     `INSERT IGNORE INTO \`${tableName}\` (${insertList}) SELECT ${selectList} FROM \`${tableName}\` WHERE org_id = ?`,
@@ -163,7 +195,7 @@ async function previewCategory(key, sourceOrgId) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET /api/admin/copy-division/orgs — list all orgs for source/target selection
-router.get('/copy-division/orgs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.get('/copy-division/orgs', authenticate, requirePlatformAdmin, async (req, res) => {
   try {
     const [orgs] = await pool.execute(
       'SELECT id, name FROM organisations ORDER BY name ASC'
@@ -176,7 +208,7 @@ router.get('/copy-division/orgs', authenticate, requireRole('admin', 'platform_a
 });
 
 // GET /api/admin/copy-division/categories — return category metadata
-router.get('/copy-division/categories', authenticate, requireRole('admin', 'platform_admin'), (req, res) => {
+router.get('/copy-division/categories', authenticate, requirePlatformAdmin, (req, res) => {
   const list = Object.entries(CATEGORIES).map(([key, v]) => ({
     key,
     label: v.label,
@@ -186,7 +218,7 @@ router.get('/copy-division/categories', authenticate, requireRole('admin', 'plat
 });
 
 // POST /api/admin/copy-division/preview — count rows that would be copied
-router.post('/copy-division/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/copy-division/preview', authenticate, requirePlatformAdmin, async (req, res) => {
   try {
     const { source_org_id, categories } = req.body;
     if (!source_org_id || !Array.isArray(categories) || categories.length === 0) {
@@ -205,7 +237,7 @@ router.post('/copy-division/preview', authenticate, requireRole('admin', 'platfo
 });
 
 // POST /api/admin/copy-division/execute — run the copy
-router.post('/copy-division/execute', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/copy-division/execute', authenticate, requirePlatformAdmin, async (req, res) => {
   const { source_org_id, target_org_id, categories, overwrite = false } = req.body;
 
   if (!source_org_id || !target_org_id) {

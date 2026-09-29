@@ -828,6 +828,8 @@ async function initializeDatabase() {
       pass_score  INT          NOT NULL DEFAULT 80,
       status      VARCHAR(50)  NOT NULL DEFAULT 'Available',
       is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+      document_id INT          NULL,
+      version     INT          NOT NULL DEFAULT 1,
       created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),

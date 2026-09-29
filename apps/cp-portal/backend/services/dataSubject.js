@@ -82,6 +82,12 @@ async function buildExport(userId, clientId) {
       [c.id, clientId]);
   }
 
+  // CPPM-15: every training attempt, with the questions as asked and the answers given.
+  const trainingAttempts = (await q(
+    `SELECT id, module_title, module_version, score, pass_score, passed, reference, answers_json, taken_at
+       FROM cp_training_attempts WHERE portal_user_id = ? AND client_id = ? ORDER BY id`, [userId, clientId]))
+    .map(({ answers_json, ...a }) => ({ ...a, answers: JSON.parse(answers_json || '[]') }));
+
   return {
     export_metadata: { generated_at: new Date().toISOString(), scope: 'CP Portal', user_id: userId, client_id: clientId, note: 'MIMS-synced case data is held in a separate system and is not included in this export.' },
     profile: profile || null,
@@ -95,6 +101,7 @@ async function buildExport(userId, clientId) {
     msl_bookings: mslBookings,
     sso_identities: ssoIdentities,
     chat_conversations: chats,
+    training_attempts: trainingAttempts,
   };
 }
 
@@ -154,6 +161,15 @@ async function eraseUser(userId, clientId) {
           AND EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [userId, clientId]);
     if (flaggedChats.affectedRows) {
       summary.retained.push(`chat_conversations(${flaggedChats.affectedRows}) [safety review raised — identity severed, record retained]`);
+    }
+
+    // CPPM-15 (decision C, Rohith 29 Sep): a training attempt is the record that a
+    // module was completed — keep it, remove who took it (as for AE/PC submissions).
+    const [trainingKept] = await conn.execute(
+      `UPDATE cp_training_attempts SET portal_user_id = NULL, person_name = ?, person_email = ?
+        WHERE portal_user_id = ? AND client_id = ?`, [ERASED, ERASED, userId, clientId]);
+    if (trainingKept.affectedRows) {
+      summary.retained.push(`training_attempts(${trainingKept.affectedRows}) [completion record retained — name and email removed]`);
     }
 
     // Delete engagement/identity-link data.

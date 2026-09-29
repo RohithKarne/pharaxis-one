@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { findSystemLabel } from '../configItems'
 import { useAuth } from '../../../../shared/context/AuthContext'
+import { hasGlobalAdminScope } from '../../../../shared/utils/adminScope.js'
 const AdminQASection = lazy(() => import('../../../admin/components/AdminQASection'))
 const AdminUATPanel = lazy(() => import('../../../admin/components/AdminUATPanel'))
 const CopyDivision = lazy(() => import('./CopyDivision'))
@@ -50,11 +51,13 @@ function SystemSectionLoader() {
 }
 
 export default function System({ selectedItem, auditItem = 'admin', onAuditSelect }) {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const tool = (
-    selectedItem === 'sys-maint-copy-division' ? <CopyDivision />
+    // A direct link still reaches this item; only a platform admin gets the tool (M-113).
+    selectedItem === 'sys-maint-copy-division'
+      ? (hasGlobalAdminScope(user) ? <CopyDivision /> : <div style={{ padding: 24, color: 'var(--text-muted)' }}>Copy Division is for platform admins only.</div>)
     : selectedItem === 'sys-division-params' ? <DivisionParameters H={H} />
     : selectedItem === 'sys-setup-customize-forms' ? <CustomizeForms />
     // Its menu item lives here (Setup › Forms & Fields); it opened "Under Development" (M-35).

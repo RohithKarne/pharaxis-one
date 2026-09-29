@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
 const { loadFormFields } = require('../../services/formFields');
+const training = require('../../services/training');
 const log = require('../../utils/logger');
 
 async function getClient(code) {
@@ -167,13 +168,23 @@ router.get('/:clientCode/training', async (req, res) => {
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
     // Same rule as trials: only the client's own approved modules, no fallback.
     const [rows] = await pool.execute(
-      `SELECT id, title, type, duration, credits, pass_score, status
-         FROM cp_training_modules
-        WHERE client_id = ? AND is_active = 1
-        ORDER BY id DESC`,
+      `SELECT m.id, m.client_id, m.title, m.type, m.duration, m.credits, m.pass_score, m.status, m.document_id,
+              (SELECT COUNT(*) FROM cp_training_questions q WHERE q.module_id = m.id) AS question_count
+         FROM cp_training_modules m
+        WHERE m.client_id = ? AND m.is_active = 1
+        ORDER BY m.id DESC`,
       [client.id]
     );
-    res.json({ items: rows });
+    // CPPM-15: can_start says whether the module can be taken today — Available,
+    // with questions and a readable document. Whether this particular reader's
+    // account may see the document is checked when they open it.
+    const items = [];
+    for (const { client_id, document_id, ...m } of rows) {
+      const readable = m.status === training.AVAILABLE && m.question_count > 0
+        && await training.readableDocument(pool, { client_id, document_id });
+      items.push({ ...m, question_count: Number(m.question_count), can_start: !!readable });
+    }
+    res.json({ items });
   } catch (err) {
     log.error('portal.content.error', { err, route: 'GET /:clientCode/training', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

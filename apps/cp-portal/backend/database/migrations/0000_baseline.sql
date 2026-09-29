@@ -10,8 +10,8 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0023 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0023 as applied, because their contents are already
+-- 0002-0024 — so an empty database is provisioned by the migration runner alone.
+-- It then records 0002-0024 as applied, because their contents are already
 -- included here and re-running them would duplicate columns.
 -- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
@@ -714,10 +714,49 @@ CREATE TABLE IF NOT EXISTS cp_training_modules (
   pass_score INT          NOT NULL DEFAULT 80,
   status     VARCHAR(50)  NOT NULL DEFAULT 'Available',
   is_active  TINYINT(1)   NOT NULL DEFAULT 1,
+  document_id INT         NULL,
+  version    INT          NOT NULL DEFAULT 1,
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT fk_training_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── TRAINING QUESTIONS AND ATTEMPTS (from 0024, CPPM-15) ──────
+CREATE TABLE IF NOT EXISTS cp_training_questions (
+  id            INT      NOT NULL AUTO_INCREMENT,
+  client_id     INT      NOT NULL,
+  module_id     INT      NOT NULL,
+  question      TEXT     NOT NULL,
+  options_json  TEXT     NOT NULL,
+  correct_index INT      NOT NULL,
+  sort_order    INT      NOT NULL DEFAULT 0,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_training_q_module (module_id, sort_order),
+  CONSTRAINT fk_training_q_module FOREIGN KEY (module_id) REFERENCES cp_training_modules(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cp_training_attempts (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  client_id      INT          NOT NULL,
+  module_id      INT          NOT NULL,
+  module_version INT          NOT NULL,
+  module_title   VARCHAR(500) NOT NULL,
+  portal_user_id INT          NULL,
+  person_name    VARCHAR(255) NOT NULL,
+  person_email   VARCHAR(255) NOT NULL,
+  score          INT          NOT NULL,
+  pass_score     INT          NOT NULL,
+  passed         TINYINT(1)   NOT NULL,
+  answers_json   MEDIUMTEXT   NOT NULL,
+  reference      VARCHAR(20)  NULL,
+  taken_at       DATETIME     NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_training_attempt_ref (reference),
+  KEY idx_training_attempt_module (client_id, module_id, taken_at),
+  KEY idx_training_attempt_user (portal_user_id),
+  CONSTRAINT fk_training_attempt_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── EMAIL CONFIG ───────────────────────────────────────────────
@@ -1036,7 +1075,7 @@ CREATE TABLE IF NOT EXISTS cp_login_attempts (
   PRIMARY KEY (login_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0023 AS APPLIED ────────────────────────────────
+-- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -1065,4 +1104,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0020_add_mims_redactions.sql',              NULL),
   ('0021_add_attachment_scan_status.sql',       NULL),
   ('0022_widen_audit_details.sql',              NULL),
-  ('0023_add_login_attempts.sql',               NULL);
+  ('0023_add_login_attempts.sql',               NULL),
+  ('0024_add_training_records.sql',             NULL);

@@ -50,7 +50,8 @@ function findFirstLeafValue(nav, predicate = () => true) {
 
 function AdminTenantPicker() {
   const { tenants, tenantId, setTenantId, loading } = useAdminTenant()
-  if (loading) return null
+  // With one organisation there is nothing to choose (M-112).
+  if (loading || tenants.length <= 1) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Tenant</span>
@@ -137,6 +138,22 @@ function AdminAccessDenied({ label = 'this admin screen' }) {
       </div>
     </div>
   )
+}
+
+// Platform-admin tools, never shown to an organisation's admin (M-113: Copy
+// Division reaches every organisation). The server refuses them too.
+const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(['sys-maint-copy-division'])
+
+function withoutPlatformOnly(nav) {
+  return nav.reduce((acc, item) => {
+    if (item.children) {
+      const children = withoutPlatformOnly(item.children)
+      if (children.length) acc.push({ ...item, children })
+      return acc
+    }
+    if (!PLATFORM_ONLY_SYSTEM_ITEMS.has(item.value)) acc.push(item)
+    return acc
+  }, [])
 }
 
 function filterSystemNav(nav, effectiveAccess) {
@@ -742,9 +759,10 @@ function MIMSAdminShellInner() {
   }, [location.search])
 
   // Capability-based filtering
-  const systemNav = (effectiveAccess?.unrestricted)
+  const capabilityNav = (effectiveAccess?.unrestricted)
     ? SYSTEM_NAV
     : filterSystemNav(SYSTEM_NAV, effectiveAccess)
+  const systemNav = hasGlobalAdminScope(user) ? capabilityNav : withoutPlatformOnly(capabilityNav)
   const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
   const defaultEscalationItem = findFirstLeafValue(ESCALATION_NAV)
   const defaultDocumentsItem = findFirstLeafValue(DOCUMENTS_NAV)
