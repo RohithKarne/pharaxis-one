@@ -74,6 +74,12 @@ export default function AETabPanel({
             {options.map((option, index) => (
               <option key={`${key}-${option.value ?? index}`} value={option.value}>{option.label || option.value}</option>
             ))}
+            {/* A value an admin has since switched off stays on the record and
+                must stay visible, or the box shows blank and the next save
+                clears it. */}
+            {d[key] && !options.some(option => String(option.value) === String(d[key])) && (
+              <option value={d[key]}>{d[key]} (no longer offered)</option>
+            )}
           </select>
         ) : (
           <div className="cf-picklist-empty"><em>No options configured for this picklist.</em></div>
