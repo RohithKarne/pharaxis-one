@@ -268,8 +268,13 @@ export default function useCaseForm(id, token) {
           values_by_id: Object.fromEntries(Object.entries(dynFieldValues).filter(([, v]) => hasValue(v))),
         }),
       })
-      const validateData = await validateRes.json()
-      if (validateRes.ok && Array.isArray(validateData.errors) && validateData.errors.length) {
+      const validateData = await validateRes.json().catch(() => ({}))
+      // A failed check is not "no errors" — stop and say so (M-55). The server
+      // still refuses a blank required field on save, but the user should know.
+      if (!validateRes.ok) {
+        throw new Error(`Could not check the fields, so nothing was saved: ${validateData.error || `error ${validateRes.status}`}. Try again.`)
+      }
+      if (Array.isArray(validateData.errors) && validateData.errors.length) {
         const nextErrors = {}
         validateData.errors.forEach(err => { nextErrors[err.field] = err.message })
         setDynFieldErrors(nextErrors)
