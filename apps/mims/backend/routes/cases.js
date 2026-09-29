@@ -63,6 +63,8 @@ const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
   listResponseBuilderRecipients, buildResponsePackage,
 } = require('../services/miResponseService');
+const { needsTwoSigners } = require('../services/miApprovalService');
+const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -570,7 +572,7 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
        COALESCE(SUM(CASE WHEN r.response_status = 'READY' THEN 1 ELSE 0 END), 0)            AS pending_approval,
-       COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
+       COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.sent_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
        COALESCE(COUNT(DISTINCT CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
                            AND r.response_status NOT IN ('SENT','VOIDED') THEN mi.id END), 0) AS sla_breached
        FROM case_mi_responses r
@@ -2217,6 +2219,7 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.sent_at,
          r.author_id,
          r.author_name AS responded_by_name,
+         r.requires_two_signers,
          r.created_at
        FROM case_mi_responses r
        LEFT JOIN cm_documents d ON d.id = r.cm_document_id
@@ -2224,6 +2227,11 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
        WHERE r.case_id = ? ORDER BY r.created_at DESC`,
       [req.params.id]
     );
+    // The page offers the single Approve button only when one signer is enough (M-86).
+    const [[caseOrg]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [req.params.id]);
+    for (const row of rows) {
+      row.two_signers_required = (await needsTwoSigners({ orgId: caseOrg?.org_id, response: row })).required;
+    }
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2337,9 +2345,10 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     const [[existing]] = await pool.execute(
-      `SELECT id, response_status
-       FROM case_mi_responses
-       WHERE id = ? AND case_id = ?`,
+      `SELECT r.id, r.response_status, r.author_id, r.mi_tab_id, r.requires_two_signers, c.org_id
+       FROM case_mi_responses r
+       JOIN cases c ON c.id = r.case_id
+       WHERE r.id = ? AND r.case_id = ?`,
       [req.params.responseId, req.params.id]
     );
     if (!existing) return res.status(404).json({ error: 'Response not found.' });
@@ -2371,6 +2380,89 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     if (responseStatus === 'SENT' && existing.response_status !== 'APPROVED') {
       return res.status(400).json({ error: 'Response must be APPROVED before it can be SENT.' });
     }
+    // Sign-off rules (M-86). Only the password was checked, so anyone who could
+    // open the case could approve and send, including the person who wrote it.
+    // Approving needs "Approve letter" and someone other than the writer;
+    // sending needs "Send response letter"; an off-label response is signed off
+    // by two people through the reviewer and approver signatures instead.
+    if (responseStatus === 'APPROVED') {
+      if (!(await userHasActivityPrivilege(req.user, 'case.letter.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to approve response letters.' });
+      }
+      if (existing.author_id && Number(existing.author_id) === Number(req.user.userId)) {
+        return res.status(403).json({ error: 'You wrote this response, so someone else must approve it.' });
+      }
+      const twoSigners = await needsTwoSigners({ orgId: existing.org_id, response: existing });
+      if (twoSigners.required) {
+        return res.status(409).json({ error: 'This response needs two signers. Use Sign as reviewer, then Sign as approver.' });
+      }
+    }
+    if (responseStatus === 'SENT' && !(await userHasActivityPrivilege(req.user, 'case.letter.send'))) {
+      return res.status(403).json({ error: 'You do not have permission to send response letters.' });
+    }
+    // Work out who the letter goes to and which mailbox sends it before anything
+    // is marked SENT (M-88). The send used to fall back to the first mailbox in
+    // the database, whichever organisation owned it, and with no mailbox or no
+    // recipient the email was skipped while the response still said SENT.
+    let sendPackage = null;
+    if (responseStatus === 'SENT') {
+      // 1. Fetch composed response package
+      const [[respRow]] = await pool.execute(
+        `SELECT response_text, response_body_html, response_subject,
+                recipient_email, recipient_name, selected_documents
+           FROM case_mi_responses WHERE id = ?`,
+        [req.params.responseId]
+      );
+
+      // 2. Resolve recipient — package first, then primary contact fallback
+      let recipientEmail = respRow?.recipient_email || '';
+      let recipientName  = respRow?.recipient_name  || '';
+      if (!recipientEmail) {
+        const [[fb]] = await pool.execute(
+          `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
+                  CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
+             FROM case_contacts cc
+             LEFT JOIN contacts ct ON ct.id = cc.contact_id
+            WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
+            ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1`,
+          [req.params.id]
+        );
+        if (fb) { recipientEmail = fb.recipient_email; recipientName = fb.recipient_name; }
+      }
+      if (!recipientEmail) {
+        return res.status(400).json({ error: 'This response has no recipient email address. Add one to the case contact before sending.' });
+      }
+
+      // 3. Resolve outbound SMTP account: the site's response mailbox, else the
+      //    case organisation's own. Never another organisation's mailbox.
+      const [[siteRow]] = await pool.execute(`SELECT site_id FROM cases WHERE id = ?`, [req.params.id]);
+      const siteId = siteRow?.site_id;
+      let smtpAccount = null;
+      if (siteId) {
+        const [[byPurpose]] = await pool.execute(
+          `SELECT ea.* FROM site_email_purpose sep
+             JOIN email_accounts ea ON ea.id = sep.email_account_id
+            WHERE sep.site_id = ? AND sep.purpose = 'response' AND ea.org_id = ?
+              AND ea.is_active = 1 AND ea.smtp_host IS NOT NULL LIMIT 1`,
+          [siteId, existing.org_id]
+        );
+        smtpAccount = byPurpose || null;
+      }
+      if (!smtpAccount) {
+        const [[fallback]] = await pool.execute(
+          `SELECT * FROM email_accounts
+            WHERE org_id = ? AND is_active = 1 AND smtp_host IS NOT NULL
+              AND smtp_port IS NOT NULL AND smtp_username IS NOT NULL
+            ORDER BY is_default_outbound DESC, id LIMIT 1`,
+          [existing.org_id]
+        );
+        smtpAccount = fallback || null;
+      }
+      if (!smtpAccount) {
+        return res.status(400).json({ error: 'No outbound mailbox is set up for this organisation. An admin can add one under Email Accounts.' });
+      }
+      sendPackage = { respRow, recipientEmail, recipientName, smtpAccount };
+    }
     if (['APPROVED', 'SENT'].includes(responseStatus)) {
       if (!password || !reason) {
         return res.status(400).json({ error: 'password and reason are required for electronic signature.' });
@@ -2384,15 +2476,17 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
 
     // F7 FIX: set is_finalized=1 when advancing beyond DRAFT (DB-level immutability guard)
     const isFinalized = responseStatus !== 'DRAFT' ? 1 : 0;
-    // C-09: MI response status change + its two audit rows commit atomically
+    // C-09: MI response status change + its two audit rows commit atomically.
+    // Sending no longer overwrites who approved it and when (M-92): the sender
+    // was recorded as the approver.
     await withTxn(async (conn) => {
       await conn.execute(
         `UPDATE case_mi_responses
          SET response_status = ?,
              is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
              draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
-             approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
-             approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END,
+             approved_by = CASE WHEN ? = 'APPROVED' THEN ? ELSE approved_by END,
+             approved_at = CASE WHEN ? = 'APPROVED' THEN NOW() ELSE approved_at END,
              sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
          WHERE id = ? AND case_id = ?`,
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
@@ -2432,58 +2526,12 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     // ── S19-P0 / Fix-9: Enqueue MI email via emailWorker (non-blocking) ────────
     // SMTP delivery is fully decoupled from the request path.
     // enqueueMiEmail writes one DB row and returns in < 5ms; the worker sends async.
-    if (responseStatus === 'SENT') {
+    if (sendPackage) {
       try {
         const { enqueueMiEmail } = require('../services/emailWorker');
+        const { respRow, recipientEmail, recipientName, smtpAccount } = sendPackage;
 
-        // 1. Fetch composed response package
-        const [[respRow]] = await pool.execute(
-          `SELECT response_text, response_body_html, response_subject,
-                  recipient_email, recipient_name, selected_documents
-             FROM case_mi_responses WHERE id = ?`,
-          [req.params.responseId]
-        );
-
-        // 2. Resolve recipient — package first, then primary contact fallback
-        let recipientEmail = respRow?.recipient_email || '';
-        let recipientName  = respRow?.recipient_name  || '';
-        if (!recipientEmail) {
-          const [[fb]] = await pool.execute(
-            `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
-                    CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
-               FROM case_contacts cc
-               LEFT JOIN contacts ct ON ct.id = cc.contact_id
-              WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
-              ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1`,
-            [req.params.id]
-          );
-          if (fb) { recipientEmail = fb.recipient_email; recipientName = fb.recipient_name; }
-        }
-
-        // 3. Resolve outbound SMTP account (site purpose → org fallback)
-        const [[siteRow]] = await pool.execute(`SELECT site_id FROM cases WHERE id = ?`, [req.params.id]);
-        const siteId = siteRow?.site_id;
-        let smtpAccount = null;
-        if (siteId) {
-          const [[byPurpose]] = await pool.execute(
-            `SELECT ea.* FROM site_email_purpose sep
-               JOIN email_accounts ea ON ea.id = sep.email_account_id
-              WHERE sep.site_id = ? AND sep.purpose = 'response'
-                AND ea.is_active = 1 AND ea.smtp_host IS NOT NULL LIMIT 1`,
-            [siteId]
-          );
-          smtpAccount = byPurpose || null;
-        }
-        if (!smtpAccount) {
-          const [[fallback]] = await pool.execute(
-            `SELECT * FROM email_accounts
-              WHERE is_active = 1 AND smtp_host IS NOT NULL
-                AND smtp_port IS NOT NULL AND smtp_username IS NOT NULL LIMIT 1`
-          );
-          smtpAccount = fallback || null;
-        }
-
-        // 4. Enqueue — fire and forget (emailWorker picks up within 15s)
+        // Enqueue — fire and forget (emailWorker picks up within 15s)
         await enqueueMiEmail({
           orgId:             req.user.orgId,
           caseId:            req.params.id,

@@ -5,10 +5,12 @@
  *
  * Supports the sequential review → approve flow:
  *   1. Author drafts (status=DRAFT)
- *   2. Reviewer signs (requires password verify via complianceService).
- *      → status flips to REVIEWED. Hash chain entry stamped.
- *   3. Approver signs (must be a different user, must have required role).
+ *   2. Reviewer signs a submitted (READY) response (password verify via
+ *      complianceService). → status flips to REVIEWED. Hash chain entry stamped.
+ *   3. Approver signs (must be a different user from the reviewer).
  *      → status flips to APPROVED. Second hash chain entry stamped.
+ *   Both signers need the "Approve letter" permission (checked in the route),
+ *   and neither may be the response's writer (M-86).
  *   4. Send → status=SENT.
  *
  * If the response is not flagged requires_two_signers, the legacy single-signer
@@ -74,6 +76,19 @@ async function sign({ orgId, globalScope = false, responseId, role, userId, user
   if (!r) throw new Error('Response not found');
   const effectiveOrgId = r.org_id || orgId;
 
+  // A signature belongs to one step (M-86): the reviewer signs a submitted
+  // response, the approver a reviewed one. With no status check a later
+  // signature could pull an approved or sent response back to REVIEWED.
+  if (role === 'reviewer' && r.response_status !== 'READY') {
+    throw new Error('The reviewer signs after the response is submitted for review.');
+  }
+  if (role === 'approver' && r.response_status !== 'REVIEWED') {
+    throw new Error('The approver signs after the reviewer has signed.');
+  }
+  // The writer does not sign off their own response.
+  if (r.author_id && Number(r.author_id) === Number(userId)) {
+    throw new Error('You wrote this response, so someone else must sign it.');
+  }
   // Reviewer must come before approver
   if (role === 'approver' && !r.reviewed_at) {
     throw new Error('Reviewer signature required before approver can sign.');
@@ -105,7 +120,7 @@ async function sign({ orgId, globalScope = false, responseId, role, userId, user
     ? `reviewer_id = ?, reviewer_name = ?, reviewed_at = NOW(),
        reviewer_reason = ?, reviewer_signature_hash = ?,
        response_status = 'REVIEWED'`
-    : `approver_id = ?, approver_name = ?, approved_at = NOW(),
+    : `approver_id = ?, approver_name = ?, approved_at = NOW(), approved_by = approver_id,
        approver_reason = ?, approver_signature_hash = ?,
        response_status = 'APPROVED'`;
   await pool.execute(

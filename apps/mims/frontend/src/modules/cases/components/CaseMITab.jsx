@@ -8,6 +8,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 import MiApprovalPanel from '../../../shared/components/MiApprovalPanel'  // Sprint 2 #16 + #17
+import { useAuth } from '../../../shared/context/AuthContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -60,6 +61,10 @@ export default function CaseMITab({
   view = 'full',
 }) {
   const ctx = useCaseFieldContext()
+  // Approve and Send follow the letter permissions the server checks (M-86).
+  const { hasCapability } = useAuth()
+  const canApproveLetters = hasCapability('case.letter.approve')
+  const canSendLetters = hasCapability('case.letter.send')
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
   // draft started against MI tab #1 leaks into MI tab #2 on the same case.
   // Key is computed below once activeMiTab is known.
@@ -635,8 +640,8 @@ export default function CaseMITab({
                     <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review</button>
                     <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
                   </>}
-                  {st === 'READY'    && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
-                  {st === 'APPROVED' && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
+                  {st === 'READY' && canApproveLetters && !r.two_signers_required && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
+                  {st === 'APPROVED' && canSendLetters && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
                 </div>
               )}
               {isSent && (
