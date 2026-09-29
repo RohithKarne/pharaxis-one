@@ -28,13 +28,14 @@ export default function SubmitPage() {
   const [attachError, setAttachError]   = useState('')
 
   const ATTACH_MAX = 10 * 1024 * 1024
-  const ATTACH_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  // CPPM-12: legacy .doc is no longer accepted — macros cannot be separated out of it.
+  const ATTACH_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
   function handleFiles(e) {
     setAttachError('')
     const picked = Array.from(e.target.files || [])
     const next = [...attachments]
     for (const f of picked) {
-      if (!ATTACH_TYPES.includes(f.type)) { setAttachError(`"${f.name}" is not an allowed type (PDF, JPG, PNG, DOC, DOCX).`); continue }
+      if (!ATTACH_TYPES.includes(f.type)) { setAttachError(`"${f.name}" is not an allowed type (PDF, JPG, PNG, DOCX).`); continue }
       if (f.size > ATTACH_MAX) { setAttachError(`"${f.name}" exceeds the 10MB limit.`); continue }
       if (next.length >= 5) { setAttachError('You can attach up to 5 files.'); break }
       if (!next.some(x => x.name === f.name && x.size === f.size)) next.push(f)
@@ -287,10 +288,10 @@ export default function SubmitPage() {
                 </div>
               ))}
               <div className="pp-attach">
-                <label className="pp-attach-label">Attachments <span>(optional — PDF, JPG, PNG, DOC, DOCX · max 10MB each · up to 5 files)</span></label>
+                <label className="pp-attach-label">Attachments <span>(optional — PDF, JPG, PNG, DOCX · max 10MB each · up to 5 files · no macros)</span></label>
                 <label className="pp-attach-drop">
                   <Icon name="file" size={17} /> Choose files
-                  <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleFiles} style={{ display: 'none' }} />
+                  <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={handleFiles} style={{ display: 'none' }} />
                 </label>
                 {attachError && <span className="pp-field-error-msg">{attachError}</span>}
                 {attachments.length > 0 && (

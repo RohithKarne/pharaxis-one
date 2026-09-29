@@ -30,6 +30,7 @@ export default function CompliancePage() {
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
+  const [notice, setNotice]   = useState('')
   const [records, setRecords] = useState([])
   const [recPage, setRecPage] = useState(1)
   const [recTotal, setRecTotal] = useState(0)
@@ -117,6 +118,10 @@ export default function CompliancePage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
+      // CPPM-13: changed wording is saved as a new version, so take the version
+      // back from the server rather than leaving a stale one on screen.
+      if (data.compliance?.version) setConfig(c => ({ ...c, version: data.compliance.version }))
+      setNotice(data.message || '')
       setSaved(true)
     } catch {
       setError('Network error.')
@@ -212,7 +217,7 @@ export default function CompliancePage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
-        {saved && <div className="cp-success">✓ Compliance settings saved.</div>}
+        {saved && <div className="cp-success">✓ Compliance settings saved.{notice ? ` ${notice}` : ''}</div>}
         <div className="cp-form-actions">
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
         </div>

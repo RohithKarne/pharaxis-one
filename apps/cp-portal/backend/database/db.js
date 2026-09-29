@@ -518,6 +518,26 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // ── CONSENT TEXT VERSIONS ──────────────────────────────────────
+  // CPPM-13: the exact wording of each consent version, written once and never
+  // updated. A reworded notice becomes a new version.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_consent_text_versions (
+      id             INT          NOT NULL AUTO_INCREMENT,
+      client_id      INT          NOT NULL,
+      version        VARCHAR(20)  NOT NULL,
+      title          VARCHAR(500) NULL,
+      body           TEXT         NOT NULL,
+      effective_from DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_by     INT          NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_consent_text_version (client_id, version),
+      CONSTRAINT fk_consent_text_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
+      CONSTRAINT fk_consent_text_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── CONSENT RECORDS ────────────────────────────────────────────
   await run(`
     CREATE TABLE IF NOT EXISTS cp_consent_records (
@@ -526,15 +546,18 @@ async function initializeDatabase() {
       user_id      INT      NULL,
       ip_hash      VARCHAR(255) NULL,
       version      VARCHAR(20)  NOT NULL,
+      consent_text_version_id INT NULL,
       choices_json TEXT     NULL,
       consented_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       CONSTRAINT fk_consent_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
-      CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL
+      CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_consent_text_version FOREIGN KEY (consent_text_version_id) REFERENCES cp_consent_text_versions(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_consent_client ON cp_consent_records(client_id)`);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_consent_user   ON cp_consent_records(user_id)`);
+  await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_consent_text_version ON cp_consent_records(consent_text_version_id)`);
 
   // ── DOCUMENT CATEGORIES ────────────────────────────────────────
   await run(`
@@ -566,6 +589,11 @@ async function initializeDatabase() {
       mims_ref_id      VARCHAR(255) NULL,
       is_active        TINYINT(1)   NOT NULL DEFAULT 1,
       status           VARCHAR(50)  NOT NULL DEFAULT 'draft',
+      approved_by      INT          NULL,
+      approved_by_name VARCHAR(255) NULL,
+      approved_at      DATETIME     NULL,
+      review_due_at    DATETIME     NULL,
+      retired_at       DATETIME     NULL,
       expires_at       DATETIME     NULL,
       version          VARCHAR(50)  NULL,
       download_count   INT          NOT NULL DEFAULT 0,
@@ -578,6 +606,34 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_docs_client ON cp_documents(client_id)`);
+  await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_docs_review_due ON cp_documents(client_id, review_due_at)`);
+
+  // ── DOCUMENT VERSION HISTORY (CPPM-31) ─────────────────────────
+  // A superseded version stays readable after the live document moves on.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_document_versions (
+      id                 INT          NOT NULL AUTO_INCREMENT,
+      document_id        INT          NOT NULL,
+      client_id          INT          NOT NULL,
+      version            VARCHAR(50)  NULL,
+      title              VARCHAR(500) NOT NULL,
+      file_path          TEXT         NULL,
+      file_name          VARCHAR(500) NULL,
+      status             VARCHAR(50)  NOT NULL,
+      approved_by        INT          NULL,
+      approved_by_name   VARCHAR(255) NULL,
+      approved_at        DATETIME     NULL,
+      review_due_at      DATETIME     NULL,
+      expires_at         DATETIME     NULL,
+      superseded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      superseded_by_name VARCHAR(255) NULL,
+      reason             VARCHAR(50)  NOT NULL,
+      PRIMARY KEY (id),
+      KEY idx_docver_document (document_id, id),
+      KEY idx_docver_client (client_id, superseded_at),
+      CONSTRAINT fk_docver_document FOREIGN KEY (document_id) REFERENCES cp_documents(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
 
   // ── NEWS POSTS ─────────────────────────────────────────────────
   await run(`
@@ -900,6 +956,29 @@ async function initializeDatabase() {
       KEY idx_outbox_due (status, next_attempt_at),
       KEY idx_outbox_client (client_id, status),
       CONSTRAINT fk_outbox_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // ── SUBMISSION ANSWERS (CPPM-14) ───────────────────────────────
+  // The approved medical answer that goes back to the person who asked.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_submission_answers (
+      id             INT          NOT NULL AUTO_INCREMENT,
+      submission_id  INT          NOT NULL,
+      client_id      INT          NOT NULL,
+      body           MEDIUMTEXT   NOT NULL,
+      status         VARCHAR(20)  NOT NULL DEFAULT 'draft',
+      drafted_by     INT          NULL,
+      approved_by    INT          NULL,
+      approved_at    DATETIME     NULL,
+      sent_at        DATETIME     NULL,
+      send_error     TEXT         NULL,
+      created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_answer_submission (submission_id),
+      KEY idx_answer_client_status (client_id, status),
+      CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 

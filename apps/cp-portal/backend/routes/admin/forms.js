@@ -7,9 +7,12 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { auditWrites } = require('../../utils/audit');
 const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
+// CPPM-10: every write below leaves a who-did-what record, including any added later.
+router.use('/:clientId', auditWrites('form_field'));
 
 // GET /api/admin/forms/:clientId — all form configs grouped by form_type
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
@@ -111,6 +114,7 @@ router.post('/:clientId/reorder', authenticateAdmin, async (req, res) => {
     } finally {
       conn.release();
     }
+    res.locals.audit = { action: 'REORDER', details: { count: fields.length } };
     res.json({ message: 'Order updated.' });
   } catch (err) {
     log.error('admin.forms.error', { err, route: 'POST /:clientId/reorder', path: req.path, request_id: req.requestId || null });

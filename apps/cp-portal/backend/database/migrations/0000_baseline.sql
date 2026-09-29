@@ -10,8 +10,8 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0015 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0015 as applied, because their contents are already
+-- 0002-0020 — so an empty database is provisioned by the migration runner alone.
+-- It then records 0002-0020 as applied, because their contents are already
 -- included here and re-running them would duplicate columns.
 -- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
@@ -436,6 +436,22 @@ CREATE TABLE IF NOT EXISTS cp_compliance_config (
   CONSTRAINT fk_compliance_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── CONSENT TEXT VERSIONS (from 0018, CPPM-13) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_consent_text_versions (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  client_id      INT          NOT NULL,
+  version        VARCHAR(20)  NOT NULL,
+  title          VARCHAR(500) NULL,
+  body           TEXT         NOT NULL,
+  effective_from DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by     INT          NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_consent_text_version (client_id, version),
+  CONSTRAINT fk_consent_text_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
+  CONSTRAINT fk_consent_text_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── CONSENT RECORDS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS cp_consent_records (
   id           INT          NOT NULL AUTO_INCREMENT,
@@ -443,13 +459,16 @@ CREATE TABLE IF NOT EXISTS cp_consent_records (
   user_id      INT          NULL,
   ip_hash      VARCHAR(255) NULL,
   version      VARCHAR(20)  NOT NULL,
+  consent_text_version_id INT NULL,
   choices_json TEXT         NULL,
   consented_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_cp_consent_client (client_id),
   KEY idx_cp_consent_user (user_id),
+  KEY idx_cp_consent_text_version (consent_text_version_id),
   CONSTRAINT fk_consent_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
-  CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL
+  CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_consent_text_version FOREIGN KEY (consent_text_version_id) REFERENCES cp_consent_text_versions(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── DOCUMENT CATEGORIES ────────────────────────────────────────
@@ -479,6 +498,11 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   mims_ref_id       VARCHAR(255) NULL,
   is_active         TINYINT(1)   NOT NULL DEFAULT 1,
   status            VARCHAR(50)  NOT NULL DEFAULT 'draft',
+  approved_by       INT          NULL,
+  approved_by_name  VARCHAR(255) NULL,
+  approved_at       DATETIME     NULL,
+  review_due_at     DATETIME     NULL,
+  retired_at        DATETIME     NULL,
   expires_at        DATETIME     NULL,
   version           VARCHAR(50)  NULL,
   download_count    INT          NOT NULL DEFAULT 0,
@@ -488,7 +512,32 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_cp_docs_client (client_id),
+  KEY idx_cp_docs_review_due (client_id, review_due_at),
   CONSTRAINT fk_docs_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── DOCUMENT VERSION HISTORY (0019) ────────────────────────────
+CREATE TABLE IF NOT EXISTS cp_document_versions (
+  id                 INT          NOT NULL AUTO_INCREMENT,
+  document_id        INT          NOT NULL,
+  client_id          INT          NOT NULL,
+  version            VARCHAR(50)  NULL,
+  title              VARCHAR(500) NOT NULL,
+  file_path          TEXT         NULL,
+  file_name          VARCHAR(500) NULL,
+  status             VARCHAR(50)  NOT NULL,
+  approved_by        INT          NULL,
+  approved_by_name   VARCHAR(255) NULL,
+  approved_at        DATETIME     NULL,
+  review_due_at      DATETIME     NULL,
+  expires_at         DATETIME     NULL,
+  superseded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  superseded_by_name VARCHAR(255) NULL,
+  reason             VARCHAR(50)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_docver_document (document_id, id),
+  KEY idx_docver_client (client_id, superseded_at),
+  CONSTRAINT fk_docver_document FOREIGN KEY (document_id) REFERENCES cp_documents(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── NEWS POSTS ─────────────────────────────────────────────────
@@ -894,7 +943,87 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
   CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0015 AS APPLIED ────────────────────────────────
+-- ── SUBMISSION ANSWERS (from 0016, CPPM-14) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_submission_answers (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  submission_id  INT          NOT NULL,
+  client_id      INT          NOT NULL,
+  body           MEDIUMTEXT   NOT NULL,
+  status         VARCHAR(20)  NOT NULL DEFAULT 'draft',
+  drafted_by     INT          NULL,
+  approved_by    INT          NULL,
+  approved_at    DATETIME     NULL,
+  sent_at        DATETIME     NULL,
+  send_error     TEXT         NULL,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_answer_submission (submission_id),
+  KEY idx_answer_client_status (client_id, status),
+  CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── SUBMISSION STATUS HISTORY (from 0017, CPPM-4) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_submission_status_events (
+  id            INT          NOT NULL AUTO_INCREMENT,
+  submission_id INT          NOT NULL,
+  client_id     INT          NOT NULL,
+  status        VARCHAR(50)  NOT NULL,
+  note          VARCHAR(500) NULL,
+  source        VARCHAR(50)  NOT NULL DEFAULT 'system',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_cp_sse_submission (submission_id, id),
+  KEY idx_cp_sse_client (client_id, created_at),
+  CONSTRAINT fk_sse_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sse_client     FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── DOCUMENT VERSIONS (from 0019, CPPM-31) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_document_versions (
+  id                 INT          NOT NULL AUTO_INCREMENT,
+  document_id        INT          NOT NULL,
+  client_id          INT          NOT NULL,
+  version            VARCHAR(50)  NULL,
+  title              VARCHAR(500) NOT NULL,
+  file_path          TEXT         NULL,
+  file_name          VARCHAR(500) NULL,
+  status             VARCHAR(50)  NOT NULL,
+  approved_by        INT          NULL,
+  approved_by_name   VARCHAR(255) NULL,
+  approved_at        DATETIME     NULL,
+  review_due_at      DATETIME     NULL,
+  expires_at         DATETIME     NULL,
+  superseded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  superseded_by_name VARCHAR(255) NULL,
+  reason             VARCHAR(50)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_docver_document (document_id, id),
+  KEY idx_docver_client (client_id, superseded_at),
+  CONSTRAINT fk_docver_document FOREIGN KEY (document_id) REFERENCES cp_documents(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── MIMS REDACTIONS (from 0020, CPPM-11) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_mims_redactions (
+  id              INT          NOT NULL AUTO_INCREMENT,
+  client_id       INT          NOT NULL,
+  submission_id   INT          NOT NULL,
+  external_ref    VARCHAR(100) NOT NULL,   -- the MIMS case id
+  portal_user_id  INT          NULL,       -- who asked, for the audit trail
+  status          VARCHAR(20)  NOT NULL DEFAULT 'pending',  -- 'pending' | 'done' | 'failed'
+  attempts        INT          NOT NULL DEFAULT 0,
+  last_error      TEXT         NULL,
+  next_attempt_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  requested_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at    DATETIME     NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mims_redaction_submission (submission_id),
+  KEY idx_mims_redaction_due (status, next_attempt_at),
+  KEY idx_mims_redaction_client (client_id, status),
+  CONSTRAINT fk_mims_redaction_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── RECORD 0002-0020 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -902,17 +1031,22 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
 -- 0001 is deliberately not listed: it only creates cp_schema_migrations with
 -- IF NOT EXISTS, so it is safe to let it run and be recorded normally.
 INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
-  ('0002_add_digest_and_msl_slots.sql',      NULL),
-  ('0003_add_submission_attachments.sql',    NULL),
-  ('0004_add_user_follows.sql',              NULL),
-  ('0005_fix_chatbox_forms_notifications.sql', NULL),
-  ('0006_add_password_reset.sql',            NULL),
-  ('0007_add_token_version.sql',             NULL),
-  ('0008_add_sso.sql',                       NULL),
-  ('0009_add_mims_case_url_base.sql',        NULL),
-  ('0010_add_data_requests.sql',             NULL),
-  ('0011_add_ae_review_tasks.sql',           NULL),
-  ('0012_add_trials_and_training.sql',       NULL),
-  ('0013_add_email_outbox.sql',              NULL),
-  ('0014_add_chat_records.sql',              NULL),
-  ('0015_chat_safety_and_confirmed_ae.sql',  NULL);
+  ('0002_add_digest_and_msl_slots.sql',         NULL),
+  ('0003_add_submission_attachments.sql',       NULL),
+  ('0004_add_user_follows.sql',                 NULL),
+  ('0005_fix_chatbox_forms_notifications.sql',  NULL),
+  ('0006_add_password_reset.sql',               NULL),
+  ('0007_add_token_version.sql',                NULL),
+  ('0008_add_sso.sql',                          NULL),
+  ('0009_add_mims_case_url_base.sql',           NULL),
+  ('0010_add_data_requests.sql',                NULL),
+  ('0011_add_ae_review_tasks.sql',              NULL),
+  ('0012_add_trials_and_training.sql',          NULL),
+  ('0013_add_email_outbox.sql',                 NULL),
+  ('0014_add_chat_records.sql',                 NULL),
+  ('0015_chat_safety_and_confirmed_ae.sql',     NULL),
+  ('0016_add_submission_answers.sql',           NULL),
+  ('0017_add_submission_status_history.sql',    NULL),
+  ('0018_add_consent_text_versions.sql',        NULL),
+  ('0019_add_document_lifecycle.sql',           NULL),
+  ('0020_add_mims_redactions.sql',              NULL);

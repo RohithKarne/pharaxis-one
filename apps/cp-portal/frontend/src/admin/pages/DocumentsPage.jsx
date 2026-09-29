@@ -8,6 +8,9 @@ const VISIBLE_TO_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 // S4-8: approval statuses added
 const ALL_docStatuses    = ['draft', 'review', 'approved', 'published', 'scheduled', 'archived']
 const WRITER_docStatuses = ['draft', 'review']  // content_manager can only set these
+// CPPM-31: a new upload has been approved by nobody, so the server refuses to
+// create it published or scheduled. Don't offer what will be refused.
+const UPLOAD_docStatuses = ['draft', 'review', 'approved']
 
 const EMPTY_UPLOAD = {
   title: '',
@@ -35,6 +38,11 @@ function docStatusLabel(status) {
   return DOC_STATUS_LABELS[status] || status || 'Draft'
 }
 
+// CPPM-31: a review date that has already passed
+function isOverdue(date) {
+  return !!date && date.slice(0, 10) < new Date().toISOString().slice(0, 10)
+}
+
 function formatFileSize(bytes) {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -46,6 +54,8 @@ export default function DocumentsPage() {
   const { canWrite, canPublish, canApprove } = useAdminAuth()
   // S4-8: role-aware status options
   const docStatuses = canPublish ? ALL_docStatuses : WRITER_docStatuses
+  // CPPM-31: the upload form never offers published/scheduled
+  const uploadStatuses = docStatuses.filter(s => UPLOAD_docStatuses.includes(s))
   const [docs, setDocs]               = useState([])
   const [categories, setCategories]   = useState([])
   const [loading, setLoading]         = useState(true)
@@ -61,6 +71,7 @@ export default function DocumentsPage() {
   const [editError, setEditError]     = useState('')
   const [actionError, setActionError] = useState('')
   const [expiringDocs, setExpiringDocs] = useState([])
+  const [reviewDueDocs, setReviewDueDocs] = useState([])
   const [alertMsg, setAlertMsg]         = useState(null)
   const [sendingAlert, setSendingAlert] = useState(false)
   const [selectedIds, setSelectedIds]   = useState([])
@@ -85,7 +96,13 @@ export default function DocumentsPage() {
         headers: adminHeaders(),
         body: JSON.stringify({ ids: selectedIds, action }),
       })
-      if (!res.ok) { setActionError(`Bulk ${action} failed. Please try again.`); return }
+      if (!res.ok) {
+        // CPPM-31: an unapproved document refuses to publish, and the reason names
+        // which ones — show it rather than a generic failure.
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error || `Bulk ${action} failed. Please try again.`)
+        return
+      }
     } catch {
       setActionError(`Network error during bulk ${action}.`)
     } finally {
@@ -97,17 +114,20 @@ export default function DocumentsPage() {
     setLoading(true)
     setSelectedIds([])
     try {
-      const [docsRes, catsRes, expiringRes] = await Promise.all([
+      const [docsRes, catsRes, expiringRes, reviewRes] = await Promise.all([
         fetch(`/api/admin/documents/${clientId}`, { headers: adminHeaders() }),
         fetch(`/api/admin/documents/${clientId}/categories`, { headers: adminHeaders() }),
         fetch(`/api/admin/documents/${clientId}/expiring`, { headers: adminHeaders() }),
+        fetch(`/api/admin/documents/${clientId}/review-due`, { headers: adminHeaders() }),
       ])
       const docsData     = await docsRes.json()
       const catsData     = await catsRes.json()
       const expiringData = await expiringRes.json()
+      const reviewData   = await reviewRes.json()
       setDocs(docsData.documents || [])
       setCategories(catsData.categories || [])
       setExpiringDocs(expiringData.expiring || [])
+      setReviewDueDocs(reviewData.reviewDue || [])
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -213,6 +233,7 @@ export default function DocumentsPage() {
       visible_to: doc.visible_to_json ? (Array.isArray(doc.visible_to_json) ? doc.visible_to_json : JSON.parse(doc.visible_to_json)) : [],
       status: doc.status || 'published',
       version: doc.version || '',
+      review_due_at: doc.review_due_at ? doc.review_due_at.slice(0, 10) : '',
       expires_at: doc.expires_at ? doc.expires_at.slice(0, 10) : '',
       publish_at: doc.publish_at ? doc.publish_at.slice(0, 16) : '',
     })
@@ -305,6 +326,23 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      {/* CPPM-31: Review-due banner — same shape as the expiry alert above */}
+      {reviewDueDocs.length > 0 && (
+        <div className="cp-inline-alert warning">
+          <span style={{ fontSize: 13, color: '#92400E', flex: 1 }}>
+            <strong>{reviewDueDocs.length} approved document{reviewDueDocs.length > 1 ? 's' : ''}</strong>
+            {' '}
+            {reviewDueDocs.filter(d => isOverdue(d.review_due_at)).length > 0
+              ? `(${reviewDueDocs.filter(d => isOverdue(d.review_due_at)).length} overdue)`
+              : ''
+            }
+            {' '}are due for review within the next 30 days:
+            {' '}{reviewDueDocs.slice(0, 3).map(d => d.title).join(', ')}
+            {reviewDueDocs.length > 3 ? ` and ${reviewDueDocs.length - 3} more` : ''}.
+          </span>
+        </div>
+      )}
+
       {/* Categories */}
       <div className="cp-card">
         <div className="cp-card-title">Categories</div>
@@ -385,7 +423,7 @@ export default function DocumentsPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
-                    {docStatuses.map(s => <option key={s} value={s}>{docStatusLabel(s)}</option>)}
+                    {uploadStatuses.map(s => <option key={s} value={s}>{docStatusLabel(s)}</option>)}
                   </select>
                 </div>
                 <div className="cp-field">
@@ -458,6 +496,16 @@ export default function DocumentsPage() {
               <div className="cp-field">
                 <label>Expiry Date (optional)</label>
                 <input type="date" value={editForm.expires_at || ''} onChange={e => setEditForm(f => ({ ...f, expires_at: e.target.value }))} />
+              </div>
+              {/* CPPM-31: the next certified review. Set automatically on approval; editable here. */}
+              <div className="cp-field">
+                <label>Next Review Due</label>
+                <input type="date" value={editForm.review_due_at || ''} onChange={e => setEditForm(f => ({ ...f, review_due_at: e.target.value }))} />
+                <span style={{ fontSize: 11, color: '#6B7280', marginTop: 4, display: 'block' }}>
+                  {editDoc.approved_by_name
+                    ? `Approved by ${editDoc.approved_by_name}${editDoc.approved_at ? ` on ${editDoc.approved_at.slice(0, 10)}` : ''}.`
+                    : 'Not yet approved — this document cannot be published.'}
+                </span>
               </div>
               {(editForm.status === 'draft' || editForm.status === 'scheduled' || !editForm.status) && (
                 <div className="cp-field">
@@ -534,6 +582,8 @@ export default function DocumentsPage() {
                 <th>Type</th>
                 <th>Status</th>
                 <th>Version</th>
+                <th>Approved By</th>
+                <th>Review Due</th>
                 <th>Expiry</th>
                 <th>Size</th>
                 <th>Downloads</th>
@@ -564,6 +614,15 @@ export default function DocumentsPage() {
                     }}>{docStatusLabel(d.status)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
+                  {/* CPPM-31: who certified this version, and when it must be looked at again */}
+                  <td>
+                    {d.approved_by_name
+                      ? <>{d.approved_by_name}<span style={{ display: 'block', fontSize: 11, color: '#6B7280' }}>{d.approved_at ? d.approved_at.slice(0, 10) : ''}</span></>
+                      : <span style={{ color: '#9CA3AF' }}>Not approved</span>}
+                  </td>
+                  <td style={{ color: isOverdue(d.review_due_at) ? '#DC2626' : undefined }}>
+                    {d.review_due_at ? d.review_due_at.slice(0, 10) : '—'}
+                  </td>
                   <td style={{ color: d.expires_at && new Date(d.expires_at) < new Date() ? '#DC2626' : undefined }}>
                     {d.expires_at ? d.expires_at.slice(0, 10) : '—'}
                   </td>
