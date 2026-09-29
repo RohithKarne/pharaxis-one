@@ -67,9 +67,13 @@ export default function CaseMITab({
   const miLabel = (key, fallback) => { const f = miField(key, fallback); return f.required ? `${f.label} *` : f.label }
   const miHide = (key) => (miField(key, '').hidden ? { display: 'none' } : undefined)
   // Approve and Send follow the letter permissions the server checks (M-86).
-  const { hasCapability } = useAuth()
-  const canApproveLetters = hasCapability('case.letter.approve')
-  const canSendLetters = hasCapability('case.letter.send')
+  // Read the resolved privilege list: hasCapability says yes to everything for
+  // a user in no security group ("unrestricted"), whatever their role (M-93).
+  const { securityAccess, hasCapability } = useAuth()
+  const letterPrivs = securityAccess?.privileges
+  const canLetter = (key) => (Array.isArray(letterPrivs) ? letterPrivs.includes(key) : hasCapability(key))
+  const canApproveLetters = canLetter('case.letter.approve')
+  const canSendLetters = canLetter('case.letter.send')
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
   // draft started against MI tab #1 leaks into MI tab #2 on the same case.
   // Key is computed below once activeMiTab is known.

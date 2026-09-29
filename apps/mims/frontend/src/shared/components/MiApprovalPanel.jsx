@@ -151,9 +151,12 @@ function ClassificationCard({ miTabId, H, onChange }) {
 // ── Two-signer approval card ────────────────────────────────────────────────
 
 function ApprovalCard({ responseId, H, onChange }) {
-  const { hasCapability } = useAuth()
+  const { securityAccess, hasCapability } = useAuth()
   // Both signatures need "Approve letter"; the server refuses anyone else (M-86).
-  const canSign = hasCapability('case.letter.approve')
+  // Read the resolved privilege list: hasCapability says yes to everything for
+  // a user in no security group ("unrestricted"), whatever their role (M-93).
+  const privs = securityAccess?.privileges
+  const canSign = Array.isArray(privs) ? privs.includes('case.letter.approve') : hasCapability('case.letter.approve')
   const [state, setState] = useState(null)
   const [signing, setSigning] = useState(null) // 'reviewer' | 'approver' | null
   const [password, setPassword] = useState('')
