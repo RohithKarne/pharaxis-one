@@ -32,7 +32,7 @@ export default function CaseFormPage() {
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-    draftStatus,
+    draftStatus, draftRestored, discardDraft,
     saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged,
     getFieldConfig, getPicklistOptions,
     headers,
@@ -165,6 +165,13 @@ export default function CaseFormPage() {
       {/* Read-only summary. Replaces the five panels that used to occupy the
           deleted "Case Meta" step — one line, no extra queries, visible on
           every step. */}
+      {draftRestored && (
+        <div className="cf-inline-note" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Unsaved changes from your last visit were restored. Save Case to keep them, or discard them.</span>
+          <button type="button" className="cf-back-btn" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
+
       <CaseHeaderStrip
         caseData={caseData}
         infoForm={infoForm}

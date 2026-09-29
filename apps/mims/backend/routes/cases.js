@@ -1760,7 +1760,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         const isClose = newName === 'Closed' && oldName !== 'Closed';
         const isReopen = oldName === 'Closed' && newName !== 'Closed';
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
-          return res.status(403).json({ error: 'Access denied' });
+          return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }
         const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
         if (isClose) {
