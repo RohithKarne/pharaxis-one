@@ -470,7 +470,11 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
       if (!current) return res.status(404).json({ error: 'Document not found.' });
     }
     let requiresReapproval = false;
-    if (current?.approved_at && status !== 'approved') {
+    // Only a request that grants a fresh approval skips this. The edit box re-sends the
+    // current status ('approved', 'published') with every save, and that must not keep
+    // an approval that no longer matches what was certified.
+    const approvingNow = status === 'approved' && current?.status !== 'approved';
+    if (current?.approved_at && !approvingNow) {
       const changed = Object.entries(CERTIFIED_FIELDS).filter(([key, value]) => {
         if (value === undefined) return false;
         const before = key === 'visible_to' ? (current.visible_to_json || null)
@@ -484,7 +488,14 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
         // Keep what was certified before, then take the approval off this row.
         await recordSupersededVersion(current, req.admin, 'edited');
         fields.push('approved_by = NULL', 'approved_by_name = NULL', 'approved_at = NULL', 'review_due_at = NULL');
-        if (status === undefined) { fields.push('status = ?'); values.push('draft'); }
+        // Nothing unapproved stays live: back to draft whatever status the form re-sent.
+        // A retirement in the same request still retires.
+        if (status !== 'archived') {
+          const at = fields.indexOf('status = ?');
+          if (at === -1) { fields.push('status = ?'); values.push('draft'); }
+          else values[fields.slice(0, at).join(' ').split('?').length - 1] = 'draft';
+          lifecycleAction = null;
+        }
         await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId, { changed });
       }
     }
@@ -500,7 +511,7 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (publish_at !== undefined)  { fields.push('publish_at = ?');      values.push(publish_at || null); }
     // CPPM-31: an approval sets the review date itself, so only take it from the
     // body when this request is not an approval.
-    if (review_due_at !== undefined && lifecycleAction !== 'APPROVE') { fields.push('review_due_at = ?'); values.push(review_due_at || null); }
+    if (review_due_at !== undefined && lifecycleAction !== 'APPROVE' && !requiresReapproval) { fields.push('review_due_at = ?'); values.push(review_due_at || null); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.docId, req.params.clientId);

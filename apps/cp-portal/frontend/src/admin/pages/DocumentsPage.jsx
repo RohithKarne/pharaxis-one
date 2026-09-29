@@ -70,6 +70,7 @@ export default function DocumentsPage() {
   const [editForm, setEditForm]       = useState({})
   const [editError, setEditError]     = useState('')
   const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('') // CPPM-31: an edit that took the approval away
   const [expiringDocs, setExpiringDocs] = useState([])
   const [reviewDueDocs, setReviewDueDocs] = useState([])
   const [alertMsg, setAlertMsg]         = useState(null)
@@ -248,12 +249,13 @@ export default function DocumentsPage() {
         headers: adminHeaders(),
         body: JSON.stringify({ ...editForm, publish_at: editForm.publish_at || null }),
       })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
         setEditError(data.error || 'Failed to save changes.')
         return
       }
       setShowEditModal(false)
+      setNotice(data.requires_reapproval ? `"${editDoc.title}": ${data.message}` : '')
       load()
     } catch {
       setEditError('Network error saving changes.')
@@ -372,6 +374,7 @@ export default function DocumentsPage() {
       </div>
 
       {actionError && <div className="cp-error">{actionError}</div>}
+      {notice && <div className="cp-inline-alert warning">{notice}</div>}
 
       {showUpload && (
         <div className="cp-modal-overlay" onClick={() => setShowUpload(false)}>
