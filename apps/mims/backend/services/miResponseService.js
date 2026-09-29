@@ -209,17 +209,23 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   });
   const selectedContent = contentBlocks.join('\n');
 
+  // {{patient_name}} was the recipient (usually the reporting HCP) and
+  // {{agent_name}} an email (M-47, same slip as merge letters). The patient is
+  // recorded by initials only; the recipient has its own fields.
+  const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
+  const [[patientRow]] = await pool.execute('SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1', [scopedCase.id]);
+
   // Merge field map
   const mergeData = {
     date:             new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-    agent_name:       req.user.name || req.user.email || '',
+    agent_name:       agent?.name || req.user.name || req.user.email || '',
     case_number:      scopedCase.case_number || '',
     case_type:        scopedCase.case_type || '',
     org_name:         scopedCase.org_name || '',
     recipient_name:   recipient.name || recipient.email || 'Requestor',
     recipient_email:  recipient.email || '',
-    patient_name:     recipient.name || '',
-    patient_email:    recipient.email || '',
+    patient_name:     patientRow?.initials || '',
+    patient_email:    '',
     product_name:     product?.trade_name || miTab?.product_name || '',
     product_family:   product?.family_name || miTab?.family_name || '',
     mi_question:      miTab?.question_summary || miTab?.detailed_question || '',

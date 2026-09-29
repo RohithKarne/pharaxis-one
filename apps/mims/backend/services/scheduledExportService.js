@@ -199,7 +199,7 @@ async function deliverByEmail(config, csvContent) {
   });
 
   if (!config.delivery_target) {
-    throw new Error('delivery_target is required for email delivery');
+    throw new Error('Enter an email address to send the report to.');
   }
 
   const fileDate = new Date().toISOString().slice(0, 10);
@@ -379,7 +379,7 @@ async function getExportConfigs(orgId) {
 async function createExportConfig(orgId, userId, data) {
   const exportName = String(data.export_name || '').trim();
   if (!exportName) {
-    const err = new Error('export_name is required');
+    const err = new Error('Enter a name for the schedule.');
     err.statusCode = 400;
     throw err;
   }
@@ -387,7 +387,7 @@ async function createExportConfig(orgId, userId, data) {
   const deliveryMethod = data.delivery_method || moduleConfig.default_delivery_method || 'email';
   const deliveryTarget = String(data.delivery_target || moduleConfig.default_delivery_target || '').trim();
   if (deliveryMethod === 'email' && !deliveryTarget) {
-    const err = new Error('delivery_target is required for email delivery');
+    const err = new Error('Enter an email address to send the report to.');
     err.statusCode = 400;
     throw err;
   }
@@ -404,12 +404,12 @@ async function createExportConfig(orgId, userId, data) {
     ? await getDashboardById(orgId, targetId)
     : null;
   if (targetType === 'report' && !reportDefinition) {
-    const err = new Error('A valid report target is required');
+    const err = new Error('Choose a report to schedule.');
     err.statusCode = 400;
     throw err;
   }
   if (targetType === 'dashboard' && !dashboardDefinition) {
-    const err = new Error('A valid dashboard target is required');
+    const err = new Error('Choose a dashboard to schedule.');
     err.statusCode = 400;
     throw err;
   }
@@ -469,7 +469,7 @@ async function updateExportConfig(id, orgId, data) {
   );
 
   if (!existingRows.length) {
-    const err = new Error('Config not found');
+    const err = new Error('Schedule not found.');
     err.statusCode = 404;
     throw err;
   }
@@ -490,18 +490,18 @@ async function updateExportConfig(id, orgId, data) {
   nextConfig.report_key = data.report_key || existing.report_key || (nextConfig.target_type === 'dashboard' ? `dashboard-${nextConfig.target_id || 'bundle'}` : 'case-summary');
 
   if (nextConfig.target_type === 'report' && nextConfig.target_id && !await getReportDefinitionById(orgId, nextConfig.target_id)) {
-    const err = new Error('A valid report target is required');
+    const err = new Error('Choose a report to schedule.');
     err.statusCode = 400;
     throw err;
   }
   if (nextConfig.target_type === 'dashboard' && nextConfig.target_id && !await getDashboardById(orgId, nextConfig.target_id)) {
-    const err = new Error('A valid dashboard target is required');
+    const err = new Error('Choose a dashboard to schedule.');
     err.statusCode = 400;
     throw err;
   }
 
   if (Object.prototype.hasOwnProperty.call(data, 'delivery_method') && nextConfig.delivery_method === 'email' && !String(nextConfig.delivery_target || '').trim()) {
-    const err = new Error('delivery_target is required for email delivery');
+    const err = new Error('Enter an email address to send the report to.');
     err.statusCode = 400;
     throw err;
   }
@@ -552,7 +552,7 @@ async function pauseExportConfig(id, orgId, userId) {
     [userId || null, id, orgId]
   );
   if (!result.affectedRows) {
-    const err = new Error('Config not found');
+    const err = new Error('Schedule not found.');
     err.statusCode = 404;
     throw err;
   }
@@ -564,7 +564,7 @@ async function resumeExportConfig(id, orgId) {
     [id, orgId]
   );
   if (!rows.length) {
-    const err = new Error('Config not found');
+    const err = new Error('Schedule not found.');
     err.statusCode = 404;
     throw err;
   }
@@ -584,7 +584,7 @@ async function deleteExportConfig(id, orgId) {
   );
 
   if (!result.affectedRows) {
-    const err = new Error('Config not found');
+    const err = new Error('Schedule not found.');
     err.statusCode = 404;
     throw err;
   }
