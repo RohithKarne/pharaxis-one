@@ -159,6 +159,13 @@ export default function SubmitPage() {
           <div className="pp-success-icon">✓</div>
           <h2>Submission Received</h2>
           <p>Your reference number is <strong>{submitted.reference}</strong></p>
+          {submitted.attachments_blocked?.length > 0 && (
+            /* CPPM-39: the report went through; the infected file did not. */
+            <p className="pp-success-sub" role="alert" style={{ color: '#B91C1C' }}>
+              We did not keep {submitted.attachments_blocked.map(f => `"${f}"`).join(', ')} because it contains a known virus.
+              Your report itself was received.
+            </p>
+          )}
           <p className="pp-success-sub">{slaText}</p>
           <div className="pp-success-actions">
             <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>Submit Another</button>

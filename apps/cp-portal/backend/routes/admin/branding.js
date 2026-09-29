@@ -12,6 +12,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const { ratio, AA_NORMAL } = require('../../utils/contrast');
 const cache = require('../../utils/cache');
 const log = require('../../utils/logger');
@@ -70,6 +71,9 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       return res.status(400).json({ error: `This image was not accepted because ${danger.reason}.` });
     }
+    // CPPM-39: and against ClamAV's list of known viruses.
+    const scanRefusal = await refuseUnlessClean([req.file]);
+    if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     const safeName = `client-${req.params.clientId}-logo${safeExt}`;
     const safePath = path.join(path.dirname(req.file.path), safeName);
     if (safePath !== req.file.path) {

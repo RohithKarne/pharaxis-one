@@ -11,6 +11,7 @@ const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
 const { validateUploads } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -76,6 +77,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     if (req.file) {
       const failure = validateUploads([req.file], ALLOWED_MIMES);
       if (failure) return res.status(400).json({ error: failure });
+      // CPPM-39: and against ClamAV's list of known viruses.
+      const scanRefusal = await refuseUnlessClean([req.file]);
+      if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     }
 
     try {

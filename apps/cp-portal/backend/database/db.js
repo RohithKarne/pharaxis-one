@@ -1030,8 +1030,12 @@ async function initializeDatabase() {
       file_size     INT          NULL,
       mime_type     VARCHAR(120) NULL,
       created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      scan_status   VARCHAR(20)  NOT NULL DEFAULT 'pending',
+      scan_detail   VARCHAR(255) NULL,
+      scanned_at    DATETIME     NULL,
       PRIMARY KEY (id),
       KEY idx_subatt_submission (submission_id),
+      KEY idx_subatt_scan (scan_status),
       CONSTRAINT fk_subatt_sub    FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
       CONSTRAINT fk_subatt_client FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4

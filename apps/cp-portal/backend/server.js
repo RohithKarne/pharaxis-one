@@ -247,6 +247,9 @@ function createContentScheduler() {
       // CPPM-29: remove anonymous visitors' cookie choices past retention.
       const { purgeExpiredConsent } = require('./utils/consent');
       await purgeExpiredConsent().catch(err => log.error('consent.records.purge_failed', { err }));
+      // CPPM-39: scan attachments held because the virus scanner was unreachable.
+      const { rescanHeldAttachments } = require('./services/attachmentScan');
+      await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

@@ -13,6 +13,7 @@ const { audit } = require('../../utils/audit');
 const { recordStatusEvent } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { queueEmail } = require('../../utils/emailOutbox');
+const { downloadRefusal } = require('../../utils/virusScan');
 const { requireRole } = require('../../middleware/auth');
 
 // GET /api/admin/submissions/:clientId
@@ -64,7 +65,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       const ids = rows.map(r => r.id);
       const ph  = ids.map(() => '?').join(',');
       const [atts] = await pool.execute(
-        `SELECT id, submission_id, file_name, file_size, mime_type FROM cp_submission_attachments WHERE submission_id IN (${ph})`, ids);
+        `SELECT id, submission_id, file_name, file_size, mime_type, scan_status FROM cp_submission_attachments WHERE submission_id IN (${ph})`, ids);
       const bySub = {};
       atts.forEach(a => { (bySub[a.submission_id] = bySub[a.submission_id] || []).push(a); });
       rows.forEach(r => { r.attachments = bySub[r.id] || []; });
@@ -159,9 +160,11 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
 router.get('/:clientId/attachments/:attachmentId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const [[att]] = await pool.execute(
-      'SELECT file_name, file_path, mime_type FROM cp_submission_attachments WHERE id = ? AND client_id = ?',
+      'SELECT file_name, file_path, mime_type, scan_status FROM cp_submission_attachments WHERE id = ? AND client_id = ?',
       [req.params.attachmentId, req.params.clientId]);
     if (!att) return res.status(404).json({ error: 'Attachment not found.' });
+    const refusal = downloadRefusal(att.scan_status); // CPPM-39: only cleared files are served
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error });
     const abs = path.join(__dirname, '../../', att.file_path.replace(/^\//, ''));
     if (!fs.existsSync(abs)) return res.status(404).json({ error: 'File missing.' });
     res.setHeader('Content-Type', att.mime_type || 'application/octet-stream');

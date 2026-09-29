@@ -10,8 +10,8 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0020 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0020 as applied, because their contents are already
+-- 0002-0021 — so an empty database is provisioned by the migration runner alone.
+-- It then records 0002-0021 as applied, because their contents are already
 -- included here and re-running them would duplicate columns.
 -- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
@@ -804,7 +804,7 @@ CREATE TABLE IF NOT EXISTS cp_msl_slots (
   CONSTRAINT fk_slots_msl    FOREIGN KEY (msl_id)    REFERENCES cp_msls(id)    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── SUBMISSION ATTACHMENTS (from 0003) ─────────────────────────
+-- ── SUBMISSION ATTACHMENTS (from 0003; scan columns from 0021, CPPM-39) ──
 CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   id            INT          NOT NULL AUTO_INCREMENT,
   submission_id INT          NOT NULL,
@@ -814,8 +814,12 @@ CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   file_size     INT          NULL,
   mime_type     VARCHAR(120) NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  scan_status   VARCHAR(20)  NOT NULL DEFAULT 'pending',
+  scan_detail   VARCHAR(255) NULL,
+  scanned_at    DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_subatt_submission (submission_id),
+  KEY idx_subatt_scan (scan_status),
   CONSTRAINT fk_subatt_sub    FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
   CONSTRAINT fk_subatt_client FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1023,7 +1027,7 @@ CREATE TABLE IF NOT EXISTS cp_mims_redactions (
   CONSTRAINT fk_mims_redaction_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0020 AS APPLIED ────────────────────────────────
+-- ── RECORD 0002-0021 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -1049,4 +1053,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0017_add_submission_status_history.sql',    NULL),
   ('0018_add_consent_text_versions.sql',        NULL),
   ('0019_add_document_lifecycle.sql',           NULL),
-  ('0020_add_mims_redactions.sql',              NULL);
+  ('0020_add_mims_redactions.sql',              NULL),
+  ('0021_add_attachment_scan_status.sql',       NULL);

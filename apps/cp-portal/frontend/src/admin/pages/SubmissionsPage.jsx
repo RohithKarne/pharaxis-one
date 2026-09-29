@@ -383,7 +383,15 @@ export default function SubmissionsPage() {
                           <>
                             <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Attachments ({s.attachments.length})</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {s.attachments.map(a => (
+                              {s.attachments.map(a => a.scan_status && a.scan_status !== 'clean' ? (
+                                /* CPPM-39: only files cleared by the virus scan are downloadable. */
+                                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6B7280' }}>
+                                  {a.file_name}{' '}
+                                  <span style={{ color: a.scan_status === 'infected' ? '#B91C1C' : '#92400E', fontSize: 11, fontWeight: 600 }}>
+                                    {{ infected: 'Removed — contained a known virus', missing: 'File no longer available' }[a.scan_status] || 'Held — being checked for viruses'}
+                                  </span>
+                                </span>
+                              ) : (
                                 <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
                                   ⬇ {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>

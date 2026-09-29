@@ -40,6 +40,7 @@ const { notifyPortalUsers } = require('../../utils/notify');
 const { sendEmail } = require('../../utils/mailer');
 const { autoTranslate } = require('../../utils/translator');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -356,6 +357,12 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       log.warn('admin.documents.upload_blocked', { client_id: req.params.clientId, reason: danger.reason, file: req.file.originalname });
       return res.status(400).json({ error: `This file was not accepted because ${danger.reason}.` });
+    }
+    // CPPM-39: and against ClamAV's list of known viruses — refused if infected or unscannable.
+    const scanRefusal = await refuseUnlessClean([req.file]);
+    if (scanRefusal) {
+      log.warn('admin.documents.upload_scan_refused', { client_id: req.params.clientId, reason: scanRefusal.error });
+      return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     }
 
     const { title, category, doc_type, visible_to, source, status, version, expires_at } = req.body;
