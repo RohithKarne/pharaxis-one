@@ -244,6 +244,9 @@ function createContentScheduler() {
       // CPPM-17: remove chat records past retention.
       const { purgeExpiredChats } = require('./utils/chatRecords');
       await purgeExpiredChats().catch(err => log.error('chat.records.purge_failed', { err }));
+      // CPPM-29: remove anonymous visitors' cookie choices past retention.
+      const { purgeExpiredConsent } = require('./utils/consent');
+      await purgeExpiredConsent().catch(err => log.error('consent.records.purge_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

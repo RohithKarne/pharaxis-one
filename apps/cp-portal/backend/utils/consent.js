@@ -7,6 +7,7 @@
 
 const crypto = require('crypto');
 const { pool } = require('../database/db');
+const log = require('./logger');
 
 // CPPM-27: a plain SHA-256 of an IP address can be reversed by trying every
 // address, so it was never "no personal data". A keyed hash cannot be reversed
@@ -50,4 +51,20 @@ async function hasAnalyticsConsent(req, clientId) {
   return (await latestChoices(req, clientId)).analytics === true;
 }
 
-module.exports = { hashVisitorIp, latestChoices, hasAnalyticsConsent };
+// CPPM-29: an anonymous visitor's choice is kept 12 months (Vasu, CCO, 29 Sep 2026).
+// Rows written before the keyed hash reached main (PR #660, 22 Sep 2026) still carry
+// the reversible hash, so they go now. Only anonymous rows (ip_hash set) are touched:
+// a signed-in person's row has no ip_hash, even after their account is deleted.
+const CONSENT_RETENTION_MONTHS = 12;
+const KEYED_HASH_SINCE = '2026-09-23 00:00:00';
+
+async function purgeExpiredConsent() {
+  const [r] = await pool.execute(
+    `DELETE FROM cp_consent_records
+      WHERE user_id IS NULL AND ip_hash IS NOT NULL
+        AND (consented_at < NOW() - INTERVAL ? MONTH OR consented_at < ?)`,
+    [CONSENT_RETENTION_MONTHS, KEYED_HASH_SINCE]);
+  if (r.affectedRows) log.info('consent.records.purged', { records: r.affectedRows, retention_months: CONSENT_RETENTION_MONTHS });
+}
+
+module.exports = { hashVisitorIp, latestChoices, hasAnalyticsConsent, purgeExpiredConsent };

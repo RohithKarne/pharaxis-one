@@ -8,6 +8,16 @@ const DEFAULT_CHOICES = {
   marketing:  false,
 }
 
+// CPPM-29: the server keeps an anonymous visitor's choice 12 months (Vasu, CCO), so
+// the browser forgets it after 12 months too and asks again. Browsers that stored
+// "true" with no date are asked once more — re-asking is the safe direction.
+const CONSENT_KEEP_MS = 365 * 24 * 60 * 60 * 1000
+
+function rememberedConsent(key) {
+  const savedAt = Number(localStorage.getItem(key))
+  return savedAt > 0 && Date.now() - savedAt < CONSENT_KEEP_MS
+}
+
 const PREFERENCE_TOGGLES = [
   { key: 'functional', label: 'Functional', desc: 'Enables personalised features and remembers your preferences.' },
   { key: 'analytics',  label: 'Analytics',  desc: 'Helps us understand how you use the portal to improve it.' },
@@ -31,8 +41,8 @@ export default function ConsentBanner() {
 
   useEffect(() => {
     if (!compliance) return
-    // Already dismissed in this browser session
-    if (localStorage.getItem(`cp_consent_v${version}`)) return
+    // Already chosen in this browser within the last 12 months
+    if (rememberedConsent(`cp_consent_v${version}`)) return
     // Signed-in user — check DB first
     if (user) {
       portalFetch(`/api/portal/consent/check?clientCode=${clientCode}&version=${version}`)
@@ -92,7 +102,7 @@ export default function ConsentBanner() {
       setSaving(false)
       return
     }
-    localStorage.setItem(`cp_consent_v${version}`, 'true')
+    localStorage.setItem(`cp_consent_v${version}`, String(Date.now()))
     setSaving(false)
     setShow(false)
   }
