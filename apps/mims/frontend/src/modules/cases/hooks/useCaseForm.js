@@ -274,14 +274,15 @@ export default function useCaseForm(id, token) {
       const validateRes = await httpFetch(`${API}/cases/${id}/validate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ payload: buildDynamicPayload() }),
+        body: JSON.stringify({ payload: buildDynamicPayload(), values_by_id: dynFieldValues }),
       })
       const validateData = await validateRes.json()
       if (validateRes.ok && Array.isArray(validateData.errors) && validateData.errors.length) {
         const nextErrors = {}
         validateData.errors.forEach(err => { nextErrors[err.field] = err.message })
         setDynFieldErrors(nextErrors)
-        throw new Error('Please fix validation errors before saving.')
+        // Name the fields — a required one may sit on another step or tab.
+        throw new Error(`Please fix before saving: ${validateData.errors.map(e => e.message).join(' ')}`)
       }
       setDynFieldErrors({})
       const fields = Object.entries(dynFieldValues).map(([field_definition_id, value]) => ({
