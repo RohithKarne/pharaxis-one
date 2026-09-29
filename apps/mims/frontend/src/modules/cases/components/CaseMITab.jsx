@@ -475,7 +475,16 @@ export default function CaseMITab({
   const bundles = builderContext?.bundles || []
   const chosenTemplate = selectedTemplate()
   const miCategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Category') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
-  const miSubcategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Subcategory') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
+  // Subcategories follow the chosen category (T19 / M-19, migration 119): a linked
+  // subcategory shows only under its category; an unlinked one ("General Query",
+  // "Other") under every category. A saved value that no longer fits stays
+  // listed so it is not silently dropped.
+  const miCategoryId = (getPicklistOptions?.('MI — Category & Product', 'MI Category') || [])
+    .find(option => option.value === miForm.mi_category)?.id
+  const miSubcategoryList = (getPicklistOptions?.('MI — Category & Product', 'MI Subcategory') || [])
+    .filter(option => !option.parent_value_id || !miCategoryId || String(option.parent_value_id) === String(miCategoryId)
+      || option.value === miForm.subcategory)
+  const miSubcategoryOptions = [{ value: '', label: '— Select —' }, ...miSubcategoryList.map(option => ({ value: option.value, label: option.label || option.value }))]
   const miStatusOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'MI Status') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
   const responseChannelOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'Response Channel') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
 
