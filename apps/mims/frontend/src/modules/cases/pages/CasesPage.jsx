@@ -428,7 +428,10 @@ export default function CasesPage() {
     return cases.filter(c => {
       if (typeFilter !== 'all' && c.case_type !== typeFilter) return false
       
-      const p = c.priority || 'normal'
+      // The case form saves the list's capitalised value ("Urgent", "High");
+      // imported cases hold lowercase. Compare without case, or dropdown-set
+      // priorities never match the filters (M-80).
+      const p = String(c.priority || 'normal').toLowerCase()
       if (priorityFilter === 'high_urgent') {
         if (p !== 'high' && p !== 'urgent') return false
       } else if (priorityFilter !== 'all' && p !== priorityFilter) {

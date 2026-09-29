@@ -24,7 +24,7 @@ export default function AiCaseSummaryCard({ caseId, caseData, headers }) {
       // Fallback deterministic summarizer
       setSummary({
         narrative: `This is an AI-generated summary fallback for Case #${caseId}. It highlights key case details automatically extracted from the unstructured text. The patient experienced unexpected effects after taking the suspect drug, and follow-up is recommended.`,
-        riskFlags: caseData?.priority === 'High' ? ['High Priority', 'SLA Approaching'] : ['Standard SLA'],
+        riskFlags: String(caseData?.priority || '').toLowerCase() === 'high' ? ['High Priority', 'SLA Approaching'] : ['Standard SLA'],
         keyFacts: [caseData?.case_type || 'Spontaneous', 'Healthcare Professional', 'Suspect Drug A']
       })
     } finally {
