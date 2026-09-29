@@ -23,11 +23,17 @@ function readCookie(req, name) {
   return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
 }
 
+// A bearer value counts only when it looks like a JWT (three base64url parts).
+// The web app no longer receives the session token (T15), so its "signed in"
+// marker still rides along as `Bearer cookie-session`; ignoring anything that is
+// not a JWT lets the httpOnly cookie carry the session instead.
+const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 function readBearer(req) {
   const authHeader = req.headers['authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7).trim();
-  return token && token !== 'null' && token !== 'undefined' ? token : null;
+  return JWT_SHAPE.test(token) ? token : null;
 }
 
 async function validateAccessToken(token) {
@@ -237,4 +243,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, readBearer, validateAccessToken, sessionCacheInvalidate };

@@ -59,7 +59,8 @@ function removeSocketFromIndex(map, key, ws) {
 
 async function handleSocketAuth(request) {
   const authHeader = request.headers.authorization || '';
-  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  // A non-JWT bearer (the web app's session marker, T15) is ignored: the cookie carries the session.
+  const bearerToken = require('../middleware/auth').readBearer({ headers: { authorization: authHeader } });
   const token = bearerToken || readCookie({ headers: { cookie: request.headers.cookie || '' } }, 'mims_token');
   return validateAccessToken(token);
 }

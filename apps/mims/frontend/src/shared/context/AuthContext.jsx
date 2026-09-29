@@ -11,6 +11,13 @@ import { formatAdminRoleLabel, hasGlobalAdminScope } from '../utils/adminScope.j
 
 const AuthContext = createContext(null)
 
+// The server no longer sends the session token to the page (T15 / M-9): it lives
+// only in the httpOnly mims_token cookie, which scripts cannot read. `token` in
+// this context is now a marker meaning "a session is active" — components keep
+// checking it and sending it, and the server ignores a bearer value that is not a
+// real token and uses the cookie.
+const COOKIE_SESSION = 'cookie-session'
+
 function createUnrestrictedSecurityAccess() {
   return { resolved: true, unrestricted: true, system_options: null, case_options: null }
 }
@@ -89,7 +96,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   const applyAuthState = useCallback((payload = {}) => {
     const nextUser = payload.user || null
-    const nextToken = payload.token || null
+    const nextToken = payload.token || (payload.user ? COOKIE_SESSION : null)
     const nextModules = Array.isArray(payload.modules) ? payload.modules : []
     const nextOrgId = payload.orgId != null && payload.orgId !== '' ? Number(payload.orgId) : null
     const nextSiteId = payload.siteId != null && payload.siteId !== '' ? Number(payload.siteId) : null
@@ -129,7 +136,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     const { orgId: oid = null, siteId: sid = null, orgName: oname = null, siteName: sname = null, allOrgs: all = [], sessionTimeout: timeout = 30 } = orgData
     applyAuthState({
       user: userData,
-      token: authToken,
+      token: authToken || (userData ? COOKIE_SESSION : null),
       modules: allowedModules,
       orgId: oid,
       siteId: sid,
@@ -175,7 +182,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     }
     applyAuthState({
       user,
-      token: data.token || null,
+      token: data.token || COOKIE_SESSION,
       modules,
       orgId: data.orgId,
       siteId: data.siteId,
@@ -254,7 +261,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (!switchRes.ok) return
     const switched = await switchRes.json()
     // Token kept in memory only (F14); the httpOnly cookie carries auth on reload.
-    setToken(switched.token || null)
+    setToken(switched.token || COOKIE_SESSION)
     localStorage.setItem(`${KEY}_org_id`,          switched.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         switched.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        switched.orgName ?? '')
