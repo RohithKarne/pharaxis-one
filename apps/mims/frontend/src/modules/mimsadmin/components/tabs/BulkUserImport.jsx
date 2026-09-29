@@ -166,7 +166,7 @@ export default function BulkUserImport({ groups, orgs, token, onClose, onCreated
           {result ? (
             <div className="ma-usr-bulk-result">
               <div className="ma-usr-bulk-result-count">{result.created}</div>
-              <p>user{result.created === 1 ? '' : 's'} created. Each one must reset their password at first login.</p>
+              <p>user{result.created === 1 ? '' : 's'} created. Each one sets their password with “Forgot password” on the sign-in page.</p>
             </div>
           ) : (
             <>

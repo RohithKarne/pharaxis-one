@@ -149,6 +149,10 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSecurityAccess(createUnrestrictedSecurityAccess()); setSessionTimeout(30)
     ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
       .forEach(k => localStorage.removeItem(k))
+    // Forget the signed-in email on sign-out: the sign-in page pre-fills it, so the
+    // next person on a shared machine typed their password against the previous
+    // account (T11 / M-33 — three failed attempts against someone else's account).
+    localStorage.removeItem('mims_last_email')
     if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
   }
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireCapability } = require('../middleware/auth');
+const { authenticate, requireCapability, requireModule } = require('../middleware/auth');
 const pool = require('../database/db');
 const {
   getDailyCaseOpenings,
@@ -13,6 +13,8 @@ const {
 const { recordReportRun, listReportRunLedger } = require('../services/reportOpsService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const router = express.Router();
+// Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
+router.use('/reports', authenticate, requireModule('reports'));
 
 function dateFilters(from, to, col) {
   const parts = [];

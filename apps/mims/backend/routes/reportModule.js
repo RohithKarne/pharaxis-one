@@ -2,7 +2,7 @@
 
 const express = require('express');
 const pool = require('../database/db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireModule } = require('../middleware/auth');
 const {
   getDatasetCatalog,
   listReportDefinitions,
@@ -56,6 +56,8 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 
 const router = express.Router();
+// Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
+router.use('/reports', authenticate, requireModule('reports'));
 
 // Capability-based: mirrors the frontend hasCapability('reports.manage') gate and
 // the presets routes' requireCapability('reports.manage'). Role-only here would
