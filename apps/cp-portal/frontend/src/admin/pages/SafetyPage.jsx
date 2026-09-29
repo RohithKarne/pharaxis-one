@@ -177,6 +177,7 @@ export default function SafetyPage() {
                     <option value="product_recall">Product Recall</option>
                     <option value="urgent_safety_restriction">Urgent Safety Restriction</option>
                     <option value="field_safety_notice">Field Safety Notice</option>
+                    <option value="safety_update">Safety Update</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
