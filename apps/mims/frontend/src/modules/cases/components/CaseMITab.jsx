@@ -23,6 +23,13 @@ function formatProductOption(product) {
   return parts.filter(Boolean).join(' - ')
 }
 
+// delivery_metadata is a JSON column: an object from the server, or text.
+function parseJsonObject(value) {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  try { return JSON.parse(value) || {} } catch { return {} }
+}
+
 function parseJsonList(value) {
   if (!value) return []
   if (Array.isArray(value)) return value
@@ -74,6 +81,7 @@ export default function CaseMITab({
   const canLetter = (key) => (Array.isArray(letterPrivs) ? letterPrivs.includes(key) : hasCapability(key))
   const canApproveLetters = canLetter('case.letter.approve')
   const canSendLetters = canLetter('case.letter.send')
+  const canAmendLetters = canLetter('case.letter.supersede')
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
   // draft started against MI tab #1 leaks into MI tab #2 on the same case.
   // Key is computed below once activeMiTab is known.
@@ -646,6 +654,7 @@ export default function CaseMITab({
           const isVoided = st === 'VOIDED'
           const isSent = st === 'SENT'
           const selectedDocs = parseJsonList(r.selected_documents)
+          const delivery = parseJsonObject(r.delivery_metadata)
           const bodyHtml = r.response_body_html || ''
           return (
             <div key={r.id} className={`cf-response-card${isVoided ? ' cf-response-voided' : ''}`}>
@@ -681,12 +690,17 @@ export default function CaseMITab({
                   {st === 'APPROVED' && canSendLetters && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
                 </div>
               )}
+              {isSent && delivery.status === 'failed' && (
+                <div className="cf-inline-note" style={{ marginTop: 8, color: '#b91c1c', borderColor: '#f5c6c6', background: '#fdecea' }}>
+                  Not delivered{delivery.to ? ` to ${delivery.to}` : ''}: {delivery.error || 'the email could not be sent.'}
+                </div>
+              )}
               {isSent && (
                 <div className="cf-mi-transition-row">
                   <span className="cf-mi-final-badge">Sent - Record Immutable</span>
                   {r.superseded_by_id
                     ? <span className="cf-mi-final-badge">Superseded</span>
-                    : <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => amendSentResponse(r.id)}>Amend (new version)</button>}
+                    : canAmendLetters && <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => amendSentResponse(r.id)}>Amend (new version)</button>}
                 </div>
               )}
               {isVoided && <div className="cf-mi-voided-label">Discarded</div>}

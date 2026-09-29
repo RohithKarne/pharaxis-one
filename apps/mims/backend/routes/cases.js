@@ -2262,6 +2262,7 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.author_id,
          r.author_name AS responded_by_name,
          r.requires_two_signers,
+         r.delivery_metadata,
          r.created_at
        FROM case_mi_responses r
        LEFT JOIN cm_documents d ON d.id = r.cm_document_id
@@ -2590,8 +2591,13 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
           enactedByEmail:    req.user.email,
         });
       } catch (enqueueErr) {
-        // Non-fatal — SENT is already committed; log failure to enqueue
+        // Non-fatal — SENT is already committed; log failure to enqueue and mark
+        // the response not delivered so the case does not simply say SENT (M-99).
         logger.error({ err: enqueueErr, case_id: req.params.id, response_id: req.params.responseId }, 'MI email enqueue failed');
+        await pool.execute(
+          `UPDATE case_mi_responses SET delivery_metadata = ? WHERE id = ?`,
+          [JSON.stringify({ status: 'failed', error: `The letter could not be queued for sending: ${String(enqueueErr.message).slice(0, 200)}`, failed_at: new Date().toISOString() }), req.params.responseId]
+        ).catch(() => {});
         await logResponseError(req.user.orgId, req.params.id, 'EMAIL_ENQUEUE_FAILED', enqueueErr.message,
           { response_id: req.params.responseId, user: req.user.email }
         );
@@ -3196,6 +3202,10 @@ router.post('/cases/:id/escalate', authenticate, requireCapability('case.escalat
 router.post('/cases/:id/mi-responses/:responseId/supersede', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    // Amending a sent letter marks it superseded; it needs "Amend letter" (M-98).
+    if (!(await userHasActivityPrivilege(req.user, 'case.letter.supersede'))) {
+      return res.status(403).json({ error: 'You do not have permission to amend response letters.' });
+    }
     const [[original]] = await pool.execute(
       `SELECT * FROM case_mi_responses WHERE id = ? AND case_id = ?`,
       [req.params.responseId, req.params.id]

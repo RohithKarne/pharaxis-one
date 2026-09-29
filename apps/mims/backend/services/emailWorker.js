@@ -175,7 +175,7 @@ async function processJob(job) {
   if (job.response_id) {
     await pool.execute(
       `UPDATE case_mi_responses SET delivery_metadata = ? WHERE id = ?`,
-      [JSON.stringify({ to: recipient_email, subject, attachment_count: attachments.length, sent_at: new Date().toISOString() }), job.response_id]
+      [JSON.stringify({ status: 'sent', to: recipient_email, subject, attachment_count: attachments.length, sent_at: new Date().toISOString() }), job.response_id]
     ).catch(() => {});
   }
 
@@ -287,6 +287,31 @@ async function processBatch() {
              VALUES (?, 'MI Email', ?, 'Failed', 500)`,
             [job.case_id, `Email job ${job.id} exhausted after ${newAttempts} attempts: ${String(err.message).slice(0, 200)}`]
           ).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to write exhaustion audit'));
+        }
+
+        // A letter that could not be sent is marked on its response and its
+        // sender is told (M-99). Before, the case kept saying SENT and only the
+        // audit table knew.
+        if (exhausted && job.job_type === 'mi_response' && job.response_id) {
+          const p = parseJsonSafe(job.payload, {});
+          const reason = String(err.message || err).slice(0, 300);
+          await pool.execute(
+            `UPDATE case_mi_responses SET delivery_metadata = ? WHERE id = ?`,
+            [JSON.stringify({ status: 'failed', to: p.recipient_email || null, error: reason, failed_at: new Date().toISOString() }), job.response_id]
+          ).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to mark the response not delivered'));
+          if (p.enacted_by_user_id) {
+            const { createNotification } = require('./notificationCenterService');
+            await createNotification(p.enacted_by_user_id, {
+              category: 'mi_response',
+              severity: 'critical',
+              title: `MI letter not delivered — ${p.case_number || job.case_id}`,
+              message: `The response to ${p.recipient_email || 'the recipient'} could not be sent after ${newAttempts} tries: ${reason}`,
+              linkUrl: `/cases/${job.case_id}/response`,
+              metadata: { case_id: job.case_id, response_id: job.response_id, job_id: job.id },
+              requiresAcknowledgement: true,
+              eventKey: 'mi-response-delivery-failed',
+            }).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to notify the sender'));
+          }
         }
       }
     }
