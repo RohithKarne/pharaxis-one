@@ -68,7 +68,9 @@ export default function CaseFormWizard({
         </div>
 
         {/* Step Progress Tracker */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, 1fr)`, gap: 8 }}>
+        {/* minmax(0, 1fr) + minWidth 0: the step labels shorten with an ellipsis on
+            narrow panes instead of pushing the strip off to the right (M-78). */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, minmax(0, 1fr))`, gap: 8 }}>
           {WIZARD_STEPS.map(step => {
             const isActive = activeStep === step.id
             // A tick means the step has what it needs, not that it was passed
@@ -83,6 +85,7 @@ export default function CaseFormWizard({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
+                  minWidth: 0,
                   padding: '10px 12px',
                   borderRadius: 8,
                   border: '1px solid',

@@ -1,4 +1,7 @@
 import { httpFetch } from '../api/httpFetch.js'
+
+const SERVER_RESTARTING = new Set([502, 503, 504]);
+const SERVER_RESTARTING_MESSAGE = 'The MIMS server is restarting or unreachable — try again in a moment.';
 const TELEMETRY_ENDPOINT = '/api/telemetry/client-error';
 
 function randomId() {
@@ -83,7 +86,9 @@ export function initClientObservability({ app = 'mims' } = {}) {
             request_id: requestId,
             status_code: response.status,
             route: req || window.location.pathname,
-            message: body?.error || 'API request failed',
+            // 502/503/504 with no message is the dev proxy (or a gateway) while the
+            // server restarts — say that, not "API request failed" (M-51 follow-up).
+            message: body?.error || (SERVER_RESTARTING.has(response.status) ? SERVER_RESTARTING_MESSAGE : 'API request failed'),
           },
         }));
       }
@@ -104,7 +109,7 @@ export function initClientObservability({ app = 'mims' } = {}) {
             request_id: requestId,
             status_code: 0,
             route: req || window.location.pathname,
-            message: err?.message || 'Network error',
+            message: err?.name === 'TypeError' ? SERVER_RESTARTING_MESSAGE : (err?.message || 'Network error'),
           },
         }));
       }

@@ -228,8 +228,10 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     // them only when a correspondence filter or sort needs them; otherwise they
     // are read for the page's cases alone after the page query (M-30: the first
     // page took 7-13 s with 482k cases, 3.4 s page + 4.3 s count).
-    const needsComm = Boolean(has_correspondence || corr_from || corr_to || corr_box
-      || sort_by === 'communication_count' || sort_by === 'last_comm_at');
+    // Only the two correspondence sorts need totals for every case; the
+    // correspondence filters below look up each candidate case's own inquiries
+    // (idx_inquiries_case) — 0.5 s instead of 6.5 s on 482k cases (M-30).
+    const needsComm = sort_by === 'communication_count' || sort_by === 'last_comm_at';
     const commJoin = needsComm ? `
       LEFT JOIN (
         SELECT i.case_id,
@@ -315,55 +317,28 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
       countQuery += globalSearch.clause;
       countParams.push(...globalSearch.params);
     }
-    if (has_correspondence === 'yes' || has_correspondence === 'true') {
-      query += ' AND COALESCE(comm.communication_count, 0) > 0';
-      countQuery += ' AND COALESCE(comm.communication_count, 0) > 0';
-    }
-    if (has_correspondence === 'no' || has_correspondence === 'false') {
-      query += ' AND COALESCE(comm.communication_count, 0) = 0';
-      countQuery += ' AND COALESCE(comm.communication_count, 0) = 0';
-    }
-    if (corr_from) {
-      query += ' AND DATE(comm.last_comm_at) >= ?';
-      params.push(corr_from);
-      countQuery += ' AND DATE(comm.last_comm_at) >= ?';
-      countParams.push(corr_from);
-    }
-    if (corr_to) {
-      query += ' AND DATE(comm.last_comm_at) <= ?';
-      params.push(corr_to);
-      countQuery += ' AND DATE(comm.last_comm_at) <= ?';
-      countParams.push(corr_to);
-    }
+    // The newest inquiry on the case decides the date and the inbox/sent box —
+    // the same rule the correspondence columns use.
+    const hasComm = 'EXISTS (SELECT 1 FROM inquiries iq WHERE iq.case_id = c.id)';
+    const lastCommAt = '(SELECT MAX(iq.received_at) FROM inquiries iq WHERE iq.case_id = c.id)';
+    const lastCommSource = `(SELECT iq.source_tag FROM inquiries iq WHERE iq.case_id = c.id
+                              ORDER BY iq.received_at DESC, iq.id DESC LIMIT 1)`;
+    const addFilter = (clause, ...values) => {
+      query += ` AND ${clause}`; params.push(...values);
+      countQuery += ` AND ${clause}`; countParams.push(...values);
+    };
+    if (has_correspondence === 'yes' || has_correspondence === 'true') addFilter(hasComm);
+    if (has_correspondence === 'no' || has_correspondence === 'false') addFilter(`NOT ${hasComm}`);
+    if (corr_from) addFilter(`DATE(${lastCommAt}) >= ?`, corr_from);
+    if (corr_to) addFilter(`DATE(${lastCommAt}) <= ?`, corr_to);
     if (corr_box === 'inbox' || corr_box === 'sent') {
-      query += `
-        AND (
+      addFilter(`(
           CASE
-            WHEN comm.last_comm_source IS NULL THEN NULL
-            WHEN LOWER(comm.last_comm_source) LIKE '%reply%'
-              OR LOWER(comm.last_comm_source) LIKE '%forward%'
-              OR LOWER(comm.last_comm_source) LIKE '%sent%'
-              OR LOWER(comm.last_comm_source) LIKE '%transmission%'
-            THEN 'sent'
+            WHEN ${lastCommSource} IS NULL THEN NULL
+            WHEN LOWER(${lastCommSource}) REGEXP 'reply|forward|sent|transmission' THEN 'sent'
             ELSE 'inbox'
           END
-        ) = ?
-      `;
-      params.push(corr_box);
-      countQuery += `
-        AND (
-          CASE
-            WHEN comm.last_comm_source IS NULL THEN NULL
-            WHEN LOWER(comm.last_comm_source) LIKE '%reply%'
-              OR LOWER(comm.last_comm_source) LIKE '%forward%'
-              OR LOWER(comm.last_comm_source) LIKE '%sent%'
-              OR LOWER(comm.last_comm_source) LIKE '%transmission%'
-            THEN 'sent'
-            ELSE 'inbox'
-          END
-        ) = ?
-      `;
-      countParams.push(corr_box);
+        ) = ?`, corr_box);
     }
     if (corr_party) {
       query += ' AND EXISTS (SELECT 1 FROM inquiries iq WHERE iq.case_id = c.id AND (iq.sender LIKE ? OR iq.recipient LIKE ?))';
