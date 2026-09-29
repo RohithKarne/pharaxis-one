@@ -100,10 +100,6 @@ export default function CompliancePage() {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (config.version && !/^\d+(\.\d+)*$/.test(config.version)) {
-      setError('Version must be in format: 1.0 or 2.1.3')
-      return
-    }
     setError(''); setSaving(true)
     try {
       const res = await fetch(`/api/admin/compliance/${clientId}`, {
@@ -112,7 +108,6 @@ export default function CompliancePage() {
         body: JSON.stringify({
           jurisdictions:    config.jurisdictions,
           banner_config:    config.banner_config,
-          version:          config.version,
           require_reconsent: config.require_reconsent,
         }),
       })
@@ -195,14 +190,13 @@ export default function CompliancePage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Consent Version</label>
-              <input
-                type="text"
-                placeholder="e.g. 1.0, 2.1.3"
-                pattern="^\d+(\.\d+)*$"
-                title="Version must be numbers separated by dots (e.g. 1.0)"
-                value={config.version || ''}
-                onChange={e => setTopField('version', e.target.value)}
-              />
+              {/* CPPM-42: shown, not typed. A typed box blocked saving for any stored
+                  version it did not like ("v1.1", the "v1.0" default) and was a silent
+                  way to make every visitor consent again. */}
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{config.version || '—'}</div>
+              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                Changes by itself when you save different banner wording, or with Force Re-acceptance below.
+              </div>
             </div>
           </div>
           <div className="cp-field cp-field-checkbox" style={{ marginTop: 8 }}>
