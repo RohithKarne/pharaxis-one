@@ -12,12 +12,8 @@
  *   listMacros({orgId})
  *   runMacro({orgId, caseId, macroId, userId})  → [{step, ok, message}]
  *
- *   cloneCase({orgId, caseId, userId, fields?}) — creates a new case row by
- *     copying the source's `fields_json` (+ optional override) and returning
- *     the new id. Best-effort against the canonical `cases` table.
- *
- *   bulkUpdate({orgId, caseIds, patch, userId}) — applies a flat patch to many
- *     cases via cases.fields_json JSON_SET. Returns counts.
+ *   cloneCase({orgId, caseId, userId, fields?}) — creates a new draft case
+ *     copying the source's type, site, channel, priority and description.
  *
  *   recentTouch({orgId, userId, caseId})        — bumps user_recent_cases
  *   listRecent({orgId, userId, limit})
@@ -27,6 +23,9 @@
 
 const pool = require('../database/db');
 const { logger } = require('./logger');
+const { writeCaseAudit } = require('./caseHelpers');
+const { checkTransitionAllowed } = require('./workflowEngine');
+const { resolveDefaultWorkflowStateId } = require('./orgBootstrapService');
 
 // ── Templates ─────────────────────────────────────────────────────────────────
 
@@ -104,14 +103,14 @@ async function _loadMacro(orgId, id) {
   return { ...macro, steps };
 }
 
-async function runMacro({ orgId, caseId, macroId, userId }) {
+async function runMacro({ orgId, caseId, macroId, userId, userName = null }) {
   const macro = await _loadMacro(orgId, macroId);
   if (!macro) throw new Error('Macro not found');
   const results = [];
   for (const step of macro.steps) {
     const args = typeof step.action_args === 'string' ? safeJson(step.action_args) : step.action_args;
     try {
-      const out = await _runStep({ orgId, caseId, userId, action: step.action, args: args || {} });
+      const out = await _runStep({ orgId, caseId, userId, userName, action: step.action, args: args || {} });
       results.push({ step: step.step_index, action: step.action, ok: true, ...out });
     } catch (err) {
       logger.warn({ err: err.message, action: step.action }, 'macro step failed');
@@ -121,61 +120,94 @@ async function runMacro({ orgId, caseId, macroId, userId }) {
   return results;
 }
 
-async function _runStep({ orgId, caseId, userId, action, args }) {
+// Case columns a macro (or a clone override) may set. The steps used to write
+// cases.fields_json / assigned_to / status / tags — none of which exist — and
+// swallowed the error, so every step reported ok without doing anything (T16).
+const SETTABLE_CASE_FIELDS = ['priority', 'description', 'internal_notes', 'intake_channel'];
+
+async function _caseRow(orgId, caseId) {
+  const [[row]] = await pool.execute(
+    `SELECT id, org_id, site_id, case_type, status_id, case_owner_id, priority, description,
+            internal_notes, intake_channel
+       FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1`,
+    [caseId, orgId]
+  );
+  if (!row) throw new Error('Case not found');
+  return row;
+}
+
+async function _runStep({ orgId, caseId, userId, userName, action, args }) {
   switch (action) {
     case 'set_field': {
       const { field, value } = args;
-      await pool.execute(
-        `UPDATE cases
-            SET fields_json = JSON_SET(COALESCE(fields_json, JSON_OBJECT()), ?, ?),
-                updated_by  = ?, updated_at = NOW()
-          WHERE id = ? AND org_id = ?`,
-        [`$.${field}`, value, userId, caseId, orgId]
-      ).catch(() => {}); // tolerate fields_json absence on older schemas
+      if (!SETTABLE_CASE_FIELDS.includes(field)) throw new Error(`A macro cannot set "${field}".`);
+      const current = await _caseRow(orgId, caseId);
+      await pool.execute(`UPDATE cases SET ${field} = ?, updated_at = NOW() WHERE id = ? AND org_id = ?`,
+        [value ?? null, caseId, orgId]);
+      await writeCaseAudit(caseId, userId, userName, 'FIELD_UPDATED', field, current[field], value ?? null);
       return { field };
     }
     case 'assign': {
       const { user_id } = args;
-      await pool.execute(
-        `UPDATE cases SET assigned_to = ?, updated_at = NOW() WHERE id = ? AND org_id = ?`,
-        [user_id, caseId, orgId]
-      ).catch(() => {});
-      return { assigned_to: user_id };
+      const [[owner]] = await pool.execute(
+        `SELECT u.id FROM users u JOIN user_org_access a ON a.user_id = u.id
+          WHERE u.id = ? AND a.org_id = ? AND a.is_active = 1 AND u.is_active = 1 LIMIT 1`,
+        [user_id, orgId]
+      );
+      if (!owner) throw new Error('That user is not an active member of this organisation.');
+      const current = await _caseRow(orgId, caseId);
+      await pool.execute('UPDATE cases SET case_owner_id = ?, updated_at = NOW() WHERE id = ? AND org_id = ?',
+        [user_id, caseId, orgId]);
+      await writeCaseAudit(caseId, userId, userName, 'OWNER_CHANGED', 'case_owner_id', current.case_owner_id, user_id);
+      return { case_owner_id: user_id };
     }
     case 'add_watcher': {
       const { user_id } = args;
       await pool.execute(
         `INSERT IGNORE INTO case_watchers (org_id, case_id, user_id, reason) VALUES (?, ?, ?, 'macro')`,
         [orgId, caseId, user_id]
-      ).catch(() => {});
+      );
       return { user_id };
     }
     case 'comment': {
-      const { body } = args;
-      await pool.execute(
-        `INSERT INTO case_comments (org_id, case_id, author_id, body_md) VALUES (?, ?, ?, ?)`,
-        [orgId, caseId, userId, body]
-      ).catch(() => {});
-      return { body_chars: (body || '').length };
+      const text = String(args.body || '').trim();
+      if (!text) throw new Error('A comment step needs text.');
+      await _caseRow(orgId, caseId);
+      await pool.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, ?, ?)',
+        [caseId, userId, text.slice(0, 4000)]);
+      await writeCaseAudit(caseId, userId, userName, 'COMMENT_ADDED', 'comment', null, text.slice(0, 4000));
+      return { body_chars: text.length };
     }
-    case 'tag': {
-      const { tag } = args;
-      // best-effort: append into cases.tags JSON array if column exists
-      await pool.execute(
-        `UPDATE cases
-            SET tags = JSON_ARRAY_APPEND(COALESCE(tags, JSON_ARRAY()), '$', ?), updated_at = NOW()
-          WHERE id = ? AND org_id = ?`,
-        [tag, caseId, orgId]
-      ).catch(() => {});
-      return { tag };
-    }
+    case 'tag':
+      throw new Error('Cases have no tags; this step cannot run.');
     case 'transition': {
-      const { to_status } = args;
-      await pool.execute(
-        `UPDATE cases SET status = ?, updated_at = NOW() WHERE id = ? AND org_id = ?`,
-        [to_status, caseId, orgId]
-      ).catch(() => {});
-      return { to_status };
+      // to_status: a workflow state id or name. The same transition rules as the
+      // case screen apply; a transition that needs a password or comment cannot
+      // be run by a macro.
+      const current = await _caseRow(orgId, caseId);
+      const [[state]] = await pool.execute(
+        `SELECT id, name FROM workflow_states
+          WHERE (id = ? OR LOWER(name) = LOWER(?)) AND is_active = 1 AND (org_id = ? OR org_id IS NULL)
+          ORDER BY org_id IS NULL LIMIT 1`,
+        [Number(args.to_status) || 0, String(args.to_status || ''), orgId]
+      );
+      if (!state) throw new Error(`Unknown status "${args.to_status}".`);
+      if (Number(state.id) === Number(current.status_id)) return { status_id: state.id };
+      const check = await checkTransitionAllowed(orgId, current.status_id, state.id);
+      if (!check.allowed) throw new Error(check.reason || 'Transition not allowed.');
+      const [[needs]] = await pool.execute(
+        `SELECT MAX(require_password) AS pwd, MAX(require_comment) AS cmt, MAX(require_checklist) AS chk
+           FROM workflow_rules
+          WHERE is_active = 1 AND from_state_id = ? AND to_state_id = ?`,
+        [current.status_id, state.id]
+      );
+      if (Number(needs?.pwd) || Number(needs?.cmt) || Number(needs?.chk)) {
+        throw new Error('This transition needs a password, comment or checklist — make it on the case screen.');
+      }
+      await pool.execute('UPDATE cases SET status_id = ?, updated_at = NOW() WHERE id = ? AND org_id = ?',
+        [state.id, caseId, orgId]);
+      await writeCaseAudit(caseId, userId, userName, 'STATUS_CHANGED', 'status_id', current.status_id, state.id);
+      return { status_id: state.id };
     }
     default:
       throw new Error(`Unknown macro action: ${action}`);
@@ -184,61 +216,26 @@ async function _runStep({ orgId, caseId, userId, action, args }) {
 
 // ── Clone ─────────────────────────────────────────────────────────────────────
 
-async function cloneCase({ orgId, caseId, userId, fields = {} }) {
-  // Best-effort against the canonical cases table. Tolerates missing fields_json column.
-  try {
-    const [[src]] = await pool.execute(
-      `SELECT * FROM cases WHERE id = ? AND org_id = ? LIMIT 1`,
-      [caseId, orgId]
-    );
-    if (!src) throw new Error('Source case not found');
-    const merged = { ...(safeJson(src.fields_json) || {}), ...fields, cloned_from: caseId };
-    const [r] = await pool.execute(
-      `INSERT INTO cases (org_id, case_type, status, created_by, updated_by, fields_json)
-       VALUES (?, ?, 'draft', ?, ?, ?)`,
-      [orgId, src.case_type || 'ae', userId, userId, JSON.stringify(merged)]
-    );
-    return { ok: true, new_case_id: r.insertId };
-  } catch (err) {
-    // Schema may not match; fall back to creating an empty case with a back-pointer note
-    logger.warn({ err: err.message, caseId }, 'cloneCase fell back to insert-only');
-    const [r] = await pool.execute(
-      `INSERT INTO cases (org_id, status, created_by) VALUES (?, 'draft', ?)`,
-      [orgId, userId]
-    ).catch(() => [{ insertId: null }]);
-    return { ok: !!r.insertId, new_case_id: r.insertId };
-  }
-}
-
-// ── Bulk update ───────────────────────────────────────────────────────────────
-
-async function bulkUpdate({ orgId, caseIds, patch, userId }) {
-  if (!Array.isArray(caseIds) || !caseIds.length) throw new Error('caseIds required');
-  if (!patch || typeof patch !== 'object') throw new Error('patch required');
-  let updated = 0, skipped = 0;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    for (const cid of caseIds) {
-      let ok = true;
-      for (const [field, value] of Object.entries(patch)) {
-        try {
-          const [r] = await conn.execute(
-            `UPDATE cases
-                SET fields_json = JSON_SET(COALESCE(fields_json, JSON_OBJECT()), ?, ?),
-                    updated_by  = ?, updated_at = NOW()
-              WHERE id = ? AND org_id = ?`,
-            [`$.${field}`, value, userId, cid, orgId]
-          );
-          if (r.affectedRows === 0) ok = false;
-        } catch { ok = false; break; }
-      }
-      ok ? updated++ : skipped++;
-    }
-    await conn.commit();
-  } catch (err) { await conn.rollback(); throw err; }
-  finally       { conn.release(); }
-  return { updated, skipped };
+async function cloneCase({ orgId, caseId, userId, userName = null, fields = {} }) {
+  // A new draft case (no case number yet, like New Case) copying the source's
+  // type, site, channel, priority and description. The old version wrote
+  // status / fields_json / updated_by (none exist) and on failure inserted an
+  // empty case, which also failed — nothing was ever cloned (T16).
+  const src = await _caseRow(orgId, caseId);
+  const override = Object.fromEntries(
+    Object.entries(fields || {}).filter(([k]) => SETTABLE_CASE_FIELDS.includes(k))
+  );
+  const merged = { ...src, ...override };
+  const statusId = await resolveDefaultWorkflowStateId(pool, orgId);
+  const [r] = await pool.execute(
+    `INSERT INTO cases (org_id, site_id, case_type, intake_channel, priority, description,
+                        internal_notes, status_id, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [orgId, src.site_id, src.case_type, merged.intake_channel, merged.priority,
+     merged.description, merged.internal_notes, statusId, userId]
+  );
+  await writeCaseAudit(r.insertId, userId, userName, 'CASE_CREATED', 'cloned_from', null, caseId);
+  return { ok: true, new_case_id: r.insertId };
 }
 
 // ── Recent + Pinned ───────────────────────────────────────────────────────────
@@ -254,13 +251,15 @@ async function recentTouch({ orgId, userId, caseId }) {
 }
 
 async function listRecent({ orgId, userId, limit = 25 }) {
+  // LIMIT is an inlined integer: a bound `LIMIT ?` is refused by execute() here
+  // ("Incorrect arguments to mysqld_stmt_execute") — GET /cases/recent was a 500.
   const [rows] = await pool.execute(
     `SELECT r.case_id, r.last_seen_at
        FROM user_recent_cases r
       WHERE r.org_id = ? AND r.user_id = ?
       ORDER BY r.last_seen_at DESC
-      LIMIT ?`,
-    [orgId, userId, Number(limit) || 25]
+      LIMIT ${Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100)}`,
+    [orgId, userId]
   );
   return rows;
 }
@@ -303,6 +302,6 @@ function safeJson(v) {
 module.exports = {
   listTemplates, getTemplate, upsertTemplate, removeTemplate,
   listMacros, runMacro,
-  cloneCase, bulkUpdate,
+  cloneCase,
   recentTouch, listRecent, togglePin, listPinned,
 };

@@ -29,7 +29,6 @@ import FieldHistoryPopover from './FieldHistoryPopover'
 import LockedFieldBadge from './compliance/LockedFieldBadge'
 import ReasonForChangeModal from './compliance/ReasonForChangeModal'
 import FieldPresenceBadge from './collab/FieldPresenceBadge'
-import FieldInlineCommentDrawer from '../../modules/cases/components/FieldInlineCommentDrawer'
 import { useFeatureFlag } from '../context/FeatureFlagsContext'
 
 // ── Context — populated by CaseFormShell so wrapped tabs inherit case info ─
@@ -51,7 +50,7 @@ export function useCaseFieldContext() { return useContext(CaseFieldCtx) }
 
 // ── Shared label + chrome row ────────────────────────────────────────────────
 
-function FieldLabel({ label, required, section, field, onOpenComments }) {
+function FieldLabel({ label, required, section, field }) {
   const ctx = useCaseFieldContext()
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -65,17 +64,9 @@ function FieldLabel({ label, required, section, field, onOpenComments }) {
       {section && field && (
         <FieldPresenceBadge field={field} presence={ctx?.presence} currentUserId={ctx?.currentUserId} />
       )}
-      {ctx?.caseId && section && field && (
-        <button 
-          type="button"
-          className="cf-field-comment-trigger"
-          onClick={onOpenComments}
-          title="Add or view comments"
-          tabIndex={-1}
-        >
-          💬
-        </button>
-      )}
+      {/* No per-field 💬 comments: the drawer called /cases/… without /api (never
+          reached the server) and the comments table has no per-field scoping.
+          Case comments live on the Comments tab (T16 / item 7). */}
     </label>
   )
 }
@@ -125,25 +116,16 @@ export function WiredField({
 }) {
   const ctx = useCaseFieldContext()
   const guard = useReasonGuard(field, value, (v) => onChange?.(v))
-  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false)
 
   const onFocus = () => ctx?.presence?.actions?.focus?.(field)
   const onBlur  = () => ctx?.presence?.actions?.blur?.(field)
 
   const wrap = (children) => (
     <div className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}${error ? ' cf-form-field--error' : ''}${className ? ' ' + className : ''}`}>
-      <FieldLabel label={label} required={required} section={section} field={field} onOpenComments={() => setCommentDrawerOpen(true)} />
+      <FieldLabel label={label} required={required} section={section} field={field} />
       {children}
       <FieldFooter error={error} warning={warning} />
       {guard.modal()}
-      <FieldInlineCommentDrawer
-        open={commentDrawerOpen}
-        onClose={() => setCommentDrawerOpen(false)}
-        caseId={ctx?.caseId}
-        section={section}
-        field={field}
-        label={label}
-      />
     </div>
   )
 

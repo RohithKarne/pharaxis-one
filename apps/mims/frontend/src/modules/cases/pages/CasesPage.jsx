@@ -116,12 +116,16 @@ export default function CasesPage() {
     else setSelectedCaseIds(prev => prev.filter(x => x !== id))
   }
 
+  // Each selected case goes through the same request as a single-case edit
+  // (PUT /cases/:id) or delete (DELETE /cases/:id), so every case gets that
+  // path's permission, access-scope, workflow and audit checks, and a case the
+  // server refuses is reported by name instead of being counted as updated.
   async function applyBulkAction(action) {
     if (!selectedCaseIds.length) return
     let payload = {}
     if (action === 'reassign') {
       if (!bulkNewOwnerId) return toast.error('Select an owner')
-      payload = { new_owner_id: bulkNewOwnerId === 'null' ? null : Number(bulkNewOwnerId) }
+      payload = { case_owner_id: bulkNewOwnerId === 'null' ? null : Number(bulkNewOwnerId) }
     } else if (action === 'update_status') {
       if (!bulkStatusId) return toast.error('Select a status')
       payload = { status_id: Number(bulkStatusId) }
@@ -133,22 +137,33 @@ export default function CasesPage() {
     }
 
     setBulkActionLoading(true)
+    const failures = []
     try {
-      const res = await httpFetch(`${API}/cases/bulk-update`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ case_ids: selectedCaseIds, action, payload })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed bulk update')
-      toast.success(`Successfully updated ${data.updated_count} cases.`)
+      for (const caseId of selectedCaseIds) {
+        const label = cases.find(c => c.id === caseId)?.case_number || `Case ${caseId}`
+        try {
+          const res = action === 'delete'
+            ? await httpFetch(`${API}/cases/${caseId}`, { method: 'DELETE', headers })
+            : await httpFetch(`${API}/cases/${caseId}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            failures.push(`${label}: ${data.error || `request failed (${res.status})`}`)
+          }
+        } catch (err) {
+          failures.push(`${label}: ${err.message}`)
+        }
+      }
+      const done = selectedCaseIds.length - failures.length
+      if (done > 0) toast.success(`Updated ${done} of ${selectedCaseIds.length} case(s).`)
+      if (failures.length) {
+        const shown = failures.slice(0, 3).join('; ') + (failures.length > 3 ? `; and ${failures.length - 3} more` : '')
+        toast.error(`${failures.length} of ${selectedCaseIds.length} case(s) not updated — ${shown}`, 10000)
+      }
       setSelectedCaseIds([])
       setBulkStatusId('')
       setBulkPriority('')
       setBulkNewOwnerId('')
       loadCases()
-    } catch (err) {
-      toast.error(err.message)
     } finally {
       setBulkActionLoading(false)
     }

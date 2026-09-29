@@ -13,7 +13,6 @@
  *   POST   /api/cases/:caseId/run-macro         body { macro_id }
  *
  *   POST   /api/cases/:caseId/clone             body { fields? }
- *   POST   /api/cases/bulk-update               body { case_ids:[], patch:{} }
  *
  *   GET    /api/cases/recent?limit=
  *   POST   /api/cases/:caseId/touch
@@ -23,7 +22,8 @@
 
 const express = require('express');
 const router  = express.Router();
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireCapability, requireScopedCapability } = require('../../middleware/auth');
+const { verifyCaseOrg } = require('../../services/caseHelpers');
 const flags = require('../../services/featureFlagsService');
 const actions = require('../../services/caseActionsService');
 
@@ -85,40 +85,33 @@ router.get('/case-macros', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/cases/:caseId/run-macro', authenticate, async (req, res) => {
+// A macro edits the case, so it needs the same permission and case access as a
+// single-case edit (it had only sign-in, T16).
+router.post('/cases/:caseId/run-macro', authenticate, requireScopedCapability('case.update'), async (req, res) => {
   try {
     if (!(await gated(req, res))) return;
+    if (!(await verifyCaseOrg(req.params.caseId, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
     const { macro_id } = req.body || {};
     if (!macro_id) return res.status(400).json({ error: 'macro_id required' });
     const results = await actions.runMacro({
       orgId: req.user.orgId, caseId: Number(req.params.caseId),
-      macroId: Number(macro_id), userId: req.user.userId,
+      macroId: Number(macro_id), userId: req.user.userId, userName: req.user.email,
     });
     res.json({ ok: results.every(r => r.ok), results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Clone + Bulk ─────────────────────────────────────────────────────────────
-router.post('/cases/:caseId/clone', authenticate, async (req, res) => {
+// ── Clone ─────────────────────────────────────────────────────────────────────
+router.post('/cases/:caseId/clone', authenticate, requireCapability('case.create'), async (req, res) => {
   try {
     if (!(await gated(req, res))) return;
+    if (!(await verifyCaseOrg(req.params.caseId, req, 'case.view'))) return res.status(403).json({ error: 'Access denied' });
     const out = await actions.cloneCase({
       orgId: req.user.orgId, caseId: Number(req.params.caseId),
-      userId: req.user.userId, fields: req.body?.fields || {},
+      userId: req.user.userId, userName: req.user.email, fields: req.body?.fields || {},
     });
     res.json(out);
   } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.post('/cases/bulk-update', authenticate, async (req, res) => {
-  try {
-    if (!(await gated(req, res))) return;
-    const { case_ids, patch } = req.body || {};
-    const out = await actions.bulkUpdate({
-      orgId: req.user.orgId, caseIds: case_ids || [], patch: patch || {}, userId: req.user.userId,
-    });
-    res.json(out);
-  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 // ── Recent + Pinned ──────────────────────────────────────────────────────────
