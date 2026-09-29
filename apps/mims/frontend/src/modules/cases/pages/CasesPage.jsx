@@ -372,6 +372,9 @@ export default function CasesPage() {
   const listOptions = (name) => (intakeLists[name] || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)
 
   function step1Valid() { return newCase.org_id && newCase.case_type }
+  // One list drives both the header count and the step strip — they disagreed
+  // ("Step 1 of 3" then "Step 2 of 2", M-44). No count until a case type is picked.
+  const newCaseSteps = ['Case Details', 'Reporter', newCase.case_type === 'AE' ? 'AE Intake' : newCase.case_type === 'PC' ? 'PC Intake' : null].filter(Boolean)
   function step2Valid() { return reporter.first_name && reporter.last_name }
 
   async function createCase() {
@@ -723,13 +726,13 @@ export default function CasesPage() {
         <div className="cf-modal-overlay" onClick={() => setModalOpen(false)}>
           <div className="cf-modal" style={{ maxWidth: 640, width: '95vw' }} onClick={e => e.stopPropagation()}>
             <div className="cf-modal-header">
-              <span className="cf-modal-title">New Case — Step {modalStep} of {newCase.case_type === 'MI' ? 2 : 3}</span>
+              <span className="cf-modal-title">New Case — Step {modalStep}{newCase.case_type ? ` of ${newCaseSteps.length}` : ''}</span>
               <button className="cf-modal-close" onClick={() => setModalOpen(false)}>✕</button>
             </div>
 
             {/* Step indicator */}
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border, #e5e7eb)' }}>
-              {['Case Details', 'Reporter', newCase.case_type === 'AE' ? 'AE Intake' : newCase.case_type === 'PC' ? 'PC Intake' : null].filter(Boolean).map((label, i) => (
+              {newCaseSteps.map((label, i) => (
                 <div key={i} style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, fontWeight: modalStep === i + 1 ? 700 : 400,
                   color: modalStep === i + 1 ? 'var(--primary, #2563eb)' : 'var(--text-muted, #9ca3af)',
                   borderBottom: modalStep === i + 1 ? '2px solid var(--primary, #2563eb)' : '2px solid transparent' }}>
@@ -755,11 +758,12 @@ export default function CasesPage() {
                     <div style={{ display: 'flex', gap: 10 }}>
                       {[{ key: 'MI', label: 'Medical Information', color: '#2563eb' }, { key: 'AE', label: 'Adverse Event', color: '#dc2626' }, { key: 'PC', label: 'Product Complaint', color: '#d97706' }].map(ct => (
                         <button key={ct.key} type="button"
+                          aria-label={ct.label} aria-pressed={newCase.case_type === ct.key}
                           onClick={() => setNewCase(p => ({ ...p, case_type: ct.key }))}
                           style={{ flex: 1, padding: '10px 6px', border: `2px solid ${newCase.case_type === ct.key ? ct.color : 'var(--border, #e5e7eb)'}`,
                             borderRadius: 8, background: newCase.case_type === ct.key ? ct.color + '15' : 'transparent',
                             color: newCase.case_type === ct.key ? ct.color : 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: newCase.case_type === ct.key ? 700 : 400 }}>
-                          <div style={{ fontSize: 18, marginBottom: 4 }}>{ct.key === 'MI' ? '💊' : ct.key === 'AE' ? '⚠️' : '📦'}</div>
+                          <div aria-hidden="true" style={{ fontSize: 18, marginBottom: 4 }}>{ct.key === 'MI' ? '💊' : ct.key === 'AE' ? '⚠️' : '📦'}</div>
                           <div>{ct.key}</div>
                           <div style={{ fontSize: 10, opacity: 0.8 }}>{ct.label}</div>
                         </button>

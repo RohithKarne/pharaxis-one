@@ -122,7 +122,9 @@ export default function ResponseLogPage() {
         <div className="rl-header">
           <div>
             <h1 className="rl-title">Response Log</h1>
-            <span className="rl-subtitle">All MI responses — complete audit trail per 21 CFR Part 11</span>
+            {/* No regulatory claim on screen: Part 11 compliance is a validated-system
+                statement, not a page label (M-32, Vasu). */}
+            <span className="rl-subtitle">All MI responses — author, approver and status of each one</span>
           </div>
           <button className="rl-refresh-btn" onClick={fetchLog} disabled={loading}>⟳ Refresh</button>
         </div>

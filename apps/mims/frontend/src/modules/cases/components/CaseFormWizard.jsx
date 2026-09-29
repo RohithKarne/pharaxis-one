@@ -20,6 +20,7 @@ export default function CaseFormWizard({
   caseNumber,
   saving,
   onSave,
+  doneSteps = {},
   children
 }) {
   const nextStep = () => setActiveStep(prev => Math.min(prev + 1, LAST_STEP))
@@ -70,7 +71,9 @@ export default function CaseFormWizard({
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, 1fr)`, gap: 8 }}>
           {WIZARD_STEPS.map(step => {
             const isActive = activeStep === step.id
-            const isCompleted = activeStep > step.id
+            // A tick means the step has what it needs, not that it was passed
+            // (Step 1 showed a green tick with no reporter, M-23).
+            const isCompleted = !isActive && Boolean(doneSteps[step.id])
             return (
               <button
                 key={step.id}

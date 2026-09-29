@@ -215,13 +215,14 @@ export default function CaseContactsTab({
       {contacts.map(c => (
         <div key={c.id} className={`cf-contact-card ${c.is_primary ? 'primary' : ''}`}>
           <div className="cf-contact-name">
-            {[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}
-            {c.is_primary && <span className="cf-primary-badge">Primary</span>}
+            <span className="cf-contact-name-text">{[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}</span>
+            {/* is_primary is 0/1 from MySQL: `0 && …` printed a stray "0" after every name (M-42) */}
+            {c.is_primary ? <span className="cf-primary-badge">Primary</span> : null}
             {c.do_not_update_master ? <span className="cf-dnumd-badge">DNUMD</span> : null}
           </div>
           <div className="cf-contact-meta">
             <span>{c.contact_type || 'Contact'}</span>
-            {c.reporter_type && <span> · {c.reporter_type}</span>}
+            {c.reporter_type && c.reporter_type !== c.contact_type && <span> · {c.reporter_type}</span>}
             {c.specialty && <span> · {c.specialty}</span>}
             {c.institution && <span> · {c.institution}</span>}
             {c.email && <span> · {c.email}</span>}

@@ -224,12 +224,35 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     const sortBy = CASE_SORT_MAP[sort_by] || CASE_SORT_MAP.created_at;
     const sortDir = String(sort_dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-    let query = `
-      SELECT c.*,
-        o.name  AS org_name,
-        s.name  AS site_name,
-        ws.name AS status_name,
-        u.name  AS owner_name,
+    // Correspondence totals are built over every inquiry in the database, so join
+    // them only when a correspondence filter or sort needs them; otherwise they
+    // are read for the page's cases alone after the page query (M-30: the first
+    // page took 7-13 s with 482k cases, 3.4 s page + 4.3 s count).
+    const needsComm = Boolean(has_correspondence || corr_from || corr_to || corr_box
+      || sort_by === 'communication_count' || sort_by === 'last_comm_at');
+    const commJoin = needsComm ? `
+      LEFT JOIN (
+        SELECT i.case_id,
+          COUNT(*) AS communication_count,
+          (
+            SELECT i2.received_at
+            FROM inquiries i2
+            WHERE i2.case_id = i.case_id
+            ORDER BY i2.received_at DESC, i2.id DESC
+            LIMIT 1
+          ) AS last_comm_at,
+          (
+            SELECT i2.source_tag
+            FROM inquiries i2
+            WHERE i2.case_id = i.case_id
+            ORDER BY i2.received_at DESC, i2.id DESC
+            LIMIT 1
+          ) AS last_comm_source
+        FROM inquiries i
+        WHERE i.case_id IS NOT NULL
+        GROUP BY i.case_id
+      ) comm ON comm.case_id = c.id` : '';
+    const commColumns = needsComm ? `
         COALESCE(comm.communication_count, 0) AS communication_count,
         comm.last_comm_at,
         CASE
@@ -240,59 +263,25 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
             OR LOWER(comm.last_comm_source) LIKE '%transmission%'
           THEN 'sent'
           ELSE 'inbox'
-        END AS last_comm_box
+        END AS last_comm_box` : `
+        0 AS communication_count, NULL AS last_comm_at, NULL AS last_comm_box`;
+
+    let query = `
+      SELECT c.*,
+        o.name  AS org_name,
+        s.name  AS site_name,
+        ws.name AS status_name,
+        u.name  AS owner_name,${commColumns}
       FROM cases c
       LEFT JOIN organisations  o  ON c.org_id        = o.id
       LEFT JOIN sites          s  ON c.site_id        = s.id
       LEFT JOIN workflow_states ws ON c.status_id     = ws.id
-      LEFT JOIN users           u  ON c.case_owner_id = u.id
-      LEFT JOIN (
-        SELECT i.case_id,
-          COUNT(*) AS communication_count,
-          (
-            SELECT i2.received_at
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_at,
-          (
-            SELECT i2.source_tag
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_source
-        FROM inquiries i
-        WHERE i.case_id IS NOT NULL
-        GROUP BY i.case_id
-      ) comm ON comm.case_id = c.id
+      LEFT JOIN users           u  ON c.case_owner_id = u.id${commJoin}
       WHERE c.is_deleted = ${deleted === 'true' ? 1 : 0}
     `;
     let countQuery = `
       SELECT COUNT(*) AS total
-      FROM cases c
-      LEFT JOIN (
-        SELECT i.case_id,
-          COUNT(*) AS communication_count,
-          (
-            SELECT i2.received_at
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_at,
-          (
-            SELECT i2.source_tag
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_source
-        FROM inquiries i
-        WHERE i.case_id IS NOT NULL
-        GROUP BY i.case_id
-      ) comm ON comm.case_id = c.id
+      FROM cases c${commJoin}
       WHERE c.is_deleted = ${deleted === 'true' ? 1 : 0}
     `;
     const params = [];
@@ -385,6 +374,29 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     query += ` ORDER BY ${sortBy} ${sortDir}, c.id DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const [rows] = await pool.execute(query, params);
+    if (!needsComm && rows.length) {
+      const ids = rows.map(r => r.id);
+      const [commRows] = await pool.execute(
+        `SELECT case_id, received_at, source_tag FROM inquiries
+          WHERE case_id IN (${ids.map(() => '?').join(',')})
+          ORDER BY case_id, received_at DESC, id DESC`,
+        ids
+      );
+      const byCase = new Map();
+      for (const r of commRows) {
+        const seen = byCase.get(r.case_id);
+        if (seen) seen.count += 1;
+        else byCase.set(r.case_id, { count: 1, at: r.received_at, source: r.source_tag });
+      }
+      for (const row of rows) {
+        const comm = byCase.get(row.id);
+        if (!comm) continue;
+        const source = comm.source == null ? null : String(comm.source).toLowerCase();
+        row.communication_count = comm.count;
+        row.last_comm_at = comm.at;
+        row.last_comm_box = source == null ? null : /reply|forward|sent|transmission/.test(source) ? 'sent' : 'inbox';
+      }
+    }
     if (String(include_meta) === 'true') {
       const [[{ total }]] = await pool.execute(countQuery, countParams);
       return res.json({ rows, total, limit, offset });
@@ -571,6 +583,7 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
     const [[miStats]] = await pool.execute(
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
+       COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') AND (c.case_owner_id = ? OR r.author_id = ?) THEN 1 ELSE 0 END), 0) AS my_pending_responses,
        COALESCE(SUM(CASE WHEN r.response_status = 'READY' THEN 1 ELSE 0 END), 0)            AS pending_approval,
        COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
        COALESCE(COUNT(DISTINCT CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
@@ -579,7 +592,7 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
        JOIN cases c ON c.id = r.case_id
        JOIN case_mi mi ON mi.id = r.mi_tab_id
        WHERE c.is_deleted = 0 AND r.response_status != 'VOIDED'${miOrgClause}${ownClause}`,
-      [...miOrgParams, ...ownParams]
+      [req.user.userId, req.user.userId, ...miOrgParams, ...ownParams]
     );
 
     return res.json({
@@ -592,6 +605,7 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
       },
       mi_stats: {
         pending_responses: Number(miStats?.pending_responses || 0),
+        my_pending_responses: Number(miStats?.my_pending_responses || 0),
         pending_approval:  Number(miStats?.pending_approval  || 0),
         sent_today:        Number(miStats?.sent_today        || 0),
         sla_breached:      Number(miStats?.sla_breached      || 0),
