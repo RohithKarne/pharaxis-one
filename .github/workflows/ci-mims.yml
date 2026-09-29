@@ -37,3 +37,6 @@ jobs:
       # frontend and syntax-checked the backend entrypoint — it never ran a test.
       test_database: pharaxis_mims_test
       test_command: npm test
+      # Component tests (vitest). They failed unnoticed on main for weeks because
+      # CI never ran them (M-65).
+      frontend_test_command: npm test

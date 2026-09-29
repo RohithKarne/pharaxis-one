@@ -44,6 +44,12 @@ on:
         required: false
         default: 'npm test'
         type: string
+      # Frontend unit tests, run in the Frontend Build job after the build.
+      # Empty = skipped (the default, so apps opt in).
+      frontend_test_command:
+        required: false
+        default: ''
+        type: string
 
 jobs:
   frontend-build:
@@ -67,6 +73,10 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Frontend tests
+        if: ${{ inputs.frontend_test_command != '' }}
+        run: ${{ inputs.frontend_test_command }}
 
   backend-syntax:
     name: Backend Syntax
