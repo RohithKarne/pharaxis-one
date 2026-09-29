@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 108 — three date columns stop being text.
+ * Migration 114 — three date columns stop being text.
  *
  *   inquiries.received_at  VARCHAR(100) 'YYYY-MM-DD HH:MM:SS' (UTC, from the poller) -> DATETIME NULL
  *   inquiries.due_date     VARCHAR(100) 'YYYY-MM-DD' (the date picker)               -> DATE NULL
@@ -67,7 +67,7 @@ async function up(conn) {
     if (Number(n) > 0) {
       const [sample] = await conn.execute(`SELECT id FROM inquiries WHERE ${bad} ORDER BY id LIMIT 10`);
       throw new Error(
-        `108: ${n} inquiries.${col.column} value(s) are not '${col.format}' — fix or clear them first. ` +
+        `114: ${n} inquiries.${col.column} value(s) are not '${col.format}' — fix or clear them first. ` +
         `Sample ids: ${sample.map((r) => r.id).join(', ')}`
       );
     }

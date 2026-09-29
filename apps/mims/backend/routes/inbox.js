@@ -320,7 +320,7 @@ const INBOX_SLA_ALERT_LEAD_MINUTES = Number(process.env.INBOX_SLA_ALERT_LEAD_MIN
 
 // SQL twin of computeSlaStatus() in inboxGovernanceService: same thresholds, same four
 // outcomes, so the SLA filters and the "SLA risk" count can run in the database instead of
-// over a loaded slice. received_at is a UTC DATETIME (migration 108); every pooled session
+// over a loaded slice. received_at is a UTC DATETIME (migration 114); every pooled session
 // is pinned to UTC in database/db.js, so NOW() compares fairly.
 function slaStatusSql(alias, kind) {
   const received = `COALESCE(${alias}.received_at, ${alias}.created_at)`;
