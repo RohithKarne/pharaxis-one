@@ -1126,7 +1126,10 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       await conn.rollback(); /* WP2: release handled by the finally — was double-released, which could hand the same pooled connection to two requests */
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
-    const dateReceived = toDateOnlyOrNull(date_received);
+    // "Date received is set by the system" (Case Meta step removed 2026-07-28), but
+    // nothing set it: a New Case had none (M-85). Today unless the caller sends one
+    // (the inbox sends the email's received date).
+    const dateReceived = toDateOnlyOrNull(date_received) || toDateOnlyOrNull(new Date());
     const awarenessDate = awareness_date ? toDateOnlyOrNull(awareness_date) : null;
     const learnOfValidityDate = learn_of_validity_date ? toDateOnlyOrNull(learn_of_validity_date) : null;
     const followUpReceivedDate = follow_up_received_date ? toDateOnlyOrNull(follow_up_received_date) : null;

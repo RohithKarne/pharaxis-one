@@ -386,6 +386,10 @@ export default function CasesPage() {
       const res  = await httpFetch(`${API}/cases`, { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create case')
+      // A case needs its number (MI-000123) — the inbox's Create Case asks for one;
+      // New Case never did, so every case made here stayed unnumbered (M-85).
+      const numRes = await httpFetch(`${API}/cases/${data.id}/assign-number`, { method: 'POST', headers })
+      if (!numRes.ok) toast.error('Case created, but its case number could not be assigned. Reopen the case to retry.')
       setModalOpen(false)
       navigate(`/cases/${data.id}`, { state: { from: '/cases' } })
     } catch (err) {
