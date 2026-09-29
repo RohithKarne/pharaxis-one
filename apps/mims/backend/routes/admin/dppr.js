@@ -16,6 +16,9 @@
  *   PATCH  /api/admin/dppr/:id/toggle        — enable / disable rule
  *   GET    /api/admin/dppr/execution-log     — execution history (paginated)
  *   POST   /api/admin/dppr/run-now           — manual trigger for org
+ *   GET    /api/admin/dppr/legal-holds       — list legal holds (+ whether the daily run is on)
+ *   POST   /api/admin/dppr/legal-holds       — place a hold on a case or inquiry (reason required)
+ *   POST   /api/admin/dppr/legal-holds/:id/release — release a hold (reason required)
  *
  *   GET    /api/admin/dppr/cases/:caseId/overrides    — case-level overrides
  *   PUT    /api/admin/dppr/cases/:caseId/overrides    — upsert case override (must be >= restrictive)
@@ -27,8 +30,9 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
-const { applyDpprRules } = require('../../services/dpprScheduler');
+const { applyDpprRules, isScheduledDpprEnabled } = require('../../services/dpprScheduler');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 // ── Data domains catalogue ────────────────────────────────────────────────────
 const DPPR_DOMAINS = [
@@ -42,9 +46,9 @@ const DPPR_DOMAINS = [
   {
     key: 'medical_data',
     label: 'Medical / Clinical Data',
-    description: 'Patient demographics and adverse event clinical details (DOB, gender, weight, medical history).',
-    tables: ['case_ae_patient_info', 'case_ae_general'],
-    pii_fields: ['patient_dob', 'patient_gender', 'patient_age', 'patient_weight', 'patient_height', 'ethnicity'],
+    description: 'Adverse event patient details: date of birth, sex, age, weight, height and ethnicity.',
+    tables: ['case_ae_patient_info'],
+    pii_fields: ['date_of_birth', 'sex', 'age', 'weight_kg', 'height_cm', 'ethnicity'],
   },
   {
     key: 'case_narrative',
@@ -58,21 +62,21 @@ const DPPR_DOMAINS = [
     label: 'Reporter / HCP Information',
     description: 'Identifiers for the reporting healthcare professional or consumer.',
     tables: ['case_reporter'],
-    pii_fields: ['reporter_name', 'reporter_email', 'reporter_phone', 'reporter_address', 'institution'],
+    pii_fields: ['first_name', 'last_name', 'email', 'phone', 'organisation'],
   },
   {
     key: 'patient_demographics',
     label: 'Patient Demographics',
-    description: 'Patient name, date of birth, address, and other demographic identifiers.',
+    description: 'Patient initials on the case patient record (the only patient name held there).',
     tables: ['case_patient'],
-    pii_fields: ['patient_name', 'patient_dob', 'patient_address', 'patient_email', 'patient_phone'],
+    pii_fields: ['initials'],
   },
   {
     key: 'inquiry_content',
     label: 'Inbox / Email Content',
     description: 'Email bodies and sender information received through the inbox.',
     tables: ['inquiries'],
-    pii_fields: ['body', 'sender_name', 'sender_email', 'subject'],
+    pii_fields: ['body', 'sender', 'subject'],
   },
 ];
 
@@ -205,6 +209,141 @@ router.post('/dppr/run-now', authenticate, requireRole('admin', 'platform_admin'
     console.error('POST /api/admin/dppr/run-now error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Legal holds — records DPPR and RTBF must never anonymise or delete ────────
+// A hold names a case (covering every case record DPPR touches, and inquiries
+// linked to the case) or a single inbox inquiry. Placing and releasing both need
+// a reason and are written to audit_logs in the same transaction.
+//
+//   GET  /api/admin/dppr/legal-holds?status=active|released|all
+//   POST /api/admin/dppr/legal-holds               { entity_type, case_number | entity_id, reason }
+//   POST /api/admin/dppr/legal-holds/:id/release   { reason }
+
+function holdReason(body) {
+  const reason = String(body?.reason || '').trim();
+  if (!reason) return { error: 'A reason is required.' };
+  if (reason.length > 1000) return { error: 'Reason must be 1000 characters or fewer.' };
+  return { reason };
+}
+
+router.get('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const scope = orgScope(req);
+    const resolvedOrg = scope ?? (req.query.org_id ? parseInt(req.query.org_id, 10) : null);
+    const status = req.query.status || 'all';
+    const params = [];
+    let where = 'WHERE 1=1';
+    if (resolvedOrg) { where += ' AND h.org_id = ?'; params.push(resolvedOrg); }
+    if (status === 'active')   where += ' AND h.released_at IS NULL';
+    if (status === 'released') where += ' AND h.released_at IS NOT NULL';
+
+    const [holds] = await pool.execute(
+      `SELECT h.*, c.case_number, o.name AS org_name, pu.name AS placed_by_name, ru.name AS released_by_name
+       FROM legal_holds h
+       LEFT JOIN organisations o ON o.id = h.org_id
+       LEFT JOIN cases c  ON h.entity_type = 'case' AND c.id = h.entity_id
+       LEFT JOIN users pu ON pu.id = h.placed_by
+       LEFT JOIN users ru ON ru.id = h.released_by
+       ${where}
+       ORDER BY h.released_at IS NULL DESC, h.placed_at DESC
+       LIMIT 500`,
+      params
+    );
+    res.json({ holds, scheduled_enforcement_enabled: isScheduledDpprEnabled() });
+  } catch (err) {
+    console.error('GET /api/admin/dppr/legal-holds error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const { entity_type, case_number, entity_id } = req.body || {};
+  if (!['case', 'inquiry'].includes(entity_type)) {
+    return res.status(400).json({ error: 'entity_type must be case or inquiry.' });
+  }
+  const { reason, error } = holdReason(req.body);
+  if (error) return res.status(400).json({ error });
+
+  // Pinned to the caller's org; a platform admin may narrow with org_id.
+  const scope = orgScope(req) ?? (req.body.org_id ? parseInt(req.body.org_id, 10) : null);
+  const conn = await pool.getConnection();
+  try {
+    let target;
+    if (entity_type === 'case' && case_number) {
+      // Case numbers are unique per organisation, not across them.
+      const [matches] = await conn.execute(
+        `SELECT id, org_id FROM cases WHERE case_number = ?${scope ? ' AND org_id = ?' : ''}`,
+        scope ? [String(case_number).trim(), scope] : [String(case_number).trim()]
+      );
+      if (matches.length > 1) {
+        return res.status(400).json({ error: 'That case number exists in more than one organisation; give org_id.' });
+      }
+      target = matches[0];
+    } else if (entity_id) {
+      if (!/^\d+$/.test(String(entity_id).trim())) return res.status(400).json({ error: 'entity_id must be a number.' });
+      const table = entity_type === 'case' ? 'cases' : 'inquiries';
+      [[target]] = await conn.execute(
+        `SELECT id, org_id FROM ${table} WHERE id = ?${scope ? ' AND org_id = ?' : ''}`,
+        scope ? [parseInt(entity_id, 10), scope] : [parseInt(entity_id, 10)]
+      );
+    } else {
+      return res.status(400).json({ error: entity_type === 'case' ? 'case_number is required.' : 'entity_id is required.' });
+    }
+    if (!target) return res.status(404).json({ error: `${entity_type === 'case' ? 'Case' : 'Inquiry'} not found.` });
+
+    await conn.beginTransaction();
+    const [[existing]] = await conn.execute(
+      `SELECT id FROM legal_holds WHERE entity_type = ? AND entity_id = ? AND released_at IS NULL FOR UPDATE`,
+      [entity_type, target.id]
+    );
+    if (existing) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'This record is already under an active legal hold.', hold_id: existing.id });
+    }
+    const [result] = await conn.execute(
+      `INSERT INTO legal_holds (org_id, entity_type, entity_id, reason, placed_by) VALUES (?, ?, ?, ?, ?)`,
+      [target.org_id, entity_type, target.id, reason, req.user.userId]
+    );
+    await logAudit(req.user.userId, req.user.email, 'LEGAL_HOLD_PLACE', 'legal_hold', result.insertId,
+      { entity_type, entity_id: target.id, org_id: target.org_id }, null, null, reason, conn);
+    await conn.commit();
+    res.status(201).json({ message: 'Legal hold placed.', id: result.insertId });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    console.error('POST /api/admin/dppr/legal-holds error:', err);
+    res.status(500).json({ error: err.message });
+  } finally { conn.release(); }
+});
+
+router.post('/dppr/legal-holds/:id/release', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const { reason, error } = holdReason(req.body);
+  if (error) return res.status(400).json({ error });
+
+  const scope = orgScope(req);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[hold]] = await conn.execute(
+      `SELECT * FROM legal_holds WHERE id = ?${scope ? ' AND org_id = ?' : ''} FOR UPDATE`,
+      scope ? [req.params.id, scope] : [req.params.id]
+    );
+    if (!hold) { await conn.rollback(); return res.status(404).json({ error: 'Legal hold not found.' }); }
+    if (hold.released_at) { await conn.rollback(); return res.status(409).json({ error: 'This legal hold is already released.' }); }
+
+    await conn.execute(
+      `UPDATE legal_holds SET released_by = ?, released_at = NOW(), release_reason = ? WHERE id = ?`,
+      [req.user.userId, reason, hold.id]
+    );
+    await logAudit(req.user.userId, req.user.email, 'LEGAL_HOLD_RELEASE', 'legal_hold', hold.id,
+      { entity_type: hold.entity_type, entity_id: hold.entity_id, org_id: hold.org_id }, null, null, reason, conn);
+    await conn.commit();
+    res.json({ message: 'Legal hold released.' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    console.error('POST /api/admin/dppr/legal-holds/:id/release error:', err);
+    res.status(500).json({ error: err.message });
+  } finally { conn.release(); }
 });
 
 // ── GET /api/admin/dppr ───────────────────────────────────────────────────────

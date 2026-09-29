@@ -5,6 +5,7 @@ import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './DPPRPage.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { isAdminUser } from '../../../shared/utils/adminScope.js'
+import { useAdminTenant } from '../../mimsadmin/utils/AdminTenantContext'
 
 const ACTION_OPTIONS = ['None', 'Anonymize', 'Delete']
 const CONTACT_TYPES  = ['all', 'HCP', 'Patient', 'Other']
@@ -36,6 +37,7 @@ export default function DPPRPage({ embedded = false } = {}) {
   const { token, user } = useAuth()
   const H = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const isAdmin = isAdminUser(user)
+  const { tenantId } = useAdminTenant()   // tenant picked in the admin console; the server ignores it for tenant admins
 
   const [tab, setTab]               = useState('rules')
   const [rules, setRules]           = useState([])
@@ -53,6 +55,10 @@ export default function DPPRPage({ embedded = false } = {}) {
   const [running, setRunning]       = useState(false)
   const [runResult, setRunResult]   = useState(null)
   const [error, setError]           = useState(null)
+  const [holds, setHolds]           = useState([])
+  const [scheduleOn, setScheduleOn] = useState(false)
+  const [holdModal, setHoldModal]   = useState(null)   // null | 'place' | hold row being released
+  const [holdForm, setHoldForm]     = useState({ entity_type: 'case', reference: '', reason: '' })
   const LIMIT = 20
 
   const fetchDomains = useCallback(async () => {
@@ -80,9 +86,56 @@ export default function DPPRPage({ embedded = false } = {}) {
     } catch { /* keep current list until next refresh */ }
   }, [H, logPage])
 
+  const fetchHolds = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const data = await httpFetch('/api/admin/dppr/legal-holds', { headers: H }).then(r => r.json())
+      setHolds(data.holds || [])
+      setScheduleOn(Boolean(data.scheduled_enforcement_enabled))
+    } catch { /* keep current list until next refresh */ }
+  }, [H, isAdmin])
+
   useEffect(() => { fetchDomains() }, [fetchDomains])
   useEffect(() => { fetchRules(page) }, [fetchRules, page])
   useEffect(() => { if (tab === 'log') fetchLog(logPage) }, [fetchLog, logPage, tab])
+  useEffect(() => { fetchHolds() }, [fetchHolds])
+
+  function openPlaceHold() {
+    setHoldForm({ entity_type: 'case', reference: '', reason: '' })
+    setHoldModal('place')
+    setError(null)
+  }
+
+  function openReleaseHold(hold) {
+    setHoldForm(f => ({ ...f, reason: '' }))
+    setHoldModal(hold)
+    setError(null)
+  }
+
+  async function saveHold() {
+    if (!holdForm.reason.trim()) { setError('A reason is required.'); return }
+    const placing = holdModal === 'place'
+    if (placing && !holdForm.reference.trim()) {
+      setError(holdForm.entity_type === 'case' ? 'Case number is required.' : 'Inquiry ID is required.'); return
+    }
+    setSaving(true); setError(null)
+    try {
+      const url  = placing ? '/api/admin/dppr/legal-holds' : `/api/admin/dppr/legal-holds/${holdModal.id}/release`
+      const body = !placing ? { reason: holdForm.reason }
+        : holdForm.entity_type === 'case'
+          ? { entity_type: 'case', case_number: holdForm.reference.trim(), reason: holdForm.reason }
+          : { entity_type: 'inquiry', entity_id: holdForm.reference.trim(), reason: holdForm.reason }
+      const res  = await httpFetch(url, {
+        method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Save failed.'); return }
+      setHoldModal(null)
+      fetchHolds()
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
 
   function openAdd() {
     setForm(BLANK_RULE)
@@ -140,7 +193,7 @@ export default function DPPRPage({ embedded = false } = {}) {
     try {
       const res  = await httpFetch('/api/admin/dppr/run-now', {
         method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ org_id: tenantId || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Run failed.'); return }
@@ -163,7 +216,10 @@ export default function DPPRPage({ embedded = false } = {}) {
           <h1 className="dp-title">Data Protection &amp; Privacy Rules</h1>
           <p className="dp-subtitle">
             Define retention and anonymisation policies for personal data across case records.
-            Rules run automatically every day at 02:00 UTC and can be triggered manually.
+            {scheduleOn
+              ? ' Rules run automatically every day at 02:00 UTC and can be triggered manually.'
+              : ' The daily automatic run is off; use Run Now to apply rules.'}
+            {' '}Records under legal hold are never anonymised or deleted.
           </p>
         </div>
         {isAdmin && (
@@ -184,7 +240,8 @@ export default function DPPRPage({ embedded = false } = {}) {
           <div className="dp-run-result-title">✅ DPPR Run Complete — {runResult.length} rule(s) processed</div>
           {runResult.map((r, i) => (
             <div key={i} className="dp-run-result-row">
-              {r.rule_name} ({r.domain}) — {r.action}: scanned {r.scanned}, affected {r.affected} — {r.status}
+              {r.rule_name} ({r.domain}) — {r.action}: scanned {r.scanned}, affected {r.affected}
+              {r.skipped_legal_hold > 0 && `, skipped for legal hold ${r.skipped_legal_hold}`} — {r.status}
             </div>
           ))}
         </div>
@@ -214,7 +271,64 @@ export default function DPPRPage({ embedded = false } = {}) {
       <div className="dp-tabs">
         <button className={`dp-tab${tab === 'rules' ? ' active' : ''}`} onClick={() => setTab('rules')}>Privacy Rules</button>
         <button className={`dp-tab${tab === 'log' ? ' active' : ''}`} onClick={() => setTab('log')}>Execution History</button>
+        {isAdmin && (
+          <button className={`dp-tab${tab === 'holds' ? ' active' : ''}`} onClick={() => setTab('holds')}>
+            Legal Holds ({holds.filter(h => !h.released_at).length})
+          </button>
+        )}
       </div>
+
+      {/* Legal Holds tab */}
+      {tab === 'holds' && isAdmin && (
+        <div className="dp-card">
+          <div className="dp-card-header">
+            <span className="dp-card-title">Legal Holds</span>
+            <button className="dp-btn-primary" onClick={openPlaceHold}>+ Place Hold</button>
+          </div>
+          {holds.length === 0 ? (
+            <div className="dp-empty">No legal holds. A held case or inquiry is skipped by every privacy run.</div>
+          ) : (
+            <table className="dp-table">
+              <thead>
+                <tr>
+                  <th>Record</th>
+                  <th>Reason</th>
+                  <th>Placed</th>
+                  <th>Status</th>
+                  <th>Released</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {holds.map(h => (
+                  <tr key={h.id}>
+                    <td style={{ fontWeight: 600 }}>
+                      {h.entity_type === 'case' ? `Case ${h.case_number || `#${h.entity_id}`}` : `Inquiry #${h.entity_id}`}
+                      <div className="dp-hint">{h.org_name}</div>
+                    </td>
+                    <td>{h.reason}</td>
+                    <td style={{ whiteSpace:'nowrap', color:'#64748b' }}>{h.placed_by_name || '—'} · {fmtDate(h.placed_at)}</td>
+                    <td>
+                      <span className={`dp-badge ${h.released_at ? 'dp-badge-inactive' : 'dp-badge-active'}`}>
+                        {h.released_at ? 'Released' : 'On hold'}
+                      </span>
+                    </td>
+                    <td style={{ color:'#64748b' }}>
+                      {h.released_at ? `${h.released_by_name || '—'} · ${fmtDate(h.released_at)} — ${h.release_reason}` : '—'}
+                    </td>
+                    <td>
+                      {!h.released_at && (
+                        <button className="dp-btn-secondary" style={{ fontSize:12, padding:'6px 12px' }}
+                          onClick={() => openReleaseHold(h)}>Release</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Rules tab */}
       {tab === 'rules' && (
@@ -299,7 +413,7 @@ export default function DPPRPage({ embedded = false } = {}) {
               onClick={() => fetchLog(logPage)}>↺ Refresh</button>
           </div>
           {execLog.length === 0 ? (
-            <div className="dp-empty">No execution history yet. Rules run daily at 02:00 UTC or use <strong>Run Now</strong>.</div>
+            <div className="dp-empty">No execution history yet. {scheduleOn ? 'Rules run daily at 02:00 UTC or use ' : 'Use '}<strong>Run Now</strong>.</div>
           ) : (
             <>
               <table className="dp-table">
@@ -311,6 +425,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                     <th>Triggered By</th>
                     <th>Scanned</th>
                     <th>Affected</th>
+                    <th>Skipped (legal hold)</th>
                     <th>Duration</th>
                     <th>Status</th>
                   </tr>
@@ -331,6 +446,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                                    color: l.records_affected > 0 ? 'var(--primary)' : '#94a3b8' }}>
                         {l.records_affected}
                       </td>
+                      <td>{l.records_skipped_legal_hold ?? 0}</td>
                       <td style={{ color:'#94a3b8' }}>{l.duration_ms ? `${l.duration_ms}ms` : '—'}</td>
                       <td>{statusBadge(l.status)}</td>
                     </tr>
@@ -348,6 +464,58 @@ export default function DPPRPage({ embedded = false } = {}) {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Place / Release legal hold modal */}
+      {holdModal && (
+        <div className="dp-modal-overlay" onClick={e => e.target === e.currentTarget && setHoldModal(null)}>
+          <div className="dp-modal">
+            <div className="dp-modal-title">
+              {holdModal === 'place'
+                ? 'Place Legal Hold'
+                : `Release Legal Hold — ${holdModal.entity_type === 'case' ? `Case ${holdModal.case_number || `#${holdModal.entity_id}`}` : `Inquiry #${holdModal.entity_id}`}`}
+            </div>
+
+            <div className="dp-info-box">
+              {holdModal === 'place'
+                ? 'A held case keeps its narrative, contacts, reporter and patient details, and any linked inquiries, out of every privacy run until the hold is released.'
+                : 'Once released, the record becomes eligible for the next privacy run.'}
+            </div>
+
+            {error && <div style={{ padding:'10px 14px', background:'#fee2e2', color:'#dc2626', borderRadius:8, fontSize:13, marginBottom:14 }}>{error}</div>}
+
+            {holdModal === 'place' && (
+              <div className="dp-form-grid">
+                <div className="dp-form-row">
+                  <label className="dp-label">Record Type *</label>
+                  <select className="dp-select" value={holdForm.entity_type}
+                    onChange={e => setHoldForm(f => ({ ...f, entity_type: e.target.value }))}>
+                    <option value="case">Case</option>
+                    <option value="inquiry">Inquiry</option>
+                  </select>
+                </div>
+                <div className="dp-form-row">
+                  <label className="dp-label">{holdForm.entity_type === 'case' ? 'Case Number *' : 'Inquiry ID *'}</label>
+                  <input className="dp-input" value={holdForm.reference}
+                    onChange={e => setHoldForm(f => ({ ...f, reference: e.target.value }))} />
+                </div>
+              </div>
+            )}
+
+            <div className="dp-form-row">
+              <label className="dp-label">{holdModal === 'place' ? 'Reason for hold *' : 'Reason for release *'}</label>
+              <textarea className="dp-textarea" maxLength={1000} value={holdForm.reason}
+                onChange={e => setHoldForm(f => ({ ...f, reason: e.target.value }))} />
+            </div>
+
+            <div className="dp-modal-actions">
+              <button className="dp-btn-secondary" onClick={() => setHoldModal(null)}>Cancel</button>
+              <button className="dp-btn-primary" onClick={saveHold} disabled={saving}>
+                {saving ? 'Saving…' : holdModal === 'place' ? 'Place Hold' : 'Release Hold'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
