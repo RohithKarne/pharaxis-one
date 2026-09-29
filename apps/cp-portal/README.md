@@ -39,6 +39,24 @@ npm install
 npm run dev
 ```
 
+### Virus scanner (ClamAV) — required
+
+Every uploaded file is checked by ClamAV before it can be downloaded or sent to MIMS
+(CPPM-39). Without the scanner running, portal attachments are **held** (the report is
+still saved) and admin uploads are **refused** with "could not be checked for viruses".
+
+```bash
+brew install clamav
+freshclam       # downloads the virus list; run it again to update
+clamd --foreground --config-file=/opt/homebrew/etc/clamav/clamd.conf
+```
+
+`clamd.conf` needs `TCPSocket 3310`, `TCPAddr 127.0.0.1` and the same `DatabaseDirectory`
+as `freshclam.conf`. If `freshclam` fails with "NULL X509 store", add
+`CVDCertsDirectory /opt/homebrew/etc/clamav/certs` to both files. The portal reads `CLAMAV_HOST` (default `127.0.0.1`), `CLAMAV_PORT`
+(default `3310`) and `CLAMAV_TIMEOUT_MS` (default `30000`). Held files are rescanned every
+minute once the scanner is back.
+
 ## Default Runtime
 
 - Backend port: `4000` (`CP_PORT`)
