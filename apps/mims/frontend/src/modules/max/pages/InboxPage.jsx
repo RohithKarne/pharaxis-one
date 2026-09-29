@@ -537,6 +537,23 @@ export default function InboxPage() {
     return true
   }
 
+  // '"Name" <email>' → the case's reporter, so the sender becomes the first
+  // contact instead of only a line in the internal notes (M-18). A sender with no
+  // display name is kept as the reporter's email only.
+  function senderAsReporter(sender) {
+    const raw = String(sender || '').trim()
+    const match = /^(.*?)\s*<([^>]+)>$/.exec(raw)
+    const email = (match ? match[2] : raw).trim()
+    const name = (match ? match[1] : '').replace(/^["']|["']$/g, '').trim()
+    if (!name && !email.includes('@')) return undefined
+    const parts = name.split(/\s+/).filter(Boolean)
+    return {
+      first_name: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
+      last_name: parts.length > 1 ? parts[parts.length - 1] : '',
+      email: email.includes('@') ? email : '',
+    }
+  }
+
   async function createCaseFromInquiry() {
     if (!selected) return
     if (!siteId) {
@@ -560,6 +577,7 @@ export default function InboxPage() {
           date_received: toDateOnly(selected.received_at),
           description:    bodySnippet  || null,
           internal_notes: contextNotes || null,
+          reporter:       senderAsReporter(selected.sender),
         }),
       })
       const created = await createRes.json().catch(() => ({}))
