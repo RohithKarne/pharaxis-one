@@ -174,6 +174,7 @@ export default function CaseFormPage() {
           setActiveStep={setActiveStep}
           caseType={caseData?.case_type}
           caseNumber={caseData?.case_number}
+          doneSteps={{ 1: tabCounts.contacts > 0 }}
           saving={saving}
           onSave={saveInfo}
         >

@@ -297,6 +297,11 @@ a.mims-sidenav-sub-item { text-decoration: none; }
 .mims-meta-value { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9); }
 
 .mims-icon-btn {
+  /* a <button> (M-12: reachable by keyboard and named for screen readers) */
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
   width: 30px;
   height: 30px;
   display: flex;
@@ -2820,6 +2825,29 @@ a.nav-item { text-decoration: none; color: inherit; }
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+/* M-14. The list kept whatever height the controls above it left: 217 px at
+   1222×814 and 8 px at ~730 px wide. It now keeps at least 320 px, and on a
+   short window the panel scrolls so the controls move out of the way.
+   "Compact" rows were 155 px tall; compact now means no body preview and the
+   chips on one short line. */
+.inbox-list-panel { overflow-y: auto; }
+.inbox-list { min-height: 320px; flex-shrink: 0; }
+.compact-mode .inbox-row { margin-bottom: 4px; }
+.compact-mode .inbox-row-preview { display: none; }
+.compact-mode .inbox-row-meta-row { flex-wrap: nowrap; overflow: hidden; margin-top: 3px; }
+.compact-mode .inbox-row-chip { min-height: 18px; white-space: nowrap; }
+@media (max-width: 1080px) {
+  /* Narrow windows stack the list above the detail. Let the page scroll so the
+     banner moves away, give the inbox a screen-high box, and while nothing is
+     selected let the list use all of it instead of sharing it with an empty
+     "Select an inquiry" box. */
+  .mims-page-body.mims-inbox-page-body.no-scroll { overflow-y: auto; }
+  .mims-inbox-page-body .inbox-page-shell { flex: none; }
+  .mims-inbox-page-body .inbox-wrapper { flex: none; height: calc(100vh - 110px); min-height: 520px; }
+  .inbox-wrapper:has(.inbox-detail-empty) .inbox-list-panel { max-height: none; flex: 1; }
+  .inbox-wrapper:has(.inbox-detail-empty) .inbox-detail-panel { display: none; }
 }
 
 .color-picker-bar {
@@ -5790,7 +5818,9 @@ a.nav-item { text-decoration: none; color: inherit; }
   overflow: auto;
 }
 
-.login-page {
+/* Not the product sign-in page: its hero text is white and needs the dark
+   background set in section 6 (M-1 — this light override made it unreadable). */
+.login-page:not(.login-page-product) {
   background:
     radial-gradient(circle at top left, rgba(232, 137, 12, 0.12), transparent 28%),
     radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.12), transparent 24%),

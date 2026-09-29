@@ -186,19 +186,14 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
         <div className="mims-header-divider" />
 
         {/* Bell — notification overlay */}
-        <div className="mims-icon-btn" title="Notifications" onClick={onBellClick}>
-          🔔
-        </div>
+        <button type="button" className="mims-icon-btn" title="Notifications" aria-label="Notifications" onClick={onBellClick}>
+          <span aria-hidden="true">🔔</span>
+        </button>
 
         {/* Help */}
-        <div
-          className="mims-icon-btn"
-          title="Help"
-          onClick={onHelpClick}
-          style={{ cursor: 'pointer' }}
-        >
-          ❓
-        </div>
+        <button type="button" className="mims-icon-btn" title="Help" aria-label="Help" onClick={onHelpClick}>
+          <span aria-hidden="true">❓</span>
+        </button>
 
         {/* Settings gear retired — old admin console removed.
             Admin access is available via the sidebar "Admin ↗" link. */}
