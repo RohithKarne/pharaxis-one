@@ -743,14 +743,18 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       ? 'Backup Codes'
                       : twoFactor.twoFactorRequired
                         ? 'Two-Factor Verification'
-                        : 'Optional Two-Factor Setup'}
+                        : twoFactor.twoFactorSetupRequired
+                          ? 'Set Up Two-Factor Authentication'
+                          : 'Optional Two-Factor Setup'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                     {postLoginData?.backupCodes?.length
                       ? 'Save these backup codes now. Each code works once if you lose access to email or your authenticator app.'
                       : twoFactor.twoFactorRequired
                         ? 'Password is correct. Complete 2FA below to finish signing in.'
-                        : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
+                        : twoFactor.twoFactorSetupRequired
+                          ? 'Your organisation requires two-factor authentication. Set it up below to finish signing in.'
+                          : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
                   </div>
 
                   {postLoginData?.backupCodes?.length ? (
@@ -854,7 +858,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       <button className="btn btn-primary btn-block" type="button" onClick={verifyTwoFactor} disabled={loading}>
                         {loading ? 'Processing...' : (twoFactor.twoFactorRequired ? 'Verify and Sign In' : 'Enable 2FA and Continue')}
                       </button>
-                      {!twoFactor.twoFactorRequired && (
+                      {!twoFactor.twoFactorRequired && !twoFactor.twoFactorSetupRequired && (
                         <button className="btn btn-outline btn-block mt-8" type="button" onClick={skipTwoFactorSetup} disabled={loading}>
                           Skip for Now
                         </button>

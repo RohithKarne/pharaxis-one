@@ -1513,7 +1513,11 @@ const authController = {
       const challengeToken = issueTwoFactorToken(makeTwoFactorPayload(
         user,
         context,
-        settings?.is_enabled ? 'verify' : 'setup_optional'
+        // 360 walk M-13 (decision Rohith, 2026-09-29): this branch runs only when
+        // the organisation has 2FA switched on, so a person without it must set it
+        // up now — 'setup_required' cannot be skipped. It was 'setup_optional',
+        // so "2FA on" meant anyone could skip it at every sign-in, for ever.
+        settings?.is_enabled ? 'verify' : 'setup_required'
       ));
 
       await logLoginAudit({
@@ -1528,6 +1532,7 @@ const authController = {
       return res.status(200).json({
         twoFactorRequired: !!settings?.is_enabled,
         twoFactorSetupAvailable: !settings?.is_enabled,
+        twoFactorSetupRequired: !settings?.is_enabled,
         challengeToken,
         availableMethods: context.twoFactorMethods,
         maskedEmail: maskEmail(user.email),
