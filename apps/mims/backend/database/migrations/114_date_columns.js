@@ -78,7 +78,7 @@ async function up(conn) {
     const [res] = await conn.execute(
       `UPDATE inquiries SET ${col.column} = NULL WHERE ${col.column} IS NOT NULL AND TRIM(${col.column}) = ''`
     );
-    console.log(`[DB] 108: inquiries.${col.column} — ${res.affectedRows} blank value(s) set to NULL`);
+    console.log(`[DB] 114: inquiries.${col.column} — ${res.affectedRows} blank value(s) set to NULL`);
   }
   if (inquiryCols.length) {
     await conn.execute(
@@ -92,7 +92,7 @@ async function up(conn) {
     if (bad.length) {
       await conn.query(`DELETE FROM sessions WHERE id IN (${bad.map((r) => Number(r.id)).join(', ')})`);
     }
-    console.log(`[DB] 108: sessions — ${bad.length} session(s) with an unreadable expires_at deleted`);
+    console.log(`[DB] 114: sessions — ${bad.length} session(s) with an unreadable expires_at deleted`);
     await conn.execute(`ALTER TABLE sessions MODIFY COLUMN ${col.column} ${col.type}`);
   }
 }
