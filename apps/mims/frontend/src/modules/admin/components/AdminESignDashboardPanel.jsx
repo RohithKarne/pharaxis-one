@@ -66,7 +66,7 @@ const AdminESignDashboardPanel = () => {
             {intact ? (
               <div className="flex items-center text-green-700 font-bold text-lg">
                 <span className="mr-2">✅</span>
-                100% Intact — 21 CFR Part 11 Compliant
+                Intact — every recorded signature matches the chain
               </div>
             ) : (
               <div className="flex items-center text-red-600 font-bold text-lg">

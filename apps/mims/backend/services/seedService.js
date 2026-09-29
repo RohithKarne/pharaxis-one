@@ -180,7 +180,7 @@ const FIELD_SETUP_ROWS = [
 const PICKLIST_GROUPS = [
   { category: 'Case', field: 'case_status', values: ['Draft', 'Open', 'In Review', 'Pending Information', 'Closed', 'Reopened', 'Submitted', 'Acknowledged', 'Amendment Submitted', 'Withdrawn', 'Investigating', 'Analysed', 'Escalated'] },
   { category: 'Case', field: 'case_type', values: ['MI', 'AE', 'PC'] },
-  { category: 'Case', field: 'priority', values: ['Critical', 'High', 'Normal', 'Low'] },
+  { category: 'Case', field: 'priority', values: ['Urgent', 'High', 'Normal', 'Low'] }, // "urgent" is what the app filters and counts (M-80)
   { category: 'Case', field: 'intake_channel', values: ['Manual', 'Email', 'Phone', 'Web Form', 'Healthcare Provider', 'Patient', 'Internal', 'EMIR', 'CRM', 'Portal', 'Other'] },
 
   { category: 'Reporter', field: 'contact_type', values: ['Healthcare Professional', 'Patient', 'Consumer', 'Pharmacist', 'Company Rep', 'Distributor', 'Regulatory Authority', 'Lawyer', 'Other'] },

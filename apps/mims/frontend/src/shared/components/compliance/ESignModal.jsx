@@ -9,7 +9,7 @@
  *   open, onClose
  *   caseId, transition  — required
  *   fromStatus, toStatus
- *   meaning?    — defaults to a Part 11 statement scoped to the transition
+ *   meaning?    — defaults to a statement of what signing means for the transition
  *   onSigned?   — (esign event) => void
  */
 
@@ -18,8 +18,8 @@ import { useAuth } from '../../context/AuthContext'
 import { httpFetch } from '../../api/httpFetch.js'
 
 const DEFAULT_MEANINGS = {
-  submit:    'I confirm submission of this case under 21 CFR Part 11.',
-  approve:   'I approve this case for release under 21 CFR Part 11.',
+  submit:    'I confirm submission of this case.',
+  approve:   'I approve this case for release.',
   close:     'I attest this case is complete and may be closed.',
   transmit:  'I authorize transmission of this case to the regulatory authority.',
   lock:      'I lock this case from further edits.',
@@ -76,7 +76,7 @@ export default function ESignModal({
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)',
           background: 'linear-gradient(180deg,#1a4f9c,#143a73)', color: '#fff' }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', opacity: 0.85 }}>
-            21 CFR Part 11 Electronic Signature
+            Electronic Signature
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
             {transition.charAt(0).toUpperCase() + transition.slice(1)} case #{caseId}

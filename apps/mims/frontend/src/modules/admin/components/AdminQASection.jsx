@@ -634,7 +634,7 @@ export default function AdminQASection({ contentSection, H }) {
           {contentSection === 'qa-rules'     && 'Configure QA rules for your organisation. Rules apply to all real-time and retrospective evaluations.'}
           {contentSection === 'qa-overrides' && 'View all QA flag overrides by users. Critical overrides without reasons are highlighted.'}
           {contentSection === 'qa-compliance' && 'Run scheduled or ad-hoc scans for mandatory fields, e-signature integrity, PII rules, and access reviews.'}
-          {contentSection === 'qa-esign'     && 'Verify 21 CFR Part 11 e-signature hash chain integrity for the tenant.'}
+          {contentSection === 'qa-esign'     && 'Verify the e-signature hash chain for the tenant.'}
         </p>
       </div>
       <Component H={H} />

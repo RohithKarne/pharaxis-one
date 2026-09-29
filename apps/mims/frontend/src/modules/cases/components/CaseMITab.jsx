@@ -834,7 +834,7 @@ export default function CaseMITab({
             </div>
             <div className="cf-corr-compose-body">
               <div className="cf-esign-notice">
-                <span>This action requires your electronic signature per 21 CFR Part 11. Your identity will be recorded against this approval/send action.</span>
+                <span>This action requires your electronic signature. Your identity will be recorded against this approval/send action.</span>
               </div>
               <div className="cf-esign-fields">
                 <div className="cf-form-field">
