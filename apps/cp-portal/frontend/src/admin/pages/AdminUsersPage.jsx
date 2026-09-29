@@ -99,6 +99,20 @@ export default function AdminUsersPage() {
     }
   }
 
+  // CPPM-49: lift a sign-in lock before its 30 minutes are up.
+  async function unlock(user) {
+    if (!confirm(`Unlock sign-in for ${user.name || user.email}?`)) return
+    try {
+      const res = await fetch(`/api/admin/admin-users/${clientId}/${user.id}/unlock`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Unlock failed.')
+      setListMsg({ type: 'success', text: d.message || 'Sign-in unlocked.' })
+      loadUsers()
+    } catch (e) {
+      setListMsg({ type: 'error', text: e.message })
+    }
+  }
+
   function roleBadge(role) {
     const r = ROLE_BADGE[role] || ROLE_BADGE.viewer
     return (
@@ -164,6 +178,11 @@ export default function AdminUsersPage() {
                     <span className={`cp-badge ${u.is_active ? 'cp-badge-active' : 'cp-badge-inactive'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
+                    {u.locked_until && (
+                      <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 4 }}>
+                        Sign-in locked until {new Date(u.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
                   </td>
                   <td>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                   <td style={{ display: 'flex', gap: 8 }}>
@@ -177,6 +196,9 @@ export default function AdminUsersPage() {
                           >
                             {u.is_active ? 'Deactivate' : 'Reactivate'}
                           </button>
+                        )}
+                        {u.locked_until && (
+                          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>
                         )}
                       </>
                     )}

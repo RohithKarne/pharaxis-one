@@ -50,6 +50,20 @@ export default function PortalUsersPage() {
     }
   }
 
+  // CPPM-49: lift a sign-in lock before its 30 minutes are up.
+  async function unlock(u) {
+    if (!confirm(`Unlock sign-in for ${u.email}?`)) return
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/${u.id}/unlock`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Unlock failed.')
+      setMsg({ type: 'success', text: d.message || 'Sign-in unlocked.' })
+      load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
+  }
+
   function toggleSelect(id) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
@@ -211,12 +225,20 @@ export default function PortalUsersPage() {
                   <td><span className="cp-type-badge">{u.user_type}</span></td>
                   <td>{u.country || '—'}</td>
                   <td>{u.is_verified ? 'Verified' : 'Not verified'}</td>
-                  <td><span className={`cp-status-badge ${u.is_active ? 'cp-status-active' : 'cp-status-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td>
+                    <span className={`cp-status-badge ${u.is_active ? 'cp-status-active' : 'cp-status-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                    {u.locked_until && (
+                      <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 4 }}>
+                        Sign-in locked until {new Date(u.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                   <td>{u.created_at?.slice(0, 10)}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
+                    {u.locked_until && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
                   </td>
                 </tr>
               ))}
