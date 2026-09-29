@@ -64,11 +64,22 @@ router.get('/admin/ai/usage', authenticate, requireRole('admin', 'platform_admin
   try {
     const params = [];
     let where = '1=1';
-    if (req.query.from) { where += ' AND created_at >= ?'; params.push(req.query.from); }
-    if (req.query.to) { where += ' AND created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    if (req.query.from) { where += ' AND s.created_at >= ?'; params.push(req.query.from); }
+    if (req.query.to) { where += ' AND s.created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    // An org admin sees their organisation's calls only (M-76: every organisation's
+    // counts were shown). ai_suggestions has no org column: a case suggestion is
+    // the case's organisation; an inbox classification (case_id 0) carries its
+    // inquiry id in the payload.
+    if (!hasGlobalAdminScope(req.user)) {
+      where += ` AND (EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.org_id = ?)
+                 OR (s.case_id = 0 AND EXISTS (SELECT 1 FROM inquiries i
+                      WHERE i.id = CAST(JSON_UNQUOTE(JSON_EXTRACT(s.suggestion_payload, '$.inquiry_id')) AS UNSIGNED)
+                        AND i.org_id = ?)))`;
+      params.push(req.user.orgId, req.user.orgId);
+    }
     const [rows] = await pool.execute(
-      `SELECT model, suggestion_type, COUNT(*) calls, SUM(tokens_in) tokens_in, SUM(tokens_out) tokens_out, AVG(latency_ms) avg_latency_ms
-         FROM ai_suggestions WHERE ${where} GROUP BY model, suggestion_type ORDER BY calls DESC`,
+      `SELECT s.model, s.suggestion_type, COUNT(*) calls, SUM(s.tokens_in) tokens_in, SUM(s.tokens_out) tokens_out, AVG(s.latency_ms) avg_latency_ms
+         FROM ai_suggestions s WHERE ${where} GROUP BY s.model, s.suggestion_type ORDER BY calls DESC`,
       params
     );
     res.json({ rows });
