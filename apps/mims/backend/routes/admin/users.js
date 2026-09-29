@@ -14,23 +14,23 @@ const bcrypt   = require('bcrypt');
 const crypto   = require('crypto');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 const { logAudit } = require('../../utils/auditLog');
 
 const SALT_ROUNDS = 12;
-const PLATFORM_ADMIN_EXCLUSION_SQL =
-  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
-// WP1: non-platform admins may only see/act on users within their OWN org.
-// Platform admins (global scope) keep full cross-tenant visibility. Returns a SQL
-// fragment (users alias = `u`) plus its bind params to AND into a WHERE clause.
+// WP1: non-platform admins may only see/act on users within their OWN org, and
+// never see a platform admin (role or console permission). Platform admins (global
+// scope) keep full cross-tenant visibility, other platform admins included, so they
+// can find a colleague to rescue. Returns a SQL fragment (users alias = `u`) plus
+// its bind params to AND into a WHERE clause.
 function orgScopeForUsers(req) {
   if (hasGlobalAdminScope(req.user)) return { sql: '1=1', params: [] };
   return {
-    sql: 'EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1)',
+    sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1) AND NOT ${PLATFORM_ADMIN_SQL}`,
     params: [req.user.orgId ?? null],
   };
 }
@@ -65,8 +65,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
               u.password_expires_at, u.created_at, u.updated_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-          AND ${scope.sql}
+        WHERE ${scope.sql}
           AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
         ORDER BY u.name`,
       [...scope.params, like, like, like]
@@ -146,8 +145,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          ) AS updated_by_name
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
@@ -156,8 +154,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM users u
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
       [...scope.params, like, like, like]
     );
@@ -182,7 +179,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.password_expires_at, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL} AND ${scope.sql}`,
+       WHERE u.id = ? AND ${scope.sql}`,
       [req.params.id, ...scope.params]
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -499,22 +496,14 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     }
 
     // Break-glass (2026-09-23): never leave the platform with no active platform admin,
-    // otherwise the only way back in is a direct database write.
-    const demoting = existing.role === 'platform_admin' && (
-      (role != null && String(role) !== 'platform_admin') ||
-      (is_active != null && !is_active) ||
-      (is_disabled != null && is_disabled)
-    );
-    if (demoting) {
-      const [[{ others }]] = await pool.execute(
-        `SELECT COUNT(*) AS others FROM users u
-          WHERE u.id != ? AND u.is_active = 1 AND u.is_disabled = 0
-            AND (u.role = 'platform_admin' OR NOT ${PLATFORM_ADMIN_EXCLUSION_SQL})`,
-        [req.params.id]
-      );
-      if (!others) {
-        return res.status(409).json({ error: 'This is the last active platform admin. Make another user a platform admin before demoting or deactivating this one.' });
-      }
+    // otherwise the only way back in is a direct database write. A platform admin is
+    // the role or the console permission, as at sign-in.
+    const leavesNone = await leavesNoActivePlatformAdmin(pool, {
+      deactivate: (is_active != null && !is_active) || (is_disabled != null && is_disabled) ? [req.params.id] : [],
+      dropRole: role != null && String(role) !== 'platform_admin' ? [req.params.id] : [],
+    });
+    if (leavesNone) {
+      return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
     }
 
     // user_id uniqueness check (exclude self)

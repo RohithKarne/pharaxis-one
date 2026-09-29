@@ -1436,13 +1436,14 @@ const authController = {
       const privileges = await resolveUserRuntimePrivileges(user);
 
       if (user.password_reset_required) {
+        // Ten minutes, the same as its cookie: the token and its session row expire with it.
         const resetToken = issueToken({
           userId: user.id,
           email: user.email,
           role: user.role,
           passwordResetRequired: true,
           platformAdmin: privileges.platformAdmin,
-        });
+        }, '10m');
         attachAuthCookie(res, resetToken, 10 * 60 * 1000);
         // Every other sign-in path records the session; without this the reset
         // screen's first request is rejected as SESSION_REVOKED and the user is
@@ -1824,7 +1825,8 @@ const authController = {
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     const runtimePrivileges = await resolveUserRuntimePrivileges(user);
-    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user)) {
+    // Never upgrade a forced password-change session into a full one here.
+    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user) && !req.user.passwordResetRequired) {
       const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
       const token = issueToken({
         userId: user.id,

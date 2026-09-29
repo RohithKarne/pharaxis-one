@@ -96,6 +96,14 @@ function AuthIssueBanner({ issue, onDismiss, onAction }) {
 
 function buildAuthIssuePresentation(detail, canOpenAdmin) {
   switch (detail?.error_code) {
+    case 'PASSWORD_RESET_REQUIRED':
+      return {
+        title: 'Set a new password first',
+        message: 'Your account requires a new password. Nothing else is available until it is set.',
+        tone: 'warning',
+        actionLabel: 'Set new password',
+        actionTo: '/reset-password',
+      }
     case 'ORG_CONTEXT_MISSING':
       return {
         title: 'Organisation context missing',
@@ -201,7 +209,7 @@ function AppRoutes() {
       <ConfirmModal />
       <ExceptionToast />
       <AuthIssueBanner
-        issue={onPublicAuthRoute ? null : authIssue}
+        issue={onPublicAuthRoute || location.pathname === '/reset-password' ? null : authIssue}
         onDismiss={() => setAuthIssue(null)}
         onAction={authIssue?.actionTo ? () => {
           navigate(authIssue.actionTo)
