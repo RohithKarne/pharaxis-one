@@ -17,6 +17,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const lockout = require('../../utils/loginLockout');
 
 const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'viewer'];
 
@@ -31,7 +32,9 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, requireRole('su
        ORDER BY created_at DESC`,
       [clientId]
     );
-    res.json({ users });
+    // CPPM-49: when an admin's sign-in is locked, and until when (UTC).
+    const locked = await lockout.lockedUntilByEmail('admin', null, users.map(u => u.email));
+    res.json({ users: users.map(u => ({ ...u, locked_until: locked[u.email] || null })) });
   } catch (err) {
     log.error('admin.adminUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -109,6 +112,24 @@ router.patch('/:clientId/:userId', authenticateAdmin, requireClientAccess, requi
     res.json({ message: 'Admin user updated.' });
   } catch (err) {
     log.error('admin.adminUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /:clientId/:userId/unlock — CPPM-49: lift a sign-in lock early ──────
+router.post('/:clientId/:userId/unlock', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.clientId);
+    const userId   = parseInt(req.params.userId);
+
+    const [[user]] = await pool.execute('SELECT id, email FROM cp_admin_users WHERE id = ? AND client_id = ?', [userId, clientId]);
+    if (!user) return res.status(404).json({ error: 'Admin user not found.' });
+
+    const removed = await lockout.clearAttempts(lockout.loginKey('admin', null, user.email));
+    if (removed) await audit(req.admin, clientId, 'UNLOCK', 'admin_user', userId, { email: user.email });
+    res.json({ message: removed ? 'Sign-in unlocked.' : 'This admin’s sign-in was not locked.' });
+  } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'POST /:clientId/:userId/unlock', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
