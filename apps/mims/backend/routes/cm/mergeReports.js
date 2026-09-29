@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
+const { getCaseProductName } = require('../../services/caseProductName');
 const { authenticate } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 
@@ -386,13 +387,7 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       );
       mergeData.patient_name = patientRow?.initials || '';
 
-      const [[miRow]] = await pool.execute(
-        `SELECT p.trade_name AS product
-           FROM case_mi mi JOIN products p ON p.id = mi.product_id
-          WHERE mi.case_id = ? ORDER BY mi.id ASC LIMIT 1`,
-        [scopedCase.id]
-      );
-      if (miRow?.product) mergeData.product_name = miRow.product;
+      mergeData.product_name = await getCaseProductName(scopedCase.id);
     }
 
     function applyMerge(text) {
