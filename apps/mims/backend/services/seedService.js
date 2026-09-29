@@ -217,7 +217,9 @@ const PICKLIST_GROUPS = [
   { category: 'Product', field: 'action_taken', values: ['Dose Reduced', 'Drug Withdrawn', 'Dose Not Changed', 'Drug Interrupted', 'Unknown', 'Not Applicable'] },
   { category: 'Product', field: 'product_type', values: ['Prescription', 'Over the Counter', 'Biological', 'Medical Device', 'Combination Product'] },
   { category: 'Product', field: 'product_category', values: ['Brand', 'Generic', 'Biosimilar', 'Investigational'] },
-  { category: 'Product', field: 'frequency', values: ['Once Daily (QD)', 'Twice Daily (BID)', 'Three Times Daily (TID)', 'Four Times Daily (QID)', 'Every 6 Hours (Q6H)', 'Every 8 Hours (Q8H)', 'Every 12 Hours (Q12H)', 'Once Weekly', 'Once Monthly', 'As Needed (PRN)', 'Continuous', 'Per Protocol', 'Other'] },
+  // Dosing frequency has its own name: the event Frequency box reads the
+  // 'frequency' list, and two lists with one name were merged into it (M-111).
+  { category: 'Product', field: 'dosing_frequency', values: ['Once Daily (QD)', 'Twice Daily (BID)', 'Three Times Daily (TID)', 'Four Times Daily (QID)', 'Every 6 Hours (Q6H)', 'Every 8 Hours (Q8H)', 'Every 12 Hours (Q12H)', 'Once Weekly', 'Once Monthly', 'As Needed (PRN)', 'Continuous', 'Per Protocol', 'Other'] },
 
   { category: 'Product Complaint', field: 'pc_status', values: ['Open', 'Investigating', 'Analysed', 'Closed', 'Reopened', 'Escalated'] },
   { category: 'Product Complaint', field: 'pc_category', values: ['Quality Defect', 'Contamination', 'Packaging Damage', 'Efficacy Complaint', 'Safety Concern', 'Regulatory Issue', 'Labeling Error', 'Delivery Issue', 'Other'] },
