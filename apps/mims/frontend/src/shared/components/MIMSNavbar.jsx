@@ -136,10 +136,6 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         active={isActive('/transmissions')}
         disabled={!canAccess('transmissions')} />
 
-      <NavItem collapsed={collapsed} to="/unified-tracking" icon={<Icon name="transmissions" />} label="Unified Tracking"
-        active={isActive('/unified-tracking')}
-        disabled={!canAccess('mims_core')} />
-
       <NavSection collapsed={collapsed} title="Knowledge" />
 
       {/* Browse Content */}
@@ -155,7 +151,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       )}
 
       {/* Reports */}
-      {(isAdmin && canAccess('reports')) && (
+      {canAccess('reports') && (
         <NavItem collapsed={collapsed} to="/reports" icon={<Icon name="reports" />} label="Reports"
           active={isActive('/reports')}
         />

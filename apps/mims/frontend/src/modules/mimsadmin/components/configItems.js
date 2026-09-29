@@ -1,46 +1,10 @@
+// Only topics with a real screen are listed (T10 / M-35, 2026-09-29). The other
+// 27 (email notifications, services, imports, exports, custom processes) only
+// highlighted a tile with a developer note; they return here when each is built.
 export const CONFIG_NAV = [
-  { label: 'Email Notifications', value: 'email-notifications' },
-  { label: 'Email Types',         value: 'email-types'         },
-  { label: 'FTP File Transfers',  value: 'ftp-file-transfers'  },
-  { label: 'Tasks',               value: 'tasks'               },
-  {
-    label: 'Services', value: 'services', children: [
-      { label: 'Rep Memo',                    value: 'svc-rep-memo'             },
-      { label: 'Correspondence Notification', value: 'svc-correspondence-notif' },
-      { label: 'Translation',                 value: 'svc-translation'          },
-    ],
-  },
   {
     label: 'Import', value: 'import', children: [
       { label: 'Email Case Import',    value: 'imp-email-case'    },
-      { label: 'Response Import',      value: 'imp-response'      },
-      { label: 'File Case Import',     value: 'imp-file-case'     },
-      { label: 'XML Case Import',      value: 'imp-xml-case'      },
-      { label: 'Account Import',       value: 'imp-account'       },
-      { label: 'Contact Import',       value: 'imp-contact'       },
-      { label: 'Product Import',       value: 'imp-product'       },
-      { label: 'Postal Codes Import',  value: 'imp-postal-codes'  },
-      { label: 'Sales Rep Import',     value: 'imp-sales-rep'     },
-      { label: 'MSL Import',           value: 'imp-msl'           },
-      { label: 'Language Map Import',  value: 'imp-language-map'  },
-      { label: 'Live Import',          value: 'imp-live'          },
-    ],
-  },
-  {
-    label: 'Export', value: 'export', children: [
-      { label: 'Document Export',     value: 'exp-document'     },
-      { label: 'Case Export',         value: 'exp-case'         },
-      { label: 'Sunshine Act Export', value: 'exp-sunshine-act' },
-    ],
-  },
-  {
-    label: 'Custom', value: 'custom', children: [
-      { label: 'AE Reporting (E2B & ACK)', value: 'cust-ae-e2b'      },
-      { label: 'AE Reporting (Email)',     value: 'cust-ae-email'     },
-      { label: 'PC Synch',                value: 'cust-pc-synch'     },
-      { label: 'Data Protection Process', value: 'cust-data-protect' },
-      { label: 'QA Rule Process',         value: 'cust-qa-rule'      },
-      { label: 'Batch Case Email/Fax',    value: 'cust-batch-case'   },
     ],
   },
 ]
@@ -60,12 +24,15 @@ export function findHelpLabel(value) {
   return item ? item.label : value
 }
 
+// Only items with a real screen are listed (T10 / M-35, 2026-09-29): Sequence,
+// Configuration Management, Security Log, Case Hyperlinks, Business Rules,
+// Individual Protection Rules, PDF Security, Table Names, Language Mapping, the
+// Contact / MSL / Representative plugins and License Administration all opened
+// "Under Development". Add an item back with its screen in tabs/System.jsx.
 export const SYSTEM_NAV = [
   {
     label: 'Maintenance', value: 'sys-maintenance', children: [
       { label: 'Copy Division',            value: 'sys-maint-copy-division' },
-      { label: 'Sequence',                 value: 'sys-maint-sequence'      },
-      { label: 'Configuration Management', value: 'sys-maint-config-mgmt'  },
     ],
   },
   {
@@ -75,7 +42,6 @@ export const SYSTEM_NAV = [
       { label: 'Auth Policy',      value: 'sys-sec-auth-policy' },
       { label: '2FA Configuration', value: 'sys-setup-2fa-config' },
       { label: 'Logged In Users',  value: 'sys-sec-logged-in'},
-      { label: 'Security Log',     value: 'sys-sec-log'      },
     ],
   },
   {
@@ -92,12 +58,10 @@ export const SYSTEM_NAV = [
           { label: 'Validation Rules',                 value: 'sys-setup-validation'      },
           { label: 'Grid Section Templates',           value: 'sys-setup-grid-templates'  },
           { label: 'Case Actions (Templates/Macros)',  value: 'sys-setup-case-actions'    },
-          { label: 'Case Hyperlinks',                  value: 'sys-setup-case-hyperlinks' },
         ],
       },
       {
         label: 'Workflow & Rules', value: 'sys-setup-grp-workflow', children: [
-          { label: 'Business Rules',    value: 'sys-setup-business-rules'  },
           { label: 'Workflow Setup',    value: 'sys-setup-workflow'        },
           { label: 'Workflow Engine',   value: 'sys-setup-workflow-engine' },
           { label: 'CAPA Workflow',     value: 'sys-setup-capa'            },
@@ -117,9 +81,7 @@ export const SYSTEM_NAV = [
         label: 'Data Protection & Compliance', value: 'sys-setup-grp-compliance', children: [
           { label: 'PII Redaction Rules',         value: 'sys-setup-pii-redaction' },
           { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'  },
-          { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect' },
           { label: 'Compliance Hardening',        value: 'sys-setup-compliance'    },
-          { label: 'PDF Security',                value: 'sys-setup-pdf-security'  },
         ],
       },
       {
@@ -141,8 +103,6 @@ export const SYSTEM_NAV = [
       {
         label: 'System Reference', value: 'sys-setup-grp-system', children: [
           { label: 'Feature Flags',           value: 'sys-setup-feature-flags' },
-          { label: 'Table Names Definitions', value: 'sys-setup-table-names'   },
-          { label: 'Language Mapping',        value: 'sys-setup-lang-mapping'  },
         ],
       },
       // Picklist Definitions / Field Configuration / Case Form Definition retired —
@@ -150,32 +110,9 @@ export const SYSTEM_NAV = [
       // System > Setup > Customize Forms (⚙ More + Add Field per section).
     ],
   },
-  {
-    label: 'Plugins', value: 'sys-plugins', children: [
-      {
-        label: 'Contact', value: 'sys-plugin-contact', children: [
-          { label: 'Plugin Maintenance',   value: 'sys-plugin-contact-maint'  },
-          { label: 'Plugin Configuration', value: 'sys-plugin-contact-config' },
-        ],
-      },
-      {
-        label: 'MSL', value: 'sys-plugin-msl', children: [
-          { label: 'Plugin Maintenance',   value: 'sys-plugin-msl-maint'  },
-          { label: 'Plugin Configuration', value: 'sys-plugin-msl-config' },
-        ],
-      },
-      {
-        label: 'Representative', value: 'sys-plugin-rep', children: [
-          { label: 'Plugin Maintenance',   value: 'sys-plugin-rep-maint'  },
-          { label: 'Plugin Configuration', value: 'sys-plugin-rep-config' },
-        ],
-      },
-    ],
-  },
   { label: 'Division Parameters',    value: 'sys-division-params' },
   { label: 'System Parameters',      value: 'sys-system-params'   },
   { label: 'Reports Access',         value: 'sys-reports-access'  },
-  { label: 'License Administration', value: 'sys-license-admin'   },
   { label: 'View Data',              value: 'sys-view-data'       },
   { label: 'Exception Log',          value: 'sys-exception-log'   },
   {
