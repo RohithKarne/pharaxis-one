@@ -18,6 +18,7 @@ const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
+const { logAudit } = require('../../utils/auditLog');
 
 const SALT_ROUNDS = 12;
 const PLATFORM_ADMIN_EXCLUSION_SQL =
@@ -41,13 +42,10 @@ function addDays(date, days) {
 }
 
 // ── Helper: audit log ─────────────────────────────────────────────────────────
+// O-6: goes through the shared writer, which logs a failed write instead of
+// discarding it. Outside a transaction it does not block the admin action.
 async function audit(userId, action, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details) VALUES (?, 'user', ?, ?, ?)`,
-      [userId, entityId, action, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'user', entityId, details);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

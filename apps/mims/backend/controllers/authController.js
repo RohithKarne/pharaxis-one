@@ -38,6 +38,7 @@ const {
 const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
 const { sessionCacheInvalidate } = require('../middleware/auth');
+const { logger } = require('../services/logger');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
 // Compared against when an email has no account, so sign-in costs the same (M-3).
@@ -105,6 +106,13 @@ async function logLoginAudit({ userId, userName, role, status, failReason, authE
         metadata ? JSON.stringify(metadata) : null,
       ]
     );
+  } catch (err) {
+    // Same rule as the shared audit writer (C-09): a lost sign-in row never
+    // blocks the sign-in, but it is never silent either.
+    logger.error({ err: err.message, authEvent, status, userId: userId || null }, 'logLoginAudit failed to persist sign-in row');
+    return;
+  }
+  try {
     if (status === 'failed' && authEvent === 'password_login_failed') {
       await emitPlatformAdminAlert('failed_login_spike', {
         severity: 'high',
@@ -1024,7 +1032,7 @@ const authController = {
       if (isPlatformAdminUser && profiles.length === 0) {
         await logLoginAudit({
           userId: user.id,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'pending',
           authEvent: 'login_start_platform_admin_password',
           metadata: auditMeta,
@@ -1243,7 +1251,7 @@ const authController = {
         await logLoginAudit({
           userId: user.id,
           userName: user.email,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'success',
           authEvent: `sso_${providerKey}_login_success`,
           req,
@@ -1462,7 +1470,7 @@ const authController = {
         const config = await getSystemConfig();
         const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'admin', status: 'success', authEvent: 'login_success', req });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
           token,
@@ -1934,7 +1942,7 @@ const authController = {
       await logLoginAudit({
         userId: req.user.userId,
         userName: req.user.email,
-        role: roleForOrg,
+        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
         status: 'success',
         authEvent: 'org_switch',
         metadata: { fromOrgId: req.user.orgId, toOrgId: Number(orgId) },

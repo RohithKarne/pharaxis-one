@@ -6,6 +6,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { emitPlatformAdminAlert } = require('../../services/alertService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const adminTwoFactorAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
@@ -15,14 +16,10 @@ function parseIntSafe(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+// Shared writer: logs a failed write instead of discarding it; outside a
+// transaction it does not block the admin action.
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function assertOrgScope(req, orgId) {
