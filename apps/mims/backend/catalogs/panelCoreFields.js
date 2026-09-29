@@ -41,6 +41,22 @@ const ROWS = [
   ['ae', 'events',           'AE — Events & Seriousness',  'Event Description',        'event_description'],
   ['ae', 'events',           'AE — Events & Seriousness',  'Onset Date',               'start_date'],
   ['ae', 'events',           'AE — Events & Seriousness',  'Outcome',                  'outcome'],
+  // The rest of the event row (M-101), linked by migration 121 so the
+  // additional-fields block stops asking for them a second time.
+  ['ae', 'events',           'AE — Events & Seriousness',  'MedDRA Term',              'meddra_term'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Reported Causality',       'reported_causality'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Frequency',                'frequency'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Causality Assessment',     'causality_assessment'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'End Date',                 'end_date'],
+  // Set by the seriousness tick-boxes, which have no input of their own for
+  // it — so, like a tick-box, it is never required.
+  ['ae', 'events',           'AE — Events & Seriousness',  'Seriousness',              'seriousness', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Death',          'is_death', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Life Threatening', 'is_life_threatening', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Hospitalisation', 'is_hospitalization', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Disability',     'is_disability', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Congenital Anomaly', 'is_congenital_anomaly', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Other Medically Important', 'is_other_medically_important', 'bool'],
   ['ae', 'product-info',     'AE — Product Information',   'Product Name',             'product_name'],
   ['ae', 'product-info',     'AE — Product Information',   'Batch / Lot Number',       'batch_lot_number'],
   ['ae', 'product-info',     'AE — Product Information',   'Dose',                     'dose'],

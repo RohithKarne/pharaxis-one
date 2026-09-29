@@ -20,7 +20,13 @@ const LIST_TAB_SECTION = {
   'medical-history': 'AE — Medical History',
 }
 const LIST_TAB_FIELDS = {
-  events: { event_description: 'Event Description', start_date: 'Onset Date', outcome: 'Outcome' },
+  events: {
+    event_description: 'Event Description', start_date: 'Onset Date', outcome: 'Outcome',
+    // The rest of the row follows the admin's settings too (M-101); MedDRA Term
+    // and Causality Assessment are switched off by migration 121 (M-103).
+    meddra_term: 'MedDRA Term', reported_causality: 'Reported Causality', frequency: 'Frequency',
+    causality_assessment: 'Causality Assessment', end_date: 'End Date',
+  },
   'product-info': {
     product_name: 'Product Name', batch_lot_number: 'Batch / Lot Number', dose: 'Dose', dose_unit: 'Dose Unit',
     route_of_admin: 'Route of Administration', start_date: 'Start Date', end_date: 'Stop Date',
@@ -211,13 +217,13 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
                 {tabKey === 'events' && <>
                   {field('event_description', 'Event Description', <textarea rows={2} value={form.event_description} onChange={e => set('event_description', e.target.value)} />, { full: true })}
-                  <div className="cf-form-field"><label>MedDRA Term</label><select value={form.meddra_term} onChange={e => set('meddra_term', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'MedDRA Term').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  {field('meddra_term', 'MedDRA Term', <select value={form.meddra_term} onChange={e => set('meddra_term', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'MedDRA Term').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('outcome', 'Outcome', <select value={form.outcome} onChange={e => set('outcome', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Outcome').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
-                  <div className="cf-form-field"><label>Reported Causality</label><select value={form.reported_causality} onChange={e => set('reported_causality', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Reported Causality').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
-                  <div className="cf-form-field"><label>Frequency</label><select value={form.frequency} onChange={e => set('frequency', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Frequency').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
-                  <div className="cf-form-field"><label>Causality Assessment</label><select value={form.causality_assessment} onChange={e => set('causality_assessment', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Causality Assessment').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  {field('reported_causality', 'Reported Causality', <select value={form.reported_causality} onChange={e => set('reported_causality', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Reported Causality').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
+                  {field('frequency', 'Frequency', <select value={form.frequency} onChange={e => set('frequency', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Frequency').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
+                  {field('causality_assessment', 'Causality Assessment', <select value={form.causality_assessment} onChange={e => set('causality_assessment', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Causality Assessment').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('start_date', 'Start Date', <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} />)}
-                  <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+                  {field('end_date', 'End Date', <input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} />)}
                   <div className="cf-form-field cf-form-field--full">
                     <SeriousnessChecklist value={form} onChange={setForm} />
                   </div>
