@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 111 — login_audit.ip_address and login_audit.location.
+ * Migration 117 — login_audit.ip_address and login_audit.location.
  *
  * The sign-in log writer (logLoginAudit in controllers/authController.js) inserts
  * both columns, but 001 creates login_audit without them and no later migration
