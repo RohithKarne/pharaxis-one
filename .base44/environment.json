@@ -1,0 +1,31 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/mims/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "BOOTSTRAP_PLATFORM_ADMIN_PASSWORD",
+      "description": "Password for the first-run platform_admin account created by migration 001. A dev default is in .env.base44-defaults; set a real one to control the admin login.",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "JWT_SECRET",
+      "description": "JWT signing secret for session tokens. A dev default is in .env.base44-defaults; set a real long random value for any non-dev use.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "SSO_CONFIG_ENCRYPTION_KEY",
+      "description": "Encryption key for stored SSO/IdP config. A dev default is in .env.base44-defaults.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "SMTP_PASS",
+      "description": "SMTP password for outbound email (apps/mims email poller). Optional — the app boots and runs without it; email features stay disabled until a real value is provided.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+# Base44 development compose for the Pharaxis-One monorepo.
+#
+# Brings up the MIMS product (the primary app shown in the preview):
+#   mims-frontend  Vite dev server  -> host port 3000 (the preview entry point)
+#   mims-backend   Express API      -> internal (proxied by the Vite dev server)
+#   mims-mysql     MySQL 8          -> internal
+#   mims-redis     Redis 7          -> internal (optional cache; app degrades without it)
+#
+# The frontend dev server proxies /api, /storage and /uploads to the backend, so
+# the browser sees a single origin (no CORS / cross-site cookie issues).
+#
+# Source is bind-mounted; dependencies install from the lockfile on container
+# start into named volumes, and both app servers run with live reload.
+
+services:
+  mims-mysql:
+    image: mysql:8.0
+    restart: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: base44rootpw
+      MYSQL_DATABASE: pharaxis_mims_dev
+      MYSQL_USER: mims
+      MYSQL_PASSWORD: base44mimspw
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mims_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "mims", "-pbase44mimspw"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  mims-redis:
+    image: redis:7
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  mims-backend:
+    image: node:20
+    restart: on-failure
+    working_dir: /app/apps/mims
+    depends_on:
+      mims-mysql:
+        condition: service_healthy
+      mims-redis:
+        condition: service_healthy
+    # Repo-level dev defaults first; platform-managed secrets last so real values win.
+    env_file:
+      - ./.env.base44-defaults
+      - /run/base44/app.env
+    environment:
+      # Local-infra credentials (generated here, not user-supplied) — inline so they
+      # never get overridden by a stale dashboard value.
+      MYSQL_HOST: mims-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: mims
+      MYSQL_PASSWORD: base44mimspw
+      MYSQL_DATABASE: pharaxis_mims_dev
+      REDIS_URL: redis://mims-redis:6379
+      # Bind all interfaces so the Vite proxy (separate container) can reach the API.
+      HOST: 0.0.0.0
+      PORT: "3000"
+    volumes:
+      - ./:/app
+      - mims_backend_node_modules:/app/apps/mims/node_modules
+    command: ["sh", "-ec", "npm ci && exec npx nodemon --watch backend backend/server.js"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 6s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+
+  mims-frontend:
+    image: node:20
+    restart: on-failure
+    working_dir: /app/apps/mims/frontend
+    depends_on:
+      mims-backend:
+        condition: service_healthy
+    env_file:
+      - ./.env.base44-defaults
+      - /run/base44/app.env
+    environment:
+      # Vite proxies API/storage/uploads to the backend over the compose network.
+      MIMS_API_PROXY: http://mims-backend:3000
+      # Vite >= 6.1 appends this to allowedHosts; platform supplies the preview host.
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS:
+    volumes:
+      - ./:/app
+      - mims_frontend_node_modules:/app/apps/mims/frontend/node_modules
+    ports:
+      - "3000:5173"
+    command: ["sh", "-ec", "npm ci && exec npm run dev -- --host 0.0.0.0"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/mims/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 6s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  mims_mysql_data:
+  mims_backend_node_modules:
+  mims_frontend_node_modules:

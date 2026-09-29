@@ -15,8 +15,22 @@ export default defineConfig({
   },
   plugins: [react()],
   server: {
+    host: true,
+    allowedHosts: true,
     port: Number(process.env.MIMS_DEV_PORT) || 5173,
     strictPort: !process.env.MIMS_DEV_PORT,
+    // The app lives under /mims/ (base path). Redirect the bare root to it so the
+    // preview (which loads /) lands on the app instead of a 404.
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url || ''
+        if (url === '/' || url === '') {
+          res.writeHead(302, { Location: '/mims/' })
+          return res.end()
+        }
+        next()
+      })
+    },
     // Proxy API + static backend assets to Express during local dev.
     // MIMS_API_PROXY overrides the backend target (default port 3000).
     proxy: {
