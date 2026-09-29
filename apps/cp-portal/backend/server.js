@@ -170,6 +170,7 @@ app.use('/api/admin/email-config', require('./routes/admin/emailConfig'));
 app.use('/api/admin/feedback',     require('./routes/admin/feedback'));
 app.use('/api/admin/faq',          require('./routes/admin/faq'));
 app.use('/api/admin/language',     require('./routes/admin/language'));
+app.use('/api/admin/scanner',      require('./routes/admin/scanner'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',        require('./routes/portal/config'));
