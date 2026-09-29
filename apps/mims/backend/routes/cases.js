@@ -254,7 +254,7 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
       ) comm ON comm.case_id = c.id` : '';
     const commColumns = needsComm ? `
         COALESCE(comm.communication_count, 0) AS communication_count,
-        comm.last_comm_at,
+        DATE_FORMAT(comm.last_comm_at, '%Y-%m-%d %H:%i:%s') AS last_comm_at,
         CASE
           WHEN comm.last_comm_source IS NULL THEN NULL
           WHEN LOWER(comm.last_comm_source) LIKE '%reply%'

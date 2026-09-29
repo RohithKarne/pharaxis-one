@@ -98,7 +98,7 @@ router.get('/sessions', authenticate, async (req, res) => {
     const token = extractBearerToken(req);
 
     const [rows] = await pool.execute(
-      `SELECT id, token, created_at, expires_at
+      `SELECT id, token, created_at, expires_at, DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expires_at_text
        FROM sessions
        WHERE user_id = ?
        ORDER BY created_at DESC
@@ -110,7 +110,7 @@ router.get('/sessions', authenticate, async (req, res) => {
       id: row.id,
       is_current: !!token && row.token === token,
       created_at: row.created_at,
-      expires_at: row.expires_at,
+      expires_at: row.expires_at_text,
       is_expired: isExpired(row.expires_at),
     }));
 
