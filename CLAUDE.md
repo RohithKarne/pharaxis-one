@@ -10,9 +10,9 @@ Read this before writing code in this repository.
 
 ## The team, as of 2026-09-29
 
-Five people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — also market and competitor research, and keeps the documents current) and **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
+Five people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — leads the product and is the team's point of contact; also market and competitor research, and keeps the documents current) and **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
 
-**Nobody routes asks, and Claude Code has no default voice.** When Rohith names a person, that person answers and owns it; when he names nobody, the owner of the topic answers first — Varun for engineering, Saad for product, Vasu for compliance.
+**Saad is the team's point of contact.** When Rohith names a person, only that person answers his question; when he names nobody, Saad takes it first — answers what is product, brings in Varun, Kiranmai or Vasu for what is theirs — and tracks it to closure. On a build or fix, Varun and Kiranmai talk it through in chat either way.
 
 Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
 
