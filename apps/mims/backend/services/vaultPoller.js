@@ -43,9 +43,15 @@ async function pollVaultForOrg(orgId) {
 
       if (data && data.length > 0) {
         for (const doc of data) {
+          // Ingested documents are linked by external_provider / external_document_id
+          // and belong to the org through their folder (cm_documents has no org_id or
+          // vault_source_* columns — the old update always failed, T16).
           await pool.query(
-            'UPDATE cm_documents SET expiry_date = CURDATE(), vault_source_status = ? WHERE vault_source_id = ? AND org_id = ? AND (expiry_date IS NULL OR expiry_date > CURDATE())',
-            [doc.status__v, doc.id, orgId]
+            `UPDATE cm_documents d JOIN cm_folders f ON f.id = d.folder_id
+                SET d.expiry_date = CURDATE()
+              WHERE d.external_provider = 'veeva_vault' AND d.external_document_id = ? AND f.org_id = ?
+                AND (d.expiry_date IS NULL OR d.expiry_date > CURDATE())`,
+            [doc.id, orgId]
           );
         }
       }

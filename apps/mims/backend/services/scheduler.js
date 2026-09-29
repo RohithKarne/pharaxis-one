@@ -73,10 +73,6 @@ const HANDLERS = {
     const { runRuntimeHealthWatch } = require('./runtimeHealthWatchService')
     await runRuntimeHealthWatch()
   },
-  'expiry-alerts': async () => {
-    const { runExpiryAlerts } = require('./expiryAlertService')
-    await runExpiryAlerts()
-  },
   'cm-expiry-alerts': async () => {
     const { runCmExpiryAlerts } = require('./cmExpiryAlertService')
     await runCmExpiryAlerts()
@@ -133,18 +129,21 @@ const HANDLERS = {
   // CUT (product rationalization): Novartis demo-data simulation removed — it fabricated
   // ~100k synthetic cases/day for a single seeded org and is not a product feature.
   'login-audit-archive': async () => {
-    let retentionDays = 90
-    try {
-      const [[cfg]] = await pool.execute(
-        `SELECT setting_value FROM system_config WHERE setting_key = 'login_audit_retention_days' LIMIT 1`
-      )
-      if (cfg?.setting_value) {
-        const parsed = parseInt(cfg.setting_value, 10)
-        if (!isNaN(parsed) && parsed > 0) retentionDays = parsed
-      }
-    } catch (_) {}
+    // Login history is audit evidence: keep 7 years unless system_config
+    // 'login_audit_retention_days' says otherwise (Vasu/Rohith, 2026-09-29). The
+    // job read setting_* and login_audit.created_at — none exist — so it failed
+    // every night and deleted nothing; with the old 90-day default a fix would
+    // have removed history back to March (T16).
+    let retentionDays = 2555
+    const [[cfg]] = await pool.execute(
+      `SELECT config_value FROM system_config WHERE config_key = 'login_audit_retention_days' LIMIT 1`
+    )
+    if (cfg?.config_value) {
+      const parsed = parseInt(cfg.config_value, 10)
+      if (!isNaN(parsed) && parsed > 0) retentionDays = parsed
+    }
     const [result] = await pool.execute(
-      `DELETE FROM login_audit WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
+      `DELETE FROM login_audit WHERE login_time < DATE_SUB(NOW(), INTERVAL ? DAY)`,
       [retentionDays]
     )
     logger.info({ job: 'login-audit-archive', deleted: result.affectedRows, retentionDays }, 'Login audit archive complete')

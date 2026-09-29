@@ -12,7 +12,6 @@ import ReportFilterBar from '../components/ReportFilterBar'
 import ReportMetricsGrid from '../components/ReportMetricsGrid'
 import ReportChartPanel from '../components/ReportChartPanel'
 import ReportTableViewer from '../components/ReportTableViewer'
-import ScheduledReportsModal from '../components/ScheduledReportsModal'
 import CustomReportBuilderPanel from '../components/CustomReportBuilderPanel'
 
 const SECTION_LABELS = {
@@ -185,7 +184,6 @@ export default function ReportsPage() {
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false)
   const [reportBuilderPreview, setReportBuilderPreview] = useState(null)
   const [reportBuilderPreviewLoading, setReportBuilderPreviewLoading] = useState(false)
-  const [isScheduleModalVisible, setIsScheduleModalVisible] = useState(false)
 
   const [dashboardSearch, setDashboardSearch] = useState('')
   const [selectedDashboardId, setSelectedDashboardId] = useState(null)
@@ -735,6 +733,21 @@ export default function ReportsPage() {
     }
   }
 
+  // The report toolbar's "Schedule" opens the Schedulers section with this report
+  // filled in. It used to open the old Scheduled Reports window, which posted to a
+  // legacy service that never worked (Postgres SQL against a missing table — T16).
+  function scheduleSelectedReport() {
+    if (!isManager) { setError('Only report managers can schedule reports.'); return }
+    setEditingScheduleId(null)
+    setScheduleForm((current) => ({
+      ...current,
+      target_type: 'report',
+      target_id: String(selectedReport.id),
+      export_name: selectedReport.name || current.export_name,
+    }))
+    pushSection('schedules')
+  }
+
   async function saveSchedule() {
     setScheduleSaving(true)
     try {
@@ -1151,7 +1164,7 @@ export default function ReportsPage() {
                     onFilterChange={() => {}} 
                     onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)} 
                     disableExport={!reportPreview.rows.length} 
-                    onSchedule={() => setIsScheduleModalVisible(true)}
+                    onSchedule={scheduleSelectedReport}
                   />
                   <ReportMetricsGrid metrics={{
                     total_cases: reportPreview.rows.length,
@@ -1921,14 +1934,12 @@ export default function ReportsPage() {
       return (
         <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
           {loadingContent}
-          <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
         </StandaloneModuleShell>
       )
     }
     return (
       <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
         {loadingContent}
-        <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
       </MIMSLayout>
     )
   }
@@ -1977,7 +1988,6 @@ export default function ReportsPage() {
     return (
       <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
         {content}
-        <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
       </StandaloneModuleShell>
     )
   }
@@ -1985,7 +1995,6 @@ export default function ReportsPage() {
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       {content}
-      <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
     </MIMSLayout>
   )
 }
