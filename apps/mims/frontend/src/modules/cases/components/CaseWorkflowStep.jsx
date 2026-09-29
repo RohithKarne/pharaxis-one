@@ -57,7 +57,12 @@ export default function CaseWorkflowStep({
         <WiredSelect label={fStatus.label} section="case_meta" field="status_id"
           value={infoForm.status_id}
           onChange={v => { setInfoForm(p => ({ ...p, status_id: v })); scheduleAutoSave() }}
-          options={[{ value: '', label: '— No Status —' }, ...statuses.map(s => ({ value: s.id, label: s.name }))]} />
+          options={[{ value: '', label: '— No Status —' }, ...statuses
+            // Closing needs the "Close case" permission; the server refuses it
+            // otherwise, so it is not offered (M-109). A case already Closed
+            // keeps showing its status.
+            .filter(s => s.name !== 'Closed' || hasCapability('case.close') || String(s.id) === String(infoForm.status_id))
+            .map(s => ({ value: s.id, label: s.name }))]} />
         )}
         {!fOwner.hidden && (
         <WiredSelect label={fOwner.label} section="case_meta" field="case_owner_id"

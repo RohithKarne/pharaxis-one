@@ -27,6 +27,9 @@ export default function useCaseForm(id, token) {
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
   const [dynFieldErrors, setDynFieldErrors] = useState({})
   const [draftStatus, setDraftStatus] = useState('')
+  // A restored draft stays flagged until it is saved or discarded; the
+  // "Draft restored" chip alone vanished after four seconds (M-109).
+  const [draftRestored, setDraftRestored] = useState(false)
 
   const autoSaveTimer = useRef(null)
   const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
@@ -109,8 +112,18 @@ export default function useCaseForm(id, token) {
       if (payload.infoForm) setInfoForm(prev => ({ ...prev, ...payload.infoForm }))
       if (payload.dynFieldValues) setDynFieldValues(payload.dynFieldValues)
       setDraftStatus('Draft restored')
+      setDraftRestored(true)
       setTimeout(() => setDraftStatus(''), 4000)
     } catch { /* draft restore is best-effort */ }
+  }
+
+  // Drop the unsaved changes and show the case as saved.
+  async function discardDraft() {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    try { await httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }) } catch { /* reload shows the truth either way */ }
+    setDraftRestored(false)
+    setDraftStatus('')
+    await loadCase()
   }
 
   function scheduleAutoSave() {
@@ -183,6 +196,7 @@ export default function useCaseForm(id, token) {
       }
       setSavedMsg(isAutoSave ? 'Auto-saved' : 'Saved')
       setDraftStatus('')
+      setDraftRestored(false)
       httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }).catch(() => {})
       setTimeout(() => setSavedMsg(''), 2500)
     } catch (err) {
@@ -195,8 +209,12 @@ export default function useCaseForm(id, token) {
         toast.error(`Save failed — ${err.message}`)
         setTimeout(() => setSavedMsg(''), 8000)
       } else {
-        setSavedMsg('Save failed')
-        setTimeout(() => setSavedMsg(''), 3000)
+        // Say why: a refusal ("You do not have permission to close cases.")
+        // used to read only "Save failed" (M-109).
+        const why = err?.message && err.message !== 'Save failed' ? ` — ${err.message}` : ''
+        setSavedMsg(`Save failed${why}`)
+        if (why) toast.error(`Save failed${why}`)
+        setTimeout(() => setSavedMsg(''), why ? 8000 : 3000)
       }
     } finally {
       setSaving(false)
@@ -325,7 +343,7 @@ export default function useCaseForm(id, token) {
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-    draftStatus,
+    draftStatus, draftRestored, discardDraft,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
     loadDynFields, saveDynFields,
     getFieldConfig, getSectionVisible, getPicklistOptions,

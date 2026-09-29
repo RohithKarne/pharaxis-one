@@ -37,10 +37,11 @@ function formatActivity(event) {
   return `${who} · ${event.title || 'updated the case'}${time ? ` · ${time}` : ''}`
 }
 
-// `infoForm` carries the user's in-progress edits from step 3. The strip reads
-// it in preference to `caseData`, which only refreshes on save — otherwise
-// changing Priority on the last step leaves the strip showing the old value
-// until the case is saved, which reads as a bug.
+// The strip shows what is saved (`caseData`). An in-progress edit from step 3
+// (`infoForm`) is shown next to it as "→ new value (unsaved)", so a change is
+// visible before saving without the strip claiming it is saved. It used to
+// show the edit as the case's value — a refused close, or a restored draft,
+// read as "Status: Closed" on a case that was New (M-109).
 export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = [], users = [], caseId, headers }) {
   const [latest, setLatest] = useState(null)
   const [auditOpen, setAuditOpen] = useState(false)
@@ -61,27 +62,35 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
     return () => { cancelled = true }
   }, [caseId, headers?.Authorization])
 
-  const statusId = infoForm.status_id ?? caseData?.status_id
-  const ownerId = infoForm.case_owner_id ?? caseData?.case_owner_id
-  const priorityValue = infoForm.priority || caseData?.priority
+  const statusLabel = (value) => statuses.find(s => String(s.id) === String(value))?.name
+  const ownerLabel = (value) => users.find(u => String(u.id) === String(value))?.name || 'Unassigned'
+  const priorityLabel = (value) => PRIORITY_LABEL[value] || value || 'Normal'
 
-  const statusName = statuses.find(s => String(s.id) === String(statusId))?.name
-    || caseData?.status
-    || 'New'
-  const ownerName = users.find(u => String(u.id) === String(ownerId))?.name || 'Unassigned'
-  const priority = PRIORITY_LABEL[priorityValue] || priorityValue || 'Normal'
-  const received = infoForm.date_received || caseData?.date_received
+  const statusName = statusLabel(caseData?.status_id) || caseData?.status || 'New'
+  const ownerName = ownerLabel(caseData?.case_owner_id)
+  const priority = priorityLabel(caseData?.priority)
+  const received = caseData?.date_received
+
+  // Unsaved edits, shown beside the saved value.
+  const pending = (edited, saved, label) => (
+    edited !== undefined && edited !== null && String(edited ?? '') !== String(saved ?? '')
+      ? <span className="cf-strip-pending"> → {label(edited) || '—'} (unsaved)</span>
+      : null
+  )
+  const statusPending = pending(infoForm.status_id, caseData?.status_id, statusLabel)
+  const ownerPending = pending(infoForm.case_owner_id, caseData?.case_owner_id, ownerLabel)
+  const priorityPending = infoForm.priority ? pending(infoForm.priority, caseData?.priority, priorityLabel) : null
   const age = ageInDays(received)
   const activity = formatActivity(latest)
 
   return (
     <>
       <div className="cf-header-strip">
-        <span className="cf-strip-item"><span className="cf-strip-key">Status</span>{statusName}</span>
+        <span className="cf-strip-item"><span className="cf-strip-key">Status</span>{statusName}{statusPending}</span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>
-        <span className="cf-strip-item"><span className="cf-strip-key">Owner</span>{ownerName}</span>
+        <span className="cf-strip-item"><span className="cf-strip-key">Owner</span>{ownerName}{ownerPending}</span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>
-        <span className="cf-strip-item"><span className="cf-strip-key">Priority</span>{priority}</span>
+        <span className="cf-strip-item"><span className="cf-strip-key">Priority</span>{priority}{priorityPending}</span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>
         <span className="cf-strip-item">
           <span className="cf-strip-key">Received</span>

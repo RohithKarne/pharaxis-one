@@ -4148,6 +4148,12 @@
   color: var(--text-muted, #6b7280);
 }
 
+/* An unsaved edit shown beside the saved value (M-109). */
+.cf-strip-pending {
+  color: #b45309;
+  font-style: italic;
+}
+
 .cf-strip-sep { color: var(--border, #d1d5db); }
 
 /* The activity line is the only variable-length item — let it shrink and
