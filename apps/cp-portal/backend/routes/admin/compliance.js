@@ -36,9 +36,16 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     const { clientId } = req.params;
     const { jurisdictions, banner_config, version, require_reconsent } = req.body;
 
-    const [[existing]] = await pool.execute('SELECT id FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+    let [[existing]] = await pool.execute('SELECT id, version FROM cp_compliance_config WHERE client_id = ?', [clientId]);
     if (!existing) {
       await pool.execute(`INSERT INTO cp_compliance_config (client_id) VALUES (?)`, [clientId]);
+      [[existing]] = await pool.execute('SELECT id, version FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+    }
+
+    // CPPM-42: the version is not typed. It moves on by itself when the wording changes
+    // (below) or through Force Re-acceptance, so a request may only repeat the current one.
+    if (version !== undefined && String(version) !== existing.version) {
+      return res.status(400).json({ error: `The consent version cannot be set by hand. It changes by itself when the banner wording changes, or with Force Re-acceptance. Current version: ${existing.version}.` });
     }
 
     const fields = [];
@@ -51,10 +58,6 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     if (banner_config !== undefined) {
       fields.push('banner_config_json = ?');
       values.push(JSON.stringify(banner_config));
-    }
-    if (version !== undefined) {
-      fields.push('version = ?');
-      values.push(version);
     }
     if (require_reconsent !== undefined) {
       fields.push('require_reconsent = ?');
@@ -82,10 +85,10 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
       }
     }
 
-    await audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version, reworded_to_version: rewordedTo });
+    await audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version: existing.version, reworded_to_version: rewordedTo });
     res.json({
       compliance: updated,
-      ...(rewordedTo ? { message: `The wording changed, so it was saved as consent version ${rewordedTo}. Version ${version || 'the previous one'} keeps the text people have already accepted.` } : {}),
+      ...(rewordedTo ? { message: `The wording changed, so it was saved as consent version ${rewordedTo}. Version ${existing.version} keeps the text people have already accepted.` } : {}),
     });
   } catch (err) {
     log.error('admin.compliance.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });

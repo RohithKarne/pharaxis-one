@@ -25,6 +25,12 @@ function getCorrBox(item) {
   return getCorrDirection(item) === 'outbound' ? 'sent' : 'inbox'
 }
 
+// Replies and forwards are stored as "outbox" once the mail has gone, which
+// read as not yet sent.
+function corrStatusLabel(item) {
+  return item?.status === 'outbox' ? 'sent' : (item?.status || '-')
+}
+
 function getThreadRootId(item) {
   return item?.original_inquiry_id || item?.id
 }
@@ -224,7 +230,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
                     <div className="cf-corr-meta">
                       <span><strong>From:</strong> {item.sender || '-'}</span>
                       <span><strong>To:</strong> {item.recipient || '-'}</span>
-                      <span><strong>Status:</strong> {item.status || '-'}</span>
+                      <span><strong>Status:</strong> {corrStatusLabel(item)}</span>
                       <span><strong>Attachments:</strong> {item.attachments_count || 0}</span>
                       {item.original_inquiry_id ? <span><strong>Thread Root:</strong> #{item.original_inquiry_id}</span> : null}
                     </div>
@@ -260,7 +266,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
               <span><strong>Direction:</strong> {getCorrDirection(activeCorrItem)}</span>
               <span><strong>Type:</strong> {activeCorrItem.source_tag || 'Email'}</span>
               <span><strong>Time:</strong> {formatDate(activeCorrItem.received_at)}</span>
-              <span><strong>Status:</strong> {activeCorrItem.status || '-'}</span>
+              <span><strong>Status:</strong> {corrStatusLabel(activeCorrItem)}</span>
             </div>
             <div className="cf-corr-modal-body">{activeCorrItem.body || '(No content)'}</div>
             <div className="cf-corr-attachments">

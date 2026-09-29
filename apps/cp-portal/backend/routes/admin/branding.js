@@ -25,11 +25,11 @@ const logoStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    // A fresh name for every upload. The old fixed name meant multer wrote over the
-    // current logo before any check ran, so an oversize or invalid upload deleted
-    // it. The client's logo now changes only when the new file is accepted and saved.
+    // CPPM-46: a fresh name for every upload. The old fixed name meant multer wrote over
+    // the current logo before any check ran, so a refused upload deleted it. The new file
+    // replaces the logo only after every check passes (the rename in the route below).
     const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `client-${req.params.clientId}-logo-${Date.now()}${ext}`);
+    cb(null, `client-${req.params.clientId}-logo-upload-${Date.now()}${ext}`);
   },
 });
 const uploadLogo = multer({
@@ -55,7 +55,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
 // POST /api/admin/branding/:clientId/upload-logo — logo file upload
 router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, (req, res, next) => {
-  // Multer errors (e.g. over 5 MB) otherwise reach the global handler as a 500.
+  // CPPM-46: multer errors (e.g. over 5 MB) otherwise reach the global handler as a 500.
   uploadLogo.single('logo')(req, res, (err) => {
     if (!err) return next();
     if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Logo is larger than 5 MB. Choose a smaller image.' });
@@ -86,9 +86,10 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, (r
     if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     const safeName = `client-${req.params.clientId}-logo${safeExt}`;
     const safePath = path.join(path.dirname(req.file.path), safeName);
-    if (safePath !== req.file.path) {
-      try { fs.renameSync(req.file.path, safePath); } catch { /* fall back to original name on rename failure */ }
-    }
+    // CPPM-46: only now, with every check passed, does the new file take the logo's name.
+    // If that fails, drop the upload and report it rather than point the logo at nothing.
+    try { fs.renameSync(req.file.path, safePath); }
+    catch (err) { try { fs.unlinkSync(req.file.path); } catch { /* ignore */ } throw err; }
     const logoUrl = `/uploads/logos/${safeName}`;
     await pool.execute(`UPDATE cp_branding SET logo_url = ?, updated_at = NOW() WHERE client_id = ?`, [logoUrl, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'UPLOAD', 'branding', req.params.clientId, { logo_url: logoUrl });
