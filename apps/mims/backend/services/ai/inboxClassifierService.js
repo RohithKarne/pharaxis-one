@@ -28,10 +28,10 @@ async function classifyInquiry(inquiryId, userId = null) {
 async function classifyRecentInquiries(orgId, limit = 25) {
   const [rows] = await pool.execute(
     `SELECT id FROM inquiries
-      WHERE org_id = ? AND (ai_suggested_type IS NULL OR ai_classified_at IS NULL)
+      WHERE org_id = ? AND ai_classified_at IS NULL
       ORDER BY received_at DESC, id DESC
-      LIMIT ?`,
-    [orgId, Number(limit)]
+      LIMIT ${Math.min(Math.max(parseInt(limit, 10) || 25, 1), 200)}`,
+    [orgId]
   );
   const results = [];
   for (const row of rows) results.push({ inquiry_id: row.id, suggestion: await classifyInquiry(row.id) });

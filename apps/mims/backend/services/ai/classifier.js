@@ -2,11 +2,15 @@
 
 function classifyText(text = '') {
   const s = String(text).toLowerCase();
-  const isAe = /(adverse|side effect|reaction|rash|hospital|fatal|death|serious)/.test(s);
-  const isPc = /(complaint|defect|broken|leak|packaging|quality)/.test(s);
-  const urgency = /(fatal|death|life threatening|hospital|emergency|serious)/.test(s) ? 'High' : /(urgent|asap|important)/.test(s) ? 'Medium' : 'Normal';
+  // Whole words only, and no guess when nothing matches: every unmatched email
+  // used to come back as 'MI' (a YouTube terms-of-service notice was tagged
+  // Medical Information, M-21). caseType null means "no keyword hint".
+  const isAe = /\b(adverse|side effects?|reactions?|rash|hospitali[sz]ed|hospital|fatal|death|died)\b/.test(s);
+  const isPc = /\b(complaints?|defects?|defective|broken|leak(ed|ing|s)?|packaging)\b/.test(s);
+  const isMi = /\b(dose|dosage|dosing|interactions?|pregnan(t|cy)|breastfeeding|lactation|storage|stability|contraindicat(ed|ion|ions)|off-label|medical information|formulation|excipients?|shelf life)\b/.test(s);
+  const urgency = /\b(fatal|death|life threatening|hospital|emergency|serious)\b/.test(s) ? 'High' : /\b(urgent|asap)\b/.test(s) ? 'Medium' : 'Normal';
   return {
-    caseType: isAe ? 'AE' : isPc ? 'PC' : 'MI',
+    caseType: isAe ? 'AE' : isPc ? 'PC' : isMi ? 'MI' : null,
     urgency,
     productGuess: extractAfter(text, /(product|drug|medicine)[:\s-]+([^\n,.]+)/i),
     therapyAreaGuess: extractAfter(text, /(therapy|area|indication)[:\s-]+([^\n,.]+)/i),
