@@ -3080,8 +3080,12 @@ miss or anything or new feature discovery or anything. It should be automaticall
 be fixed, build in the same chat session along with existing one. Dont wait for
 my approval for this."* The closing clause of point 3 — *"but ask me before you
 include one"* — is narrowed to match: asking first now covers changes to how we
-build and how we work together, not what is found in the product. Point 5 is
-untouched: nothing is pushed without him.
+build and how we work together, not what is found in the product. **Point 5's
+login line is reworded** to his instruction of the same day during the CPPM-6
+walk — *"you should only create the user to sign in and proceed. dont ask me to
+sign in"* — replacing *"if you need a login, ask me"*; real passwords are still
+never typed. The rest of point 5 is untouched: nothing is pushed without him.
+Point 6 also asks for each find to be named in the report (§39.9).
 
 **The current wording, kept here so it can be copied:**
 
@@ -3128,14 +3132,16 @@ untouched: nothing is pushed without him.
 >    than words — how a thing flows, where it breaks, what talks to what. Keep the
 >    long detail out; put file references at the foot.
 > 5. **Nothing is done until you have seen it on the real screen, and nothing is
->    pushed without me.** Every report tells me what you did not check. If you
->    need a login, ask me — do not type passwords. Ask me before pushing
->    anything, and never push to `main` directly.
+>    pushed without me.** Every report tells me what you did not check. If a
+>    screen needs a login, create your own test user on the local copy and sign
+>    in with that — do not ask me to sign in, and never type my passwords or any
+>    real one. Ask me before pushing anything, and never push to `main` directly.
 > 6. **Fix and build what you find, in the same session — do not wait for me.**
 >    During any feature build, enhancement, bug fix or other work, if the team
 >    finds anything — a defect, a missed workflow, missed logic, any other miss,
 >    or a new feature worth having — fix it or build it in the same chat
 >    session, alongside the work in hand. Do not wait for my approval for this.
+>    Tell me in the report what you found and what you did about it.
 
 Why each point is there: 1 is §39, reinforced more than twenty times, with the
 working conversation between the pair added 2026-09-29; 2 is §4 and §39.12 for
