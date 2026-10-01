@@ -78,6 +78,7 @@ export default function AdminUsersPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
       setModal(null)
+      if (data.released_tasks) setListMsg({ type: 'success', text: data.message })
       loadUsers()
     } catch {
       setError('Network error. Please try again.')
@@ -93,8 +94,11 @@ export default function AdminUsersPage() {
         headers: adminHeaders(),
         body: JSON.stringify({ is_active: user.is_active ? 0 : 1 }),
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Update failed.') }
-      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.` })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Update failed.')
+      // CPPM-6: safety tasks the person was holding go back to the queue; say so.
+      const n = d.released_tasks || 0
+      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.${n ? ` ${n} safety task${n === 1 ? '' : 's'} they were holding went back to the queue.` : ''}` })
       loadUsers()
     } catch (e) {
       setListMsg({ type: 'error', text: e.message })
