@@ -15,7 +15,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Sync label definitions
         uses: EndBug/label-sync@v2
