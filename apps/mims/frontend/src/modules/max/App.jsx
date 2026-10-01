@@ -171,9 +171,12 @@ function AppRoutes() {
 
   useEffect(() => {
     setSessionExpiryHandler(async (detail) => {
+      const accessEnded = detail?.error_code === 'ACCESS_ENDED'
       await logout()
-      // MIPM-32: a switched-off person gets the "access has ended" screen, not the sign-in form.
-      navigate(detail?.error_code === 'ACCESS_ENDED' ? '/access-ended' : '/login', { replace: true })
+      // MIPM-32: a switched-off person gets the "access has ended" screen, not the
+      // sign-in form — now and on every later refresh, back or bookmark (ProtectedRoute).
+      if (accessEnded) { try { localStorage.setItem('mims_access_ended', '1') } catch { /* storage blocked */ } }
+      navigate(accessEnded ? '/access-ended' : '/login', { replace: true })
     })
     setAuthIssueHandler((detail) => {
       if (isPublicAuthPath(window.location.pathname)) return
