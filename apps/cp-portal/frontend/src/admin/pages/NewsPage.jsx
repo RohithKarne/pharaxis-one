@@ -309,7 +309,8 @@ export default function NewsPage() {
                   <td>{p.category || '—'}</td>
                   <td>
                     <span className="cp-status-badge" style={statusBadgeStyle(p.status)}>
-                      {statusLabel(p.status)}
+                      {/* CPPM-58: published with a later date is not on the portal yet. */}
+                      {p.status === 'published' && p.publish_at && new Date(p.publish_at) > new Date() ? 'Published — not live yet' : statusLabel(p.status)}
                     </span>
                   </td>
                   <td>{p.is_pinned ? 'Pinned' : 'Not pinned'}</td>

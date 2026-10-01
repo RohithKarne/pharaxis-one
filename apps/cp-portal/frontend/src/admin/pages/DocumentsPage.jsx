@@ -35,6 +35,16 @@ const DOC_STATUS_LABELS = {
   archived: 'Archived',
 }
 
+// CPPM-55: a published document the portal is not showing is not "Live in portal".
+// It is hidden once its expiry date passes, and until its publish date arrives.
+function docLiveLabel(doc) {
+  if (doc.status === 'published') {
+    if (doc.expires_at && new Date(doc.expires_at) <= new Date()) return 'Expired — not shown in portal'
+    if (doc.publish_at && new Date(doc.publish_at) > new Date()) return 'Published — not live yet'
+  }
+  return docStatusLabel(doc.status)
+}
+
 function docStatusLabel(status) {
   return DOC_STATUS_LABELS[status] || status || 'Draft'
 }
@@ -617,9 +627,9 @@ export default function DocumentsPage() {
                   </td>
                   <td>
                     <span className="cp-status-badge" style={{
-                      background: d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
-                      color:      d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
-                    }}>{docStatusLabel(d.status)}</span>
+                      background: docLiveLabel(d) !== docStatusLabel(d.status) ? '#FEF3C7' : d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
+                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
+                    }}>{docLiveLabel(d)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
                   {/* CPPM-31: who certified this version, and when it must be looked at again */}

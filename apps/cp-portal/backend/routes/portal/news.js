@@ -119,9 +119,11 @@ router.get('/:postId', authenticatePortal, async (req, res) => {
       return res.status(403).json({ error: 'News feature is not enabled for this portal.' });
     }
 
+    // CPPM-58: a post published ahead is not served by its own page before its
+    // time; the list already hid it.
     const [[post]] = await pool.execute(`
       SELECT * FROM cp_news_posts
-      WHERE id = ? AND client_id = ? AND status = 'published'
+      WHERE id = ? AND client_id = ? AND status = 'published' AND publish_at <= NOW()
     `, [req.params.postId, client.id]);
     if (!post) return res.status(404).json({ error: 'Post not found.' });
 

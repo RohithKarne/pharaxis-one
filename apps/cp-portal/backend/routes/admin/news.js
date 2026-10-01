@@ -105,7 +105,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     ]);
 
     await audit(req.admin, req.params.clientId, 'CREATE', 'news', result.insertId, { title });
-    if ((status || 'draft') === 'published') notifyPortalUsers(req.params.clientId, 'news', title, result.insertId);
+    // CPPM-58: the portal shows a published post from its publish time, so that is
+    // when readers are told. One published ahead is announced by the scheduler.
+    if ((status || 'draft') === 'published' && publishAtIso <= toMySQL(new Date())) notifyPortalUsers(req.params.clientId, 'news', title, result.insertId);
     autoTranslate(req.params.clientId, 'cp_news_posts', result.insertId, { title, body_html: sanitiseHtml(body_html) }).catch(() => {});
 
     const [[post]] = await pool.execute('SELECT * FROM cp_news_posts WHERE id = ?', [result.insertId]);
@@ -203,7 +205,8 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
     // CPPM-43: what changed, from → to, with the body in full.
     await audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { changes: changesBetween(before, after,
       ['title', 'body_html', 'category', 'is_pinned', 'thumbnail_path', 'target_types_json', 'status', 'publish_at']) });
-    if (status === 'published' && title) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
+    // CPPM-58: not before the post can be seen (see the create route).
+    if (status === 'published' && title && new Date(after.publish_at) <= new Date()) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
     // Re-translate whenever title or body changes
     const transFields = {};
     if (title !== undefined)     transFields.title     = title;

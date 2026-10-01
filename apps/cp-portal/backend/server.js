@@ -223,6 +223,17 @@ function createContentScheduler() {
           notifyPortalUsers(p.client_id, 'news', p.title, p.id).catch(() => {});
         }
       }
+      // CPPM-58: a post saved as published with a later date has no status change
+      // to hook; readers are told in the ten minutes after its date (one alert per
+      // reader and item, so being picked up on several ticks is harmless).
+      const [liveNews] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_news_posts
+          WHERE status = 'published' AND publish_at <= ? AND publish_at > (? - INTERVAL 10 MINUTE)`,
+        [now, now]
+      );
+      for (const p of liveNews) {
+        notifyPortalUsers(p.client_id, 'news', p.title, p.id).catch(() => {});
+      }
 
       // Documents: promote scheduled docs, and tell readers (CPPM-55) — as news does above.
       // Two kinds go live here: a scheduled document whose time has come, and one
