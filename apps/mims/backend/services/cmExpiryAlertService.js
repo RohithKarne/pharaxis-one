@@ -6,6 +6,7 @@
  */
 const pool = require('../database/db');
 const mailer = require('../utils/mailer');
+const { decryptMailboxSecret } = require('./mailboxCrypto');
 
 async function runCmExpiryAlerts() {
   try {
@@ -115,14 +116,16 @@ async function runCmExpiryAlerts() {
         host: emailAccount.smtp_host,
         port: emailAccount.smtp_port || 587,
         secure: emailAccount.smtp_port === 465,
-        auth: { user: emailAccount.username, pass: emailAccount.password },
+        // MIPM-65: the mailbox keeps these as smtp_username / smtp_password (encrypted)
+        // and from_email. The names read here before do not exist, so no alert could sign in.
+        auth: { user: emailAccount.smtp_username, pass: decryptMailboxSecret(emailAccount.smtp_password) },
       });
 
       const uniqueSubs = [...new Map(subs.map(s => [s.email, s])).values()];
       for (const sub of uniqueSubs) {
         try {
           await transporter.sendMail({
-            from: `"MIMS Alerts" <${emailAccount.email_address || emailAccount.username}>`,
+            from: `"MIMS Alerts" <${emailAccount.from_email || emailAccount.smtp_username}>`,
             to: sub.email,
             subject: `⚠️ ${doc.content_type === 'faq' ? 'FAQ' : 'Document'} Expiry Alert — ${doc.name} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
             html: `
