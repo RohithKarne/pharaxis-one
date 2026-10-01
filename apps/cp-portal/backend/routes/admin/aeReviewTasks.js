@@ -16,6 +16,13 @@
  *
  * CPPM-18: a task comes from a form submission OR a chat conversation.
  *
+ * CPPM-6: an open task can be held by one staff member at a time — taken, released
+ * or handed to a colleague — so two people do not work the same task and nobody
+ * assumes somebody else has it. Every one of those moves is written to the audit
+ * trail. Holding a task is never a condition for closing it: anyone who could close
+ * a task before still can, and the close record names the holder when it was someone
+ * else.
+ *
  * Same button for both and within a year every task closes as "reviewed" and the
  * number means nothing (Sowmya). The split is what makes the aged-out rate a
  * metric someone can actually report on (Vasu).
@@ -32,6 +39,27 @@ const { syncToIntegration, toDateOnly } = require('../portal/submit');
 const OUTCOMES = ['reviewed_not_ae', 'cleared_administrative', 'confirmed_ae'];
 const CLINICAL_ROLES = ['safety_reviewer', 'superadmin'];
 const MIN_REASON = 10;
+
+// CPPM-6: any staff role except viewer can hold a task. A team lead (admin) can
+// also move a task somebody else holds — that is how work is covered when the
+// holder is away.
+const LEAD_ROLES = ['admin', 'superadmin'];
+function requireHolder(req, res, next) {
+  if (req.admin.role === 'viewer') return res.status(403).json({ error: 'A viewer cannot take or hand over a task.' });
+  next();
+}
+
+// The task as the ownership routes need it: its state and who holds it now.
+async function taskWithOwner(clientId, taskId) {
+  const [[task]] = await pool.execute(
+    `SELECT t.id, t.status, t.owner_id, o.name AS owner_name
+       FROM cp_ae_review_tasks t
+  LEFT JOIN cp_admin_users o ON o.id = t.owner_id
+      WHERE t.id = ? AND t.client_id = ?`,
+    [taskId, clientId]
+  );
+  return task || null;
+}
 
 /**
  * CPPM-18: the confirmed side effect as a new adverse_event submission. The
@@ -74,6 +102,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
               t.ae_submission_id, t.closed_at, t.created_at,
               IF(t.chat_conversation_id IS NULL, 'form', 'chat') AS source,
               a.name AS closed_by_name,
+              t.owner_id, t.owner_since, o.name AS owner_name,
               COALESCE(s.submission_type, 'chat') AS submission_type,
               COALESCE(s.submitter_name, NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), '')) AS submitter_name,
               COALESCE(s.submitter_email, u.email) AS submitter_email,
@@ -85,10 +114,12 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     LEFT JOIN cp_portal_users u ON u.id = c.portal_user_id AND u.client_id = t.client_id
     LEFT JOIN cp_submissions ae ON ae.id = t.ae_submission_id
     LEFT JOIN cp_admin_users a ON a.id = t.closed_by
+    LEFT JOIN cp_admin_users o ON o.id = t.owner_id
         WHERE t.client_id = ? AND t.status = ?
         ORDER BY t.created_at ASC`,
       [req.params.clientId, status]
     );
+    rows.forEach(r => { r.owned_by_me = r.owner_id != null && r.owner_id === req.admin.adminId; });
     res.json({ items: rows });
   } catch (err) {
     log.error('admin.aeReviewTasks.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
@@ -99,13 +130,137 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 // GET /api/admin/ae-review/:clientId/count — badge for the sidebar
 router.get('/:clientId/count', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
+    // CPPM-6: `mine` is how many of the open tasks the signed-in person holds.
     const [[row]] = await pool.execute(
-      `SELECT COUNT(*) AS cnt FROM cp_ae_review_tasks WHERE client_id = ? AND status = 'open'`,
-      [req.params.clientId]
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(owner_id = ?), 0) AS mine
+         FROM cp_ae_review_tasks WHERE client_id = ? AND status = 'open'`,
+      [req.admin.adminId, req.params.clientId]
     );
-    res.json({ count: row.cnt });
+    res.json({ count: row.cnt, mine: Number(row.mine) });
   } catch (err) {
     log.error('admin.aeReviewTasks.error', { err, route: 'GET /:clientId/count', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/ae-review/:clientId/staff — who a task can be handed to (CPPM-6).
+// Its own list rather than the Admin Users one, which only admins may read: a
+// reviewer needs to hand a task over too. Names and roles only.
+router.get('/:clientId/staff', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, name, role FROM cp_admin_users
+        WHERE client_id = ? AND is_active = 1 AND role <> 'viewer'
+        ORDER BY name`,
+      [req.params.clientId]
+    );
+    res.json({ staff: rows });
+  } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'GET /:clientId/staff', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/ae-review/:clientId/:taskId/take — hold an open task nobody holds (CPPM-6)
+router.post('/:clientId/:taskId/take', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
+  try {
+    // The check ("nobody holds it") and the write are one statement, so two people
+    // pressing Take at the same moment cannot both end up holding the task.
+    const [result] = await pool.execute(
+      `UPDATE cp_ae_review_tasks
+          SET owner_id = ?, owner_since = NOW()
+        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id IS NULL`,
+      [req.admin.adminId, req.params.taskId, req.params.clientId]
+    );
+    if (result.affectedRows === 0) {
+      const task = await taskWithOwner(req.params.clientId, req.params.taskId);
+      if (!task) return res.status(404).json({ error: 'Task not found.' });
+      if (task.status === 'closed') return res.status(409).json({ error: 'This task is already closed.' });
+      return res.status(409).json({
+        error: task.owner_id === req.admin.adminId
+          ? 'You already hold this task.'
+          : `${task.owner_name || 'Someone else'} is already working on this task.`,
+      });
+    }
+    await audit(req.admin, req.params.clientId, 'AE_TASK_TAKEN', 'ae_review_task', req.params.taskId,
+      { owner_id: req.admin.adminId, owner: req.admin.name });
+    res.json({ message: 'You now hold this task.' });
+  } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/take', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/ae-review/:clientId/:taskId/release — put a held task back for anyone (CPPM-6)
+router.post('/:clientId/:taskId/release', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
+  try {
+    const task = await taskWithOwner(req.params.clientId, req.params.taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found.' });
+    if (task.status === 'closed') return res.status(409).json({ error: 'This task is already closed.' });
+    if (task.owner_id == null) return res.status(409).json({ error: 'Nobody holds this task.' });
+    if (task.owner_id !== req.admin.adminId && !LEAD_ROLES.includes(req.admin.role)) {
+      return res.status(403).json({ error: `Only ${task.owner_name || 'the holder'} or an admin can release this task.` });
+    }
+    // Only if the holder is still the one read above — otherwise somebody moved the
+    // task in between and this would silently undo their change.
+    const [result] = await pool.execute(
+      `UPDATE cp_ae_review_tasks
+          SET owner_id = NULL, owner_since = NULL
+        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id = ?`,
+      [req.params.taskId, req.params.clientId, task.owner_id]
+    );
+    if (result.affectedRows === 0) return res.status(409).json({ error: 'This task changed while you were looking at it. Refresh and try again.' });
+    await audit(req.admin, req.params.clientId, 'AE_TASK_RELEASED', 'ae_review_task', req.params.taskId,
+      { from_id: task.owner_id, from: task.owner_name });
+    res.json({ message: 'Task released. Anyone can take it now.' });
+  } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/release', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/ae-review/:clientId/:taskId/hand — give a task to a colleague (CPPM-6)
+// The holder can hand over their own task. An admin can hand over any open task,
+// held or not, which is how work is covered when the holder is away.
+router.post('/:clientId/:taskId/hand', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
+  try {
+    const toId = Number(req.body.to_admin_id);
+    if (!Number.isInteger(toId) || toId <= 0) return res.status(400).json({ error: 'Choose who to hand this task to.' });
+
+    const task = await taskWithOwner(req.params.clientId, req.params.taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found.' });
+    if (task.status === 'closed') return res.status(409).json({ error: 'This task is already closed.' });
+    if (task.owner_id !== req.admin.adminId && !LEAD_ROLES.includes(req.admin.role)) {
+      return res.status(403).json({
+        error: task.owner_id == null
+          ? 'Take this task first, or ask an admin to hand it over.'
+          : `Only ${task.owner_name || 'the holder'} or an admin can hand this task over.`,
+      });
+    }
+    if (task.owner_id === toId) return res.status(409).json({ error: `${task.owner_name || 'That person'} already holds this task.` });
+
+    // The receiver must be someone who could have taken it themselves: active
+    // staff of this client, and not a viewer.
+    const [[to]] = await pool.execute(
+      `SELECT id, name FROM cp_admin_users WHERE id = ? AND client_id = ? AND is_active = 1 AND role <> 'viewer'`,
+      [toId, req.params.clientId]
+    );
+    if (!to) return res.status(400).json({ error: 'That person cannot hold tasks for this client.' });
+
+    // <=> also matches "nobody holds it". Same reason as release: never overwrite
+    // a move somebody else made in between.
+    const [result] = await pool.execute(
+      `UPDATE cp_ae_review_tasks
+          SET owner_id = ?, owner_since = NOW()
+        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id <=> ?`,
+      [to.id, req.params.taskId, req.params.clientId, task.owner_id]
+    );
+    if (result.affectedRows === 0) return res.status(409).json({ error: 'This task changed while you were looking at it. Refresh and try again.' });
+    await audit(req.admin, req.params.clientId, 'AE_TASK_HANDED', 'ae_review_task', req.params.taskId,
+      { from_id: task.owner_id, from: task.owner_name || null, to_id: to.id, to: to.name });
+    res.json({ message: `Task handed to ${to.name}.` });
+  } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/hand', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -141,7 +296,10 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
     }
 
     const [[task]] = await pool.execute(
-      'SELECT id, status, submission_id, chat_conversation_id, created_at FROM cp_ae_review_tasks WHERE id = ? AND client_id = ?',
+      `SELECT t.id, t.status, t.submission_id, t.chat_conversation_id, t.created_at, t.owner_id, o.name AS owner_name
+         FROM cp_ae_review_tasks t
+    LEFT JOIN cp_admin_users o ON o.id = t.owner_id
+        WHERE t.id = ? AND t.client_id = ?`,
       [req.params.taskId, req.params.clientId]
     );
     if (!task) return res.status(404).json({ error: 'Task not found.' });
@@ -179,8 +337,12 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
       conn.release();
     }
 
+    // CPPM-6: closing never needs the holder's leave, but the record says when the
+    // person who closed it was not the person holding it.
+    const heldByOther = task.owner_id != null && task.owner_id !== req.admin.adminId;
     await audit(req.admin, req.params.clientId, 'AE_REVIEW_CLOSED', 'ae_review_task', req.params.taskId,
-      { outcome, reason: cleanReason || null, ...(aeSubmissionId ? { ae_submission_id: aeSubmissionId } : {}) });
+      { outcome, reason: cleanReason || null, ...(aeSubmissionId ? { ae_submission_id: aeSubmissionId } : {}),
+        ...(heldByOther ? { held_by_id: task.owner_id, held_by: task.owner_name } : {}) });
 
     if (!aeSubmissionId) return res.json({ message: 'Task closed.' });
 

@@ -129,18 +129,28 @@ export default function AdminLayout({ children }) {
   // Sidebar badge counts, keyed by the `badge` name on each nav item.
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
-  const [badges, setBadges] = useState({ review: 0, safety: 0 })
+  //   safetyMine — CPPM-6: how many of those the signed-in person holds
+  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0 })
+  // CPPM-6: a page says when it changed a count (a task taken, handed over or
+  // closed), so the sidebar does not wait for the next page change to catch up.
+  const [badgeTick, setBadgeTick] = useState(0)
+  useEffect(() => {
+    const refresh = () => setBadgeTick(t => t + 1)
+    window.addEventListener('cp:badges-changed', refresh)
+    return () => window.removeEventListener('cp:badges-changed', refresh)
+  }, [])
   useEffect(() => {
     if (!clientId) return
     const get = (url) => fetch(url, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => (d?.count != null ? d.count : 0))
-      .catch(() => 0)
+      .catch(() => null)
     Promise.all([
       get(`/api/admin/review-queue/${clientId}/count`),
       get(`/api/admin/ae-review/${clientId}/count`),
-    ]).then(([review, safety]) => setBadges({ review, safety }))
-  }, [clientId, location.pathname])
+    ]).then(([review, safety]) => setBadges({
+      review: review?.count || 0, safety: safety?.count || 0, safetyMine: safety?.mine || 0,
+    }))
+  }, [clientId, location.pathname, badgeTick])
 
   // Client logo — fetch branding when a client is selected
   const [clientLogo, setClientLogo] = useState(null)
@@ -271,7 +281,9 @@ export default function AdminLayout({ children }) {
                               marginLeft: 'auto', background: '#DC2626', color: '#fff',
                               borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700,
                             }}>
-                              {badges[item.badge]}
+                              {item.badge === 'safety' && badges.safetyMine > 0 && !sidebarCompact
+                                ? `${badges.safetyMine} yours · ${badges.safety} open`
+                                : badges[item.badge]}
                             </span>
                           )}
                         </NavLink>

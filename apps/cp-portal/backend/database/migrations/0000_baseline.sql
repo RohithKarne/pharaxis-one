@@ -905,10 +905,11 @@ CREATE TABLE IF NOT EXISTS cp_data_requests (
   KEY idx_dr_user (portal_user_id)
 );
 
--- ── AE REVIEW TASKS (from 0011, as changed by 0015) ────────────
+-- ── AE REVIEW TASKS (from 0011, as changed by 0015 and 0025) ───
 -- Defined only in migrations, never in db.js. No foreign keys, as in 0011.
 -- CPPM-18 (0015): a task comes from a form submission OR a chat conversation,
 -- exactly one of them; a confirmed side effect links its new AE submission.
+-- CPPM-6 (0025): owner_id is the staff member holding an open task now.
 CREATE TABLE IF NOT EXISTS cp_ae_review_tasks (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
   client_id            INT NOT NULL,
@@ -919,6 +920,8 @@ CREATE TABLE IF NOT EXISTS cp_ae_review_tasks (
   outcome_reason       TEXT NULL,
   ae_submission_id     INT NULL,
   reported_detail      TEXT NULL,
+  owner_id             INT NULL,
+  owner_since          DATETIME NULL,
   closed_by            INT NULL,
   closed_at            DATETIME NULL,
   created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1105,4 +1108,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0021_add_attachment_scan_status.sql',       NULL),
   ('0022_widen_audit_details.sql',              NULL),
   ('0023_add_login_attempts.sql',               NULL),
-  ('0024_add_training_records.sql',             NULL);
+  ('0024_add_training_records.sql',             NULL),
+  ('0025_add_ae_task_owner.sql',                NULL);
