@@ -393,11 +393,11 @@ router.get('/login-audit', authenticate, requireAdminConsoleAccess, async (req, 
 // ─── EMAIL ACCOUNTS ───────────────────────────────────────────
 
 function sanitizeError(msg, account) {
-  return (msg || '')
-    .replace(account.imap_password || '', '[REDACTED]')
-    .replace(account.smtp_password || '', '[REDACTED]')
-    .replace(account.imap_username || '', '[REDACTED]')
-    .replace(account.smtp_username || '', '[REDACTED]')
+  // MIPM-64: an empty value must not be "redacted" — replacing '' matches at the
+  // very start and stuck [REDACTED] on the front of every reason.
+  return [account.imap_password, account.smtp_password, account.imap_username, account.smtp_username]
+    .filter(Boolean)
+    .reduce((text, secret) => text.replaceAll(secret, '[REDACTED]'), msg || '')
     .substring(0, 500);
 }
 

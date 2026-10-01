@@ -798,6 +798,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), asyn
 
     let totalIngested = 0;
     let failedCount = 0; // M4 FIX: track per-account failures so caller knows when fetch partially failed
+    const failures = []; // MIPM-64: which mailbox failed and why, for the screen and the log
     for (const account of accounts) {
       const runStartedAt = new Date().toISOString();
       try {
@@ -832,13 +833,15 @@ router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), asyn
             last_poll_at: runEndedAt,
           },
         });
-      } catch (_) {
+      } catch (err) {
         failedCount++;
+        const reason = String(err?.message || err).slice(0, 200);
+        failures.push({ account_name: account.account_name, error: reason });
         const runEndedAt = new Date().toISOString();
         logService({
           source: 'Email Accounts',
           service_type: 'IMAP',
-          description: `Manual fetch failed for "${account.account_name}"`,
+          description: `Manual fetch failed for "${account.account_name}" — ${reason}`,
           status: 'failed',
           details: {
             task_name: 'Email Import',
@@ -859,7 +862,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), asyn
     }
 
     // M4 FIX: surface failure count so the caller can detect partial-fetch failures
-    res.json({ ingested: totalIngested, failed: failedCount });
+    res.json({ ingested: totalIngested, failed: failedCount, failures });
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Fetch failed.' });
   }

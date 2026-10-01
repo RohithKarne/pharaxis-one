@@ -376,8 +376,11 @@ export default function InboxPage() {
     setFetching(true); setFetchResult(null)
     try {
       const res = await httpFetch('/api/inbox/fetch', { method: 'POST', headers: AUTH_H })
-      if (res.ok) { const d = await res.json(); setFetchResult(d); await loadInquiries() }
-    } catch { /* silently fail */ }
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { setFetchResult(d); await loadInquiries() }
+      // MIPM-64: a fetch that fails outright says so instead of showing nothing.
+      else setFetchResult({ ingested: 0, failures: [{ account_name: 'all mailboxes', error: d.error || 'Fetch failed.' }] })
+    } catch { setFetchResult({ ingested: 0, failures: [{ account_name: 'all mailboxes', error: 'The server could not be reached.' }] }) }
     finally { setFetching(false) }
   }
 
@@ -1187,9 +1190,14 @@ export default function InboxPage() {
                   Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
                   {fetchResult != null && (
                     <span style={{ marginLeft: 8, color: 'var(--success, #22c55e)', fontSize: 11 }}>
-                      {fetchResult.ingested > 0 ? `+${fetchResult.ingested} new` : 'Up to date'}
+                      {fetchResult.ingested > 0 ? `+${fetchResult.ingested} new` : (fetchResult.failures?.length ? '' : 'Up to date')}
                     </span>
                   )}
+                  {(fetchResult?.failures || []).map(f => (
+                    <span key={f.account_name} style={{ marginLeft: 8, color: 'var(--danger, #dc2626)', fontSize: 11 }}>
+                      Could not fetch "{f.account_name}": {f.error}
+                    </span>
+                  ))}
                 </span>
                 <div className="inbox-sort-actions">
                   <button className="inbox-sort-btn" onClick={() => setSortAsc(a => !a)}>
