@@ -844,6 +844,7 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
 
 // POST — fetch emails now (immediate IMAP ingest, bypasses polling interval)
 router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  let accountName = null;
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
@@ -853,6 +854,7 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
+    accountName = account.account_name;
     if (!['Inbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for inbound.' });
     if (!account.imap_host || !account.imap_port || !account.imap_username || !account.imap_password)
@@ -871,14 +873,16 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
     });
     res.json({ message: 'Fetch complete.', ingested: n });
   } catch (err) {
+    // MIPM-64: say which mailbox, in the log and on screen.
     const msg = err?.message || String(err);
+    const label = accountName ? `Fetch failed for "${accountName}"` : 'Fetch failed';
     logService({
       source: 'Email Accounts',
       service_type: 'IMAP',
-      description: `Manual fetch failed — ${msg}`,
+      description: `${label} — ${msg}`,
       status: 'failed',
     });
-    res.status(500).json({ error: msg });
+    res.status(500).json({ error: `${label}: ${msg}` });
   }
 });
 

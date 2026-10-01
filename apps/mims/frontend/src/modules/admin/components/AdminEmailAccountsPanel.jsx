@@ -9,6 +9,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   const [orgs, setOrgs] = useState([])
   const [emailAccounts, setEmailAccounts] = useState([])
   const [emailModal, setEmailModal] = useState(null)
+  const [emailFormError, setEmailFormError] = useState('')
   const [emailEditTarget, setEmailEditTarget] = useState(null)
   const [emailForm, setEmailForm] = useState(getDefaultEmailFormBase())
   const [emailTestingId, setEmailTestingId] = useState(null)
@@ -85,6 +86,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   function openAddEmailModal() {
     setEmailEditTarget(null)
     setEmailForm(getDefaultEmailForm())
+    setEmailFormError('')
     setEmailModal('add')
   }
 
@@ -94,6 +96,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     // the form's default — the Encryption box showed "SSL/TLS" and saved nothing.
     const saved = Object.fromEntries(Object.entries(account).filter(([, value]) => value != null))
     setEmailForm(getDefaultEmailForm({ ...saved, org_id: String(account.org_id || orgId || ''), imap_password: '', smtp_password: '' }))
+    setEmailFormError('')
     setEmailModal('edit')
   }
 
@@ -109,7 +112,9 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     const url = isEdit ? `/api/admin/email-accounts/${emailEditTarget.id}` : '/api/admin/email-accounts'
     const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(emailForm) })
     const d = await readJson(res)
-    if (!res.ok) return flash(d.error || 'Request failed. Is the backend running on :3000?', 'error')
+    // MIPM-64: the reason is shown inside the dialog. As a page message it sat behind
+    // the dialog and faded after a few seconds.
+    if (!res.ok) return setEmailFormError(d.error || 'The mailbox could not be saved.')
     await loadEmailAccounts()
     setEmailModal(null)
     flash(isEdit ? 'Email account updated.' : 'Email account created.')
@@ -402,7 +407,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                     <input type="checkbox" checked={emailForm.ingest_attachments} onChange={e => setEmailForm(f => ({ ...f, ingest_attachments: e.target.checked }))} />
                     Ingest Attachments
                   </label>
-                  {emailForm.ingest_attachments && (
+                  {!!emailForm.ingest_attachments && ( // the database sends 0, which React drew as a stray "0"
                     <div style={{ marginTop: 10, maxWidth: 200 }}>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Max Attachment Size (MB)</label>
                       <input className="form-control" type="number" min={1} value={emailForm.max_attachment_mb} onChange={e => setEmailForm(f => ({ ...f, max_attachment_mb: Number(e.target.value) }))} />
@@ -411,6 +416,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 </div>
               )}
 
+              {emailFormError && <div role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{emailFormError}</div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                 <button type="button" className="btn btn-outline" onClick={() => setEmailModal(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">{emailModal === 'add' ? 'Create Account' : 'Save Changes'}</button>
