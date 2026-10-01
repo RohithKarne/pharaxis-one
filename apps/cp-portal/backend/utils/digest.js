@@ -10,6 +10,7 @@
 const { pool } = require('../database/db')
 const { sendEmail } = require('./mailer')
 const { canSee } = require('./audience')
+const { VISIBLE_DOCUMENT_SQL } = require('./documentVisibility')
 
 // ISO-8601 week tag, e.g. "2026-W27". Used as the per-client dedup key.
 function isoWeekTag(d = new Date()) {
@@ -22,17 +23,25 @@ function isoWeekTag(d = new Date()) {
 }
 
 // Collect new content from the last 7 days for one client, with each item's audience (CPPM-25).
+// The whole week is read, not a fixed number of rows (CPPM-55): the audience filter runs
+// afterwards, so a cap here could push a reader's own items out in a busy week.
 async function collectContent(clientId) {
   const [news] = await pool.execute(
-    `SELECT title, target_types_json AS audience FROM cp_news_posts WHERE client_id = ? AND status = 'published' AND publish_at >= (NOW() - INTERVAL 7 DAY) ORDER BY publish_at DESC LIMIT 40`,
+    `SELECT title, target_types_json AS audience FROM cp_news_posts WHERE client_id = ? AND status = 'published' AND publish_at >= (NOW() - INTERVAL 7 DAY) ORDER BY publish_at DESC`,
     [clientId]
   )
   const [safety] = await pool.execute(
-    `SELECT title, target_types_json AS audience FROM cp_safety_alerts WHERE client_id = ? AND status = 'active' AND publish_at >= (NOW() - INTERVAL 7 DAY) ORDER BY publish_at DESC LIMIT 40`,
+    `SELECT title, target_types_json AS audience FROM cp_safety_alerts WHERE client_id = ? AND status = 'active' AND publish_at >= (NOW() - INTERVAL 7 DAY) ORDER BY publish_at DESC`,
     [clientId]
   )
+  // CPPM-55: a document is new in the week it went live (publish_at, stamped when it is
+  // published), not the week it was uploaded — approval can take longer than a week. And
+  // only what the Documents page itself would show: not expired, not waiting for its date.
   const [docs] = await pool.execute(
-    `SELECT title, visible_to_json AS audience FROM cp_documents WHERE client_id = ? AND is_active = 1 AND status = 'published' AND created_at >= (NOW() - INTERVAL 7 DAY) ORDER BY created_at DESC LIMIT 40`,
+    `SELECT title, visible_to_json AS audience FROM cp_documents
+      WHERE client_id = ? AND is_active = 1 AND ${VISIBLE_DOCUMENT_SQL}
+        AND COALESCE(publish_at, created_at) >= (NOW() - INTERVAL 7 DAY)
+      ORDER BY COALESCE(publish_at, created_at) DESC`,
     [clientId]
   )
   return { news, safety, docs }

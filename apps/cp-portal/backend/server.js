@@ -197,6 +197,7 @@ app.use('/api/portal/training',      require('./routes/portal/training'));   // 
 // in-process interval (dev/single instance) or an external cron (stateless/HA).
 function createContentScheduler() {
   const { notifyPortalUsers } = require('./utils/notify');
+  const { VISIBLE_DOCUMENT_SQL } = require('./utils/documentVisibility');
   const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
   async function tick() {
@@ -223,11 +224,28 @@ function createContentScheduler() {
         }
       }
 
-      // Documents: promote scheduled docs
+      // Documents: promote scheduled docs, and tell readers (CPPM-55) — as news does above.
+      // Two kinds go live here: a scheduled document whose time has come, and one
+      // published ahead with a later date. The second has no status change to hook, so it
+      // is picked up in the ten minutes after its date; the alert is recorded once per
+      // reader and item, so being picked up on several ticks is harmless.
+      const [dueDocs] = await pool.execute(
+        `SELECT id FROM cp_documents WHERE status='scheduled' AND publish_at <= ?`, [now]
+      );
       await pool.execute(
         `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ?`,
         [now]
       );
+      const dueIds = dueDocs.map(d => d.id);
+      const [liveDocs] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_documents
+          WHERE is_active = 1 AND ${VISIBLE_DOCUMENT_SQL}
+            AND (publish_at > (? - INTERVAL 10 MINUTE)${dueIds.length ? ` OR id IN (${dueIds.map(() => '?').join(',')})` : ''})`,
+        [now, ...dueIds]
+      );
+      for (const d of liveDocs) {
+        notifyPortalUsers(d.client_id, 'document', d.title, d.id).catch(() => {});
+      }
 
       // Weekly digest — fire only during the configured window (default Mon 08:00 server time).
       // sendAllDigests() dedups per ISO week, so it sends at most once even though the

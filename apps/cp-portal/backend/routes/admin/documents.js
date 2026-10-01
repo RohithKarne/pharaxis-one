@@ -41,6 +41,7 @@ const { sendEmail } = require('../../utils/mailer');
 const { autoTranslate } = require('../../utils/translator');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
+const { documentUnavailableReason } = require('../../utils/documentVisibility');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -295,7 +296,20 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
           error: `Nothing was published. ${unapproved.length} of ${selected.length} selected document(s) have not been approved: ${unapproved.map(d => d.title).join(', ')}.`,
         });
       }
-      await pool.execute(`UPDATE cp_documents SET status='published', retired_at=NULL, updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // CPPM-55: publish_at is when a document goes live. One that is already
+      // published keeps its date; a future date is kept and hides it until then.
+      // (publish_at is set before status so it still sees the old status.)
+      await pool.execute(
+        `UPDATE cp_documents
+            SET publish_at = IF(status = 'published', publish_at, IF(publish_at > NOW(), publish_at, NOW())),
+                status='published', retired_at=NULL, updated_at=NOW()
+          WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // Readers hear about a document when it goes live, not when it was uploaded.
+      const [live] = await pool.execute(`SELECT * FROM cp_documents WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      const wasPublished = new Set(selected.filter(d => d.status === 'published').map(d => d.id));
+      for (const doc of live) {
+        if (!wasPublished.has(doc.id) && doc.is_active && !documentUnavailableReason(doc)) notifyPortalUsers(req.params.clientId, 'document', doc.title, doc.id);
+      }
     } else if (action === 'archive') {
       // Retiring a certified document keeps a copy of what was certified.
       for (const doc of selected) await recordSupersededVersion(doc, req.admin, 'retired');
@@ -410,7 +424,6 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       const [[doc]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ?', [result.insertId]);
       await audit(req.admin, req.params.clientId, 'UPLOAD', 'document', doc.id, { title: doc.title });
       if (approving) await audit(req.admin, req.params.clientId, 'APPROVE', 'document', doc.id, { title: doc.title, version: doc.version, review_due_at: doc.review_due_at });
-      if (docStatus === 'published') notifyPortalUsers(req.params.clientId, 'document', title, doc.id);
       autoTranslate(req.params.clientId, 'cp_documents', doc.id, { title }).catch(() => {});
       res.json({ document: doc });
     } catch (e) {
@@ -519,7 +532,14 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (is_active !== undefined)  { fields.push('is_active = ?');       values.push(is_active ? 1 : 0); }
     if (expires_at !== undefined)  { fields.push('expires_at = ?');      values.push(expires_at || null); }
     if (version !== undefined)     { fields.push('version = ?');         values.push(version || null); }
-    if (publish_at !== undefined)  { fields.push('publish_at = ?');      values.push(publish_at || null); }
+    // CPPM-55: publish_at is when a document goes live. Publishing stamps it: now, unless
+    // a later date is given (or already set and not being changed), which hides the
+    // document until then. Uploading is not going live — approval comes in between.
+    if (status === 'published' && lifecycleAction === 'PUBLISH') {
+      if (publish_at)                    { fields.push('publish_at = IF(? > NOW(), ?, NOW())'); values.push(publish_at, publish_at); }
+      else if (publish_at === undefined) { fields.push('publish_at = IF(publish_at > NOW(), publish_at, NOW())'); }
+      else                               { fields.push('publish_at = NOW()'); }
+    } else if (publish_at !== undefined) { fields.push('publish_at = ?');      values.push(publish_at || null); }
     // CPPM-31: an approval sets the review date itself, so only take it from the
     // body when this request is not an approval.
     if (review_due_at !== undefined && lifecycleAction !== 'APPROVE' && !requiresReapproval) { fields.push('review_due_at = ?'); values.push(review_due_at || null); }
@@ -543,6 +563,11 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
       await audit(req.admin, req.params.clientId, lifecycleAction, 'document', req.params.docId, {
         title: current.title, version: current.version, from: current.status, to: status,
       });
+    }
+    // CPPM-55: readers are told when a document goes live. One published with a
+    // later date is announced by the scheduler when that date arrives.
+    if (lifecycleAction === 'PUBLISH' && after.is_active && !documentUnavailableReason(after)) {
+      notifyPortalUsers(req.params.clientId, 'document', after.title, after.id);
     }
     if (req.body.title) autoTranslate(req.params.clientId, 'cp_documents', req.params.docId, { title: req.body.title }).catch(() => {});
     res.json({
