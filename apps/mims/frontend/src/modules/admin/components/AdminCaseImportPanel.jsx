@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { confirm } from '../../../shared/utils/confirm'
 import { IntegrationSectionHeader } from './AdminIntegrationShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -15,18 +14,12 @@ export default function AdminCaseImportPanel({ H }) {
   const [importUploadMsg, setImportUploadMsg] = useState('')
   const [importJobHistory, setImportJobHistory] = useState([])
   const [importJobLoading, setImportJobLoading] = useState(false)
-  const [scheduledExports, setScheduledExports] = useState([])
-  const [scheduledExportsLoading, setScheduledExportsLoading] = useState(false)
-  const [scheduledExportForm, setScheduledExportForm] = useState({ name: '', cron_expression: '', format: 'csv', case_type: '', email_to: '', is_active: true })
-  const [scheduledExportSaving, setScheduledExportSaving] = useState(false)
-  const [scheduledExportMsg, setScheduledExportMsg] = useState('')
   // PAUD-4 item 4 — count-back per import job, keyed by job id.
   const [reconciliation, setReconciliation] = useState({})
   const [reconcilingId, setReconcilingId] = useState(null)
 
   useEffect(() => {
     loadImportJobs()
-    loadScheduledExports()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadImportJobs() {
@@ -50,16 +43,6 @@ export default function AdminCaseImportPanel({ H }) {
     } catch {
       setReconciliation(prev => ({ ...prev, [jobId]: { error: 'Network error.' } }))
     } finally { setReconcilingId(null) }
-  }
-
-  async function loadScheduledExports() {
-    setScheduledExportsLoading(true)
-    try {
-      const r = await httpFetch('/api/admin/exports/scheduled', { headers: H })
-      const d = await r.json()
-      setScheduledExports(d.configs || [])
-    } catch { setScheduledExports([]) }
-    finally { setScheduledExportsLoading(false) }
   }
 
   async function handleCaseExport() {
@@ -286,81 +269,14 @@ export default function AdminCaseImportPanel({ H }) {
       </>)}
 
       {caseImportTab === 'scheduled' && (
-        <div>
-          <div style={{ background: 'var(--bg-subtle, #f8f9fa)', border: '1px solid var(--border)', borderRadius: 6, padding: 20, marginBottom: 24 }}>
-            <h3 style={{ margin: '0 0 8px' }}>Scheduled Exports</h3>
-            <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>Configure recurring case export jobs. Exports are generated on the defined schedule and delivered by email.</p>
-          </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 20, marginBottom: 24 }}>
-            <h4 style={{ margin: '0 0 16px', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>New Scheduled Export</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 700 }}>
-              <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Name</label><input className="form-input" placeholder="e.g. Weekly MI Export" value={scheduledExportForm.name} onChange={e => setScheduledExportForm(f => ({ ...f, name: e.target.value }))} /></div>
-              <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Schedule (Cron)</label><input className="form-input" placeholder="e.g. 0 8 * * 1 (Mon 8am)" value={scheduledExportForm.cron_expression} onChange={e => setScheduledExportForm(f => ({ ...f, cron_expression: e.target.value }))} /></div>
-              <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Format</label>
-                <select className="form-input" value={scheduledExportForm.format} onChange={e => setScheduledExportForm(f => ({ ...f, format: e.target.value }))}>
-                  <option value="csv">CSV</option><option value="xlsx">Excel (XLSX)</option><option value="json">JSON</option><option value="e2b_r3">E2B R3</option>
-                </select>
-              </div>
-              <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Case Type</label>
-                <select className="form-input" value={scheduledExportForm.case_type} onChange={e => setScheduledExportForm(f => ({ ...f, case_type: e.target.value }))}>
-                  <option value="">All Types</option><option value="MI">MI</option><option value="AE">AE</option><option value="PC">PC</option>
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Deliver to Email(s)</label><input className="form-input" placeholder="email1@example.com, email2@example.com" value={scheduledExportForm.email_to} onChange={e => setScheduledExportForm(f => ({ ...f, email_to: e.target.value }))} /></div>
-            </div>
-            {scheduledExportMsg && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>{scheduledExportMsg}</p>}
-            <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={scheduledExportSaving} onClick={async () => {
-              if (!scheduledExportForm.name || !scheduledExportForm.cron_expression) { setScheduledExportMsg('Name and schedule are required.'); return }
-              setScheduledExportSaving(true)
-              setScheduledExportMsg('')
-              try {
-                const r = await httpFetch('/api/admin/exports/scheduled', { method: 'POST', headers: H, body: JSON.stringify(scheduledExportForm) })
-                const d = await r.json()
-                if (r.ok) {
-                  setScheduledExportMsg('Scheduled export created.')
-                  setScheduledExportForm({ name: '', cron_expression: '', format: 'csv', case_type: '', email_to: '', is_active: true })
-                  await loadScheduledExports()
-                } else { setScheduledExportMsg(d.error || 'Failed to create.') }
-              } catch { setScheduledExportMsg('Request failed.') }
-              finally { setScheduledExportSaving(false) }
-            }}>{scheduledExportSaving ? 'Saving…' : 'Create Schedule'}</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Active Schedules</h4>
-            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={scheduledExportsLoading} onClick={loadScheduledExports}>{scheduledExportsLoading ? 'Loading…' : 'Refresh'}</button>
-          </div>
-          {scheduledExports.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No scheduled exports configured. Create one above.</p>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name','Schedule','Format','Case Type','Email To','Active',''].map(h => <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>)}
-              </tr></thead>
-              <tbody>{scheduledExports.map((cfg, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 500 }}>{cfg.name}</td>
-                  <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 12 }}>{cfg.cron_expression}</td>
-                  <td style={{ padding: '6px 8px' }}>{cfg.format?.toUpperCase()}</td>
-                  <td style={{ padding: '6px 8px' }}>{cfg.case_type || 'All'}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)', fontSize: 12 }}>{cfg.email_to || '—'}</td>
-                  <td style={{ padding: '6px 8px' }}>{cfg.is_active ? '✓' : '—'}</td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
-                      if (!await confirm('Delete this scheduled export?')) return
-                      try {
-                        // WP7: only remove the row if the DELETE actually succeeded — was
-                        // removing it unconditionally, so a failed delete made the schedule
-                        // vanish from the UI while it kept firing server-side.
-                        const res = await httpFetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
-                        if (!res.ok) { alert('Failed to delete scheduled export.'); return }
-                        setScheduledExports(prev => prev.filter((_, idx) => idx !== i))
-                      } catch { alert('Failed to delete scheduled export.') }
-                    }}>Delete</button>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
+        // MIPM-70: the form that was here sent fields the server does not read and
+        // asked for options it does not support (cron, format, case type), so it could
+        // never create a schedule, and its list showed blank columns. Scheduling lives
+        // in Reports → Schedulers, which creates, lists, pauses and deletes them.
+        <div style={{ background: 'var(--bg-subtle, #f8f9fa)', border: '1px solid var(--border)', borderRadius: 6, padding: 20, marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 8px' }}>Scheduled Exports</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--text-muted)' }}>Recurring exports are set up in Reports: choose a report or dashboard, how often, and who receives it by email.</p>
+          <a className="btn btn-primary" href={`${import.meta.env.BASE_URL || '/'}reports?section=schedules`}>Open Reports → Schedulers</a>
         </div>
       )}
     </div>
