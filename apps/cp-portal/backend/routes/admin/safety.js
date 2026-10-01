@@ -48,6 +48,7 @@ const upload = multer({
 // CP-28: shared allow-list sanitizer (replaces the bypassable blocklist).
 const { sanitizeHtml: sanitiseHtml } = require('../../utils/sanitizeHtml');
 const log = require('../../utils/logger');
+const { parsePublishAt } = require('../../utils/publishAt');
 
 // CPPM-47: 'safety_update' added (Rohith, 29 Sep) — existing alerts already carry it,
 // and without it they could not be saved. Keep in step with admin/pages/SafetyPage.jsx.
@@ -87,6 +88,14 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     try {
       const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status } = req.body;
 
+      // CPPM-58: the create form has always offered "Schedule Publish At" and this
+      // route never stored it, so every alert went live at once. An alert now carries
+      // the moment it goes live: the time given, or now.
+      const publishAt = parsePublishAt(req.body.publish_at);
+      if (publishAt === undefined) return res.status(400).json({ error: 'The publish time is not a valid date and time.' });
+      const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const goesLiveLater = publishAt !== null && publishAt > nowUtc;
+
       if (!title)     return res.status(400).json({ error: 'title is required.' });
       if (!VALID_TYPES.includes(alert_type))      return res.status(400).json({ error: 'Invalid alert_type.' });
       if (!VALID_SEVERITIES.includes(severity))   return res.status(400).json({ error: 'Invalid severity.' });
@@ -109,20 +118,25 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 
       const [result] = await pool.execute(`
         INSERT INTO cp_safety_alerts
-          (client_id, title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types_json, attachment_path, attachment_name, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (client_id, title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types_json, attachment_path, attachment_name, status, publish_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         req.params.clientId, title, alert_type, severity,
         product_name || null, ref_number || null,
         sanitiseHtml(body_html),
-        effective_date || new Date().toISOString().replace('T', ' ').substring(0, 19),
+        // A date, not a moment: the form shows and re-sends only the day, so storing the
+        // current second here made every later plain save record an "effective date" change.
+        effective_date || nowUtc.substring(0, 10),
         JSON.stringify(targetTypes),
         attachmentPath, attachmentName,
         status || 'active',
+        goesLiveLater ? publishAt : nowUtc,
       ]);
 
       await audit(req.admin, req.params.clientId, 'CREATE', 'safety_alert', result.insertId, { title });
-      if ((status || 'active') === 'active') notifyPortalUsers(req.params.clientId, 'safety', title, result.insertId);
+      // Readers are told when the alert goes live; for one scheduled for later the
+      // scheduler does that when its time arrives.
+      if ((status || 'active') === 'active' && !goesLiveLater) notifyPortalUsers(req.params.clientId, 'safety', title, result.insertId);
       autoTranslate(req.params.clientId, 'cp_safety_alerts', result.insertId, { title, body_html: sanitiseHtml(body_html) }).catch(() => {});
 
       const [[alert]] = await pool.execute('SELECT * FROM cp_safety_alerts WHERE id = ?', [result.insertId]);
@@ -149,6 +163,8 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
   }
   try {
     const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status, publish_at } = req.body;
+    const publishAt = parsePublishAt(publish_at); // CPPM-58: stored as UTC
+    if (publishAt === undefined) return res.status(400).json({ error: 'The publish time is not a valid date and time.' });
     const fields = [], values = [];
 
     if (title !== undefined && !String(title).trim()) return res.status(400).json({ error: 'Title cannot be empty.' });
@@ -176,7 +192,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
     if (effective_date)               { fields.push('effective_date = ?');     values.push(effective_date); }
     if (targetTypes !== undefined)    { fields.push('target_types_json = ?'); values.push(JSON.stringify(targetTypes)); }
     if (status !== undefined)         { fields.push('status = ?');             values.push(status); }
-    if (publish_at !== undefined)     { fields.push('publish_at = ?');         values.push(publish_at || null); }
+    if (publish_at !== undefined)     { fields.push('publish_at = ?');         values.push(publishAt); }
     if (req.file) {
       fields.push('attachment_path = ?', 'attachment_name = ?');
       values.push(`/uploads/private/safety/${req.params.clientId}/${req.file.filename}`, req.file.originalname);

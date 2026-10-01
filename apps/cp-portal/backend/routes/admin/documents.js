@@ -42,6 +42,7 @@ const { autoTranslate } = require('../../utils/translator');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
 const { documentUnavailableReason } = require('../../utils/documentVisibility');
+const { parsePublishAt } = require('../../utils/publishAt');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -437,6 +438,8 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const { title, category, doc_type, visible_to, source, is_active, status, expires_at, version, publish_at, review_due_at } = req.body;
+    const publishAt = parsePublishAt(publish_at); // CPPM-58: stored as UTC
+    if (publishAt === undefined) return res.status(400).json({ error: 'The publish time is not a valid date and time.' });
     const fields = [], values = [];
     let current = null;        // the row as it stands before this update
     let lifecycleAction = null; // APPROVE | PUBLISH | RETIRE, audited below
@@ -536,10 +539,10 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     // a later date is given (or already set and not being changed), which hides the
     // document until then. Uploading is not going live — approval comes in between.
     if (status === 'published' && lifecycleAction === 'PUBLISH') {
-      if (publish_at)                    { fields.push('publish_at = IF(? > NOW(), ?, NOW())'); values.push(publish_at, publish_at); }
+      if (publishAt)                     { fields.push('publish_at = IF(? > NOW(), ?, NOW())'); values.push(publishAt, publishAt); }
       else if (publish_at === undefined) { fields.push('publish_at = IF(publish_at > NOW(), publish_at, NOW())'); }
       else                               { fields.push('publish_at = NOW()'); }
-    } else if (publish_at !== undefined) { fields.push('publish_at = ?');      values.push(publish_at || null); }
+    } else if (publish_at !== undefined) { fields.push('publish_at = ?');      values.push(publishAt); }
     // CPPM-31: an approval sets the review date itself, so only take it from the
     // body when this request is not an approval.
     if (review_due_at !== undefined && lifecycleAction !== 'APPROVE' && !requiresReapproval) { fields.push('review_due_at = ?'); values.push(review_due_at || null); }

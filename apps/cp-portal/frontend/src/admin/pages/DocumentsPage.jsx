@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
 
 const VISIBLE_TO_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -206,7 +207,7 @@ export default function DocumentsPage() {
       fd.append('status', form.status)
       fd.append('version', form.version || '')
       fd.append('expires_at', form.expires_at || '')
-      fd.append('publish_at', form.publish_at || '')
+      fd.append('publish_at', fromLocalInput(form.publish_at))
       fd.append('is_active', form.is_active ? '1' : '0')
       if (fileInput) fd.append('file', fileInput)
 
@@ -236,7 +237,7 @@ export default function DocumentsPage() {
       version: doc.version || '',
       review_due_at: doc.review_due_at ? doc.review_due_at.slice(0, 10) : '',
       expires_at: doc.expires_at ? doc.expires_at.slice(0, 10) : '',
-      publish_at: doc.publish_at ? doc.publish_at.slice(0, 16) : '',
+      publish_at: toLocalInput(doc.publish_at),
     })
     setShowEditModal(true)
   }
@@ -247,7 +248,11 @@ export default function DocumentsPage() {
       const res = await fetch(`/api/admin/documents/${clientId}/${editDoc.id}`, {
         method: 'PUT',
         headers: adminHeaders(),
-        body: JSON.stringify({ ...editForm, publish_at: editForm.publish_at || null }),
+        // CPPM-58: send the moment the admin meant; an untouched time is left out.
+        body: JSON.stringify({
+          ...editForm,
+          publish_at: editForm.publish_at === toLocalInput(editDoc.publish_at) ? undefined : (fromLocalInput(editForm.publish_at) || null),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

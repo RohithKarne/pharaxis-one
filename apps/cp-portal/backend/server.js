@@ -247,6 +247,18 @@ function createContentScheduler() {
         notifyPortalUsers(d.client_id, 'document', d.title, d.id).catch(() => {});
       }
 
+      // Safety alerts scheduled for later (CPPM-58): the portal shows one from its
+      // publish time, with no status change to hook, so readers are told in the same
+      // ten-minute pick-up.
+      const [liveAlerts] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_safety_alerts
+          WHERE status = 'active' AND publish_at <= ? AND publish_at > (? - INTERVAL 10 MINUTE)`,
+        [now, now]
+      );
+      for (const a of liveAlerts) {
+        notifyPortalUsers(a.client_id, 'safety', a.title, a.id).catch(() => {});
+      }
+
       // Weekly digest — fire only during the configured window (default Mon 08:00 server time).
       // sendAllDigests() dedups per ISO week, so it sends at most once even though the
       // window spans ~60 ticks.

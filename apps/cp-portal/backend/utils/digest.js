@@ -31,7 +31,12 @@ async function collectContent(clientId) {
     [clientId]
   )
   const [safety] = await pool.execute(
-    `SELECT title, target_types_json AS audience FROM cp_safety_alerts WHERE client_id = ? AND status = 'active' AND publish_at >= (NOW() - INTERVAL 7 DAY) ORDER BY publish_at DESC`,
+    // CPPM-58: by the date the alert went live, and not before it has. Alerts created
+    // before this fix have no publish time, so their creation date stands in.
+    `SELECT title, target_types_json AS audience FROM cp_safety_alerts
+      WHERE client_id = ? AND status = 'active' AND (publish_at IS NULL OR publish_at <= NOW())
+        AND COALESCE(publish_at, created_at) >= (NOW() - INTERVAL 7 DAY)
+      ORDER BY COALESCE(publish_at, created_at) DESC`,
     [clientId]
   )
   // CPPM-55: a document is new in the week it went live (publish_at, stamped when it is
