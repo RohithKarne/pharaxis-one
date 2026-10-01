@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { encryptMailboxSecret, decryptMailboxSecret } = require('../../services/mailboxCrypto');
 const mailer = require('../../utils/mailer');
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
@@ -145,7 +146,7 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
       smtp_port: smtp_port !== undefined ? String(smtp_port) : undefined,
       smtp_encryption,
       smtp_username,
-      smtp_password,
+      smtp_password: smtp_password ? encryptMailboxSecret(smtp_password) : undefined, // MIPM-68
       smtp_from_email,
       smtp_from_name,
     };
@@ -218,7 +219,7 @@ router.post('/two-factor/config/test-email', ...adminTwoFactorAuth, async (req, 
     const port = parseIntSafe(smtp_port ?? currentConfig.smtp_port, 0);
     const encryption = smtp_encryption ?? currentConfig.smtp_encryption ?? 'STARTTLS';
     const username = smtp_username ?? currentConfig.smtp_username;
-    const password = smtp_password || currentConfig.smtp_password;
+    const password = smtp_password || decryptMailboxSecret(currentConfig.smtp_password); // MIPM-68
     const fromEmail = smtp_from_email ?? currentConfig.smtp_from_email ?? username;
     const fromName = smtp_from_name ?? currentConfig.smtp_from_name ?? 'MIMS Platform';
 
