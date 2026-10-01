@@ -73,4 +73,16 @@ function decryptMailboxSecret(value) {
   return value; // no configured key matched → treat as legacy plaintext
 }
 
-module.exports = { decryptMailboxSecret };
+// MIPM-68: encrypt for write, in the same envelope decryptMailboxSecret reads.
+// Idempotent: a value that already decrypts is returned unchanged.
+function encryptMailboxSecret(value) {
+  if (value == null || value === '') return value == null ? null : value;
+  const str = String(value);
+  if (decryptMailboxSecret(str) !== str) return str;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', deriveMailboxSecretKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(str, 'utf8'), cipher.final()]);
+  return `${iv.toString('base64')}.${cipher.getAuthTag().toString('base64')}.${encrypted.toString('base64')}`;
+}
+
+module.exports = { decryptMailboxSecret, encryptMailboxSecret };

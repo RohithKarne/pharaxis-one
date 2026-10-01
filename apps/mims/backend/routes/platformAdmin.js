@@ -5,6 +5,7 @@
  */
 
 const express = require('express');
+const { encryptMailboxSecret, decryptMailboxSecret } = require('../services/mailboxCrypto');
 const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
@@ -409,7 +410,7 @@ router.put('/config', authenticate, requireRole('platform_admin'), async (req, r
       smtp_port: smtp_port !== undefined ? String(smtp_port) : undefined,
       smtp_encryption,
       smtp_username,
-      smtp_password,
+      smtp_password: smtp_password ? encryptMailboxSecret(smtp_password) : undefined, // MIPM-68
       smtp_from_email,
       smtp_from_name,
     };
@@ -473,7 +474,7 @@ router.post('/config/test-email', authenticate, requireRole('platform_admin'), a
     const port = parseInt(smtp_port ?? currentConfig.smtp_port ?? '0', 10);
     const encryption = smtp_encryption ?? currentConfig.smtp_encryption ?? 'STARTTLS';
     const username = smtp_username ?? currentConfig.smtp_username;
-    const password = smtp_password || currentConfig.smtp_password;
+    const password = smtp_password || decryptMailboxSecret(currentConfig.smtp_password); // MIPM-68
     const fromEmail = smtp_from_email ?? currentConfig.smtp_from_email ?? username;
     const fromName = smtp_from_name ?? currentConfig.smtp_from_name ?? 'MIMS Platform';
 

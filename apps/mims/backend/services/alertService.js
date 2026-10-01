@@ -1,6 +1,7 @@
 'use strict';
 
 const mailer = require('../utils/mailer');
+const { decryptMailboxSecret } = require('./mailboxCrypto');
 const pool = require('../database/db');
 const { logger } = require('./logger');
 const { PLATFORM_ADMIN_MODULE_KEYS } = require('../utils/adminScope');
@@ -58,7 +59,7 @@ async function getTransporter() {
   const port = parseInt(config.smtp_port || '0', 10);
   const encryption = config.smtp_encryption || 'STARTTLS';
   const username = config.smtp_username;
-  const password = config.smtp_password;
+  const password = decryptMailboxSecret(config.smtp_password); // MIPM-68: stored encrypted
   const fromEmail = config.smtp_from_email || username;
   const fromName = config.smtp_from_name || 'MIMS Platform';
 
