@@ -131,16 +131,20 @@ async function ingestAccount(account, sinceDt) {
     const lock = await client.getMailboxLock(mailbox)
 
     try {
-      // Search for messages since sinceDt; imapflow accepts a Date directly.
-      const uids = await client.search({ since: sinceDt }, { uid: true })
-
-      if (!uids || uids.length === 0) return 0
+      // Search one day further back than the marker. The marker is a UTC time, but a
+      // mail server compares SINCE against the date in its own time zone: on a server
+      // behind UTC, mail arriving after UTC midnight fell on "yesterday" and was never
+      // found. What is already held is skipped below, so the overlap costs headers only.
+      const searchFrom = new Date(sinceDt.getTime() - 24 * 60 * 60 * 1000)
+      const uids = (await client.search({ since: searchFrom }, { uid: true })) || []
 
       // MIPM-18: this used to take the newest 25 and stop. Every caller then moves
       // its marker past the rest, so they were never looked for again. Nothing in
       // the window is skipped now; a run that fails part-way throws, the marker
       // stays where it was, and the next run carries on from what is already held.
-      const toFetch = await uidsNotHeld(client, account.id, uids)
+      // No early return when the search is empty: returning from inside this block
+      // skipped the logout below and left the connection to the mail server open.
+      const toFetch = uids.length ? await uidsNotHeld(client, account.id, uids) : []
 
       for await (const msg of fetchInBatches(client, toFetch)) {
         let parsedEmail = null
