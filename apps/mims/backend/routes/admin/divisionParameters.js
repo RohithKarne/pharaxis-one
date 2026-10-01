@@ -14,6 +14,7 @@
  */
 
 const express = require('express');
+const { bootstrapOrg, bootstrapOrgWithConnection } = require('../../services/orgBootstrapService');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
@@ -201,6 +202,10 @@ router.post('/division-parameters', authenticate, requireRole('platform_admin'),
       `INSERT INTO division_parameters (org_id, config_status, division_code) VALUES (?, 'draft', ?)`,
       [orgId, divisionCode]
     );
+    // MIPM-73: give the division the starting setup every organisation needs —
+    // case fields, default site, case numbering, workflow states, starter content —
+    // as POST /api/admin/orgs does. Without it a division made here could not hold a case.
+    await bootstrapOrgWithConnection(conn, orgId, req.user.userId);
     await conn.commit();
     res.status(201).json({ org_id: orgId, name, config_status: 'draft' });
   } catch (err) {
@@ -350,6 +355,9 @@ router.post('/division-parameters/:orgId/activate', authenticate, requireRole('p
       'SELECT COUNT(*) AS cnt FROM user_org_access WHERE org_id = ? AND is_active = 1', [orgId]
     );
     if (cnt === 0) return res.status(422).json({ error: 'Cannot activate a division with no assigned users' });
+    // MIPM-73: a division created before setup was added on create gets it here.
+    // Every step only adds what is missing, so running it again changes nothing.
+    await bootstrapOrg(orgId, req.user.userId);
     await pool.execute(
       `UPDATE division_parameters SET config_status = 'active', needs_review = 0 WHERE org_id = ?`, [orgId]
     );
