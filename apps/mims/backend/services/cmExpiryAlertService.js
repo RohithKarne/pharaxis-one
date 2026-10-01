@@ -115,7 +115,10 @@ async function runCmExpiryAlerts() {
       const transporter = mailer.createTransport('alert', {
         host: emailAccount.smtp_host,
         port: emailAccount.smtp_port || 587,
-        secure: emailAccount.smtp_port === 465,
+        // MIPM-65: use the mailbox's own Encryption setting, as every other sender
+        // does; guessing from the port hung on an SSL/TLS mailbox not on 465.
+        secure: emailAccount.smtp_encryption === 'SSL/TLS',
+        requireTLS: emailAccount.smtp_encryption === 'STARTTLS',
         // MIPM-65: the mailbox keeps these as smtp_username / smtp_password (encrypted)
         // and from_email. The names read here before do not exist, so no alert could sign in.
         auth: { user: emailAccount.smtp_username, pass: decryptMailboxSecret(emailAccount.smtp_password) },
