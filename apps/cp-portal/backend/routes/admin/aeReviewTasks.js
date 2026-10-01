@@ -43,9 +43,12 @@ const MIN_REASON = 10;
 // CPPM-6: any staff role except viewer can hold a task. A team lead (admin) can
 // also move a task somebody else holds — that is how work is covered when the
 // holder is away.
+// CPPM-56: the same rule covers closing. A viewer could clear a task
+// administratively, because that outcome was open to "any admin" and nothing
+// excluded the read-only role.
 const LEAD_ROLES = ['admin', 'superadmin'];
 function requireHolder(req, res, next) {
-  if (req.admin.role === 'viewer') return res.status(403).json({ error: 'A viewer cannot take or hand over a task.' });
+  if (req.admin.role === 'viewer') return res.status(403).json({ error: 'A viewer can see the Safety Queue but cannot take, hand over or close a task.' });
   next();
 }
 
@@ -266,7 +269,7 @@ router.post('/:clientId/:taskId/hand', authenticateAdmin, requireClientAccess, r
 });
 
 // POST /api/admin/ae-review/:clientId/:taskId/close
-router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, async (req, res) => {
+router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
   try {
     const { outcome, reason } = req.body;
 
