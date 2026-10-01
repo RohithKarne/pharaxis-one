@@ -17,6 +17,7 @@ import { isAdminUser } from '../../shared/utils/adminScope.js'
 import LoginPage            from './pages/LoginPage'
 import SsoCompletePage      from './pages/SsoCompletePage'
 import NoAccessPage         from '../../pages/NoAccessPage'
+import AccessEndedPage      from '../../pages/AccessEndedPage'
 import ResetPasswordPage    from '../../pages/ResetPasswordPage'
 
 // ── Lazily loaded — heavy or rarely-visited pages (loaded on demand) ─────────
@@ -154,7 +155,8 @@ function isPublicAuthPath(pathname) {
     pathname === '/mims-admin/login' ||
     pathname === '/content/login' ||
     pathname === '/reports/login' ||
-    pathname === '/auth/sso-complete'
+    pathname === '/auth/sso-complete' ||
+    pathname === '/access-ended'
   )
 }
 
@@ -168,9 +170,10 @@ function AppRoutes() {
   const onPublicAuthRoute = isPublicAuthPath(location.pathname)
 
   useEffect(() => {
-    setSessionExpiryHandler(async () => {
+    setSessionExpiryHandler(async (detail) => {
       await logout()
-      navigate('/login', { replace: true })
+      // MIPM-32: a switched-off person gets the "access has ended" screen, not the sign-in form.
+      navigate(detail?.error_code === 'ACCESS_ENDED' ? '/access-ended' : '/login', { replace: true })
     })
     setAuthIssueHandler((detail) => {
       if (isPublicAuthPath(window.location.pathname)) return
@@ -385,6 +388,7 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="/no-access"       element={<NoAccessPage />} />
+          <Route path="/access-ended"    element={<AccessEndedPage />} />
           <Route path="/reset-password"  element={<ResetPasswordPage />} />
           <Route path="*" element={
             <ProtectedRoute>

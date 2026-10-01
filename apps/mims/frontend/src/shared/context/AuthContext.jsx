@@ -69,7 +69,8 @@ function isPublicAuthPath() {
     path.endsWith('/mims-admin/login') ||
     path.endsWith('/content/login') ||
     path.endsWith('/reports/login') ||
-    path.includes('/auth/sso-complete')
+    path.includes('/auth/sso-complete') ||
+    path.endsWith('/access-ended')
   )
 }
 

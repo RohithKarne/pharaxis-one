@@ -11,7 +11,7 @@ function mapSsoError(code) {
     provider_declined: 'The identity provider sign-in was cancelled or declined.',
     provider_not_configured: 'That SSO provider is not configured in this environment yet.',
     no_account: 'No MIMS account is linked to that external identity yet. Ask an admin to provision or link your account.',
-    inactive_account: 'Your MIMS account is inactive. Contact your administrator.',
+    inactive_account: 'Your access has ended. Please contact your administrator.',
     no_org_access: 'Your MIMS account exists but has no active organisation access.',
     sso_failed: 'SSO sign-in failed before the app session could be created.',
     user_not_found: 'The current app user could not be found for account linking.',
