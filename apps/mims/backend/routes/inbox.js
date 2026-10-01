@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const { decryptMailboxSecret } = require('../services/mailboxCrypto');
 const fs = require('fs');
 const router = express.Router();
 const { authenticate, requireRole, requireCapability } = require('../middleware/auth');
@@ -1242,7 +1243,9 @@ async function sendViaSmtp(account, { from, to, subject, text }) {
     port: account.smtp_port,
     secure,
     requireTLS,
-    auth: { user: account.smtp_username, pass: account.smtp_password },
+    // MIPM-67: the stored password is encrypted; sending it as it is meant every
+    // reply and forward was refused by the mail server.
+    auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
     tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     connectionTimeout: 10000,
   });

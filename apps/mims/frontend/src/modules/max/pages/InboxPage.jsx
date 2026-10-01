@@ -12,7 +12,7 @@ import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
-import EmailBody, { compactEmailBodyText, normalizeEmailBodyText } from '../components/EmailBody'
+import EmailBody, { compactEmailBodyText } from '../components/EmailBody'
 import InboxFilterBar from '../components/InboxFilterBar'
 import InboxBulkBar from '../components/InboxBulkBar'
 
@@ -442,12 +442,15 @@ export default function InboxPage() {
     })
   }
 
-  // H3 FIX: validate email format on the frontend before sending
+  // H3 FIX: validate email format on the frontend before sending. MIPM-67: the
+  // same rule as the server — "Name <address>", which Reply fills in, is checked
+  // on the address inside the brackets.
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const addressOf = (value) => { const raw = String(value || '').trim(); return ((raw.match(/<([^>]+)>/) || [null, raw])[1] || '').trim() }
 
   async function sendCompose() {
     if (!compose || !selected) return
-    if (!EMAIL_RE.test(compose.to.trim())) {
+    if (!EMAIL_RE.test(addressOf(compose.to))) {
       setCompose(c => ({ ...c, error: 'Invalid recipient email address.' }))
       return
     }
