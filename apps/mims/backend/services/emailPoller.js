@@ -82,7 +82,7 @@ async function ingestAccount(account, sinceDt) {
       user: account.imap_username,
       pass: decryptMailboxSecret(account.imap_password),
     },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     logger: false,
     // Explicit timeouts — prevents IMAP hangs from silently stalling the poller
     connectionTimeout: IMAP_CONNECT_TIMEOUT_MS, // max time to establish TCP+TLS
