@@ -7,6 +7,7 @@ const ROLES = [
   { value: 'admin',           label: 'Admin',           desc: 'Full access to this client' },
   { value: 'content_manager', label: 'Content Manager', desc: 'Create & edit content; submit for review' },
   { value: 'reviewer',        label: 'Reviewer',         desc: 'Approve or reject content in review queue' },
+  { value: 'safety_reviewer', label: 'Safety Reviewer',  desc: 'Record clinical outcomes on the Safety Queue; read chat records' },
   { value: 'viewer',          label: 'Viewer',           desc: 'Read-only access' },
 ]
 
@@ -15,6 +16,7 @@ const ROLE_BADGE = {
   admin:           { label: 'Admin',           color: '#1D4ED8', bg: '#DBEAFE' },
   content_manager: { label: 'Content Manager', color: '#D97706', bg: '#FEF3C7' },
   reviewer:        { label: 'Reviewer',        color: '#0891B2', bg: '#CFFAFE' },
+  safety_reviewer: { label: 'Safety Reviewer', color: '#B91C1C', bg: '#FEE2E2' },
   viewer:          { label: 'Viewer',          color: '#6B7280', bg: '#F3F4F6' },
 }
 

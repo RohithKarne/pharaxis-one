@@ -298,7 +298,7 @@ export default function AdminLayout({ children }) {
 
         <div className="cp-sidebar-footer">
           <div className="cp-admin-name">{admin?.name}</div>
-          <div className="cp-admin-role">{admin?.role}</div>
+          <div className="cp-admin-role">{String(admin?.role || '').replace(/_/g, ' ')}</div>
           <button className="cp-logout-btn" onClick={handleLogout}>Sign Out</button>
         </div>
       </aside>

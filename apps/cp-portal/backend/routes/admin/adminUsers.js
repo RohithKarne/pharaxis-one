@@ -6,7 +6,12 @@
  *   superadmin — view/create/edit/deactivate any admin user across all clients
  *   admin      — view/create/edit/deactivate admin users scoped to their own client
  *
- * Roles that can be assigned: admin | content_manager | reviewer | viewer
+ * Roles that can be assigned: admin | content_manager | reviewer | safety_reviewer | viewer
+ *
+ * CPPM-52: safety_reviewer is the role that may record a clinical outcome on the
+ * Safety Queue and read chat records. Those routes have checked for it since
+ * August 2026, but it was never added here, so nobody could be given it and only
+ * the platform admin could record a clinical outcome.
  * (superadmin role is reserved — only seeded at startup, never assignable via API)
  */
 
@@ -19,7 +24,7 @@ const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const lockout = require('../../utils/loginLockout');
 
-const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'viewer'];
+const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'safety_reviewer', 'viewer'];
 
 // ── GET /:clientId — list all admin users for a client ───────────────────────
 router.get('/:clientId', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
