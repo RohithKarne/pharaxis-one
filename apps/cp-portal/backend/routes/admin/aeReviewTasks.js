@@ -32,7 +32,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { auditWithin } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const { syncToIntegration, toDateOnly } = require('../portal/submit');
 
@@ -50,6 +50,33 @@ const LEAD_ROLES = ['admin', 'superadmin'];
 function requireHolder(req, res, next) {
   if (req.admin.role === 'viewer') return res.status(403).json({ error: 'A viewer can see the Safety Queue but cannot take, hand over or close a task.' });
   next();
+}
+
+// CPPM-53: a change to a task and its audit line are written together, or not at
+// all. `work(conn)` does both on one connection; returning { refuse: [status, body] }
+// rolls back and answers with that. Anything thrown rolls back too, and the person
+// is told nothing was changed rather than left to assume it was.
+const NOT_RECORDED = 'Nothing was changed, because the action could not be recorded. Please try again.';
+async function changeWithAudit(res, work) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const out = await work(conn);
+    if (out?.refuse) {
+      await conn.rollback();
+      res.status(out.refuse[0]).json(out.refuse[1]);
+      return null;
+    }
+    await conn.commit();
+    return out || {};
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    log.error('admin.aeReviewTasks.not_recorded', { err, request_id: res.req?.requestId || null });
+    res.status(500).json({ error: NOT_RECORDED });
+    return null;
+  } finally {
+    conn.release();
+  }
 }
 
 // The task as the ownership routes need it: its state and who holds it now.
@@ -167,27 +194,29 @@ router.get('/:clientId/staff', authenticateAdmin, requireClientAccess, requireHo
 // POST /api/admin/ae-review/:clientId/:taskId/take — hold an open task nobody holds (CPPM-6)
 router.post('/:clientId/:taskId/take', authenticateAdmin, requireClientAccess, requireHolder, async (req, res) => {
   try {
-    // The check ("nobody holds it") and the write are one statement, so two people
-    // pressing Take at the same moment cannot both end up holding the task.
-    const [result] = await pool.execute(
-      `UPDATE cp_ae_review_tasks
-          SET owner_id = ?, owner_since = NOW()
-        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id IS NULL`,
-      [req.admin.adminId, req.params.taskId, req.params.clientId]
-    );
-    if (result.affectedRows === 0) {
-      const task = await taskWithOwner(req.params.clientId, req.params.taskId);
-      if (!task) return res.status(404).json({ error: 'Task not found.' });
-      if (task.status === 'closed') return res.status(409).json({ error: 'This task is already closed.' });
-      return res.status(409).json({
-        error: task.owner_id === req.admin.adminId
-          ? 'You already hold this task.'
-          : `${task.owner_name || 'Someone else'} is already working on this task.`,
-      });
-    }
-    await audit(req.admin, req.params.clientId, 'AE_TASK_TAKEN', 'ae_review_task', req.params.taskId,
-      { owner_id: req.admin.adminId, owner: req.admin.name });
-    res.json({ message: 'You now hold this task.' });
+    const done = await changeWithAudit(res, async (conn) => {
+      // The check ("nobody holds it") and the write are one statement, so two people
+      // pressing Take at the same moment cannot both end up holding the task.
+      const [result] = await conn.execute(
+        `UPDATE cp_ae_review_tasks
+            SET owner_id = ?, owner_since = NOW()
+          WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id IS NULL`,
+        [req.admin.adminId, req.params.taskId, req.params.clientId]
+      );
+      if (result.affectedRows === 0) {
+        const task = await taskWithOwner(req.params.clientId, req.params.taskId);
+        if (!task) return { refuse: [404, { error: 'Task not found.' }] };
+        if (task.status === 'closed') return { refuse: [409, { error: 'This task is already closed.' }] };
+        return { refuse: [409, {
+          error: task.owner_id === req.admin.adminId
+            ? 'You already hold this task.'
+            : `${task.owner_name || 'Someone else'} is already working on this task.`,
+        }] };
+      }
+      await auditWithin(conn, req.admin, req.params.clientId, 'AE_TASK_TAKEN', 'ae_review_task', req.params.taskId,
+        { owner_id: req.admin.adminId, owner: req.admin.name });
+    });
+    if (done) res.json({ message: 'You now hold this task.' });
   } catch (err) {
     log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/take', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -206,16 +235,18 @@ router.post('/:clientId/:taskId/release', authenticateAdmin, requireClientAccess
     }
     // Only if the holder is still the one read above — otherwise somebody moved the
     // task in between and this would silently undo their change.
-    const [result] = await pool.execute(
-      `UPDATE cp_ae_review_tasks
-          SET owner_id = NULL, owner_since = NULL
-        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id = ?`,
-      [req.params.taskId, req.params.clientId, task.owner_id]
-    );
-    if (result.affectedRows === 0) return res.status(409).json({ error: 'This task changed while you were looking at it. Refresh and try again.' });
-    await audit(req.admin, req.params.clientId, 'AE_TASK_RELEASED', 'ae_review_task', req.params.taskId,
-      { from_id: task.owner_id, from: task.owner_name });
-    res.json({ message: 'Task released. Anyone can take it now.' });
+    const done = await changeWithAudit(res, async (conn) => {
+      const [result] = await conn.execute(
+        `UPDATE cp_ae_review_tasks
+            SET owner_id = NULL, owner_since = NULL
+          WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id = ?`,
+        [req.params.taskId, req.params.clientId, task.owner_id]
+      );
+      if (result.affectedRows === 0) return { refuse: [409, { error: 'This task changed while you were looking at it. Refresh and try again.' }] };
+      await auditWithin(conn, req.admin, req.params.clientId, 'AE_TASK_RELEASED', 'ae_review_task', req.params.taskId,
+        { from_id: task.owner_id, from: task.owner_name });
+    });
+    if (done) res.json({ message: 'Task released. Anyone can take it now.' });
   } catch (err) {
     log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/release', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -252,16 +283,18 @@ router.post('/:clientId/:taskId/hand', authenticateAdmin, requireClientAccess, r
 
     // <=> also matches "nobody holds it". Same reason as release: never overwrite
     // a move somebody else made in between.
-    const [result] = await pool.execute(
-      `UPDATE cp_ae_review_tasks
-          SET owner_id = ?, owner_since = NOW()
-        WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id <=> ?`,
-      [to.id, req.params.taskId, req.params.clientId, task.owner_id]
-    );
-    if (result.affectedRows === 0) return res.status(409).json({ error: 'This task changed while you were looking at it. Refresh and try again.' });
-    await audit(req.admin, req.params.clientId, 'AE_TASK_HANDED', 'ae_review_task', req.params.taskId,
-      { from_id: task.owner_id, from: task.owner_name || null, to_id: to.id, to: to.name });
-    res.json({ message: `Task handed to ${to.name}.` });
+    const done = await changeWithAudit(res, async (conn) => {
+      const [result] = await conn.execute(
+        `UPDATE cp_ae_review_tasks
+            SET owner_id = ?, owner_since = NOW()
+          WHERE id = ? AND client_id = ? AND status = 'open' AND owner_id <=> ?`,
+        [to.id, req.params.taskId, req.params.clientId, task.owner_id]
+      );
+      if (result.affectedRows === 0) return { refuse: [409, { error: 'This task changed while you were looking at it. Refresh and try again.' }] };
+      await auditWithin(conn, req.admin, req.params.clientId, 'AE_TASK_HANDED', 'ae_review_task', req.params.taskId,
+        { from_id: task.owner_id, from: task.owner_name || null, to_id: to.id, to: to.name });
+    });
+    if (done) res.json({ message: `Task handed to ${to.name}.` });
   } catch (err) {
     log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/hand', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -312,10 +345,12 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
 
     // Close the task and, for a confirmed side effect, create its AE submission in
     // one transaction: a task must never read "confirmed" with no case behind it.
+    // CPPM-53: the audit line is part of the same transaction.
     let aeSubmissionId = null;
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
+    // CPPM-6: closing never needs the holder's leave, but the record says when the
+    // person who closed it was not the person holding it.
+    const heldByOther = task.owner_id != null && task.owner_id !== req.admin.adminId;
+    const done = await changeWithAudit(res, async (conn) => {
       const [result] = await conn.execute(
         `UPDATE cp_ae_review_tasks
             SET status = 'closed', outcome = ?, outcome_reason = ?, closed_by = ?, closed_at = NOW()
@@ -323,29 +358,17 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
         [outcome, cleanReason || null, req.admin.adminId, req.params.taskId, req.params.clientId]
       );
       // Lost the race between the SELECT and the UPDATE.
-      if (result.affectedRows === 0) {
-        await conn.rollback();
-        return res.status(409).json({ error: 'This task is already closed.' });
-      }
+      if (result.affectedRows === 0) return { refuse: [409, { error: 'This task is already closed.' }] };
       if (outcome === 'confirmed_ae') {
         aeSubmissionId = await createAeSubmission(conn, req.params.clientId, task,
           { productName, eventDescription, eventDate: req.body.event_date || null, reviewer: req.admin.name });
         await conn.execute('UPDATE cp_ae_review_tasks SET ae_submission_id = ? WHERE id = ?', [aeSubmissionId, task.id]);
       }
-      await conn.commit();
-    } catch (txErr) {
-      await conn.rollback().catch(() => {});
-      throw txErr;
-    } finally {
-      conn.release();
-    }
-
-    // CPPM-6: closing never needs the holder's leave, but the record says when the
-    // person who closed it was not the person holding it.
-    const heldByOther = task.owner_id != null && task.owner_id !== req.admin.adminId;
-    await audit(req.admin, req.params.clientId, 'AE_REVIEW_CLOSED', 'ae_review_task', req.params.taskId,
-      { outcome, reason: cleanReason || null, ...(aeSubmissionId ? { ae_submission_id: aeSubmissionId } : {}),
-        ...(heldByOther ? { held_by_id: task.owner_id, held_by: task.owner_name } : {}) });
+      await auditWithin(conn, req.admin, req.params.clientId, 'AE_REVIEW_CLOSED', 'ae_review_task', req.params.taskId,
+        { outcome, reason: cleanReason || null, ...(aeSubmissionId ? { ae_submission_id: aeSubmissionId } : {}),
+          ...(heldByOther ? { held_by_id: task.owner_id, held_by: task.owner_name } : {}) });
+    });
+    if (!done) return;
 
     if (!aeSubmissionId) return res.json({ message: 'Task closed.' });
 
