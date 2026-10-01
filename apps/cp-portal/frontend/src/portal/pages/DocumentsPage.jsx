@@ -27,7 +27,7 @@ const DOC_TYPE_CLASSES = {
 }
 
 export default function DocumentsPage() {
-  const { clientCode, user, language } = usePortal()
+  const { clientCode, user, language, authLoading } = usePortal()
   const navigate                  = useNavigate()
   const [docs, setDocs]           = useState([])
   const [categories, setCategories] = useState([])
@@ -51,6 +51,7 @@ export default function DocumentsPage() {
   const base = `/portal/${clientCode}`
 
   useEffect(() => {
+    if (authLoading) return // CPPM-59: not known yet whether this person is signed in
     if (!user) { navigate(`${base}/login`); return }
     async function load() {
       setLoading(true)
@@ -73,7 +74,7 @@ export default function DocumentsPage() {
       setLoading(false)
     }
     if (clientCode) load()
-  }, [clientCode, user, language])
+  }, [clientCode, user, language, authLoading])
 
   const allCategories = ['All', ...categories.map(c => (typeof c === 'string' ? c : c.name)).filter(Boolean)]
 

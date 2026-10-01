@@ -96,9 +96,10 @@ function FeatureGuard({ featureKey, children }) {
 }
 
 function PortalAuthGuard({ children }) {
-  const { user, clientCode, loading } = usePortal()
+  const { user, clientCode, loading, authLoading } = usePortal()
   const location = useLocation()
-  if (loading) return <div className="pp-loading">Loading…</div>
+  // CPPM-59: wait for the sign-in check as well as the settings before redirecting.
+  if (loading || authLoading) return <div className="pp-loading">Loading…</div>
   if (!user) return <Navigate to={`/portal/${clientCode}/login`} replace state={{ from: location.pathname }} />
   return children
 }
