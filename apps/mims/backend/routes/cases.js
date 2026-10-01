@@ -2297,6 +2297,10 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
       responsePackage = await buildResponsePackage(req, req.params.id, {
         ...req.body,
         body_html: req.body.response_body_html !== undefined ? req.body.response_body_html : req.body.body_html,
+        // MIPM-69: the builder sends the typed subject as response_subject, but the
+        // package reads `subject`, so a typed subject was dropped for the default.
+        // Empty still means "use the template's or the default".
+        subject: req.body.subject !== undefined ? req.body.subject : (req.body.response_subject || undefined),
       });
     }
     const finalResponseText = responsePackage?.rendered_text || response_text || null;
