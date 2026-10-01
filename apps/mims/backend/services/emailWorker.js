@@ -135,7 +135,7 @@ async function processJob(job) {
     secure,
     requireTLS,
     auth: { user: smtp_username, pass: decryptMailboxSecret(smtp_password) },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     connectionTimeout: SMTP_TIMEOUT_MS,
     socketTimeout:     SMTP_TIMEOUT_MS,
   });

@@ -90,7 +90,10 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
 
   function openEditEmailModal(account) {
     setEmailEditTarget(account)
-    setEmailForm(getDefaultEmailForm({ ...account, org_id: String(account.org_id || orgId || ''), imap_password: '', smtp_password: '' }))
+    // MIPM-63: a value the mailbox never had comes back as null. Left in, it replaced
+    // the form's default — the Encryption box showed "SSL/TLS" and saved nothing.
+    const saved = Object.fromEntries(Object.entries(account).filter(([, value]) => value != null))
+    setEmailForm(getDefaultEmailForm({ ...saved, org_id: String(account.org_id || orgId || ''), imap_password: '', smtp_password: '' }))
     setEmailModal('edit')
   }
 

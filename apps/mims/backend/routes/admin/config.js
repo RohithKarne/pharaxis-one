@@ -10,6 +10,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { imapRequireStartTls, unencryptedMailError } = require('../../utils/mailSecurity');
 const crypto = require('crypto');
 // P7/F12: reuse the SAME AES-256-GCM secret encryption the codebase uses for SSO
 // secrets so IMAP/SMTP mailbox passwords are no longer stored in plaintext at rest.
@@ -448,6 +449,9 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'platform_admi
       return res.status(400).json({ error: 'Mailbox email required for inbound accounts.' });
     if (['Outbound', 'Both'].includes(direction) && !from_email)
       return res.status(400).json({ error: 'From email required for outbound accounts.' });
+    // MIPM-63: a direction in use is saved with an encrypted connection, or not at all.
+    const unencrypted = unencryptedMailError(direction, imap_encryption, smtp_encryption);
+    if (unencrypted) return res.status(400).json({ error: unencrypted });
 
     const [result] = await pool.execute(`
       INSERT INTO email_accounts (
@@ -522,6 +526,9 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'platform_a
       return res.status(400).json({ error: 'Mailbox email required for inbound accounts.' });
     if (['Outbound', 'Both'].includes(direction) && !from_email)
       return res.status(400).json({ error: 'From email required for outbound accounts.' });
+    // MIPM-63: a direction in use is saved with an encrypted connection, or not at all.
+    const unencrypted = unencryptedMailError(direction, imap_encryption, smtp_encryption);
+    if (unencrypted) return res.status(400).json({ error: unencrypted });
 
     await pool.execute(`
       UPDATE email_accounts SET
@@ -673,11 +680,12 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
       host: account.imap_host,
       port: account.imap_port,
       secure: account.imap_encryption === 'SSL/TLS',
+      doSTARTTLS: imapRequireStartTls(account.imap_encryption),
       auth: {
         user: account.imap_username,
         pass: decryptMailboxSecret(account.imap_password),
       },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       logger: false,
       connectionTimeout: 10000,
       greetingTimeout: 10000,
@@ -747,7 +755,7 @@ router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 
       secure,
       requireTLS,
       auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       connectionTimeout: 10000,
     });
 
@@ -802,7 +810,7 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
       secure,
       requireTLS,
       auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       connectionTimeout: 10000,
     });
 

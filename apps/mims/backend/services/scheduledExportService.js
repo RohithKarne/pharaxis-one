@@ -195,7 +195,7 @@ async function deliverByEmail(config, csvContent) {
       user: username,
       pass: password,
     },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
   });
 
   if (!config.delivery_target) {

@@ -1240,7 +1240,7 @@ async function sendViaSmtp(account, { from, to, subject, text }) {
     secure,
     requireTLS,
     auth: { user: account.smtp_username, pass: account.smtp_password },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     connectionTimeout: 10000,
   });
   await transporter.sendMail({ from, to, subject, text });

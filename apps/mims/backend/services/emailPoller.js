@@ -22,6 +22,7 @@ const { classifyInquiry } = require('./ai/inboxClassifierService')
 // at the point the IMAP client consumes them — shared helper so the Email Case
 // Import ack sender uses the identical scheme without a circular require.
 const { decryptMailboxSecret } = require('./mailboxCrypto')
+const { imapRequireStartTls } = require('../utils/mailSecurity')
 
 function toMySqlDateTime(input) {
   const dt = input instanceof Date ? input : new Date(input)
@@ -111,11 +112,12 @@ async function ingestAccount(account, sinceDt) {
     host: account.imap_host,
     port: account.imap_port,
     secure: account.imap_encryption === 'SSL/TLS',
+    doSTARTTLS: imapRequireStartTls(account.imap_encryption),
     auth: {
       user: account.imap_username,
       pass: decryptMailboxSecret(account.imap_password),
     },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     logger: false,
     // Explicit timeouts — prevents IMAP hangs from silently stalling the poller
     connectionTimeout: IMAP_CONNECT_TIMEOUT_MS, // max time to establish TCP+TLS
