@@ -338,6 +338,13 @@ export default function AdminLayout({ children }) {
               Virus scanner running · virus list updated {listDate}
             </div>
           )}
+          {/* CPPM-60: one notice for every screen. A viewer can open everything; the
+              server refuses every change, and this says so before they try. */}
+          {admin?.role === 'viewer' && (
+            <div role="note" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
+              Your role is view-only. You can look at everything here, but changes will not be saved. Ask an admin if you need to make changes.
+            </div>
+          )}
           {children}
         </div>
       </div>

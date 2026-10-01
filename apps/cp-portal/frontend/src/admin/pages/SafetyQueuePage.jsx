@@ -147,11 +147,7 @@ export default function SafetyQueuePage() {
         Each one needs a human decision — a task cannot be closed without recording an outcome.
       </p>
 
-      {!canHold ? (
-        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
-          Your role is view-only: you can see the queue and who holds each task, but not take, hand over or close one.
-        </div>
-      ) : !canJudge && (
+      {canHold && !canJudge && (
         <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
           You can clear tasks administratively with a reason. Recording a clinical outcome
           (“reviewed — not an adverse event” or “confirmed side effect”) requires the safety reviewer role.
