@@ -16,8 +16,9 @@ changed" but "does this make us revalidate?"
 | **Partial** | A GxP-relevant function changed, but the scope is bounded and named | Revalidate the named area only |
 | **Full** | A record structure, audit trail, e-signature, calculation or access control changed | Full revalidation of affected processes |
 
-**Vasu Ranabothu (CCO) owns this classification.** Engineering proposes it in the
-pull request; the flag is not final until Compliance confirms it.
+**Saad Rahman, as compliance owner, owns this classification** (Vasu Ranabothu, CCO,
+until 2026-10-01). Engineering proposes it in the pull request; the flag is not final
+until he confirms it.
 
 ## Format
 
