@@ -150,6 +150,8 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
         flash(`Fetch complete. ${d.ingested ?? 0} email(s) ingested.`)
       } else if (d.status === 'fail') {
         if (action === 'test-smtp') setSmtpErrorModal({ account_name: account.account_name, error: d.error || 'SMTP test failed.', tested_at: d.tested_at || 'Just now' })
+        // MIPM-64: an IMAP failure shows its reason the same way an SMTP one does.
+        if (action === 'test-imap') setSmtpErrorModal({ title: 'IMAP Test Failed', account_name: account.account_name, error: d.error || 'IMAP test failed.', tested_at: d.tested_at || 'Just now' })
         flash(`${action === 'test-imap' ? 'IMAP' : 'SMTP'} test failed.`, 'error')
       } else {
         flash(action === 'test-imap' ? 'IMAP test passed.' : action === 'test-smtp' ? 'SMTP test passed.' : 'Action completed.')
@@ -221,9 +223,11 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   <td><StatusPill active={account.is_active} /></td>
                   <td style={{ fontSize: 11 }}>
                     {account.last_imap_test_at ? <span style={{ color: account.last_imap_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_imap_test_status} · {account.last_imap_test_at}</span> : '—'}
+                    {account.last_imap_test_status === 'fail' && account.last_imap_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_imap_test_error}</div>}
                   </td>
                   <td style={{ fontSize: 11 }}>
                     {account.last_smtp_test_at ? <span style={{ color: account.last_smtp_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_smtp_test_status} · {account.last_smtp_test_at}</span> : '—'}
+                    {account.last_smtp_test_status === 'fail' && account.last_smtp_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_smtp_test_error}</div>}
                   </td>
                   <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{account.last_ingest_at || '—'}</td>
                   <td>
@@ -419,7 +423,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
       {smtpErrorModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 10, width: '100%', maxWidth: 480, padding: 28, boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
-            <h3 style={{ margin: '0 0 4px', color: 'var(--danger)' }}>SMTP Test Failed</h3>
+            <h3 style={{ margin: '0 0 4px', color: 'var(--danger)' }}>{smtpErrorModal.title || 'SMTP Test Failed'}</h3>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Account: <strong>{smtpErrorModal.account_name}</strong> &nbsp;·&nbsp; {smtpErrorModal.tested_at}</p>
             <pre style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14, fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--danger)', margin: '0 0 20px' }}>{smtpErrorModal.error}</pre>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-outline" onClick={() => setSmtpErrorModal(null)}>Close</button></div>
