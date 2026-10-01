@@ -13,7 +13,7 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const crypto   = require('crypto');
 const pool     = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, endAllSessions } = require('../../middleware/auth');
 const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
@@ -561,7 +561,12 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       ]
     );
 
-    await audit(req.user.userId, 'UPDATE_USER', req.params.id, req.body);
+    // MIPM-32: switching someone off ends every session they have, at once. Before,
+    // nothing did, and they stayed signed in until the session ran out.
+    const switchedOff = (is_active != null && !is_active) || (is_disabled != null && is_disabled);
+    const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
+
+    await audit(req.user.userId, 'UPDATE_USER', req.params.id, switchedOff ? { ...req.body, sessions_ended: sessionsEnded } : req.body);
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /users/:id error:', err);

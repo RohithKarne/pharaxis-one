@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
@@ -690,6 +690,7 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
     // they no longer appear as active members.
     if (is_active !== undefined && !is_active) {
       await pool.execute('UPDATE user_org_access SET is_active = 0 WHERE user_id = ?', [req.params.id]);
+      await endAllSessions(req.params.id); // MIPM-32: out at once, on every device
     }
     await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, { name, email, role, org_id, is_active });
     res.json({ message: 'Updated.' });
@@ -797,6 +798,9 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
       );
       if (action === 'deactivate') {
         await pool.query('UPDATE user_org_access SET is_active = 0 WHERE user_id IN (?)', [ids]);
+        // MIPM-32: only those the update above really switched off (it skips console holders).
+        const [nowOff] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = 0', [ids]);
+        for (const row of nowOff) await endAllSessions(row.id);
       }
     }
     await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, { action, userIds: ids });

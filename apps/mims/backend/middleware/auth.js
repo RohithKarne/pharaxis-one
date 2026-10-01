@@ -56,6 +56,24 @@ function refusePendingPasswordReset(session, allowPasswordReset) {
   return session;
 }
 
+// MIPM-32: what a switched-off person is told, on every route in — a live session,
+// a password sign-in or single sign-on. The web app shows it as a full screen.
+const ACCESS_ENDED_MESSAGE = 'Your access has ended. Please contact your administrator.';
+const ACCESS_ENDED_CODE = 'ACCESS_ENDED';
+
+function isSwitchedOff(user) {
+  return Boolean(user) && (!Number(user.is_active) || Boolean(Number(user.is_disabled)));
+}
+
+// Ends every session a person has, on every device, and clears the 60-second
+// session cache for each one. Throws if it cannot, so the caller can say so.
+async function endAllSessions(userId) {
+  const [rows] = await pool.execute('SELECT token FROM sessions WHERE user_id = ?', [userId]);
+  await pool.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  await Promise.all(rows.map((row) => sessionCacheInvalidate(row.token)));
+  return rows.length;
+}
+
 async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   if (!token) throw createAuthError('Access denied. No token provided.', 'AUTH_TOKEN_MISSING');
 
@@ -82,6 +100,15 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   let sessionFound = false;
 
   try {
+    // MIPM-32: a switched-off account is refused here whether or not its sessions
+    // were ended, and with its own reason. Before, only the session row was
+    // checked, so a person switched off by an admin stayed in until it expired.
+    const [[account]] = await pool.execute(
+      'SELECT is_active, is_disabled FROM users WHERE id = ? LIMIT 1',
+      [decoded.userId]
+    );
+    if (isSwitchedOff(account)) throw createAuthError(ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE);
+
     const [[sessionRow]] = await pool.execute(
       'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
       [token]
@@ -310,4 +337,4 @@ function requireModule(moduleKey) {
   };
 }
 
-module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs, readBearer };
+module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };
