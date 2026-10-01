@@ -68,6 +68,39 @@ function hashFallback({ sender, recipient, subject, receivedAt, body, attachment
   return h.digest('hex')
 }
 
+const FETCH_BATCH_SIZE = 25
+
+// MIPM-18: which of these messages does this mailbox not hold yet? Reads the
+// Message-ID headers only, so a run with nothing new downloads nothing. Mail
+// without a Message-ID cannot be recognised here; it is downloaded again and
+// left to the INSERT IGNORE on its fallback hash.
+async function uidsNotHeld(client, accountId, uids) {
+  const messageIdByUid = new Map()
+  for await (const msg of client.fetch(uids, { envelope: true, uid: true }, { uid: true })) {
+    messageIdByUid.set(msg.uid, msg.envelope?.messageId || null)
+  }
+
+  const messageIds = [...new Set([...messageIdByUid.values()].filter(Boolean))]
+  const held = new Set()
+  for (let i = 0; i < messageIds.length; i += 500) {
+    const chunk = messageIds.slice(i, i + 500)
+    const [rows] = await pool.execute(
+      `SELECT message_id FROM inquiries WHERE email_account_id = ? AND message_id IN (${chunk.map(() => '?').join(',')})`,
+      [accountId, ...chunk]
+    )
+    for (const row of rows) held.add(row.message_id)
+  }
+
+  return uids.filter((uid) => !held.has(messageIdByUid.get(uid))).sort((a, b) => a - b)
+}
+
+// Oldest first, a batch at a time, until none are left.
+async function* fetchInBatches(client, uids) {
+  for (let i = 0; i < uids.length; i += FETCH_BATCH_SIZE) {
+    yield* client.fetch(uids.slice(i, i + FETCH_BATCH_SIZE), { source: true, uid: true, bodyStructure: true }, { uid: true })
+  }
+}
+
 async function ingestAccount(account, sinceDt) {
   const { ImapFlow } = require('imapflow')
 
@@ -103,11 +136,13 @@ async function ingestAccount(account, sinceDt) {
 
       if (!uids || uids.length === 0) return 0
 
-      // Cap per-run to 25 to avoid overloading; dedup (INSERT IGNORE) handles re-fetched overlaps.
-      const maxPerRun = 25
-      const toFetch = uids.length > maxPerRun ? uids.slice(-maxPerRun) : uids
+      // MIPM-18: this used to take the newest 25 and stop. Every caller then moves
+      // its marker past the rest, so they were never looked for again. Nothing in
+      // the window is skipped now; a run that fails part-way throws, the marker
+      // stays where it was, and the next run carries on from what is already held.
+      const toFetch = await uidsNotHeld(client, account.id, uids)
 
-      for await (const msg of client.fetch(toFetch, { source: true, uid: true, bodyStructure: true }, { uid: true })) {
+      for await (const msg of fetchInBatches(client, toFetch)) {
         let parsedEmail = null
         try {
           parsedEmail = await simpleParser(msg.source)
