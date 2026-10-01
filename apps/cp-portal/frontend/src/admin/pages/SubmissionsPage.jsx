@@ -2,6 +2,8 @@ import { useState, useEffect, Fragment } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',
@@ -105,11 +107,14 @@ export default function SubmissionsPage() {
   const [msg, setMsg]           = useState(null)  // { type, text }
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
+  const [mineOnly, setMineOnly] = useState(false)   // CPPM-61
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
 
-  async function load() {
-    setLoading(true)
+  // `quiet` reloads the rows without swapping the whole page for "Loading…", which
+  // would close a hand-over box that is still open (CPPM-61).
+  async function load(quiet) {
+    if (!quiet) setLoading(true)
     try {
       const params = new URLSearchParams()
       if (typeFilter)   params.set('type', typeFilter)
@@ -213,6 +218,9 @@ export default function SubmissionsPage() {
 
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
 
+  const mineCount = submissions.filter(s => s.owned_by_me).length
+  const shown = mineOnly ? submissions.filter(s => s.owned_by_me) : submissions
+
   return (
     <AdminLayout title="Submissions">
 
@@ -262,6 +270,12 @@ export default function SubmissionsPage() {
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           />
         </label>
+        {/* CPPM-61: the enquiries this person holds */}
+        {!hasRole('viewer') && (
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+            {mineOnly ? 'Show all' : `Show mine${mineCount ? ` (${mineCount})` : ''}`}
+          </button>
+        )}
         {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
             Clear
@@ -286,8 +300,8 @@ export default function SubmissionsPage() {
         </div>
       )}
 
-      {submissions.length === 0 ? (
-        <div className="cp-empty"><p>No submissions found.</p></div>
+      {shown.length === 0 ? (
+        <div className="cp-empty"><p>{mineOnly && submissions.length ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
       ) : (
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
@@ -300,14 +314,15 @@ export default function SubmissionsPage() {
                 <th>User Type</th>
                 <th>Status</th>
                 <th>Ref</th>
+                <th>Held by</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {submissions.map(s => (
+              {shown.map(s => (
                 <Fragment key={s.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{s.submitted_at ? s.submitted_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{formatDateTime(s.submitted_at)}</td>
                     <td>
                       <span style={{ fontSize: 12, fontWeight: 600 }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</span>
                       {/* PD-2: the submitter reported that someone became unwell.
@@ -350,7 +365,15 @@ export default function SubmissionsPage() {
                         )
                       ) : null}
                     </td>
+                    <td style={{ fontSize: 12 }}>{s.status === 'closed' && !s.owner_id ? '—' : <OwnerCell item={s} />}</td>
                     <td>
+                      <span style={{ display: 'inline-flex', gap: 6, marginRight: 6, verticalAlign: 'middle' }}>
+                        <OwnerButtons item={s} open={s.status !== 'closed'}
+                          base={`/api/admin/submissions/${clientId}/${s.id}`}
+                          staffUrl={`/api/admin/submissions/${clientId}/staff`}
+                          label={`enquiry ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
+                          onChanged={() => load(true)} onMessage={setMsg} />
+                      </span>
                       <select
                         value={s.status}
                         onClick={e => e.stopPropagation()}
@@ -369,7 +392,7 @@ export default function SubmissionsPage() {
                   </tr>
                   {expanded === s.id && (
                     <tr key={`${s.id}-detail`}>
-                      <td colSpan={8} style={{ background: '#F9FAFB', padding: '12px 16px' }}>
+                      <td colSpan={9} style={{ background: '#F9FAFB', padding: '12px 16px' }}>
                         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Form Data</div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
                           {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (

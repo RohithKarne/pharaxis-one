@@ -483,6 +483,8 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
         }
       }
       fields.push('status = ?'); values.push(status);
+      // CPPM-61: a document coming (back) into the review queue arrives with no holder.
+      if (status === 'review' && current.status !== 'review') fields.push('owner_id = NULL', 'owner_since = NULL');
     }
 
     // CPPM-31 (Rohith and Vasu, 23 Sep 2026): an approved document that is edited

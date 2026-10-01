@@ -234,6 +234,8 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   submitted_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   synced_at       DATETIME     NULL,
   updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id        INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since     DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
@@ -510,6 +512,8 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   publish_at        DATETIME     NULL,
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since       DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_docs_client (client_id),
   KEY idx_cp_docs_review_due (client_id, review_due_at),
@@ -556,6 +560,8 @@ CREATE TABLE IF NOT EXISTS cp_news_posts (
   translations_json MEDIUMTEXT   NULL,
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since       DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_news_client (client_id),
   KEY idx_cp_news_status (status),
@@ -1109,4 +1115,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0022_widen_audit_details.sql',              NULL),
   ('0023_add_login_attempts.sql',               NULL),
   ('0024_add_training_records.sql',             NULL),
-  ('0025_add_ae_task_owner.sql',                NULL);
+  ('0025_add_ae_task_owner.sql',                NULL),
+  ('0026_add_work_owners.sql',                  NULL);

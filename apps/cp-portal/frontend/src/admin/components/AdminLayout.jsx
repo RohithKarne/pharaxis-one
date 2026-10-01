@@ -130,7 +130,7 @@ export default function AdminLayout({ children }) {
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
   //   safetyMine — CPPM-6: how many of those the signed-in person holds
-  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0 })
+  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0 })
   // CPPM-6: a page says when it changed a count (a task taken, handed over or
   // closed), so the sidebar does not wait for the next page change to catch up.
   const [badgeTick, setBadgeTick] = useState(0)
@@ -149,6 +149,7 @@ export default function AdminLayout({ children }) {
       get(`/api/admin/ae-review/${clientId}/count`),
     ]).then(([review, safety]) => setBadges({
       review: review?.count || 0, safety: safety?.count || 0, safetyMine: safety?.mine || 0,
+      reviewMine: review?.mine || 0, // CPPM-61
     }))
   }, [clientId, location.pathname, badgeTick])
 
@@ -283,7 +284,9 @@ export default function AdminLayout({ children }) {
                             }}>
                               {item.badge === 'safety' && badges.safetyMine > 0 && !sidebarCompact
                                 ? `${badges.safetyMine} yours · ${badges.safety} open`
-                                : badges[item.badge]}
+                                : item.badge === 'review' && badges.reviewMine > 0 && !sidebarCompact
+                                  ? `${badges.reviewMine} yours · ${badges.review} to review`
+                                  : badges[item.badge]}
                             </span>
                           )}
                         </NavLink>

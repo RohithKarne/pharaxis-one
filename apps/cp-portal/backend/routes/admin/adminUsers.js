@@ -23,18 +23,19 @@ const { authenticateAdmin, requireClientAccess, requireRole } = require('../../m
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const lockout = require('../../utils/loginLockout');
-const { releaseTasksHeldBy } = require('../../utils/aeTaskOwnership');
+const { releaseWorkHeldBy } = require('../../utils/workOwnership');
 
 const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'safety_reviewer', 'viewer'];
 
-// CPPM-6: change a staff account and, when the change means they can no longer hold
-// safety tasks, hand those tasks back to the queue — together, or not at all.
+// CPPM-6, CPPM-61: change a staff account and, when the change means they can no longer
+// hold work (safety tasks, enquiries, content awaiting approval), hand it back to its
+// list — together, or not at all.
 async function updateAccount(sql, params, releaseFor) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     await conn.execute(sql, params);
-    const released = releaseFor ? await releaseTasksHeldBy(conn, releaseFor.actor, releaseFor.user, releaseFor.reason) : 0;
+    const released = releaseFor ? await releaseWorkHeldBy(conn, releaseFor.actor, releaseFor.user, releaseFor.reason) : 0;
     await conn.commit();
     return released;
   } catch (err) {
@@ -44,7 +45,7 @@ async function updateAccount(sql, params, releaseFor) {
     conn.release();
   }
 }
-const releasedNote = n => (n ? ` ${n} safety task${n === 1 ? '' : 's'} they were holding went back to the queue.` : '');
+const releasedNote = n => (n ? ` ${n} item${n === 1 ? '' : 's'} they were holding went back to the list for anyone to take.` : '');
 
 // ── GET /:clientId — list all admin users for a client ───────────────────────
 router.get('/:clientId', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
@@ -137,7 +138,7 @@ router.patch('/:clientId/:userId', authenticateAdmin, requireClientAccess, requi
 
     await audit(req.admin, clientId, 'update', 'admin_user', userId, `Updated ${user.email}: role=${newRole}, active=${newIsActive}`);
 
-    res.json({ message: `Admin user updated.${releasedNote(released)}`, released_tasks: released });
+    res.json({ message: `Admin user updated.${releasedNote(released)}`, released_tasks: released, released_note: releasedNote(released) });
   } catch (err) {
     log.error('admin.adminUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -179,7 +180,7 @@ router.delete('/:clientId/:userId', authenticateAdmin, requireClientAccess, requ
     );
     await audit(req.admin, clientId, 'deactivate', 'admin_user', userId, `Deactivated ${user.email}`);
 
-    res.json({ message: `Admin user deactivated.${releasedNote(released)}`, released_tasks: released });
+    res.json({ message: `Admin user deactivated.${releasedNote(released)}`, released_tasks: released, released_note: releasedNote(released) });
   } catch (err) {
     log.error('admin.adminUsers.error', { err, route: 'DELETE /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

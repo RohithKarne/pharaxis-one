@@ -166,10 +166,12 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
       }
     }
     // S4-8: validate status transition + role permission
+    let entersReview = false; // CPPM-61
     if (status !== undefined) {
       const [[current]] = await pool.execute('SELECT status FROM cp_news_posts WHERE id = ? AND client_id = ?', [req.params.postId, req.params.clientId]);
       if (!current) return res.status(404).json({ error: 'Post not found.' });
       if (current.status !== status) {
+        entersReview = status === 'review';
         const allowed = ALLOWED_TRANSITIONS[current.status] || [];
         if (!allowed.includes(status)) {
           return res.status(400).json({ error: `Invalid transition: ${current.status} → ${status}.` });
@@ -192,6 +194,9 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
     }
     if (target_types !== undefined) { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
     if (status !== undefined)       { fields.push('status = ?');             values.push(status); }
+    // CPPM-61: an item coming (back) into the review queue arrives with no holder —
+    // whoever held it on an earlier pass is not assumed to be on it now.
+    if (entersReview)               { fields.push('owner_id = NULL', 'owner_since = NULL'); }
     if (publishAtIso !== undefined) { fields.push('publish_at = ?');         values.push(publishAtIso); }
 
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });

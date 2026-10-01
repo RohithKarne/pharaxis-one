@@ -15,6 +15,7 @@ const log = require('../../utils/logger');
 const { queueEmail } = require('../../utils/emailOutbox');
 const { downloadRefusal } = require('../../utils/virusScan');
 const { requireRole } = require('../../middleware/auth');
+const workOwnership = require('../../utils/workOwnership');
 
 // GET /api/admin/submissions/:clientId
 // Returns submissions with optional filter by submission_type and status
@@ -29,10 +30,12 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
              s.submitter_type, s.status, s.external_ref, s.submitted_at,
              s.sync_attempts, s.form_data,
              u.first_name, u.last_name, u.email AS user_email,
-             t.status AS ae_task_status
+             t.status AS ae_task_status,
+             s.owner_id, s.owner_since, o.name AS owner_name
       FROM cp_submissions s
       LEFT JOIN cp_portal_users u ON s.user_id = u.id
       LEFT JOIN cp_ae_review_tasks t ON t.submission_id = s.id
+      LEFT JOIN cp_admin_users o ON o.id = s.owner_id
       WHERE s.client_id = ?
     `;
     const params = [req.params.clientId];
@@ -56,6 +59,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [[integ]] = await pool.execute('SELECT mims_case_url_base FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [req.params.clientId]);
     const caseUrlBase = (integ && integ.mims_case_url_base) || process.env.CP_MIMS_CASE_URL_BASE || null;
     rows.forEach(r => {
+      r.owned_by_me = r.owner_id != null && r.owner_id === req.admin.adminId; // CPPM-61
       r.reference = `CP-${String(r.id).padStart(6, '0')}`;
       r.mims_case_url = (caseUrlBase && r.external_ref) ? caseUrlBase + encodeURIComponent(r.external_ref) : null;
     });
@@ -175,6 +179,31 @@ router.get('/:clientId/attachments/:attachmentId', authenticateAdmin, requireCli
     res.status(500).json({ error: 'Server error.' });
   }
 });
+
+
+// ── CPPM-61: who is working this — take, release, hand to a colleague ───────
+// The rules live in utils/workOwnership.js. Any role but a viewer may hold an item
+// (the admin write policy refuses a viewer before these run).
+router.get('/:clientId/staff', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    res.json({ staff: await workOwnership.staffFor(req.params.clientId) });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/staff', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+for (const action of ['take', 'release', 'hand']) {
+  router.post(`/:clientId/:submissionId/${action}`, authenticateAdmin, requireClientAccess, async (req, res) => {
+    try {
+      const out = await workOwnership[action]('submission', req.params.clientId, req.params.submissionId, req.admin, req.body.to_admin_id);
+      res.status(out.status).json(out.body);
+    } catch (err) {
+      log.error('admin.submissions.error', { err, route: `POST /:clientId/:submissionId/${action}`, path: req.path, request_id: req.requestId || null });
+      res.status(500).json({ error: 'Server error.' });
+    }
+  });
+}
 
 // PATCH /api/admin/submissions/:clientId/:submissionId — update status
 router.patch('/:clientId/:submissionId', authenticateAdmin, requireClientAccess, async (req, res) => {

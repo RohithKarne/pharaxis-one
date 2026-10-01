@@ -96,9 +96,8 @@ export default function AdminUsersPage() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || 'Update failed.')
-      // CPPM-6: safety tasks the person was holding go back to the queue; say so.
-      const n = d.released_tasks || 0
-      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.${n ? ` ${n} safety task${n === 1 ? '' : 's'} they were holding went back to the queue.` : ''}` })
+      // CPPM-6, CPPM-61: work the person was holding goes back to its list; say so.
+      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.${d.released_note || ''}` })
       loadUsers()
     } catch (e) {
       setListMsg({ type: 'error', text: e.message })

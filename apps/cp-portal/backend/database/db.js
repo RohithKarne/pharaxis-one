@@ -294,6 +294,8 @@ async function initializeDatabase() {
       submitted_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       synced_at        DATETIME     NULL,
       updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      owner_id         INT          NULL,
+      owner_since      DATETIME     NULL,
       PRIMARY KEY (id),
       CONSTRAINT fk_submissions_client  FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
       CONSTRAINT fk_submissions_user    FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL
@@ -601,6 +603,8 @@ async function initializeDatabase() {
       publish_at       DATETIME     NULL,
       created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      owner_id         INT          NULL,
+      owner_since      DATETIME     NULL,
       PRIMARY KEY (id),
       CONSTRAINT fk_docs_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -652,6 +656,8 @@ async function initializeDatabase() {
       translations_json   MEDIUMTEXT   NULL,
       created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      owner_id            INT          NULL,
+      owner_since         DATETIME     NULL,
       PRIMARY KEY (id),
       CONSTRAINT fk_news_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
