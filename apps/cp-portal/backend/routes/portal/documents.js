@@ -16,6 +16,11 @@ const log = require('../../utils/logger');
 const { hasAnalyticsConsent } = require('../../utils/consent');
 const { canSee } = require('../../utils/audience');
 
+// CPPM-57: the AI service that AI search asks. It was hardcoded to the AI Agent
+// application, which was deleted on 9 Sep 2026, so the page offered a search that
+// could never run. Not set means AI search is not offered at all.
+const AI_AGENT_URL = String(process.env.AI_AGENT_URL || '').trim().replace(/\/+$/, '');
+
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -85,7 +90,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     const [allCategories] = await pool.execute('SELECT * FROM cp_document_categories WHERE client_id = ? ORDER BY sort_order ASC', [client.id]);
     const categories = allCategories.filter(c => visibleCategoryNames.has(c.name));
 
-    res.json({ documents: filtered, categories });
+    res.json({ documents: filtered, categories, ai_search_available: Boolean(AI_AGENT_URL) });
   } catch (err) {
     log.error('portal.documents.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -108,6 +113,8 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
       return res.status(403).json({ error: 'Document library is not enabled for this portal.' });
     }
 
+    if (!AI_AGENT_URL) return res.json({ ai_unavailable: true, results: [] });
+
     const [allDocs] = await pool.execute(`
       SELECT id, title, category, doc_type, file_size, expires_at, visible_to_json
       FROM cp_documents
@@ -128,7 +135,7 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
 
     let aiResponse;
     try {
-      aiResponse = await httpPost("http://localhost:6000/api/v1/agent/query", { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.AI_AGENT_INTERNAL_TOKEN }, JSON.stringify({ org_id: client.id, app_source: "cp_portal", query_type: "document_search", payload: { query, context: { documents: context } } }));
+      aiResponse = await httpPost(`${AI_AGENT_URL}/api/v1/agent/query`, { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.AI_AGENT_INTERNAL_TOKEN }, JSON.stringify({ org_id: client.id, app_source: "cp_portal", query_type: "document_search", payload: { query, context: { documents: context } } }));
     } catch (err) {
       // Degradation, not a server error — the caller still gets 200. Logged at
       // warn so the operator can tell the AI agent is unreachable; without this

@@ -44,6 +44,9 @@ export default function DocumentsPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [aiUnavailable, setAiUnavailable] = useState(false)
+  // CPPM-57: AI search is offered only where an AI service is set up for it.
+  const [aiAvailable, setAiAvailable] = useState(false)
+  const [aiNotice, setAiNotice] = useState('')
 
   const base = `/portal/${clientCode}`
 
@@ -62,6 +65,7 @@ export default function DocumentsPage() {
         const s = await savedRes.json()
         setDocs(d.documents || [])
         setCategories(d.categories || [])
+        setAiAvailable(Boolean(d.ai_search_available))
         setSavedIds((s.saved || []).filter(x => x.item_type === 'document').map(x => x.item_id))
       } catch {
         setError('Unable to load documents.')
@@ -112,10 +116,15 @@ export default function DocumentsPage() {
       const data = await res.json()
 
       if (data?.ai_unavailable) {
+        // CPPM-57: say so, and give the list back. Until now the button vanished
+        // without a word and the question was left in the box as a title filter,
+        // so the reader saw "No documents found" for a library that had documents.
         setAiUnavailable(true)
         setAiMode(false)
         setAiResults([])
         setAiError('')
+        setSearch('')
+        setAiNotice('AI search is not available right now. All documents are listed below — you can still search by a word from the title.')
         return
       }
 
@@ -228,7 +237,7 @@ export default function DocumentsPage() {
             {aiLoading ? 'Searching…' : 'Search'}
           </button>
         )}
-        {!aiUnavailable && (
+        {aiAvailable && !aiUnavailable && (
           <button
             className="pp-btn pp-btn-outline pp-btn-sm"
             onClick={toggleAiMode}
@@ -238,6 +247,12 @@ export default function DocumentsPage() {
           </button>
         )}
       </div>
+
+      {aiNotice && (
+        <div role="status" style={{ margin: '8px 0 12px', padding: '10px 14px', borderRadius: 6, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 13 }}>
+          {aiNotice}
+        </div>
+      )}
 
       <div className="pp-news-filters" style={{ marginBottom: 16 }}>
         {allCategories.map(cat => (
