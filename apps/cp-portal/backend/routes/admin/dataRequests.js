@@ -6,7 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { eraseUser } = require('../../services/dataSubject');
 const log = require('../../utils/logger');
@@ -32,7 +32,11 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
 // POST /api/admin/data-requests/:clientId/:requestId/fulfill — run the erasure
 // (retention-aware) for a pending erasure request and mark it fulfilled.
-router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAccess, async (req, res) => {
+// Erasure cannot be undone: only an administrator fulfils or rejects a request. Any
+// admin account, read-only viewers included, could do it before (found in bridge row 10).
+const CAN_DECIDE = requireRole('superadmin', 'admin');
+
+router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAccess, CAN_DECIDE, async (req, res) => {
   try {
     const { clientId, requestId } = req.params;
     const [[reqRow]] = await pool.execute(
@@ -61,7 +65,7 @@ router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAcc
 });
 
 // POST /api/admin/data-requests/:clientId/:requestId/reject — decline (e.g. cannot verify identity)
-router.post('/:clientId/:requestId/reject', authenticateAdmin, requireClientAccess, async (req, res) => {
+router.post('/:clientId/:requestId/reject', authenticateAdmin, requireClientAccess, CAN_DECIDE, async (req, res) => {
   try {
     const { clientId, requestId } = req.params;
     const [[reqRow]] = await pool.execute(

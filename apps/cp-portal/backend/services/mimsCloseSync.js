@@ -18,6 +18,7 @@ const { pool } = require('../database/db');
 const { getAuthHeaders, invalidateAuth } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
+const { eraseSubmissionIdentity } = require('./dataSubject');
 const { recordStatusEvent } = require('../utils/submissionStatus');
 const { queueEmail } = require('../utils/emailOutbox');
 const log = require('../utils/logger');
@@ -78,7 +79,7 @@ async function applyProgress(integ, sub, change) {
     `SELECT s.submitter_email, u.email AS user_email, c.code FROM cp_submissions s
        JOIN cp_clients c ON c.id = s.client_id LEFT JOIN cp_portal_users u ON u.id = s.user_id WHERE s.id = ?`, [sub.id]);
   const to = who?.user_email || who?.submitter_email;
-  if (to) {
+  if (to && to.includes('@')) {
     const ref = `CP-${String(sub.id).padStart(6, '0')}`;
     queueEmail(integ.client_id, {
       to, subject: `Your answer is ready — ${ref}`,
@@ -92,9 +93,27 @@ async function applyProgress(integ, sub, change) {
 /** Apply one MIMS change to the request linked to that case. Returns 'closed', 'reopened' or null. */
 async function applyChange(integ, change) {
   const [[sub]] = await pool.execute(
-    `SELECT id, status FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
+    `SELECT id, status, identity_erased_at FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
     [integ.client_id, String(change.id)]);
   if (!sub) return null;
+  // Bridge row 10: the reporter's identity was erased on the MIMS case — blank it on
+  // this copy as well, and keep the request (Saad: the safety record stays). Done
+  // before anything else here, so an answer email can never go to an erased person.
+  if (change.reporter_erased && !sub.identity_erased_at) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await eraseSubmissionIdentity(conn, integ.client_id, [sub.id]);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback().catch(() => {});
+      throw err;
+    } finally {
+      conn.release();
+    }
+    systemAudit('MIMS integration', integ.client_id, 'REPORTER_ERASED_FROM_MIMS', 'submission', sub.id,
+      { mims_case_id: change.id, source: 'mims-close-sync' });
+  }
   // Answers always travel — an amended answer can go out after the case closed.
   await applyProgress(integ, sub, change);
 

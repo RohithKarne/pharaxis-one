@@ -23,6 +23,7 @@ const { validateUpload } = require('../middleware/uploadValidation');
 const { writeCaseAudit, writeAuditLog } = require('../services/caseHelpers');
 const { logger } = require('../services/logger');
 const { notifyIntakeArrival } = require('../services/intakeAlertService');
+const { eraseReporterIdentity } = require('../services/reporterErasureService');
 
 const router = express.Router();
 
@@ -181,6 +182,7 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
     `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
             DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
             c.case_owner_id IS NOT NULL AS owner_assigned,
+            c.reporter_erased_at IS NOT NULL AS reporter_erased,
             -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
             -- or a superseded one), and whether it was addressed to the person who
             -- reported — only then does its text travel back to them.
@@ -222,6 +224,8 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
     changes: page.map(r => ({
       id: r.id, case_number: r.case_number, status: r.status, closed: !!Number(r.closed), updated_at: r.updated_at,
       owner_assigned: !!Number(r.owner_assigned), answer: answers[r.id] || null,
+      // Bridge row 10: the reporter's identity has been erased on this case.
+      reporter_erased: !!Number(r.reporter_erased),
     })),
     has_more: rows.length > limit,
     next: last ? { since: last.updated_at, after_id: last.id } : null,
@@ -273,43 +277,15 @@ router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), asyn
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
     await conn.beginTransaction();
-    // Whether any identity is still there, so a repeat call logs no second removal.
-    const [[{ present }]] = await conn.execute(
-      `SELECT (SELECT COUNT(*) FROM case_reporter WHERE case_id = ?
-                 AND COALESCE(first_name, last_name, email, phone, organisation) IS NOT NULL)
-            + (SELECT COUNT(*) FROM case_contacts WHERE case_id = ? AND contact_role = 'reporter'
-                 AND COALESCE(first_name, last_name, email, phone, address, institution) IS NOT NULL) AS present`,
-      [c.id, c.id]
-    );
-    // Intake records the reporter twice: case_reporter (the intake record) and
-    // case_contacts (what the case screen shows). Both carry the identity, so
-    // both are blanked or the identity survives on screen.
-    const [rep] = await conn.execute(
-      `UPDATE case_reporter
-          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, organisation = NULL
-        WHERE case_id = ?`,
-      [c.id]
-    );
-    const [con] = await conn.execute(
-      `UPDATE case_contacts
-          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, address = NULL, institution = NULL
-        WHERE case_id = ? AND contact_role = 'reporter'`,
-      [c.id]
-    );
-    // Part 11: the removal goes into the case's own history, in this transaction —
-    // writeCaseAudit re-throws inside one, so no audit row means no redaction. The
-    // actor is the API client, not a person (user_id 0). The erased values are
-    // deliberately not kept as old_value: that would undo the erasure (Vasu, CCO).
-    if (present > 0) {
-      await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
-        'REPORTER_IDENTITY_REDACTED', 'reporter_identity', null,
-        "removed on the source portal's erasure request", conn);
-    }
+    const { reporter_rows, contact_rows } = await eraseReporterIdentity(conn, c.id, {
+      userId: 0, userName: `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+      note: "removed on the source portal's erasure request",
+    });
     await conn.commit();
     // Counts are rows MATCHED (the pool runs with FOUND_ROWS), so they are the
     // same on a repeat call — the caller reads them as "a reporter row exists",
     // never as "something changed this time".
-    res.json({ id: c.id, redacted: true, reporter_rows: rep.affectedRows, contact_rows: con.affectedRows });
+    res.json({ id: c.id, redacted: true, reporter_rows, contact_rows });
   } catch (err) {
     await conn.rollback().catch(() => {});
     res.status(500).json({ error: 'Failed to redact the reporter identity.' });

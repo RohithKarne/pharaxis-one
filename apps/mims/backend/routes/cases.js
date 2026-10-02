@@ -824,6 +824,39 @@ router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('c
   }
 });
 
+// POST /api/cases/:id/erase-reporter — bridge row 10: erase the reporter's identity on
+// this case when the person asks MIMS (or the company running it) for erasure. The case
+// is kept; name, email, phone, organisation, address and institution are blanked. Needs
+// a reason and the user's password (electronic signature), because it cannot be undone.
+// A case sent by a portal is then reported on the change feed, and the portal blanks
+// its own copy.
+router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const reason = String(req.body?.reason || '').trim();
+  if (reason.length < 3) return res.status(400).json({ error: 'Give the reason for the erasure (for example, the request it answers).', code: 'REASON_REQUIRED' });
+  if (!(await changeControl.verifyPassword(req.user.userId, req.body?.password))) {
+    return res.status(401).json({ error: 'Password is incorrect. Erasure was not done.', code: 'PASSWORD_REQUIRED' });
+  }
+  const owned = await verifyCaseOrg(req.params.id, req);
+  if (!owned) return res.status(403).json({ error: 'Access denied' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const { eraseReporterIdentity } = require('../services/reporterErasureService');
+    await eraseReporterIdentity(conn, owned.id, {
+      userId: req.user.userId, userName: req.user.email,
+      note: `erased in MIMS: ${reason.slice(0, 500)}`, always: true,
+    });
+    await conn.commit();
+    res.json({ erased: true });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    logger.error({ err, route: 'POST /api/cases/:id/erase-reporter', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to erase the reporter identity');
+    res.status(500).json({ error: 'Could not erase the reporter\'s identity. Nothing was changed.' });
+  } finally {
+    conn.release();
+  }
+});
+
 // GET /api/cases/:id/comments — list case comments newest-first
 router.get('/cases/:id/comments', authenticate, async (req, res) => {
   try {
@@ -3049,7 +3082,10 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
     const caseId = req.params.id;
     const validationDate = toDateOnlyOrNull(new Date());
 
-    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    // Only a type the caller sends is checked against the organisation's list. With
+    // none sent, the case keeps the type it has: defaulting to 'HCP' made every save
+    // without a type fail where the list says 'Healthcare Professional' (bridge row 10).
+    let reporterTypeValue = reporter?.reporter_type || null;
     let patientGenderValue = patient?.gender || null;
     let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
     let aeRouteValue = ae_intake?.route_of_admin || null;
@@ -3089,6 +3125,16 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
     }
 
     if (reporter) {
+      if (!reporterTypeValue) {
+        const [[current]] = await pool.execute('SELECT reporter_type FROM case_reporter WHERE case_id = ?', [caseId]);
+        reporterTypeValue = current?.reporter_type || 'HCP';
+      }
+      // Bridge row 10: once the reporter's identity has been erased on this case, an
+      // intake save cannot put it back — only reporter type and country are kept.
+      const [[erased]] = await pool.execute('SELECT reporter_erased_at FROM cases WHERE id = ?', [caseId]);
+      if (erased?.reporter_erased_at) {
+        reporter.first_name = reporter.last_name = reporter.email = reporter.phone = reporter.organisation = null;
+      }
       await pool.execute(
         `INSERT INTO case_reporter (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE
@@ -3157,7 +3203,7 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
       updated_by: req.user.userId,
     }, 'case', String(caseId)).catch(() => {});
     res.json({ message: 'Intake data updated.' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 // ─── SOFT DELETE ──────────────────────────────────────────────────────────────

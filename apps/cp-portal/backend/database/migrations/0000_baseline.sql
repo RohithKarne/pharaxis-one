@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   submitted_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   synced_at       DATETIME     NULL,
   updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  identity_erased_at DATETIME  NULL,
   PRIMARY KEY (id),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
@@ -1172,4 +1173,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0032_add_mims_change_checkpoint.sql',       NULL),
   ('0033_add_connection_failure_count.sql',     NULL),
   ('0034_add_answer_source.sql',                NULL),
-  ('0035_add_submission_followups.sql',         NULL);
+  ('0035_add_submission_followups.sql',         NULL),
+  ('0036_add_submission_identity_erased.sql',   NULL);

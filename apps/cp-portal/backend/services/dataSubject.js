@@ -26,6 +26,51 @@ const log = require('../utils/logger');
 const RETAINED_SUBMISSION_TYPES = new Set(['adverse_event', 'product_complaint']);
 const ERASED = '[erased]';
 
+// Bridge row 10: the answers in a stored form that identify the person. The name and
+// email columns were blanked on erasure but these copies inside the form were not, so
+// the admin screen still showed who reported. Same list of details MIMS blanks.
+const IDENTITY_KEYS = [
+  'name', 'first_name', 'last_name', 'full_name', 'reporter_name',
+  'email', 'reporter_email', 'contact_email', 'reporter_contact',
+  'phone', 'reporter_phone', 'contact_phone',
+  'organization', 'organisation', 'institution', 'address',
+];
+
+/**
+ * Remove the reporter's identity from these requests and keep the requests: the name
+ * and email columns, the link to their portal account, their IP address, and every
+ * identifying answer in the stored form — the fixed list above plus any email or phone
+ * field this client added to its forms. Runs on the caller's transaction. A request
+ * already erased is left as it is.
+ */
+async function eraseSubmissionIdentity(conn, clientId, ids) {
+  if (!ids.length) return 0;
+  const [cfg] = await conn.execute(
+    `SELECT DISTINCT field_key FROM cp_form_config WHERE client_id = ? AND field_type IN ('email', 'phone')`, [clientId]);
+  const keys = new Set([...IDENTITY_KEYS, ...cfg.map(f => f.field_key)]);
+  const [rows] = await conn.execute(
+    `SELECT id, form_data FROM cp_submissions
+      WHERE client_id = ? AND identity_erased_at IS NULL AND id IN (${ids.map(() => '?').join(',')})`, [clientId, ...ids]);
+  for (const r of rows) {
+    let formData = r.form_data;
+    try {
+      const fd = typeof r.form_data === 'string' ? JSON.parse(r.form_data) : r.form_data;
+      for (const k of keys) if (fd && fd[k] != null && String(fd[k]).trim() !== '') fd[k] = ERASED;
+      formData = JSON.stringify(fd);
+    } catch (err) {
+      // Unreadable form data cannot be picked apart, so none of it is kept.
+      formData = JSON.stringify({ erased: true });
+      log.warn('dataSubject.form_data_unreadable_on_erasure', { submission_id: r.id });
+    }
+    await conn.execute(
+      `UPDATE cp_submissions
+          SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+              form_data = ?, identity_erased_at = NOW()
+        WHERE id = ?`, [ERASED, ERASED, formData, r.id]);
+  }
+  return rows.length;
+}
+
 /** GDPR Art. 15 — everything we hold about this user, as structured JSON. */
 async function buildExport(userId, clientId) {
   const q = (sql, params) => pool.execute(sql, params).then(([rows]) => rows);
@@ -122,6 +167,20 @@ async function eraseUser(userId, clientId) {
     const retainIds = subs.filter(s => RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
     const deleteIds = subs.filter(s => !RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
 
+    // CPPM-11: every request already sent to MIMS holds the identity over there too —
+    // the kept side-effect and complaint reports, and (bridge row 10) the medical
+    // enquiries deleted below, whose MIMS cases kept the name and email until now.
+    // Recorded inside this transaction, so the outstanding work either lands with the
+    // erasure or not at all — it can never be lost between the two.
+    if (subs.length) {
+      const [synced] = await conn.execute(
+        `SELECT id, external_ref FROM cp_submissions
+          WHERE id IN (${subs.map(() => '?').join(',')}) AND external_ref IS NOT NULL AND external_ref <> ''`,
+        subs.map(s => s.id));
+      mimsTargets = synced;
+      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
+    }
+
     // Delete non-regulated submissions + their attachment rows (and files best-effort).
     if (deleteIds.length) {
       const ph = deleteIds.map(() => '?').join(',');
@@ -136,20 +195,7 @@ async function eraseUser(userId, clientId) {
 
     // Retain regulated submissions but sever the reporter identity.
     if (retainIds.length) {
-      const ph = retainIds.map(() => '?').join(',');
-      // CPPM-11: the ones already sent to MIMS hold the identity over there too.
-      // Recorded inside this transaction, so the outstanding work either lands
-      // with the erasure or not at all — it can never be lost between the two.
-      const [synced] = await conn.execute(
-        `SELECT id, external_ref FROM cp_submissions
-          WHERE id IN (${ph}) AND external_ref IS NOT NULL AND external_ref <> ''`, retainIds);
-      mimsTargets = synced;
-      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
-
-      await conn.execute(
-        `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL WHERE id IN (${ph})`,
-        [ERASED, ERASED, ...retainIds]
-      );
+      await eraseSubmissionIdentity(conn, clientId, retainIds);
       summary.retained.push(`submissions(${retainIds.length}) [AE/PC — identity severed, safety record retained]`);
     }
 
@@ -226,4 +272,4 @@ async function eraseUser(userId, clientId) {
   }
 }
 
-module.exports = { buildExport, eraseUser, RETAINED_SUBMISSION_TYPES };
+module.exports = { buildExport, eraseUser, eraseSubmissionIdentity, RETAINED_SUBMISSION_TYPES };

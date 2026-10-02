@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 // CP-63 — GDPR data-subject request queue. Exports are logged (self-service);
 // erasure requests are reviewed and fulfilled here (retention-aware anonymization).
@@ -9,6 +9,9 @@ const STATUS_TONE = { pending: '#d97706', fulfilled: '#16a34a', rejected: '#6474
 
 export default function DataRequestsPage() {
   const { clientId } = useParams()
+  // Erasure cannot be undone, so only an administrator decides a request.
+  const { admin } = useAdminAuth()
+  const canDecide = ['superadmin', 'admin'].includes(admin?.role)
   const [requests, setRequests] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -76,7 +79,9 @@ export default function DataRequestsPage() {
                     <td>{r.requested_at ? new Date(r.requested_at).toLocaleString() : '—'}</td>
                     <td style={{ maxWidth: 280, fontSize: 12, color: '#475569' }}>{r.notes || '—'}</td>
                     <td>
-                      {r.request_type === 'erasure' && r.status === 'pending' ? (
+                      {r.request_type === 'erasure' && r.status === 'pending' && !canDecide ? (
+                        <span style={{ fontSize: 12, color: '#64748b' }}>An administrator decides this request.</span>
+                      ) : r.request_type === 'erasure' && r.status === 'pending' ? (
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="cp-btn cp-btn-sm cp-btn-primary" disabled={busy === r.id}
                             onClick={() => { if (window.confirm('Fulfil this erasure? Non-retained data will be deleted and the identity anonymized. This cannot be undone.')) act(r.id, 'fulfill') }}>
