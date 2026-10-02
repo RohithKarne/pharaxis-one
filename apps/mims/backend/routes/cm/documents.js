@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireCapability } = require('../../middleware/auth');
+const { seesAllContentStatuses, liveContentSql, liveOnlyForReaders } = require('../../services/contentVisibility');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
@@ -247,6 +248,8 @@ router.get('/documents', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
 
+    // MIPM-89: someone who does not work on content sees only live (Published, unexpired) documents.
+    if (!(await seesAllContentStatuses(req.user))) query += liveContentSql('d');
     if (status) {
       query += ' AND d.status = ?';
       params.push(status);
@@ -416,6 +419,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     if (folder_id) { query += ` AND d.folder_id = ?`; params.push(folder_id); }
+    if (!(await seesAllContentStatuses(req.user))) query += liveContentSql('d'); // MIPM-89
     if (status) {
       query += ` AND d.status = ?`;
       params.push(status);
@@ -430,7 +434,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/documents/:id — get document with version history
-router.get('/documents/:id', authenticate, async (req, res) => {
+router.get('/documents/:id', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[doc]] = await pool.execute(
@@ -509,7 +513,7 @@ async function documentInScope(req, docId) {
 }
 
 // GET /api/cm/documents/:id/attachments — list source attachments for a document
-router.get('/documents/:id/attachments', authenticate, async (req, res) => {
+router.get('/documents/:id/attachments', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const { id } = req.params;
     if (!(await documentInScope(req, id))) {
@@ -530,7 +534,7 @@ router.get('/documents/:id/attachments', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/documents/:id/attachments/:attId/download — stream one attachment (inline preview)
-router.get('/documents/:id/attachments/:attId/download', authenticate, async (req, res) => {
+router.get('/documents/:id/attachments/:attId/download', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const { id, attId } = req.params;
     if (!(await documentInScope(req, id))) {
@@ -1132,7 +1136,7 @@ router.delete('/documents/:id/alert-subs/:sub_id', authenticate, async (req, res
 });
 
 // GET /api/cm/documents/:id/versions — paginated version history (CM-T3)
-router.get('/documents/:id/versions', authenticate, async (req, res) => {
+router.get('/documents/:id/versions', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
@@ -1156,7 +1160,7 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/documents/:id/version-diff — compare two versions (CM-E2)
-router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
+router.get('/documents/:id/version-diff', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
@@ -1393,7 +1397,7 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
 });
 
 // GET /api/cm/documents/:id/download — serve the stored file as a download attachment
-router.get('/documents/:id/download', authenticate, async (req, res) => {
+router.get('/documents/:id/download', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
       `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
@@ -1419,7 +1423,7 @@ router.get('/documents/:id/download', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/documents/:id/file — serve the stored file inline (for in-app preview)
-router.get('/documents/:id/file', authenticate, async (req, res) => {
+router.get('/documents/:id/file', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
       `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
@@ -1456,7 +1460,7 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/documents/:id/activity — paginated activity log
-router.get('/documents/:id/activity', authenticate, async (req, res) => {
+router.get('/documents/:id/activity', authenticate, liveOnlyForReaders('cm_documents'), async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });

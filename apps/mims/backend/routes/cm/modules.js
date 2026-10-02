@@ -10,6 +10,7 @@ const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { seesAllContentStatuses, liveContentSql, liveOnlyForReaders } = require('../../services/contentVisibility');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const {
   archiveLinkedDocumentsForModule,
@@ -248,6 +249,7 @@ router.get('/modules', authenticate, async (req, res) => {
     await ensureCmModulesSchema();
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
+    const seesAll = await seesAllContentStatuses(req.user); // MIPM-89
     const buildQuery = (includeCreatedBy) => {
       let query = `
         SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''}
@@ -261,6 +263,7 @@ router.get('/modules', authenticate, async (req, res) => {
         query += ' AND f.org_id = ?';
         params.push(req.user.orgId);
       }
+      if (!seesAll) query += liveContentSql('m');
       if (status) { query += ' AND m.status = ?'; params.push(status); }
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
       if (search) {
@@ -291,7 +294,7 @@ router.get('/modules', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/modules/:id — module detail
-router.get('/modules/:id', authenticate, async (req, res) => {
+router.get('/modules/:id', authenticate, liveOnlyForReaders('cm_modules'), async (req, res) => {
   try {
     await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);
