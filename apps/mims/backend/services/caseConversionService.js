@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { logAudit } = require('../utils/auditLog');
 
 async function convertMi(miTabId, userId, target) {
   const [[mi]] = await pool.execute(
@@ -36,7 +37,7 @@ async function convertMi(miTabId, userId, target) {
     }
   }
   await pool.execute('UPDATE case_mi SET converted_to_case_id=?, converted_to_type=?, converted_at=CURRENT_TIMESTAMP, converted_by=? WHERE id=?', [newCaseId, target, userId || null, miTabId]);
-  await pool.execute('INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)', [userId || null, String(userId || 'system'), target === 'ae' ? 'MI_CONVERTED_TO_AE' : 'MI_CONVERTED_TO_PC', 'case_mi', miTabId, JSON.stringify({ source_case_id: mi.case_id, target_case_id: newCaseId })]).catch(() => {});
+  await logAudit(userId || null, String(userId || 'system'), target === 'ae' ? 'MI_CONVERTED_TO_AE' : 'MI_CONVERTED_TO_PC', 'case_mi', miTabId, { source_case_id: mi.case_id, target_case_id: newCaseId });
   return { case_id: newCaseId, target: type };
 }
 

@@ -31,17 +31,20 @@ export default function MySubmissionsPage() {
   const { clientCode, user, portalHeaders } = usePortal()
   const navigate     = useNavigate()
   const [subs, setSubs]   = useState([])
+  const [screening, setScreening] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // CPPM-4: this endpoint returns the same list plus each request's history.
+  // CPPM-63: and the conversation after the answer, and the screening question for a reply.
   function load() {
-    // CPPM-4: this endpoint returns the same list plus each request's history.
     return fetch(`/api/portal/submit/${clientCode}/submissions`, { headers: portalHeaders() })
-      .then(r => r.json()).then(d => { setSubs(d.submissions || []); setLoading(false) }).catch(() => setLoading(false))
+      .then(r => r.json()).then(d => { setSubs(d.submissions || []); setScreening(d.reply_screening || []); setLoading(false) })
+      .catch(() => setLoading(false))
   }
   useEffect(() => {
     if (!user) { navigate(`/portal/${clientCode}/login`); return }
     load()
-  }, [user, clientCode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, clientCode])
 
   // Submitted timestamps are shown with date + time in the viewer's local zone.
   const formatDate = (str) => formatDateTime(str)
@@ -124,7 +127,7 @@ export default function MySubmissionsPage() {
                     </div>
                     <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
                     <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
-                      A copy was emailed to you. Reply through the portal if you need anything further.
+                      A copy was emailed to you. If you need anything further, reply below.
                     </div>
                   </div>
                 )}
@@ -141,7 +144,17 @@ export default function MySubmissionsPage() {
                     ))}
                   </div>
                 )}
-                {s.can_follow_up && <AddInformation clientCode={clientCode} submissionId={s.id} onAdded={load} />}
+                {/* One box per request. A request in MIMS is answered there, so what the person
+                    adds goes to the MIMS case (bridge row 9). Otherwise, once answered, they reply
+                    to the answer (CPPM-63); before that, they add information. */}
+                {s.external_ref && s.can_follow_up ? (
+                  <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} />
+                ) : s.answer ? (
+                  <Conversation submission={s} screening={screening} clientCode={clientCode} portalHeaders={portalHeaders}
+                    formatDate={formatDate} onSent={load} />
+                ) : s.can_follow_up ? (
+                  <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} />
+                ) : null}
 
                 {/* Expandable Activity Details */}
                 <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
@@ -169,30 +182,39 @@ export default function MySubmissionsPage() {
 }
 
 // Bridge row 9: add something to a request already sent — a new detail, a correction,
-// a file — instead of sending a second, unconnected request.
-function AddInformation({ clientCode, submissionId, onAdded }) {
+// a file — instead of sending a second, unconnected request. Asks the same question as
+// the form and a reply (PD-2): did anyone become unwell; a Yes goes to the safety team.
+function AddInformation({ submission: s, screening, clientCode, onAdded }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [files, setFiles] = useState([])
+  const [unwell, setUnwell] = useState('')
+  const [detail, setDetail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
+  const ask = screening.find(f => f.field_key === 'ae_screen_answer')
+  const askMore = screening.find(f => f.field_key === 'ae_screen_detail')
+  const needsScreen = s.reply_needs_screening && ask
 
   async function send(e) {
     e.preventDefault()
-    setBusy(true); setError(''); setDone('')
+    setError(''); setDone('')
+    if (needsScreen && !unwell) { setError('Please answer whether anyone became unwell after using the product.'); return }
+    setBusy(true)
     const fd = new FormData()
     fd.append('text', text)
+    if (needsScreen) { fd.append('ae_screen_answer', unwell); fd.append('ae_screen_detail', unwell === 'Yes' ? detail : '') }
     files.forEach(f => fd.append('attachments', f))
     try {
-      const res = await fetch(`/api/portal/submit/${clientCode}/submissions/${submissionId}/followups`, {
+      const res = await fetch(`/api/portal/submit/${clientCode}/submissions/${s.id}/followups`, {
         method: 'POST', credentials: 'include', body: fd,
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || 'Could not add your information. Please try again.'); return }
       const blocked = data.blocked_files?.length ? ` These files were removed because they contained a virus: ${data.blocked_files.join(', ')}.` : ''
       setDone(data.message + blocked)
-      setText(''); setFiles([]); setOpen(false)
+      setText(''); setFiles([]); setUnwell(''); setDetail(''); setOpen(false)
       onAdded()
     } catch {
       setError('Could not add your information. Please check your connection and try again.')
@@ -204,28 +226,137 @@ function AddInformation({ clientCode, submissionId, onAdded }) {
   if (!open) {
     return (
       <div style={{ marginTop: 12 }}>
-        {done && <div style={{ fontSize: '0.85rem', color: '#166534', marginBottom: 8 }}>{done}</div>}
+        {done && <div role="status" style={{ fontSize: '0.85rem', color: '#166534', marginBottom: 8 }}>{done}</div>}
         <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => { setOpen(true); setDone('') }}>Add information</button>
       </div>
     )
   }
   return (
     <form onSubmit={send} style={{ marginTop: 12, padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }} htmlFor={`fu-${submissionId}`}>
+      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }} htmlFor={`fu-${s.id}`}>
         What would you like to add?
       </label>
-      <textarea id={`fu-${submissionId}`} value={text} onChange={e => setText(e.target.value)} rows={4} maxLength={5000}
+      <textarea id={`fu-${s.id}`} value={text} onChange={e => setText(e.target.value)} rows={4} maxLength={5000} disabled={busy}
         style={{ width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', font: 'inherit' }}
         placeholder="For example: a new symptom, a date you remembered, a batch number." />
+      {needsScreen && (
+        <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
+          <legend style={{ fontWeight: 600, fontSize: '0.85rem' }}>{ask.label} *</legend>
+          {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 6px' }}>{ask.help_text}</div>}
+          {String(ask.options || '').split('\n').map(o => (
+            <label key={o} style={{ marginRight: 16, fontSize: '0.85rem' }}>
+              <input type="radio" name={`fu-unwell-${s.id}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}
+            </label>
+          ))}
+          {unwell === 'Yes' && askMore && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }} htmlFor={`fu-unwell-detail-${s.id}`}>{askMore.label}</label>
+              <textarea id={`fu-unwell-detail-${s.id}`} rows={3} value={detail} maxLength={5000} disabled={busy} onChange={e => setDetail(e.target.value)}
+                placeholder={askMore.placeholder || ''}
+                style={{ width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', font: 'inherit' }} />
+            </div>
+          )}
+        </fieldset>
+      )}
       <div style={{ margin: '8px 0', fontSize: '0.8rem', color: '#64748b' }}>
-        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 5))} />
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" disabled={busy} onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 5))} />
         {' '}Up to 5 files (PDF, JPG, PNG or DOCX, 10 MB each).
       </div>
-      {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: 8 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: 8 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" className="pp-btn pp-btn-primary pp-btn-sm" disabled={busy || text.trim().length < 2}>{busy ? 'Sending…' : 'Send'}</button>
-        <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => { setOpen(false); setError('') }}>Cancel</button>
+        <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>Cancel</button>
       </div>
     </form>
+  )
+}
+
+// CPPM-63: what was said after the answer, oldest first, and a box to reply. On a
+// request that is screened (every type but a side effect report) the reply asks the
+// same question as the original form — "did anyone become unwell" — and it must be
+// answered; a Yes goes to the safety team.
+function Conversation({ submission: s, screening, clientCode, portalHeaders, formatDate, onSent }) {
+  const [open, setOpen]       = useState(false)
+  const [body, setBody]       = useState('')
+  const [unwell, setUnwell]   = useState('')
+  const [detail, setDetail]   = useState('')
+  const [busy, setBusy]       = useState(false)
+  const [error, setError]     = useState('')
+  const [done, setDone]       = useState('')
+  const ask    = screening.find(f => f.field_key === 'ae_screen_answer')
+  const askMore = screening.find(f => f.field_key === 'ae_screen_detail')
+  const needsScreen = s.reply_needs_screening && ask
+
+  async function send(e) {
+    e.preventDefault(); setError(''); setDone('')
+    if (body.trim().length < 2) { setError('Write your reply before sending it.'); return }
+    if (needsScreen && !unwell) { setError('Please answer whether anyone became unwell after using the product.'); return }
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/portal/submit/${clientCode}/submissions/${s.id}/reply`, {
+        method: 'POST', headers: portalHeaders(),
+        body: JSON.stringify({ body, ...(needsScreen ? { ae_screen_answer: unwell, ae_screen_detail: unwell === 'Yes' ? detail : '' } : {}) }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'Your reply could not be sent. Please try again.'); return }
+      setBody(''); setUnwell(''); setDetail(''); setOpen(false); setDone(d.message || 'Your reply has been sent.')
+      await onSent()
+    } catch { setError('Network error — please try again.') } finally { setBusy(false) }
+  }
+
+  const box = { marginTop: 10, padding: '12px 14px', borderRadius: 8, fontSize: '0.9rem', lineHeight: 1.55, whiteSpace: 'pre-wrap' }
+  return (
+    <div style={{ marginTop: 10 }}>
+      {(s.conversation || []).map((m, i) => m.from === 'you' ? (
+        <div key={i} style={{ ...box, background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#334155' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 4 }}>Your reply · {formatDate(m.at)}</div>
+          {m.body}
+        </div>
+      ) : (
+        <div key={i} style={{ ...box, background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#14532d' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#166534', marginBottom: 4 }}>Our follow-up · {formatDate(m.at)}</div>
+          {m.body}
+        </div>
+      ))}
+
+      {done && <div role="status" style={{ marginTop: 10, color: '#166534', fontWeight: 600, fontSize: '0.88rem' }}>{done}</div>}
+
+      {!open ? (
+        <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" style={{ marginTop: 10 }} onClick={() => { setOpen(true); setDone('') }}>
+          Reply to this answer
+        </button>
+      ) : (
+        <form onSubmit={send} style={{ marginTop: 10, padding: 14, border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff' }}>
+          <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', marginBottom: 6 }} htmlFor={`reply-${s.id}`}>Your reply</label>
+          <textarea id={`reply-${s.id}`} rows={4} value={body} maxLength={5000} disabled={busy} onChange={e => setBody(e.target.value)}
+            placeholder="Ask a follow-up question or tell us more."
+            style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontFamily: 'inherit', fontSize: '0.9rem' }} />
+          {needsScreen && (
+            <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
+              <legend style={{ fontWeight: 600, fontSize: '0.9rem' }}>{ask.label} *</legend>
+              {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 6px' }}>{ask.help_text}</div>}
+              {String(ask.options || '').split('\n').map(o => (
+                <label key={o} style={{ marginRight: 16, fontSize: '0.9rem' }}>
+                  <input type="radio" name={`unwell-${s.id}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}
+                </label>
+              ))}
+              {unwell === 'Yes' && askMore && (
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }} htmlFor={`unwell-detail-${s.id}`}>{askMore.label}</label>
+                  <textarea id={`unwell-detail-${s.id}`} rows={3} value={detail} maxLength={5000} disabled={busy} onChange={e => setDetail(e.target.value)}
+                    placeholder={askMore.placeholder || ''}
+                    style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontFamily: 'inherit', fontSize: '0.9rem' }} />
+                </div>
+              )}
+            </fieldset>
+          )}
+          {error && <div role="alert" style={{ marginTop: 10, color: '#B91C1C', fontSize: '0.85rem', fontWeight: 600 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button type="submit" className="pp-btn pp-btn-primary pp-btn-sm" disabled={busy}>{busy ? 'Sending…' : 'Send reply'}</button>
+            <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }

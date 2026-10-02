@@ -45,7 +45,8 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 // DELETE /api/admin/feedback/:clientId/:feedbackId
 router.delete('/:clientId/:feedbackId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM cp_feedback WHERE id = ? AND client_id = ?', [req.params.feedbackId, req.params.clientId]);
+    const [result] = await pool.execute('DELETE FROM cp_feedback WHERE id = ? AND client_id = ?', [req.params.feedbackId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Feedback not found.' });
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.feedback.error', { err, route: 'DELETE /:clientId/:feedbackId', path: req.path, request_id: req.requestId || null });

@@ -53,6 +53,9 @@ function formatDetails(detailsRaw) {
 
 export default function AuditTrailPage() {
   const { clientId } = useParams()
+  // CPPM-62: with no client in the address this is the platform audit trail —
+  // records that belong to no client, for the platform admin only.
+  const scope = clientId || 'platform'
 
   const [records, setRecords]   = useState([])
   const [total, setTotal]       = useState(0)
@@ -78,9 +81,10 @@ export default function AuditTrailPage() {
       if (filterFrom)             params.set('from',   filterFrom)
       if (filterTo)               params.set('to',     filterTo)
 
-      const res = await fetch(`/api/admin/audit/${clientId}?${params.toString()}`, {
+      const res = await fetch(`/api/admin/audit/${scope}?${params.toString()}`, {
         headers: adminHeaders(),
       })
+      if (res.status === 403) { setError('Only the platform admin can see this audit trail.'); setRecords([]); setTotal(0); setLoading(false); return }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const d = await res.json()
       setRecords(d.records || [])
@@ -91,7 +95,7 @@ export default function AuditTrailPage() {
       setTotal(0)
     }
     setLoading(false)
-  }, [clientId, page, filterEntity, filterAction, filterFrom, filterTo])
+  }, [scope, page, filterEntity, filterAction, filterFrom, filterTo])
 
   useEffect(() => { loadRecords() }, [loadRecords])
 
@@ -204,7 +208,7 @@ export default function AuditTrailPage() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `gxp_audit_package_${clientId}_${new Date().toISOString().slice(0, 10)}.csv`;
+              a.download = `gxp_audit_package_${scope}_${new Date().toISOString().slice(0, 10)}.csv`;
               a.click();
               URL.revokeObjectURL(url);
             }}

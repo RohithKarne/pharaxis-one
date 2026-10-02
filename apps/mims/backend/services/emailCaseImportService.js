@@ -33,6 +33,7 @@ const { assignCaseNumberWithConnection } = require('./orgBootstrapService');
 const { createNotification, createNotifications } = require('./notificationCenterService');
 const { emitDataSync } = require('./appRealtimeService');
 const { decryptMailboxSecret } = require('./mailboxCrypto');
+const { logAudit } = require('../utils/auditLog');
 
 const SYSTEM_ACTOR = 'Email Case Import';
 
@@ -131,11 +132,7 @@ async function resolveEmailIntakeStateId(conn, orgId) {
 // ── Audit helper ────────────────────────────────────────────────────────────
 
 async function audit(action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-     VALUES (NULL, ?, ?, ?, ?, ?)`,
-    [SYSTEM_ACTOR, action, entity, entityId, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(null, SYSTEM_ACTOR, action, entity, entityId, details || {});
 }
 
 // ── Follow-up / thread handling (MIMS-36, decision #5) ──────────────────────
@@ -294,7 +291,9 @@ async function sendAcknowledgment({ account, config, orgId, toEmail, variant, mi
   const transporter = mailer.createTransport('operational', {
     host: outbound.smtp_host,
     port: Number(outbound.smtp_port),
-    secure: Number(outbound.smtp_port) === 465,
+    // MIPM-63: the mailbox's own Encryption setting, not a guess from the port.
+    secure: outbound.smtp_encryption === 'SSL/TLS',
+    requireTLS: outbound.smtp_encryption === 'STARTTLS',
     auth: {
       user: outbound.smtp_username,
       pass: decryptMailboxSecret(outbound.smtp_password),

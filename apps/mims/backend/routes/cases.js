@@ -1249,13 +1249,17 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
         [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
       );
     } catch (err) {
+      // MIPM-21: a reference that is already taken is refused and the caller told.
+      // It used to be saved under the reference plus a run of digits, silently, off
+      // the numbering pattern. Sending no reference gets a proper number assigned.
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
-        [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId, ownerId]
-        );
-      } else { throw err; }
+        await conn.rollback(); /* release handled by the finally */
+        return res.status(409).json({
+          error: `Case reference "${case_number}" is already in use in this organisation. Use a different reference, or send none to have the next number assigned.`,
+          code: 'CASE_NUMBER_TAKEN',
+        });
+      }
+      throw err;
     }
     const caseId = result.insertId;
     if (ownerId) {
@@ -2342,6 +2346,10 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
       responsePackage = await buildResponsePackage(req, req.params.id, {
         ...req.body,
         body_html: req.body.response_body_html !== undefined ? req.body.response_body_html : req.body.body_html,
+        // MIPM-69: the builder sends the typed subject as response_subject, but the
+        // package reads `subject`, so a typed subject was dropped for the default.
+        // Empty still means "use the template's or the default".
+        subject: req.body.subject !== undefined ? req.body.subject : (req.body.response_subject || undefined),
       });
     }
     const finalResponseText = responsePackage?.rendered_text || response_text || null;
@@ -2418,7 +2426,7 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
         category: 'mi_response',
         severity: follow_up_required ? 'warning' : 'info',
         title: `MI Response ${responseStatus} — ${c.case_number || req.params.id}`,
-        message: `${req.user.name || 'A user'} ${responseStatus === 'DRAFT' ? 'saved a draft for' : 'added a response to'} case ${c.case_number || req.params.id}.`,
+        message: `${req.user.name || req.user.email} ${responseStatus === 'DRAFT' ? 'saved a draft for' : 'added a response to'} case ${c.case_number || req.params.id}.`,
         linkUrl: `/cases/${req.params.id}?section=mi`,
         metadata: { case_id: req.params.id, response_id: result.insertId, response_status: responseStatus },
         eventKey: 'mi-response-updated',
@@ -2753,7 +2761,7 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       category: 'ae_transmission',
       severity: slaStatus === 'at_risk' ? 'warning' : 'info',
       title: `AE Case Routed to You — ${c?.case_number || req.params.id}`,
-      message: `${req.user.name || 'A user'} routed AE case ${c?.case_number || req.params.id} to you for PV review. Due: ${dueDate}.`,
+      message: `${req.user.name || req.user.email} routed AE case ${c?.case_number || req.params.id} to you for PV review. Due: ${dueDate}.`,
       linkUrl: `/cases/${req.params.id}?section=ae`,
       metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus, product_group_id: productGroup.product_group_id },
       eventKey: 'ae-transmission-created',
@@ -2864,7 +2872,7 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       category: 'pc_transmission',
       severity: slaStatus === 'at_risk' ? 'warning' : 'info',
       title: `PC Complaint Routed to You — ${c?.case_number || req.params.id}`,
-      message: `${req.user.name || 'A user'} routed PC complaint ${c?.case_number || req.params.id} to you for quality investigation. Due: ${dueDate}.`,
+      message: `${req.user.name || req.user.email} routed PC complaint ${c?.case_number || req.params.id} to you for quality investigation. Due: ${dueDate}.`,
       linkUrl: `/cases/${req.params.id}?section=pc`,
       metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus, product_group_id: productGroup.product_group_id },
       eventKey: 'pc-transmission-created',

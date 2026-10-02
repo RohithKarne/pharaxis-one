@@ -5,6 +5,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const meddra = require('../../services/meddraService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 async function orgForCase(caseId, req) {
   const [[row]] = await pool.execute('SELECT org_id FROM cases WHERE id=? LIMIT 1', [caseId]);
@@ -14,7 +15,7 @@ async function orgForCase(caseId, req) {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute('INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)', [req.user.userId, req.user.email, action, entity, entityId || null, JSON.stringify(details || {})]).catch(() => {});
+  await logAudit(req.user.userId, req.user.email, action, entity, entityId || null, details || {});
 }
 
 router.get('/meddra/search', authenticate, async (req, res) => {
@@ -43,7 +44,7 @@ router.post('/cases/:caseId/meddra/approve', authenticate, async (req, res) => {
     if (!orgId) return res.status(404).json({ error: 'Case not found.' });
     const id = await meddra.codeReaction({ orgId, caseId: req.params.caseId, aeEventId: req.body.ae_event_id, verbatim: req.body.verbatim, termId: req.body.term_id, approvedBy: req.user.userId });
     await audit(req, 'MEDDRA_APPROVED', 'case_meddra_codes', id, req.body);
-    await pool.execute('INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)', [req.user.userId, req.user.email, 'ESIGN_MEDDRA_APPROVAL', 'case_meddra_codes', id, JSON.stringify({ term_id: req.body.term_id })]).catch(() => {});
+    await logAudit(req.user.userId, req.user.email, 'ESIGN_MEDDRA_APPROVAL', 'case_meddra_codes', id, { term_id: req.body.term_id });
     res.status(201).json({ id });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

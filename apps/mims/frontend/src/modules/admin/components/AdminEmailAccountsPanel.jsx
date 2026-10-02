@@ -9,6 +9,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   const [orgs, setOrgs] = useState([])
   const [emailAccounts, setEmailAccounts] = useState([])
   const [emailModal, setEmailModal] = useState(null)
+  const [emailFormError, setEmailFormError] = useState('')
   const [emailEditTarget, setEmailEditTarget] = useState(null)
   const [emailForm, setEmailForm] = useState(getDefaultEmailFormBase())
   const [emailTestingId, setEmailTestingId] = useState(null)
@@ -85,12 +86,17 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   function openAddEmailModal() {
     setEmailEditTarget(null)
     setEmailForm(getDefaultEmailForm())
+    setEmailFormError('')
     setEmailModal('add')
   }
 
   function openEditEmailModal(account) {
     setEmailEditTarget(account)
-    setEmailForm(getDefaultEmailForm({ ...account, org_id: String(account.org_id || orgId || ''), imap_password: '', smtp_password: '' }))
+    // MIPM-63: a value the mailbox never had comes back as null. Left in, it replaced
+    // the form's default — the Encryption box showed "SSL/TLS" and saved nothing.
+    const saved = Object.fromEntries(Object.entries(account).filter(([, value]) => value != null))
+    setEmailForm(getDefaultEmailForm({ ...saved, org_id: String(account.org_id || orgId || ''), imap_password: '', smtp_password: '' }))
+    setEmailFormError('')
     setEmailModal('edit')
   }
 
@@ -106,7 +112,9 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     const url = isEdit ? `/api/admin/email-accounts/${emailEditTarget.id}` : '/api/admin/email-accounts'
     const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(emailForm) })
     const d = await readJson(res)
-    if (!res.ok) return flash(d.error || 'Request failed. Is the backend running on :3000?', 'error')
+    // MIPM-64: the reason is shown inside the dialog. As a page message it sat behind
+    // the dialog and faded after a few seconds.
+    if (!res.ok) return setEmailFormError(d.error || 'The mailbox could not be saved.')
     await loadEmailAccounts()
     setEmailModal(null)
     flash(isEdit ? 'Email account updated.' : 'Email account created.')
@@ -147,6 +155,8 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
         flash(`Fetch complete. ${d.ingested ?? 0} email(s) ingested.`)
       } else if (d.status === 'fail') {
         if (action === 'test-smtp') setSmtpErrorModal({ account_name: account.account_name, error: d.error || 'SMTP test failed.', tested_at: d.tested_at || 'Just now' })
+        // MIPM-64: an IMAP failure shows its reason the same way an SMTP one does.
+        if (action === 'test-imap') setSmtpErrorModal({ title: 'IMAP Test Failed', account_name: account.account_name, error: d.error || 'IMAP test failed.', tested_at: d.tested_at || 'Just now' })
         flash(`${action === 'test-imap' ? 'IMAP' : 'SMTP'} test failed.`, 'error')
       } else {
         flash(action === 'test-imap' ? 'IMAP test passed.' : action === 'test-smtp' ? 'SMTP test passed.' : 'Action completed.')
@@ -218,9 +228,11 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   <td><StatusPill active={account.is_active} /></td>
                   <td style={{ fontSize: 11 }}>
                     {account.last_imap_test_at ? <span style={{ color: account.last_imap_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_imap_test_status} · {account.last_imap_test_at}</span> : '—'}
+                    {account.last_imap_test_status === 'fail' && account.last_imap_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_imap_test_error}</div>}
                   </td>
                   <td style={{ fontSize: 11 }}>
                     {account.last_smtp_test_at ? <span style={{ color: account.last_smtp_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_smtp_test_status} · {account.last_smtp_test_at}</span> : '—'}
+                    {account.last_smtp_test_status === 'fail' && account.last_smtp_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_smtp_test_error}</div>}
                   </td>
                   <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{account.last_ingest_at || '—'}</td>
                   <td>
@@ -395,7 +407,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                     <input type="checkbox" checked={emailForm.ingest_attachments} onChange={e => setEmailForm(f => ({ ...f, ingest_attachments: e.target.checked }))} />
                     Ingest Attachments
                   </label>
-                  {emailForm.ingest_attachments && (
+                  {!!emailForm.ingest_attachments && ( // the database sends 0, which React drew as a stray "0"
                     <div style={{ marginTop: 10, maxWidth: 200 }}>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Max Attachment Size (MB)</label>
                       <input className="form-control" type="number" min={1} value={emailForm.max_attachment_mb} onChange={e => setEmailForm(f => ({ ...f, max_attachment_mb: Number(e.target.value) }))} />
@@ -404,6 +416,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 </div>
               )}
 
+              {emailFormError && <div role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{emailFormError}</div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                 <button type="button" className="btn btn-outline" onClick={() => setEmailModal(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">{emailModal === 'add' ? 'Create Account' : 'Save Changes'}</button>
@@ -416,7 +429,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
       {smtpErrorModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 10, width: '100%', maxWidth: 480, padding: 28, boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
-            <h3 style={{ margin: '0 0 4px', color: 'var(--danger)' }}>SMTP Test Failed</h3>
+            <h3 style={{ margin: '0 0 4px', color: 'var(--danger)' }}>{smtpErrorModal.title || 'SMTP Test Failed'}</h3>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Account: <strong>{smtpErrorModal.account_name}</strong> &nbsp;·&nbsp; {smtpErrorModal.tested_at}</p>
             <pre style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14, fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--danger)', margin: '0 0 20px' }}>{smtpErrorModal.error}</pre>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-outline" onClick={() => setSmtpErrorModal(null)}>Close</button></div>

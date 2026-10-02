@@ -233,7 +233,8 @@ router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req,
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(id);
-    await pool.execute(`UPDATE cp_clients SET ${updates.join(', ')} WHERE id = ?`, params);
+    const [result] = await pool.execute(`UPDATE cp_clients SET ${updates.join(', ')} WHERE id = ?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Client not found.' });
     await audit(req.admin, Number(id), 'UPDATE', 'client', Number(id), req.body);
     res.json({ message: 'Client updated.' });
   } catch (err) {

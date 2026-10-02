@@ -30,6 +30,9 @@ const PUBLIC_LABELS = {
   follow_up: 'You added more information',
 };
 
+// The note a reply writes when it reopens a closed request (routes/portal/submit.js).
+const REOPENED_NOTE = 'Reopened by a reply';
+
 /** Append one status change. Returns nothing; failures are logged, never thrown. */
 async function recordStatusEvent({ submissionId, clientId, status, note = null, source }) {
   try {
@@ -51,7 +54,8 @@ async function recordStatusEvent({ submissionId, clientId, status, note = null, 
 function publicTimeline(events) {
   const steps = [];
   for (const e of events) {
-    const label = PUBLIC_LABELS[e.status];
+    // CPPM-63: a reply that reopened a closed request is shown as that, not as a second "Received".
+    const label = e.note === REOPENED_NOTE ? 'Reopened' : PUBLIC_LABELS[e.status];
     if (!label) continue;
     if (steps.length && steps[steps.length - 1].label === label) continue;
     steps.push({ label, at: e.created_at });
@@ -59,4 +63,4 @@ function publicTimeline(events) {
   return steps;
 }
 
-module.exports = { recordStatusEvent, publicTimeline, PUBLIC_LABELS };
+module.exports = { recordStatusEvent, publicTimeline, PUBLIC_LABELS, REOPENED_NOTE };

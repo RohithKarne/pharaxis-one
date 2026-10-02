@@ -18,6 +18,11 @@ function fmtDate(d) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+// MIPM-35: when someone was switched off — date and time.
+function fmtDateTime(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 function isExpired(d) {
   return d && new Date(d) < new Date()
 }
@@ -253,6 +258,11 @@ export default function Users() {
                       ? <span className="ma-usr-pill ma-usr-pill-active">Active</span>
                       : <span className="ma-usr-pill ma-usr-pill-inactive">Inactive</span>
                   }
+                  {(!u.is_active || !!u.is_disabled) && !!u.inactive_reason && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {u.inactive_reason}{u.inactive_at ? ` · ${fmtDateTime(u.inactive_at)}` : ''}
+                    </div>
+                  )}
                 </td>
                 <td style={{ fontSize: 12, color: isExpired(u.password_expires_at) ? 'var(--error, #c00)' : 'var(--text-muted)' }}>
                   {fmtDate(u.password_expires_at)}
@@ -339,8 +349,16 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       access_admin_site:!!editUser.access_admin_site,
       case_admin:       !!editUser.case_admin,
       tenant_ids:       editUser.tenant_ids       || [],
+      inactive_reason:  '',
+      reactivation_reason: '',
     }
   })
+
+  // MIPM-35: switching someone back on needs a reason; switching off may give one.
+  const wasOff     = isEdit && (!editUser.is_active || !!editUser.is_disabled)
+  const willBeOff  = !form.is_active || form.is_disabled
+  const switchingOn  = wasOff && !willBeOff
+  const switchingOff = isEdit && !wasOff && willBeOff
 
   // ── Quick Actions state ─────────────────────────────────────────────────────
   const [expiringNow,   setExpiringNow]   = useState(false)
@@ -375,6 +393,8 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
     if (!form.email.trim())          e.email            = 'Email Account is required.'
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email address.'
     if (!form.tenant_ids.length)     e.tenant_ids       = 'Select at least one tenant.'
+    if (switchingOn && !String(form.reactivation_reason || '').trim())
+      e.reactivation_reason = 'Enter a reason for switching this user back on.'
     return e
   }
 
@@ -385,7 +405,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
     if (Object.keys(e).length) {
       setErrors(e)
       // Jump to first tab with error
-      if (e.user_id || e.name || e.security_group_id || e.email) setTab('general')
+      if (e.user_id || e.name || e.security_group_id || e.email || e.reactivation_reason) setTab('general')
       else if (e.tenant_ids) setTab('tenants')
       return
     }
@@ -522,6 +542,36 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     Disabled
                   </label>
                 </div>
+                {wasOff && editUser.inactive_reason && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                    Switched off: {editUser.inactive_reason}{editUser.inactive_at ? ` · ${fmtDateTime(editUser.inactive_at)}` : ''}
+                  </div>
+                )}
+                {switchingOn && (
+                  <div className="ma-usr-field" style={{ marginTop: 10 }}>
+                    <label>Reason for switching back on <span className="req">*</span></label>
+                    <input
+                      className={`ma-usr-input${errors.reactivation_reason ? ' err' : ''}`}
+                      value={form.reactivation_reason}
+                      onChange={e => set('reactivation_reason', e.target.value)}
+                      placeholder="e.g. Returned from leave"
+                      maxLength={255}
+                    />
+                    {errors.reactivation_reason && <span className="ma-usr-err-msg">{errors.reactivation_reason}</span>}
+                  </div>
+                )}
+                {switchingOff && (
+                  <div className="ma-usr-field" style={{ marginTop: 10 }}>
+                    <label>Reason for switching off</label>
+                    <input
+                      className="ma-usr-input"
+                      value={form.inactive_reason}
+                      onChange={e => set('inactive_reason', e.target.value)}
+                      placeholder="e.g. Left the company"
+                      maxLength={255}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="ma-usr-row">

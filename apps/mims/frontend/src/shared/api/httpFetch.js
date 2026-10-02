@@ -34,7 +34,11 @@ export async function httpFetch(input, init) {
   const response = await globalThis.fetch(input, { credentials: 'include', ...init })
   const url = typeof input === 'string' ? input : (input?.url ?? '')
 
-  if ((response.status === 401 || response.status === 403 || response.status === 503) && !url.includes('/api/auth/')) {
+  // Sign-in routes are left alone so a wrong password does not sign anyone out —
+  // except a switched-off account, which is acted on wherever it is reported,
+  // including the session check a page makes when it loads (MIPM-32).
+  const accessEnded = response.status === 401 && (await readResponseDetail(response))?.error_code === 'ACCESS_ENDED'
+  if ((response.status === 401 || response.status === 403 || response.status === 503) && (!url.includes('/api/auth/') || accessEnded)) {
     const detail = await readResponseDetail(response)
     const payload = {
       url,
@@ -55,7 +59,7 @@ export async function httpFetch(input, init) {
       } finally {
         _handling = false
       }
-    } else {
+    } else if (!(accessEnded && _handling)) { // the sign-out the handler itself makes is refused too; it is not a second issue
       if (typeof _onAuthIssue === 'function') {
         _onAuthIssue(payload)
       }

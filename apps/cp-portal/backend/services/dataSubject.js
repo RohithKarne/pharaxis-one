@@ -26,50 +26,100 @@ const log = require('../utils/logger');
 const RETAINED_SUBMISSION_TYPES = new Set(['adverse_event', 'product_complaint']);
 const ERASED = '[erased]';
 
-// Bridge row 10: the answers in a stored form that identify the person. The name and
-// email columns were blanked on erasure but these copies inside the form were not, so
-// the admin screen still showed who reported. Same list of details MIMS blanks.
-const IDENTITY_KEYS = [
-  'name', 'first_name', 'last_name', 'full_name', 'reporter_name',
-  'email', 'reporter_email', 'contact_email', 'reporter_contact',
-  'phone', 'reporter_phone', 'contact_phone',
-  'organization', 'organisation', 'institution', 'address',
-];
+// ── CPPM-69: the person's name, email and phone inside text that is kept ──────
+// A kept safety record has its name and email columns blanked, but the person also
+// typed their name into form answers and replies, staff wrote it into answers and
+// review notes, and we addressed emails to them. Those are rewritten here: every
+// known full name, email address and phone number becomes [erased], and the rest of
+// the text — the clinical content — is kept. A nickname, a first name on its own,
+// or someone else's name cannot be recognised by a machine and stays.
 
-/**
- * Remove the reporter's identity from these requests and keep the requests: the name
- * and email columns, the link to their portal account, their IP address, and every
- * identifying answer in the stored form — the fixed list above plus any email or phone
- * field this client added to its forms. Runs on the caller's transaction. A request
- * already erased is left as it is.
- */
-async function eraseSubmissionIdentity(conn, clientId, ids) {
-  if (!ids.length) return 0;
-  const [cfg] = await conn.execute(
-    `SELECT DISTINCT field_key FROM cp_form_config WHERE client_id = ? AND field_type IN ('email', 'phone')`, [clientId]);
-  const keys = new Set([...IDENTITY_KEYS, ...cfg.map(f => f.field_key)]);
-  const [rows] = await conn.execute(
-    `SELECT id, form_data FROM cp_submissions
-      WHERE client_id = ? AND identity_erased_at IS NULL AND id IN (${ids.map(() => '?').join(',')})`, [clientId, ...ids]);
-  for (const r of rows) {
-    let formData = r.form_data;
-    try {
-      const fd = typeof r.form_data === 'string' ? JSON.parse(r.form_data) : r.form_data;
-      for (const k of keys) if (fd && fd[k] != null && String(fd[k]).trim() !== '') fd[k] = ERASED;
-      formData = JSON.stringify(fd);
-    } catch (err) {
-      // Unreadable form data cannot be picked apart, so none of it is kept.
-      formData = JSON.stringify({ erased: true });
-      log.warn('dataSubject.form_data_unreadable_on_erasure', { submission_id: r.id });
+// Form fields that identify the reporter rather than describe what happened.
+// Bridge row 10: organisation and institution too — MIMS blanks both on the case.
+const IDENTITY_FIELD = /^(first_?name|last_?name|full_?name|name|surname|e_?mail(_address)?|phone(_number)?|telephone|mobile|address|postcode|zip|organi[sz]ation|institution|(reporter|submitter|contact|requester)_.+)$/i;
+
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Collect what identifies the person: full names (two words or more), emails, phone numbers. */
+function collectIdentifiers(user, subs) {
+  const names = new Set(), emails = new Set(), phones = new Set();
+  const addName = (...parts) => {
+    const n = parts.filter(Boolean).map(x => String(x).trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ');
+    if (n.split(' ').length >= 2 && n.length >= 4 && n !== `${ERASED} ${ERASED}`) names.add(n);
+  };
+  const addEmail = (e) => { if (e && /@/.test(e)) emails.add(String(e).trim().toLowerCase()); };
+  const addPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); if (d.length >= 7) phones.add(d); };
+  addName(user.first_name, user.last_name); addEmail(user.email); addPhone(user.phone);
+  for (const s of subs) {
+    addName(s.submitter_name); addEmail(s.submitter_email);
+    let f = {};
+    try { f = JSON.parse(s.form_data || '{}') || {}; } catch { f = {}; }
+    addName(f.first_name || f.firstName, f.last_name || f.lastName); addName(f.name); addName(f.full_name);
+    for (const [k, v] of Object.entries(f)) {
+      if (/e_?mail/i.test(k)) addEmail(v);
+      if (/phone|mobile|telephone/i.test(k)) addPhone(v);
     }
-    await conn.execute(
-      `UPDATE cp_submissions
-          SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
-              form_data = ?, identity_erased_at = NOW()
-        WHERE id = ?`, [ERASED, ERASED, formData, r.id]);
   }
-  return rows.length;
+  const patterns = [
+    ...[...emails].map(e => new RegExp(escapeRe(e), 'gi')),
+    // Longest names first, so "Mary Ann Smith" goes before "Mary Ann".
+    ...[...names].sort((x, y) => y.length - x.length)
+      .map(n => new RegExp(`(?<![\\p{L}\\p{N}])${n.split(' ').map(escapeRe).join('\\s+')}(?![\\p{L}\\p{N}])`, 'giu')),
+    // The same number is written with or without its country code and leading 0
+    // ("+44 7700 900555", "07700 900555"), so the match is on the last ten digits.
+    ...[...phones].map(d => {
+      const core = d.length > 10 ? d.slice(-10) : d.replace(/^0/, '');
+      return new RegExp(`(?<!\\d)(?:(?:\\+|00)\\d{1,3}[\\s().-]*)?(?:\\(?0\\)?[\\s().-]*)?${core.split('').join('[\\s().-]*')}(?!\\d)`, 'g');
+    }),
+  ];
+  return { names, emails, phones, patterns };
 }
+
+function redactText(text, ids) {
+  if (text == null || !ids.patterns.length) return text;
+  let out = String(text);
+  for (const re of ids.patterns) out = out.replace(re, ERASED);
+  return out;
+}
+
+// Rewrites every string inside a parsed JSON value; identity fields of a form are
+// blanked outright when `form` is set.
+function redactDeep(value, ids, form = false) {
+  if (typeof value === 'string') return redactText(value, ids);
+  if (Array.isArray(value)) return value.map(v => redactDeep(v, ids, form));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = form && IDENTITY_FIELD.test(k) && v != null && v !== '' ? ERASED : redactDeep(v, ids, form);
+    }
+    return out;
+  }
+  return value;
+}
+
+function redactJsonText(text, ids, form = false) {
+  if (text == null) return text;
+  try { return JSON.stringify(redactDeep(JSON.parse(text), ids, form)); } catch { return redactText(text, ids); }
+}
+
+/** Rewrites one text column on the given rows; returns how many rows changed. */
+async function rewriteColumn(conn, table, column, rows, fn) {
+  let changed = 0;
+  for (const r of rows) {
+    const next = fn(r[column]);
+    if (next !== r[column]) {
+      await conn.execute(`UPDATE \`${table}\` SET \`${column}\` = ? WHERE id = ?`, [next, r.id]);
+      changed += 1;
+    }
+  }
+  return changed;
+}
+
+// CPPM-70: a person's requests are the ones sent while signed in, and the ones sent
+// while signed out from the address their account has verified — the same person.
+// An unverified account claims nothing by address.
+const OWN_SUBMISSIONS = '(user_id = ? OR (user_id IS NULL AND ? = 1 AND LOWER(submitter_email) = LOWER(?)))';
+const ownParams = (userId, person) => [userId, person?.email_verified ? 1 : 0, person?.email || ''];
 
 /** GDPR Art. 15 — everything we hold about this user, as structured JSON. */
 async function buildExport(userId, clientId) {
@@ -85,17 +135,30 @@ async function buildExport(userId, clientId) {
   const submissions = await q(
     `SELECT id, submission_type, submitter_name, submitter_email, submitter_type, form_data,
             status, external_ref, submitted_at, updated_at
-       FROM cp_submissions WHERE user_id = ? AND client_id = ?`,
-    [userId, clientId]
+       FROM cp_submissions WHERE client_id = ? AND ${OWN_SUBMISSIONS}`,
+    [clientId, ...ownParams(userId, profile)]
   );
   const subIds = submissions.map(s => s.id);
   let attachments = [];
+  let answers = [];
+  let messages = [];
   if (subIds.length) {
+    const ph = subIds.map(() => '?').join(',');
     attachments = await q(
       `SELECT id, submission_id, file_name, file_size, mime_type, created_at
-         FROM cp_submission_attachments WHERE submission_id IN (${subIds.map(() => '?').join(',')})`,
+         FROM cp_submission_attachments WHERE submission_id IN (${ph})`,
       subIds
     );
+    // CPPM-63: what was said to and by the person about their requests — the answers
+    // sent to them, their replies, and the follow-ups sent. Staff drafts are not theirs.
+    answers = await q(
+      `SELECT submission_id, body, sent_at FROM cp_submission_answers
+        WHERE submission_id IN (${ph}) AND status = 'sent'`, subIds);
+    messages = await q(
+      `SELECT submission_id, IF(direction = 'in', 'from_you', 'from_team') AS direction, body,
+              ae_screen_answer, ae_screen_detail, IF(direction = 'in', created_at, sent_at) AS at
+         FROM cp_submission_messages
+        WHERE submission_id IN (${ph}) AND (direction = 'in' OR status = 'sent') ORDER BY id`, subIds);
   }
 
   const [consent, savedItems, follows, notifications, feedback, mslBookings, ssoIdentities] = await Promise.all([
@@ -138,6 +201,8 @@ async function buildExport(userId, clientId) {
     profile: profile || null,
     submissions,
     submission_attachments: attachments,
+    submission_answers: answers,
+    submission_messages: messages,
     consent_records: consent,
     saved_items: savedItems,
     follows,
@@ -151,6 +216,56 @@ async function buildExport(userId, clientId) {
 }
 
 /**
+ * Bridge row 10: the reporter's identity was erased on the MIMS case — remove it from
+ * the portal's copy of those requests and keep the requests, with the same scrubbing
+ * as a full erasure (CPPM-69): name and email columns, the link to the portal account,
+ * the IP address, identity answers in the stored form, and the person's name, email
+ * and phone inside the answer, replies, added information, safety review notes and the
+ * emails about the request (one not yet sent is never sent). Runs on the caller's
+ * transaction. A request already erased is left as it is. The portal account itself is
+ * not touched: the person asked MIMS, not the portal, and may have other requests.
+ */
+async function eraseSubmissionIdentity(conn, clientId, subIds) {
+  if (!subIds.length) return 0;
+  const [rows] = await conn.execute(
+    `SELECT s.id, s.submitter_name, s.submitter_email, s.form_data,
+            u.first_name, u.last_name, u.email, u.phone
+       FROM cp_submissions s LEFT JOIN cp_portal_users u ON u.id = s.user_id
+      WHERE s.client_id = ? AND s.identity_erased_at IS NULL AND s.id IN (${subIds.map(() => '?').join(',')})`,
+    [clientId, ...subIds]);
+  for (const r of rows) {
+    const ids = collectIdentifiers(r, [r]);
+    await conn.execute(
+      `UPDATE cp_submissions
+          SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+              form_data = ?, identity_erased_at = NOW()
+        WHERE id = ?`, [ERASED, ERASED, redactJsonText(r.form_data, ids, true), r.id]);
+    const [ans] = await conn.execute('SELECT id, body FROM cp_submission_answers WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_answers', 'body', ans, t => redactText(t, ids));
+    const [msgs] = await conn.execute('SELECT id, body, ae_screen_detail FROM cp_submission_messages WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_messages', 'body', msgs, t => redactText(t, ids));
+    await rewriteColumn(conn, 'cp_submission_messages', 'ae_screen_detail', msgs, t => redactText(t, ids));
+    const [fus] = await conn.execute('SELECT id, body FROM cp_submission_followups WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_followups', 'body', fus, t => redactText(t, ids));
+    const [tasks] = await conn.execute('SELECT id, reported_detail, outcome_reason FROM cp_ae_review_tasks WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_ae_review_tasks', 'reported_detail', tasks, t => redactText(t, ids));
+    await rewriteColumn(conn, 'cp_ae_review_tasks', 'outcome_reason', tasks, t => redactText(t, ids));
+    const [mail] = await conn.execute(
+      `SELECT id, to_email, subject, html, text_body, status FROM cp_email_outbox
+        WHERE client_id = ? AND related_type = 'submission' AND related_id = ?`, [clientId, r.id]);
+    for (const m of mail) {
+      const to = ids.emails.has(String(m.to_email || '').toLowerCase()) ? ERASED : redactText(m.to_email, ids);
+      await conn.execute(
+        `UPDATE cp_email_outbox SET to_email = ?, subject = ?, html = ?, text_body = ?,
+                status = IF(status = 'pending', 'failed', status),
+                last_error = IF(status = 'pending', 'Not sent: the recipient asked for their data to be erased.', last_error)
+          WHERE id = ?`, [to, redactText(m.subject, ids), redactText(m.html, ids), redactText(m.text_body, ids), m.id]);
+    }
+  }
+  return rows.length;
+}
+
+/**
  * GDPR Art. 17 erasure with regulated-retention holds. Runs in a transaction and
  * returns a summary of what was deleted / retained / anonymized for the audit log.
  */
@@ -161,22 +276,37 @@ async function eraseUser(userId, clientId) {
   try {
     await conn.beginTransaction();
 
+    // CPPM-69: what identifies them, read before any of it is changed.
+    const [[person]] = await conn.execute(
+      'SELECT first_name, last_name, email, phone, email_verified FROM cp_portal_users WHERE id = ? AND client_id = ?', [userId, clientId]);
     // Split submissions: retain AE/PC (sever identity), delete the rest.
     const [subs] = await conn.execute(
-      `SELECT id, submission_type FROM cp_submissions WHERE user_id = ? AND client_id = ?`, [userId, clientId]);
-    const retainIds = subs.filter(s => RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
-    const deleteIds = subs.filter(s => !RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
+      `SELECT id, submission_type, submitter_name, submitter_email, form_data FROM cp_submissions WHERE client_id = ? AND ${OWN_SUBMISSIONS}`,
+      [clientId, ...ownParams(userId, person)]);
+    const ids = collectIdentifiers(person || {}, subs);
+    const allSubIds = subs.map(s => s.id);
+    // CPPM-66: a request that raised a safety review — on the form, or in a reply to
+    // our answer — is a safety record whatever its type, as a flagged chat is below.
+    // Deleting it left the review pointing at nothing, and it could not be confirmed.
+    let reviewed = new Set();
+    if (subs.length) {
+      const [flagged] = await conn.execute(
+        `SELECT DISTINCT submission_id FROM cp_ae_review_tasks WHERE submission_id IN (${subs.map(() => '?').join(',')})`,
+        subs.map(s => s.id));
+      reviewed = new Set(flagged.map(f => f.submission_id));
+    }
+    const keep = s => RETAINED_SUBMISSION_TYPES.has(s.submission_type) || reviewed.has(s.id);
+    const retainIds = subs.filter(keep).map(s => s.id);
+    const deleteIds = subs.filter(s => !keep(s)).map(s => s.id);
 
     // CPPM-11: every request already sent to MIMS holds the identity over there too —
-    // the kept side-effect and complaint reports, and (bridge row 10) the medical
-    // enquiries deleted below, whose MIMS cases kept the name and email until now.
-    // Recorded inside this transaction, so the outstanding work either lands with the
-    // erasure or not at all — it can never be lost between the two.
-    if (subs.length) {
+    // the kept ones, and (bridge row 10) the medical enquiries deleted below, whose
+    // MIMS cases kept the name and email until now. Recorded inside this transaction,
+    // so the outstanding work either lands with the erasure or not at all.
+    if (allSubIds.length) {
       const [synced] = await conn.execute(
         `SELECT id, external_ref FROM cp_submissions
-          WHERE id IN (${subs.map(() => '?').join(',')}) AND external_ref IS NOT NULL AND external_ref <> ''`,
-        subs.map(s => s.id));
+          WHERE id IN (${allSubIds.map(() => '?').join(',')}) AND external_ref IS NOT NULL AND external_ref <> ''`, allSubIds);
       mimsTargets = synced;
       await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
     }
@@ -195,12 +325,22 @@ async function eraseUser(userId, clientId) {
 
     // Retain regulated submissions but sever the reporter identity.
     if (retainIds.length) {
-      await eraseSubmissionIdentity(conn, clientId, retainIds);
-      summary.retained.push(`submissions(${retainIds.length}) [AE/PC — identity severed, safety record retained]`);
+      const ph = retainIds.map(() => '?').join(',');
+      // Bridge row 10: stamped, so a later report of the same erasure from MIMS changes nothing.
+      await conn.execute(
+        `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+                identity_erased_at = COALESCE(identity_erased_at, NOW()) WHERE id IN (${ph})`,
+        [ERASED, ERASED, ...retainIds]
+      );
+      summary.retained.push(`submissions(${retainIds.length}) [AE/PC or safety review raised — identity severed, safety record retained]`);
     }
 
     // CPPM-18: a chat that raised a safety review is a safety record — keep it,
     // sever the identity (as for AE/PC submissions above). The rest are deleted below.
+    const [keptChats] = await conn.execute(
+      `SELECT c.id FROM cp_chat_conversations c
+        WHERE c.portal_user_id = ? AND c.client_id = ?
+          AND EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [userId, clientId]);
     const [flaggedChats] = await conn.execute(
       `UPDATE cp_chat_conversations c SET c.portal_user_id = NULL
         WHERE c.portal_user_id = ? AND c.client_id = ?
@@ -232,6 +372,77 @@ async function eraseUser(userId, clientId) {
     // Retain consent records as proof of consent (Art. 17(3)(b)); leave as-is.
     const [[cc]] = await conn.execute(`SELECT COUNT(*) n FROM cp_consent_records WHERE user_id = ? AND client_id = ?`, [userId, clientId]);
     if (cc.n) summary.retained.push(`consent_records(${cc.n}) [proof of consent]`);
+
+    // CPPM-69: the name, email and phone inside what is kept.
+    const scrubbed = [];
+    const inList = (n) => Array(n).fill('?').join(',');
+    if (retainIds.length) {
+      const ph = inList(retainIds.length);
+      const [fd] = await conn.execute(`SELECT id, form_data FROM cp_submissions WHERE id IN (${ph})`, retainIds);
+      const nForm = await rewriteColumn(conn, 'cp_submissions', 'form_data', fd, t => redactJsonText(t, ids, true));
+      const [ans] = await conn.execute(`SELECT id, body FROM cp_submission_answers WHERE submission_id IN (${ph})`, retainIds);
+      const nAns = await rewriteColumn(conn, 'cp_submission_answers', 'body', ans, t => redactText(t, ids));
+      const [msgs] = await conn.execute(`SELECT id, body, ae_screen_detail FROM cp_submission_messages WHERE submission_id IN (${ph})`, retainIds);
+      const nMsg = await rewriteColumn(conn, 'cp_submission_messages', 'body', msgs, t => redactText(t, ids))
+        + await rewriteColumn(conn, 'cp_submission_messages', 'ae_screen_detail', msgs, t => redactText(t, ids));
+      const [fus] = await conn.execute(`SELECT id, body FROM cp_submission_followups WHERE submission_id IN (${ph})`, retainIds);
+      const nFu = await rewriteColumn(conn, 'cp_submission_followups', 'body', fus, t => redactText(t, ids));
+      if (nForm || nAns || nMsg || nFu) scrubbed.push(`submissions(form answers ${nForm}, answers ${nAns}, replies ${nMsg}, added information ${nFu})`);
+    }
+    const chatIds = keptChats.map(c => c.id);
+    {
+      const where = [];
+      const params = [];
+      if (retainIds.length) { where.push(`submission_id IN (${inList(retainIds.length)})`); params.push(...retainIds); }
+      if (chatIds.length) { where.push(`chat_conversation_id IN (${inList(chatIds.length)})`); params.push(...chatIds); }
+      if (where.length) {
+        const [tasks] = await conn.execute(`SELECT id, reported_detail, outcome_reason FROM cp_ae_review_tasks WHERE ${where.join(' OR ')}`, params);
+        const n = await rewriteColumn(conn, 'cp_ae_review_tasks', 'reported_detail', tasks, t => redactText(t, ids))
+          + await rewriteColumn(conn, 'cp_ae_review_tasks', 'outcome_reason', tasks, t => redactText(t, ids));
+        if (n) scrubbed.push(`safety_reviews(${n})`);
+      }
+    }
+    if (chatIds.length) {
+      const [cm] = await conn.execute(`SELECT id, content FROM cp_chat_messages WHERE conversation_id IN (${inList(chatIds.length)})`, chatIds);
+      const n = await rewriteColumn(conn, 'cp_chat_messages', 'content', cm, t => redactText(t, ids));
+      if (n) scrubbed.push(`chat_messages(${n})`);
+    }
+    // Emails we sent or still owe them: the address goes, and one not yet sent is never sent.
+    if (ids.emails.size || allSubIds.length) {
+      const where = [];
+      const params = [clientId];
+      if (ids.emails.size) { where.push(`LOWER(to_email) IN (${inList(ids.emails.size)})`); params.push(...ids.emails); }
+      if (allSubIds.length) { where.push(`(related_type = 'submission' AND related_id IN (${inList(allSubIds.length)}))`); params.push(...allSubIds); }
+      const [mail] = await conn.execute(
+        `SELECT id, to_email, subject, html, text_body, status FROM cp_email_outbox WHERE client_id = ? AND (${where.join(' OR ')})`, params);
+      let n = 0;
+      for (const m of mail) {
+        const to = ids.emails.has(String(m.to_email || '').toLowerCase()) ? ERASED : redactText(m.to_email, ids);
+        const next = [to, redactText(m.subject, ids), redactText(m.html, ids), redactText(m.text_body, ids)];
+        const owed = m.status === 'pending';
+        if (owed || next[0] !== m.to_email || next[1] !== m.subject || next[2] !== m.html || next[3] !== m.text_body) {
+          await conn.execute(
+            `UPDATE cp_email_outbox SET to_email = ?, subject = ?, html = ?, text_body = ?,
+                    status = IF(status = 'pending', 'failed', status),
+                    last_error = IF(status = 'pending', 'Not sent: the recipient asked for their data to be erased.', last_error)
+              WHERE id = ?`, [...next, m.id]);
+          n += 1;
+        }
+      }
+      if (n) scrubbed.push(`emails(${n})`);
+    }
+    // Audit lines keep the action and who did it; the person's address and name go.
+    {
+      const like = [...ids.emails, ...ids.names];
+      if (like.length) {
+        const [lines] = await conn.execute(
+          `SELECT id, details FROM cp_audit_logs WHERE client_id = ? AND (${like.map(() => 'details LIKE ?').join(' OR ')})`,
+          [clientId, ...like.map(x => `%${x}%`)]);
+        const n = await rewriteColumn(conn, 'cp_audit_logs', 'details', lines, t => redactJsonText(t, ids));
+        if (n) scrubbed.push(`audit_lines(${n})`);
+      }
+    }
+    if (scrubbed.length) summary.anonymized.push(`name, email and phone removed from kept text: ${scrubbed.join(', ')}`);
 
     // Anonymize the identity row (kept — anchors retained records) + kill sessions.
     const anonEmail = `erased+${userId}.${Date.now()}@anonymized.invalid`;

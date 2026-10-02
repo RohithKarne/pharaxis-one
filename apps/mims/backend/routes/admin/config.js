@@ -10,10 +10,12 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { imapRequireStartTls, unencryptedMailError } = require('../../utils/mailSecurity');
 const crypto = require('crypto');
 // P7/F12: reuse the SAME AES-256-GCM secret encryption the codebase uses for SSO
 // secrets so IMAP/SMTP mailbox passwords are no longer stored in plaintext at rest.
 const { encryptSecret } = require('../../services/ssoService');
+const { logAudit } = require('../../utils/auditLog');
 
 // ssoService only exports encryptSecret; mirror its decrypt (same key derivation and
 // iv.tag.ciphertext format) locally, tolerating not-yet-encrypted (plaintext) rows so
@@ -107,12 +109,7 @@ function encryptMailboxSecret(value) {
 }
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function hasPlatformAdminScope(req) {
@@ -396,11 +393,11 @@ router.get('/login-audit', authenticate, requireAdminConsoleAccess, async (req, 
 // ─── EMAIL ACCOUNTS ───────────────────────────────────────────
 
 function sanitizeError(msg, account) {
-  return (msg || '')
-    .replace(account.imap_password || '', '[REDACTED]')
-    .replace(account.smtp_password || '', '[REDACTED]')
-    .replace(account.imap_username || '', '[REDACTED]')
-    .replace(account.smtp_username || '', '[REDACTED]')
+  // MIPM-64: an empty value must not be "redacted" — replacing '' matches at the
+  // very start and stuck [REDACTED] on the front of every reason.
+  return [account.imap_password, account.smtp_password, account.imap_username, account.smtp_username]
+    .filter(Boolean)
+    .reduce((text, secret) => text.replaceAll(secret, '[REDACTED]'), msg || '')
     .substring(0, 500);
 }
 
@@ -451,6 +448,9 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'platform_admi
       return res.status(400).json({ error: 'Mailbox email required for inbound accounts.' });
     if (['Outbound', 'Both'].includes(direction) && !from_email)
       return res.status(400).json({ error: 'From email required for outbound accounts.' });
+    // MIPM-63: a direction in use is saved with an encrypted connection, or not at all.
+    const unencrypted = unencryptedMailError(direction, imap_encryption, smtp_encryption);
+    if (unencrypted) return res.status(400).json({ error: unencrypted });
 
     const [result] = await pool.execute(`
       INSERT INTO email_accounts (
@@ -525,6 +525,9 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'platform_a
       return res.status(400).json({ error: 'Mailbox email required for inbound accounts.' });
     if (['Outbound', 'Both'].includes(direction) && !from_email)
       return res.status(400).json({ error: 'From email required for outbound accounts.' });
+    // MIPM-63: a direction in use is saved with an encrypted connection, or not at all.
+    const unencrypted = unencryptedMailError(direction, imap_encryption, smtp_encryption);
+    if (unencrypted) return res.status(400).json({ error: unencrypted });
 
     await pool.execute(`
       UPDATE email_accounts SET
@@ -676,11 +679,12 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
       host: account.imap_host,
       port: account.imap_port,
       secure: account.imap_encryption === 'SSL/TLS',
+      doSTARTTLS: imapRequireStartTls(account.imap_encryption),
       auth: {
         user: account.imap_username,
         pass: decryptMailboxSecret(account.imap_password),
       },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       logger: false,
       connectionTimeout: 10000,
       greetingTimeout: 10000,
@@ -750,7 +754,7 @@ router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 
       secure,
       requireTLS,
       auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       connectionTimeout: 10000,
     });
 
@@ -805,7 +809,7 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
       secure,
       requireTLS,
       auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       connectionTimeout: 10000,
     });
 
@@ -839,6 +843,7 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
 
 // POST — fetch emails now (immediate IMAP ingest, bypasses polling interval)
 router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  let accountName = null;
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
@@ -848,6 +853,7 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
+    accountName = account.account_name;
     if (!['Inbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for inbound.' });
     if (!account.imap_host || !account.imap_port || !account.imap_username || !account.imap_password)
@@ -866,14 +872,16 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
     });
     res.json({ message: 'Fetch complete.', ingested: n });
   } catch (err) {
+    // MIPM-64: say which mailbox, in the log and on screen.
     const msg = err?.message || String(err);
+    const label = accountName ? `Fetch failed for "${accountName}"` : 'Fetch failed';
     logService({
       source: 'Email Accounts',
       service_type: 'IMAP',
-      description: `Manual fetch failed — ${msg}`,
+      description: `${label} — ${msg}`,
       status: 'failed',
     });
-    res.status(500).json({ error: msg });
+    res.status(500).json({ error: `${label}: ${msg}` });
   }
 });
 

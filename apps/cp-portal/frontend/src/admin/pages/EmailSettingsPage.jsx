@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import LoadingButton from '../components/LoadingButton'
 
@@ -126,6 +127,7 @@ export default function EmailSettingsPage() {
 
   return (
     <AdminLayout>
+      <ReadOnlyUnless area="email-config" what="the email settings">
       <div className="cp-section-header">
         <h2>Email Settings</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -305,6 +307,7 @@ export default function EmailSettingsPage() {
           </table>
         )}
       </div>
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

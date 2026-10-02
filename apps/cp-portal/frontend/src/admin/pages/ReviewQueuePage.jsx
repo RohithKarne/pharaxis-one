@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
 
 const STATUS_STYLE = {
   review:   { background: '#FEF3C7', color: '#D97706' },
@@ -21,7 +22,9 @@ const TYPE_STYLE = {
 export default function ReviewQueuePage() {
   const { clientId }         = useParams()
   const navigate             = useNavigate()
-  const { canApprove, canPublish } = useAdminAuth()
+  const { canApprove, canPublish, hasRole } = useAdminAuth()
+  const [mineOnly, setMineOnly] = useState(false)   // CPPM-61
+  const [notice, setNotice]  = useState(null)       // { type, text } from take / release / hand
   const [items, setItems]    = useState([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing]  = useState(null)  // id of item being actioned
@@ -29,8 +32,10 @@ export default function ReviewQueuePage() {
 
   useEffect(() => { load() }, [clientId])
 
-  function load() {
-    setLoading(true)
+  // `quiet` reloads the rows without swapping the page for "Loading…", which would
+  // close a hand-over box that is still open (CPPM-61).
+  function load(quiet) {
+    if (!quiet) setLoading(true)
     fetch(`/api/admin/review-queue/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json())
       .then(d => { setItems(d.items || []); setLoading(false) })
@@ -50,8 +55,8 @@ export default function ReviewQueuePage() {
         body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) { setError(`Failed to update "${item.title}". Please try again.`); return }
+      window.dispatchEvent(new Event('cp:badges-changed'))
       load()
-      window.dispatchEvent(new Event('cp-admin-counts-changed'))
     } catch {
       setError(`Network error updating "${item.title}".`)
     } finally {
@@ -66,13 +71,18 @@ export default function ReviewQueuePage() {
     navigate(path)
   }
 
-  const reviewItems   = items.filter(i => i.status === 'review')
-  const approvedItems = items.filter(i => i.status === 'approved')
+  const mineCount     = items.filter(i => i.owned_by_me).length
+  const shown         = mineOnly ? items.filter(i => i.owned_by_me) : items
+  const reviewItems   = shown.filter(i => i.status === 'review')
+  const approvedItems = shown.filter(i => i.status === 'approved')
 
-  function Section({ title, rows }) {
+  // A plain function, not a component: as a component defined in here it was a new
+  // type on every render, so each reload remounted the rows and closed an open
+  // hand-over box (CPPM-61).
+  function section(title, rows) {
     if (rows.length === 0) return null
     return (
-      <div style={{ marginBottom: 28 }}>
+      <div key={title} style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
           {title} ({rows.length})
         </div>
@@ -85,6 +95,7 @@ export default function ReviewQueuePage() {
                 <th scope="col">Category</th>
                 <th scope="col">Status</th>
                 <th scope="col">Last Updated</th>
+                <th scope="col">Held by</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
@@ -114,7 +125,13 @@ export default function ReviewQueuePage() {
                     <td style={{ fontSize: 12, color: '#6B7280' }}>
                       {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
                     </td>
-                    <td style={{ display: 'flex', gap: 6 }}>
+                    <td style={{ fontSize: 13 }}><OwnerCell item={item} /></td>
+                    <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <OwnerButtons item={item}
+                        base={`/api/admin/review-queue/${clientId}/${item.item_type}/${item.id}`}
+                        staffUrl={`/api/admin/review-queue/${clientId}/staff`}
+                        label={item.title}
+                        onChanged={() => load(true)} onMessage={setNotice} />
                       {canApprove && item.status === 'review' && (
                         <>
                           <button
@@ -176,6 +193,18 @@ export default function ReviewQueuePage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
+        {notice && (
+          <div role="status" className={notice.type === 'error' ? 'cp-error' : 'cp-success'} onClick={() => setNotice(null)} style={{ cursor: 'pointer', marginBottom: 12 }}>
+            {notice.text}
+          </div>
+        )}
+        {!hasRole('viewer') && items.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+              {mineOnly ? 'Show all' : `Show mine${mineCount ? ` (${mineCount})` : ''}`}
+            </button>
+          </div>
+        )}
 
         {!canApprove && !canPublish && (
           <div className="cp-card" style={{ padding: '12px 16px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 16, fontSize: 13, color: '#92400E' }}>
@@ -185,14 +214,14 @@ export default function ReviewQueuePage() {
 
         {loading ? (
           <div className="cp-empty">Loading…</div>
-        ) : items.length === 0 ? (
+        ) : shown.length === 0 ? (
           <div className="cp-empty">
-            <div>Review queue is empty. All content is up to date.</div>
+            <div>{mineOnly && items.length ? 'You are not holding any items in the review queue.' : 'Review queue is empty. All content is up to date.'}</div>
           </div>
         ) : (
           <>
-            <Section title="Awaiting Review" rows={reviewItems} />
-            <Section title="Approved — Awaiting Publish" rows={approvedItems} />
+            {section('Awaiting Review', reviewItems)}
+            {section('Approved — Awaiting Publish', approvedItems)}
           </>
         )}
       </div>

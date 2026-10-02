@@ -13,7 +13,8 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const crypto   = require('crypto');
 const pool     = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, endAllSessions } = require('../../middleware/auth');
+const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../../services/leaverCasesService');
 const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
@@ -30,7 +31,8 @@ const SALT_ROUNDS = 12;
 function orgScopeForUsers(req) {
   if (hasGlobalAdminScope(req.user)) return { sql: '1=1', params: [] };
   return {
-    sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1) AND NOT ${PLATFORM_ADMIN_SQL}`,
+    // MIPM-35: a member switched off by a platform admin stays visible, so their org admin can switch them back on.
+    sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND (uoa_scope.is_active = 1 OR uoa_scope.ended_with_user = 1)) AND NOT ${PLATFORM_ADMIN_SQL}`,
     params: [req.user.orgId ?? null],
   };
 }
@@ -62,7 +64,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
       `SELECT u.id, u.user_id, u.name, u.email, u.role, u.department,
               sg.name AS security_group_name,
               u.is_active, u.is_disabled, u.access_admin_site, u.case_admin,
-              u.password_expires_at, u.created_at, u.updated_at
+              u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
         WHERE ${scope.sql}
@@ -136,7 +138,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          u.access_admin_site, u.case_admin,
          u.network_user_id, u.department,
          u.security_group_id, sg.name AS security_group_name,
-         u.password_expires_at, u.created_at, u.updated_at,
+         u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at,
          (
            SELECT al.user_id FROM audit_logs al
             WHERE al.entity = 'user' AND al.entity_id = u.id
@@ -181,7 +183,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.access_admin_site, u.case_admin,
          u.network_user_id, u.department,
          u.security_group_id, sg.name AS security_group_name,
-         u.password_expires_at, u.created_at, u.updated_at
+         u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
        WHERE u.id = ? AND ${scope.sql}`,
@@ -190,7 +192,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     const [tenants] = await pool.execute(
-      `SELECT org_id FROM user_org_access WHERE user_id = ? AND is_active = 1`,
+      `SELECT org_id FROM user_org_access WHERE user_id = ? AND (is_active = 1 OR ended_with_user = 1)`,
       [user.id]
     );
     user.tenant_ids = tenants.map(t => t.org_id);
@@ -480,16 +482,25 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[existing]] = await pool.execute(
       canTouchPlatformAdmin
-        ? 'SELECT id, role FROM users WHERE id = ?'
-        : 'SELECT id, role FROM users WHERE id = ? AND role != ?',
+        ? 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ?'
+        : 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ? AND role != ?',
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
 
+    // MIPM-35: switching someone back on needs a reason; switching off records why and when.
+    const wasOff = !existing.is_active || !!existing.is_disabled;
+    const willBeOff = (is_active != null ? !is_active : !existing.is_active)
+      || (is_disabled != null ? !!is_disabled : !!existing.is_disabled);
+    const reactivationReason = String(req.body.reactivation_reason || '').trim();
+    if (wasOff && !willBeOff && !reactivationReason) {
+      return res.status(400).json({ error: 'A reason is required to switch this user back on.' });
+    }
+
     // WP1: a tenant admin may only edit users that belong to their own org.
     if (!canTouchPlatformAdmin) {
       const [[inOrg]] = await pool.execute(
-        'SELECT 1 AS ok FROM user_org_access WHERE user_id = ? AND org_id = ? AND is_active = 1 LIMIT 1',
+        'SELECT 1 AS ok FROM user_org_access WHERE user_id = ? AND org_id = ? AND (is_active = 1 OR ended_with_user = 1) LIMIT 1',
         [req.params.id, req.user.orgId ?? null]
       );
       if (!inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
@@ -529,39 +540,79 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       if (dup) return res.status(409).json({ error: 'Email address already in use.' });
     }
 
-    await pool.execute(
-      `UPDATE users SET
-         user_id           = COALESCE(?, user_id),
-         name              = COALESCE(?, name),
-         email             = COALESCE(?, email),
-         initials          = COALESCE(?, initials),
-         role              = COALESCE(?, role),
-         security_group_id = COALESCE(?, security_group_id),
-         network_user_id   = COALESCE(?, network_user_id),
-         department        = COALESCE(?, department),
-         is_active         = COALESCE(?, is_active),
-         is_disabled       = COALESCE(?, is_disabled),
-         is_primary_ref    = COALESCE(?, is_primary_ref),
-         access_admin_site = COALESCE(?, access_admin_site),
-         case_admin        = COALESCE(?, case_admin)
-       WHERE id = ?`,
-      [
-        user_id   ?? null, name     ?? null,
-        email     ? email.trim().toLowerCase() : null,
-        initials  ?? null, role     ?? null,
-        security_group_id ?? null,
-        network_user_id   ?? null,
-        department        ?? null,
-        is_active   != null ? (is_active   ? 1 : 0) : null,
-        is_disabled != null ? (is_disabled ? 1 : 0) : null,
-        is_primary_ref    != null ? (is_primary_ref    ? 1 : 0) : null,
-        access_admin_site != null ? (access_admin_site ? 1 : 0) : null,
-        case_admin        != null ? (case_admin        ? 1 : 0) : null,
-        req.params.id,
-      ]
-    );
+    // MIPM-33: the user update, the switch-off/back-on bookkeeping and moving a leaver's
+    // open cases to the unassigned queue commit together or not at all.
+    const switchedOff = (is_active != null && !is_active) || (is_disabled != null && is_disabled);
+    let statusChange;
+    let movedCases = [];
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        `UPDATE users SET
+           user_id           = COALESCE(?, user_id),
+           name              = COALESCE(?, name),
+           email             = COALESCE(?, email),
+           initials          = COALESCE(?, initials),
+           role              = COALESCE(?, role),
+           security_group_id = COALESCE(?, security_group_id),
+           network_user_id   = COALESCE(?, network_user_id),
+           department        = COALESCE(?, department),
+           is_active         = COALESCE(?, is_active),
+           is_disabled       = COALESCE(?, is_disabled),
+           is_primary_ref    = COALESCE(?, is_primary_ref),
+           access_admin_site = COALESCE(?, access_admin_site),
+           case_admin        = COALESCE(?, case_admin)
+         WHERE id = ?`,
+        [
+          user_id   ?? null, name     ?? null,
+          email     ? email.trim().toLowerCase() : null,
+          initials  ?? null, role     ?? null,
+          security_group_id ?? null,
+          network_user_id   ?? null,
+          department        ?? null,
+          is_active   != null ? (is_active   ? 1 : 0) : null,
+          is_disabled != null ? (is_disabled ? 1 : 0) : null,
+          is_primary_ref    != null ? (is_primary_ref    ? 1 : 0) : null,
+          access_admin_site != null ? (access_admin_site ? 1 : 0) : null,
+          case_admin        != null ? (case_admin        ? 1 : 0) : null,
+          req.params.id,
+        ]
+      );
 
-    await audit(req.user.userId, 'UPDATE_USER', req.params.id, req.body);
+      // MIPM-35: record why and when on the way off; on the way back, clear it and give
+      // back the organisation access the switch-off ended.
+      if (!wasOff && willBeOff) {
+        const offReason = String(req.body.inactive_reason || '').trim().slice(0, 255) || 'Switched off by an administrator';
+        await conn.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?', [offReason, req.params.id]);
+        movedCases = await moveOpenCasesToUnassigned(conn, [req.params.id], req.user.userId);
+        statusChange = { status_change: 'switched_off', reason: offReason, cases_moved_to_unassigned: movedCases.length };
+      } else if (wasOff && !willBeOff) {
+        await conn.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
+        await conn.execute(
+          'UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1',
+          [req.params.id]
+        );
+        statusChange = { status_change: 'switched_back_on', reason: reactivationReason };
+      }
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
+    }
+
+    // MIPM-32: switching someone off ends every session they have, at once.
+    const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
+    // MIPM-33: tell the organisation's case administrators, after the move is committed.
+    if (movedCases.length) {
+      await notifyCaseAdmins(movedCases).catch((err) => console.error('[MIPM-33] notifying case administrators failed:', err.message));
+    }
+
+    await audit(req.user.userId, 'UPDATE_USER', req.params.id, {
+      ...req.body, ...(switchedOff ? { sessions_ended: sessionsEnded } : {}), ...(statusChange || {}),
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /users/:id error:', err);
@@ -663,16 +714,17 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
     await conn.beginTransaction();
 
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
+    const scope = orgScopeForUsers(req);
     const [[user]] = await conn.execute(
-      canTouchPlatformAdmin
-        ? 'SELECT id, security_group_id FROM users WHERE id = ? LIMIT 1'
-        : 'SELECT id, security_group_id FROM users WHERE id = ? AND role != ? LIMIT 1',
-      canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
+      `SELECT u.id, u.security_group_id, u.is_active, u.is_disabled FROM users u WHERE u.id = ? AND ${scope.sql} LIMIT 1`,
+      [req.params.id, ...scope.params]
     );
     if (!user) {
       await conn.rollback();
       return res.status(404).json({ error: 'User not found.' });
     }
+    // MIPM-35: while someone is switched off, the organisations chosen here are the ones they get back.
+    const switchedOff = !user.is_active || !!user.is_disabled;
     if (!user.security_group_id) {
       await conn.rollback();
       return res.status(400).json({ error: 'User must have a Security Group assigned before tenant assignment.' });
@@ -704,16 +756,17 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
 
     // Deactivate all existing
     await conn.execute(
-      'UPDATE user_org_access SET is_active = 0 WHERE user_id = ?', [req.params.id]
+      'UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ?', [req.params.id]
     );
 
     // Re-activate / insert selected
     for (const orgId of tenant_ids) {
       await conn.execute(
-        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active)
-         VALUES (?, ?, ?, 1)
-         ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1`,
-        [req.params.id, orgId, roleAtOrg]
+        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, ended_with_user)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = VALUES(is_active),
+           ended_with_user = VALUES(ended_with_user)`,
+        [req.params.id, orgId, roleAtOrg, switchedOff ? 0 : 1, switchedOff ? 1 : 0]
       );
     }
 

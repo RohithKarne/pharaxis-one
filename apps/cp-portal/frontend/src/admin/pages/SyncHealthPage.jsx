@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 // FIX-2: the Sync Health dashboard — live view over the O2 sync-health API.
@@ -15,7 +16,7 @@ const STATUS_TILES = [
 
 export default function SyncHealthPage() {
   const { clientId } = useParams()
-  const { admin } = useAdminAuth()
+  const { canChange } = useAdminAuth()
   const [counts, setCounts]     = useState({})
   const [failures, setFailures] = useState([])
   const [files, setFiles]       = useState([])
@@ -136,9 +137,11 @@ export default function SyncHealthPage() {
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
                           🔍 Inspect
                         </button>
+                        <CanChange area="submissions">
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
                           {retrying === f.id ? 'Retrying…' : '↻ Retry'}
                         </button>
+                        </CanChange>
                       </div>
                       {retryResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: retryResult[f.id].status === 'synced' ? '#16a34a' : '#dc2626' }}>
@@ -172,7 +175,7 @@ export default function SyncHealthPage() {
                     <td style={{ maxWidth: 260 }}>{f.forward_error || '—'}</td>
                     <td>{f.last_forward_at ? new Date(f.last_forward_at).toLocaleString() : '—'}</td>
                     <td>
-                      {admin?.role !== 'viewer' && (
+                      {canChange('submissions') && (
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFile(f.id)} disabled={retrying === `file-${f.id}`}>
                           {retrying === `file-${f.id}` ? 'Sending…' : '↻ Send again'}
                         </button>
@@ -210,7 +213,7 @@ export default function SyncHealthPage() {
                       <td style={{ maxWidth: 260 }}>{f.forward_error || '—'}</td>
                       <td>{f.last_forward_at ? new Date(f.last_forward_at).toLocaleString() : '—'}</td>
                       <td>
-                        {admin?.role !== 'viewer' && (
+                        {canChange('submissions') && (
                           <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFollowUp(f.id)} disabled={retrying === `fu-${f.id}`}>
                             {retrying === `fu-${f.id}` ? 'Sending…' : '↻ Send again'}
                           </button>

@@ -9,14 +9,10 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 // All sections available per case type — the master list
@@ -130,7 +126,7 @@ router.post('/case-form-definition', authenticate, requireRole('admin', 'platfor
       conn.release();
     }
 
-    await audit(req.user.id, req.user.name, 'SAVE', 'case_form_definition', null, { case_type, org_id, sectionCount: sections.length });
+    await audit(req.user.userId, req.user.name || req.user.email, 'SAVE', 'case_form_definition', null, { case_type, org_id, sectionCount: sections.length });
     res.json({ ok: true, saved: sections.length });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -24,6 +24,7 @@
  * success without testing anything is worse than one that fails.
  */
 const nodemailer = require('nodemailer');
+const { smtpWithRequiredTls } = require('./mailSecurity');
 
 const OFF_MESSAGE =
   'Alert email is disabled (MIMS_ALERT_EMAIL is not on). No mail was sent.';
@@ -52,7 +53,8 @@ function blockedTransport() {
 
 function createTransport(kind, options) {
   const isOperational = kind === 'operational';
-  if (isOperational || alertEmailEnabled()) return nodemailer.createTransport(options);
+  // MIPM-63: every sender comes through here, so this is where "never in the clear" is held.
+  if (isOperational || alertEmailEnabled()) return nodemailer.createTransport(smtpWithRequiredTls(options));
   return blockedTransport();
 }
 

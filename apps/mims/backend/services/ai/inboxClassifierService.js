@@ -2,6 +2,7 @@
 
 const pool = require('../../database/db');
 const { classifyText } = require('./classifier');
+const { logAudit } = require('../../utils/auditLog');
 
 async function classifyInquiry(inquiryId, userId = null) {
   const [[row]] = await pool.execute('SELECT id, org_id, sender, subject, body FROM inquiries WHERE id = ? LIMIT 1', [inquiryId]);
@@ -15,13 +16,10 @@ async function classifyInquiry(inquiryId, userId = null) {
   );
   await pool.execute(
     `INSERT INTO ai_suggestions (case_id, suggestion_type, prompt_hash, suggestion_payload, model, tokens_in, tokens_out, latency_ms)
-     VALUES (0, 'classification', SHA2(?, 256), ?, 'deterministic-local', ?, ?, 0)`,
+     VALUES (0, 'classification', SHA2(?, 256), ?, 'rules-based', ?, ?, 0)`, /* MIPM-27: keyword rules, not a model */
     [JSON.stringify(suggestion), JSON.stringify({ inquiry_id: inquiryId, ...suggestion }), Math.ceil(JSON.stringify(row).length / 4), Math.ceil(JSON.stringify(suggestion).length / 4)]
   ).catch(() => {});
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, 'AI Assistant', 'CLASSIFY', 'inquiry', ?, ?)`,
-    [userId, inquiryId, JSON.stringify(suggestion)]
-  ).catch(() => {});
+  await logAudit(userId, 'Keyword classifier', 'CLASSIFY', 'inquiry', inquiryId, suggestion);
   return suggestion;
 }
 

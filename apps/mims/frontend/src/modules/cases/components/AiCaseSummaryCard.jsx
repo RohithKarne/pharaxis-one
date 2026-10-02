@@ -1,7 +1,10 @@
+// PARKED (MIPM-28, 2 Oct 2026): not shown anywhere in MIMS — it was taken off the case
+// screen in the 29 Jul 2026 release (the AI pieces because the AI suite gave canned output).
+// Whether to bring it back or delete it is Rohith's decision; until then it stays unmounted.
 import { useState, useEffect, useMemo } from 'react'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
-export default function AiCaseSummaryCard({ caseId, caseData, headers }) {
+export default function AiCaseSummaryCard({ caseId, headers }) {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dismissed, setDismissed] = useState(false)
@@ -16,17 +19,17 @@ export default function AiCaseSummaryCard({ caseId, caseData, headers }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await httpFetch(`/api/cases/${caseId}/ai/summarize`, { headers: requestHeaders })
-      if (!res.ok) throw new Error('API error')
-      const data = await res.json()
-      setSummary(data)
+      // MIPM-28: the route is POST; a GET always failed and fell through to the text below.
+      const res = await httpFetch(`/api/cases/${caseId}/ai/summarize`, { method: 'POST', headers: requestHeaders })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No AI summary is available for this case.')
+      setSummary(data.suggestion || data)
     } catch (err) {
-      // Fallback deterministic summarizer
-      setSummary({
-        narrative: `This is an AI-generated summary fallback for Case #${caseId}. It highlights key case details automatically extracted from the unstructured text. The patient experienced unexpected effects after taking the suspect drug, and follow-up is recommended.`,
-        riskFlags: String(caseData?.priority || '').toLowerCase() === 'high' ? ['High Priority', 'SLA Approaching'] : ['Standard SLA'],
-        keyFacts: [caseData?.case_type || 'Spontaneous', 'Healthcare Professional', 'Suspect Drug A']
-      })
+      // MIPM-28: never show text that did not come from the case. This used to invent a
+      // clinical narrative ("the patient experienced unexpected effects after taking the
+      // suspect drug…") and call it an AI summary.
+      setSummary(null)
+      setError(err.message || 'No AI summary is available for this case.')
     } finally {
       setLoading(false)
     }
@@ -63,6 +66,7 @@ export default function AiCaseSummaryCard({ caseId, caseData, headers }) {
         </div>
       ) : (
         <div className="cf-ai-summary-content">
+          {error && <p className="cf-ai-summary-narrative" role="status">{error}</p>}
           <p className="cf-ai-summary-narrative">{summary?.narrative}</p>
           <div className="cf-ai-summary-tags">
             {summary?.riskFlags?.length > 0 && (

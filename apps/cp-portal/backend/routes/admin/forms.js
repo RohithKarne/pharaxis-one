@@ -74,7 +74,8 @@ router.patch('/:clientId/:fieldId', authenticateAdmin, async (req, res) => {
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(req.params.fieldId, req.params.clientId);
-    await pool.execute(`UPDATE cp_form_config SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`, params);
+    const [result] = await pool.execute(`UPDATE cp_form_config SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Field not found.' });
     res.json({ message: 'Field updated.' });
   } catch (err) {
     log.error('admin.forms.error', { err, route: 'PATCH /:clientId/:fieldId', path: req.path, request_id: req.requestId || null });
@@ -85,7 +86,8 @@ router.patch('/:clientId/:fieldId', authenticateAdmin, async (req, res) => {
 // DELETE /api/admin/forms/:clientId/:fieldId
 router.delete('/:clientId/:fieldId', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute('UPDATE cp_form_config SET is_active = 0 WHERE id = ? AND client_id = ?', [req.params.fieldId, req.params.clientId]);
+    const [result] = await pool.execute('UPDATE cp_form_config SET is_active = 0 WHERE id = ? AND client_id = ?', [req.params.fieldId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Field not found.' });
     res.json({ message: 'Field deactivated.' });
   } catch (err) {
     log.error('admin.forms.error', { err, route: 'DELETE /:clientId/:fieldId', path: req.path, request_id: req.requestId || null });

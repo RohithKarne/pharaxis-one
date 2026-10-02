@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const input = { width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }
@@ -192,6 +193,7 @@ export default function TrainingAdminPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
+        <ReadOnlyUnless area="training" what="the training modules">
         <form onSubmit={handleSave} className="cp-card" style={card}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{editingId ? 'Edit Training Module' : 'Create Training Module'}</h3>
           <div style={{ marginBottom: 12 }}>
@@ -239,6 +241,7 @@ export default function TrainingAdminPage() {
             </button>
           )}
         </form>
+        </ReadOnlyUnless>
 
         <div className="cp-card" style={card}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Training Modules ({modules.length})</h3>
@@ -266,9 +269,13 @@ export default function TrainingAdminPage() {
                     <td style={{ padding: 8 }}>{m.pass_score}%</td>
                     <td style={{ padding: 8 }}>{m.pass_count} / {m.attempt_count}</td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                      <CanChange area="training">
                       <button onClick={() => startEdit(m)} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                      </CanChange>
                       <button onClick={() => openQuestions(m)} style={{ ...link, color: '#6B3FA0' }}>Questions</button>
+                      <CanChange area="training">
                       <button onClick={() => handleDelete(m)} style={{ ...link, color: '#DC2626' }}>Delete</button>
+                      </CanChange>
                     </td>
                   </tr>
                 ))}
@@ -293,13 +300,18 @@ export default function TrainingAdminPage() {
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0' }}>
                     {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{i === q.correct_index ? '✓' : '○'} {o}</li>)}
                   </ul>
+                  <CanChange area="training">
                   <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                  </CanChange>
+                  <CanChange area="training">
                   <button onClick={() => deleteQuestion(q)} style={{ ...link, color: '#DC2626' }}>Remove</button>
+                  </CanChange>
                 </li>
               ))}
             </ol>
           )}
 
+          <CanChange area="training">
           <form onSubmit={saveQuestion} style={{ borderTop: '1px solid #E2E8F0', paddingTop: 14, maxWidth: 640 }}>
             <label style={label}>{qEditingId ? 'Edit question' : 'New question'}</label>
             <textarea required value={qForm.question} onChange={e => setQForm(f => ({ ...f, question: e.target.value }))} rows={2} style={{ ...input, marginBottom: 10 }} />
@@ -320,6 +332,7 @@ export default function TrainingAdminPage() {
               {qEditingId && <button type="button" onClick={() => { setQEditingId(null); setQForm(EMPTY_Q) }} className="cp-btn cp-btn-outline" style={{ marginLeft: 8 }}>Cancel</button>}
             </div>
           </form>
+          </CanChange>
         </div>
       )}
 

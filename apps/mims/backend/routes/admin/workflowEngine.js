@@ -7,6 +7,7 @@ const { validateDefinition } = require('../../services/workflow/definitionValida
 const { traceGraph } = require('../../services/workflow/executionEngine');
 const { fireWorkflowEvent } = require('../../services/workflow/eventHookService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const guard = [authenticate, requireRole('admin', 'platform_admin')];
@@ -16,10 +17,7 @@ function scope(req, alias = 'wd') {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user.userId, req.user.email, action, entity, entityId || null, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user.userId, req.user.email, action, entity, entityId || null, details || {});
 }
 
 router.get('/workflow-definitions', ...guard, async (req, res) => {
@@ -35,7 +33,7 @@ router.post('/workflow-definitions', ...guard, async (req, res) => {
     const graph = req.body.graph_json || { nodes: [], edges: [] };
     const validation = validateDefinition(graph);
     if (!validation.valid) return res.status(422).json(validation);
-    const orgId = req.body.org_id || req.user.orgId;
+    const orgId = hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId; // MIPM-5
     // workflow_definitions has no updated_by column — every write here failed on
     // it (T16). Who changed a definition is recorded by audit() below.
     const [result] = await pool.execute(
@@ -126,7 +124,7 @@ router.get('/workflow-instances/:id/timeline', ...guard, async (req, res) => {
 router.post('/workflow-events/fire', ...guard, async (req, res) => {
   try {
     const instances = await fireWorkflowEvent({
-      orgId: req.body.org_id || req.user.orgId,
+      orgId: hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId, // MIPM-5
       eventName: req.body.event_name,
       entityType: req.body.entity_type || 'case',
       entityId: req.body.entity_id,

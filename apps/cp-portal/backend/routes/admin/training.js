@@ -182,10 +182,11 @@ router.delete('/:clientId/:moduleId', authenticateAdmin, requireClientAccess, as
     if (used.n > 0) {
       return res.status(409).json({ error: 'This module has completion records, so it cannot be deleted. Set it to Retired instead.' });
     }
-    await pool.execute(
+    const [result] = await pool.execute(
       'DELETE FROM cp_training_modules WHERE id = ? AND client_id = ?',
       [req.params.moduleId, req.params.clientId]
     );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'training_module', Number(req.params.moduleId), {});
     res.json({ message: 'Training module deleted.' });
   } catch (err) {

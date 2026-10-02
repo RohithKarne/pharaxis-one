@@ -14,6 +14,11 @@ export function PortalProvider({ children }) {
   const [error, setError]               = useState(null)
   const portalConfigRef                 = useRef(null)
   const [user, setUser]                 = useState(null)
+  // CPPM-59: true until the portal knows whether this person is signed in. `user`
+  // is null both for "not signed in" and for "not checked yet"; pages that redirect
+  // a signed-out visitor must wait for this, or a signed-in reader who refreshes is
+  // sent to the sign-in page and from there to Home.
+  const [authLoading, setAuthLoading]   = useState(true)
   const [showGate, setShowGate]         = useState(false)
   // English-only for now (2026-07-03) — language switching disabled; always 'en'.
   const [language, setLanguageState]    = useState('en')
@@ -191,10 +196,11 @@ export function PortalProvider({ children }) {
       .catch(() => {
         // network error — leave user as null, do not logout
       })
+      .finally(() => setAuthLoading(false))
   }, [clientCode])
 
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, signOut, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig, language, setLanguage, t }}>
+    <PortalContext.Provider value={{ portalConfig, loading, authLoading, error, user, login, logout, signOut, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig, language, setLanguage, t }}>
       {children}
     </PortalContext.Provider>
   )

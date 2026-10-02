@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { toLocalInput, fromLocalInput, formatDateTime } from '../../shared/utils/datetime'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -88,7 +89,7 @@ export default function NewsPage() {
       title:        post.title || '',
       body_html:    post.body_html || '',
       category:     post.category || '',
-      publish_at:   post.publish_at ? post.publish_at.slice(0, 16) : '',
+      publish_at:   toLocalInput(post.publish_at),
       target_types: post.target_types_json ? (Array.isArray(post.target_types_json) ? post.target_types_json : JSON.parse(post.target_types_json)) : [],
       status:       post.status || 'draft',
       is_pinned:    !!post.is_pinned,
@@ -120,7 +121,12 @@ export default function NewsPage() {
       const res = await fetch(url, {
         method,
         headers: adminHeaders(),
-        body: JSON.stringify(form),
+        // CPPM-58: send the moment the admin meant. On an edit where the time was not
+        // touched, leave it out so the stored time is not rounded to the minute.
+        body: JSON.stringify({
+          ...form,
+          publish_at: editPost && form.publish_at === toLocalInput(editPost.publish_at) ? undefined : fromLocalInput(form.publish_at),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
@@ -303,12 +309,13 @@ export default function NewsPage() {
                   <td>{p.category || '—'}</td>
                   <td>
                     <span className="cp-status-badge" style={statusBadgeStyle(p.status)}>
-                      {statusLabel(p.status)}
+                      {/* CPPM-58: published with a later date is not on the portal yet. */}
+                      {p.status === 'published' && p.publish_at && new Date(p.publish_at) > new Date() ? 'Published — not live yet' : statusLabel(p.status)}
                     </span>
                   </td>
                   <td>{p.is_pinned ? 'Pinned' : 'Not pinned'}</td>
                   <td>{targetSummary(p)}</td>
-                  <td>{p.publish_at ? p.publish_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+                  <td>{formatDateTime(p.publish_at)}</td>
                   <td>{p.view_count || 0}</td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(p)}>Edit</button>}

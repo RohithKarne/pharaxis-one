@@ -7,6 +7,9 @@ import Icon from '../../shared/components/Icon'
 const NAV_ITEMS = [
   { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true },
   { to: '/admin/clients',          label: 'Clients',         icon: 'building' },
+  // CPPM-62: records that belong to no client (platform-admin sign-ins, failed
+  // sign-ins for unknown emails). Shown to the platform admin only.
+  { to: '/admin/audit',            label: 'Platform Audit Trail', icon: 'clipboard', exact: true, superadminOnly: true },
 ]
 
 // ── #1 Grouped + collapsible client nav ───────────────────────────────────
@@ -103,6 +106,7 @@ const SEGMENT_TITLES = {
 function deriveTitle(pathname) {
   if (pathname === '/admin' || pathname === '/admin/') return 'Dashboard'
   if (/^\/admin\/clients\/[^/]+\/?$/.test(pathname)) return 'Overview'
+  if (pathname === '/admin/audit' || pathname === '/admin/audit/') return 'Platform Audit Trail' // CPPM-62
   const lastSegment = pathname.split('/').filter(Boolean).pop() || ''
   return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
@@ -129,27 +133,29 @@ export default function AdminLayout({ children }) {
   // Sidebar badge counts, keyed by the `badge` name on each nav item.
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
-  const [badges, setBadges] = useState({ review: 0, safety: 0 })
-  // A page that closes or approves items says so ('cp-admin-counts-changed'), so the
-  // counts refresh straight away rather than on the next page change — the Safety Queue
-  // count used to stay at its old number after a task was closed.
-  const [countsTick, setCountsTick] = useState(0)
+  //   safetyMine — CPPM-6: how many of those the signed-in person holds
+  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0 })
+  // CPPM-6: a page says when it changed a count (a task taken, handed over or
+  // closed), so the sidebar does not wait for the next page change to catch up.
+  const [badgeTick, setBadgeTick] = useState(0)
   useEffect(() => {
-    const bump = () => setCountsTick(t => t + 1)
-    window.addEventListener('cp-admin-counts-changed', bump)
-    return () => window.removeEventListener('cp-admin-counts-changed', bump)
+    const refresh = () => setBadgeTick(t => t + 1)
+    window.addEventListener('cp:badges-changed', refresh)
+    return () => window.removeEventListener('cp:badges-changed', refresh)
   }, [])
   useEffect(() => {
     if (!clientId) return
     const get = (url) => fetch(url, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => (d?.count != null ? d.count : 0))
-      .catch(() => 0)
+      .catch(() => null)
     Promise.all([
       get(`/api/admin/review-queue/${clientId}/count`),
       get(`/api/admin/ae-review/${clientId}/count`),
-    ]).then(([review, safety]) => setBadges({ review, safety }))
-  }, [clientId, location.pathname, countsTick])
+    ]).then(([review, safety]) => setBadges({
+      review: review?.count || 0, safety: safety?.count || 0, safetyMine: safety?.mine || 0,
+      reviewMine: review?.mine || 0, // CPPM-61
+    }))
+  }, [clientId, location.pathname, badgeTick])
 
   // Client logo — fetch branding when a client is selected
   const [clientLogo, setClientLogo] = useState(null)
@@ -210,7 +216,7 @@ export default function AdminLayout({ children }) {
 
         <nav className="cp-sidebar-nav">
           <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.filter(item => !item.superadminOnly || admin?.role === 'superadmin').map(item => (
             <NavLink
               key={item.to} to={item.to} end={item.exact}
               title={item.label}
@@ -280,7 +286,11 @@ export default function AdminLayout({ children }) {
                               marginLeft: 'auto', background: '#DC2626', color: '#fff',
                               borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700,
                             }}>
-                              {badges[item.badge]}
+                              {item.badge === 'safety' && badges.safetyMine > 0 && !sidebarCompact
+                                ? `${badges.safetyMine} yours · ${badges.safety} open`
+                                : item.badge === 'review' && badges.reviewMine > 0 && !sidebarCompact
+                                  ? `${badges.reviewMine} yours · ${badges.review} to review`
+                                  : badges[item.badge]}
                             </span>
                           )}
                         </NavLink>
@@ -295,7 +305,7 @@ export default function AdminLayout({ children }) {
 
         <div className="cp-sidebar-footer">
           <div className="cp-admin-name">{admin?.name}</div>
-          <div className="cp-admin-role">{admin?.role}</div>
+          <div className="cp-admin-role">{String(admin?.role || '').replace(/_/g, ' ')}</div>
           <button className="cp-logout-btn" onClick={handleLogout}>Sign Out</button>
         </div>
       </aside>
@@ -333,6 +343,13 @@ export default function AdminLayout({ children }) {
           {scanner?.up && location.pathname === '/admin' && listDate && scanner.listAgeDays < 2 && (
             <div style={{ marginBottom: 12, fontSize: 12, color: '#6B7280' }}>
               Virus scanner running · virus list updated {listDate}
+            </div>
+          )}
+          {/* CPPM-60: one notice for every screen. A viewer can open everything; the
+              server refuses every change, and this says so before they try. */}
+          {admin?.role === 'viewer' && (
+            <div role="note" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
+              Your role is view-only. You can look at everything here, but changes will not be saved. Ask an admin if you need to make changes.
             </div>
           )}
           {children}

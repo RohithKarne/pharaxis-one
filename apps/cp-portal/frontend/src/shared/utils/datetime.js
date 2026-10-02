@@ -55,6 +55,24 @@ export function formatDateTime(value) {
   }).format(d)
 }
 
+/**
+ * For <input type="datetime-local"> (CPPM-58). That box holds the admin's own
+ * wall-clock time with no timezone; the API holds a UTC instant. These two convert
+ * between them, so the time typed is the time meant, and the time shown back is
+ * the time typed.
+ */
+export function toLocalInput(value) {
+  const d = toDate(value)
+  if (!d) return ''
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+export function fromLocalInput(value) {
+  const d = toDate(value)
+  return d ? d.toISOString() : ''
+}
+
 /** The viewer's detected IANA timezone, e.g. "America/Toronto". */
 export function currentTimeZone() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }

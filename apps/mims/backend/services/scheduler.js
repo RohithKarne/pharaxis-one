@@ -77,6 +77,10 @@ const HANDLERS = {
     const { runCmExpiryAlerts } = require('./cmExpiryAlertService')
     await runCmExpiryAlerts()
   },
+  'cm-pre-expiry-reminders': async () => {
+    const { runCmPreExpiryReminders } = require('./cmExpiryAlertService')
+    await runCmPreExpiryReminders()
+  },
   'cm-module-lifecycle': async () => {
     const { runCmModuleLifecycle } = require('./cmModuleLifecycleService')
     await runCmModuleLifecycle()

@@ -73,7 +73,8 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(req.params.integrationId, req.params.clientId);
-    await pool.execute(`UPDATE cp_integration_config SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
+    const [result] = await pool.execute(`UPDATE cp_integration_config SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Integration not found.' });
     // CPPM-10: which fields changed, never what they changed to.
     await audit(req.admin, req.params.clientId, 'UPDATE', 'integration', Number(req.params.integrationId),
       { fields: updates.map(u => u.split(' ')[0]).filter(f => f !== 'updated_at') });
@@ -87,7 +88,8 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
 // DELETE /api/admin/integration/:clientId/:integrationId
 router.delete('/:clientId/:integrationId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('UPDATE cp_integration_config SET is_active=0 WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
+    const [result] = await pool.execute('UPDATE cp_integration_config SET is_active=0 WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Integration not found.' });
     await audit(req.admin, req.params.clientId, 'DISABLE', 'integration', Number(req.params.integrationId), {});
     res.json({ message: 'Integration deactivated.' });
   } catch (err) {
@@ -174,7 +176,8 @@ router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, async 
 // DELETE /api/admin/integration/:clientId/mapping/:mappingId
 router.delete('/:clientId/mapping/:mappingId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM cp_field_mapping WHERE id=? AND client_id=?', [req.params.mappingId, req.params.clientId]);
+    const [result] = await pool.execute('DELETE FROM cp_field_mapping WHERE id=? AND client_id=?', [req.params.mappingId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Mapping not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'field_mapping', Number(req.params.mappingId), {});
     res.json({ message: 'Mapping removed.' });
   } catch (err) {

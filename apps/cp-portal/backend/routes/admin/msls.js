@@ -58,7 +58,8 @@ router.patch('/:clientId/:id', authenticateAdmin, async (req, res) => {
     }
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
-    await pool.execute(`UPDATE cp_msls SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    const [result] = await pool.execute(`UPDATE cp_msls SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'MSL not found.' });
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl', req.params.id, {});
     res.json({ message: 'MSL updated.' });
   } catch (err) {
@@ -69,7 +70,8 @@ router.patch('/:clientId/:id', authenticateAdmin, async (req, res) => {
 
 router.delete('/:clientId/:id', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute(`UPDATE cp_msls SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    const [result] = await pool.execute(`UPDATE cp_msls SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'MSL not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl', req.params.id, {});
     res.json({ message: 'MSL deactivated.' });
   } catch (err) {
@@ -120,7 +122,8 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
     if (fields.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.bookingId, req.params.clientId);
-    await pool.execute(`UPDATE cp_msl_bookings SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    const [result] = await pool.execute(`UPDATE cp_msl_bookings SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Booking not found.' });
     // CPPM-26: a cancelled meeting gives its time back.
     if (status === 'cancelled') await releaseSlot(req.params.clientId, req.params.bookingId);
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl_booking', req.params.bookingId, { status });
@@ -135,6 +138,8 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
 router.delete('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
     if (!/^\d+$/.test(req.params.bookingId)) return res.status(404).json({ error: 'Booking not found.' });
+    const [[booking]] = await pool.execute('SELECT id FROM cp_msl_bookings WHERE id = ? AND client_id = ?', [req.params.bookingId, req.params.clientId]);
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     await releaseSlot(req.params.clientId, req.params.bookingId);
     await pool.execute('DELETE FROM cp_msl_bookings WHERE id = ? AND client_id = ?', [req.params.bookingId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl_booking', req.params.bookingId, {});

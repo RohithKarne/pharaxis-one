@@ -25,6 +25,11 @@ export default function AiConfig() {
     <div className="ma-ai-config">
       <h1>AI Configuration</h1>
       <p>Configure provider, model, budget, and PHI boundary. External providers stay disabled unless PHI export is explicitly allowed.</p>
+      {/* MIPM-27: say what the provider is actually used for. */}
+      <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+        Only the case summary uses this provider. Case classification, field extraction, response drafting, quality checks and the
+        Inbox case-type hint are fixed rules (keywords and templates), are labelled as such, and do not use it.
+      </p>
       <form onSubmit={save} className="ma-ai-card">
         <label>Provider<select value={form.provider_key} onChange={e => setForm(f => ({ ...f, provider_key: e.target.value }))}><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="azure_openai">Azure OpenAI</option><option value="on_prem">On-prem</option></select></label>
         <label>Model<input value={form.model_name} onChange={e => setForm(f => ({ ...f, model_name: e.target.value }))} /></label>

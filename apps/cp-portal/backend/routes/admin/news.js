@@ -105,7 +105,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     ]);
 
     await audit(req.admin, req.params.clientId, 'CREATE', 'news', result.insertId, { title });
-    if ((status || 'draft') === 'published') notifyPortalUsers(req.params.clientId, 'news', title, result.insertId);
+    // CPPM-58: the portal shows a published post from its publish time, so that is
+    // when readers are told. One published ahead is announced by the scheduler.
+    if ((status || 'draft') === 'published' && publishAtIso <= toMySQL(new Date())) notifyPortalUsers(req.params.clientId, 'news', title, result.insertId);
     autoTranslate(req.params.clientId, 'cp_news_posts', result.insertId, { title, body_html: sanitiseHtml(body_html) }).catch(() => {});
 
     const [[post]] = await pool.execute('SELECT * FROM cp_news_posts WHERE id = ?', [result.insertId]);
@@ -164,10 +166,12 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
       }
     }
     // S4-8: validate status transition + role permission
+    let entersReview = false; // CPPM-61
     if (status !== undefined) {
       const [[current]] = await pool.execute('SELECT status FROM cp_news_posts WHERE id = ? AND client_id = ?', [req.params.postId, req.params.clientId]);
       if (!current) return res.status(404).json({ error: 'Post not found.' });
       if (current.status !== status) {
+        entersReview = status === 'review';
         const allowed = ALLOWED_TRANSITIONS[current.status] || [];
         if (!allowed.includes(status)) {
           return res.status(400).json({ error: `Invalid transition: ${current.status} → ${status}.` });
@@ -190,6 +194,9 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
     }
     if (target_types !== undefined) { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
     if (status !== undefined)       { fields.push('status = ?');             values.push(status); }
+    // CPPM-61: an item coming (back) into the review queue arrives with no holder —
+    // whoever held it on an earlier pass is not assumed to be on it now.
+    if (entersReview)               { fields.push('owner_id = NULL', 'owner_since = NULL'); }
     if (publishAtIso !== undefined) { fields.push('publish_at = ?');         values.push(publishAtIso); }
 
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
@@ -198,12 +205,14 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
 
     const ROW = 'SELECT * FROM cp_news_posts WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'Post not found.' });
     await pool.execute(`UPDATE cp_news_posts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
     // CPPM-43: what changed, from → to, with the body in full.
     await audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { changes: changesBetween(before, after,
       ['title', 'body_html', 'category', 'is_pinned', 'thumbnail_path', 'target_types_json', 'status', 'publish_at']) });
-    if (status === 'published' && title) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
+    // CPPM-58: not before the post can be seen (see the create route).
+    if (status === 'published' && title && new Date(after.publish_at) <= new Date()) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
     // Re-translate whenever title or body changes
     const transFields = {};
     if (title !== undefined)     transFields.title     = title;
@@ -222,8 +231,9 @@ router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, asyn
     if (!PUBLISH_ROLES.includes(req.admin.role)) {
       return res.status(403).json({ error: 'Only admins can archive posts.' });
     }
-    await pool.execute("UPDATE cp_news_posts SET status = 'archived', updated_at = NOW() WHERE id = ? AND client_id = ?",
+    const [result] = await pool.execute("UPDATE cp_news_posts SET status = 'archived', updated_at = NOW() WHERE id = ? AND client_id = ?",
       [req.params.postId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Post not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'news', req.params.postId, {});
     res.json({ ok: true });
   } catch (err) {

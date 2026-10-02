@@ -6,6 +6,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { evaluateRule } = require('../../../shared/services/ruleEvaluator');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const ROLE = ['admin', 'platform_admin'];
 const CASE_TYPES = new Set(['AE', 'MI', 'PC', 'ALL']);
@@ -32,13 +33,7 @@ function scopedOrgId(req, input) {
 }
 
 async function audit(userId, action, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'case_form_rule', ?, ?, ?)`,
-      [userId, entityId || null, action, JSON.stringify(details || {})]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'case_form_rule', entityId || null, details || {});
 }
 
 function validatePayload(req, isUpdate = false) {

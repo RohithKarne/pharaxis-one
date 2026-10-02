@@ -3,6 +3,7 @@
 const pool = require('../database/db');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { findSodConflicts } = require('./sodEvaluator');
+const { logAudit } = require('../utils/auditLog');
 const {
   getOrgSsoPolicy,
   normalizeLoginMode,
@@ -100,23 +101,7 @@ function normalizeOrgId(req, providedOrgId = null) {
 }
 
 async function auditAccessChange({ userId, userName, action, entity, entityId, details, before = null, after = null, reason = null }) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details, before_value, after_value, change_reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        userId || null,
-        userName || null,
-        action,
-        entity,
-        entityId || null,
-        toJson(details || {}, {}),
-        before ? toJson(before, {}) : null,
-        after ? toJson(after, {}) : null,
-        reason || null,
-      ]
-    );
-  } catch (_) {}
+  await logAudit(userId || null, userName || null, action, entity, entityId || null, details || {}, before, after, reason || null);
 }
 
 async function getPrivilegeCatalog(orgId = null) {

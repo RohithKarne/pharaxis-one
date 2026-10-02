@@ -24,6 +24,7 @@ const { assess: assessCaseValidity } = require('../../services/caseValidityServi
 const { redact: redactPii } = require('../../services/piiRedactionService');
 const { createFollowup, createAmendment, createNullification } = require('../../services/icsrLifecycleService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const adminOnly = [authenticate, requireRole('admin', 'platform_admin')];
@@ -33,11 +34,7 @@ function orgScope(req, alias = 'r') {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, details || {});
 }
 
 async function verifyElectronicSignature(req, action, entityId) {
@@ -386,7 +383,13 @@ router.post('/icsr/:id/ack/:level', ...adminOnly, async (req, res) => {
 
 router.post('/pv/periodic-reports/generate', ...adminOnly, async (req, res) => {
   try {
-    const orgId = req.body.org_id || req.user.orgId;
+    // MIPM-5: only a platform admin may name another organisation.
+    const orgId = hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId;
+    // A missing period reached the database as "undefined" and failed with a 500.
+    const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    if (!req.body.product_name || !isDate(req.body.from) || !isDate(req.body.to)) {
+      return res.status(400).json({ error: 'product_name, from and to (YYYY-MM-DD) are required.' });
+    }
     const result = await generatePeriodicReport({
       orgId,
       productName: req.body.product_name,
@@ -414,7 +417,7 @@ router.get('/pv/periodic-reports', ...adminOnly, async (req, res) => {
 // safety-signal detection is worth recording even when it does nothing.
 router.post('/pv/signals/run', ...adminOnly, async (req, res) => {
   try {
-    const result = await runSignalDetection(req.body.org_id || req.user.orgId);
+    const result = await runSignalDetection(hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId); // MIPM-5
     await audit(req, 'RUN', 'pv_signal_detection', null, {
       created: result.created.length,
       enabled: result.enabled,
