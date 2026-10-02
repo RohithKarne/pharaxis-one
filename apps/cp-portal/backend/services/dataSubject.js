@@ -114,6 +114,12 @@ async function rewriteColumn(conn, table, column, rows, fn) {
   return changed;
 }
 
+// CPPM-70: a person's requests are the ones sent while signed in, and the ones sent
+// while signed out from the address their account has verified — the same person.
+// An unverified account claims nothing by address.
+const OWN_SUBMISSIONS = '(user_id = ? OR (user_id IS NULL AND ? = 1 AND LOWER(submitter_email) = LOWER(?)))';
+const ownParams = (userId, person) => [userId, person?.email_verified ? 1 : 0, person?.email || ''];
+
 /** GDPR Art. 15 — everything we hold about this user, as structured JSON. */
 async function buildExport(userId, clientId) {
   const q = (sql, params) => pool.execute(sql, params).then(([rows]) => rows);
@@ -128,8 +134,8 @@ async function buildExport(userId, clientId) {
   const submissions = await q(
     `SELECT id, submission_type, submitter_name, submitter_email, submitter_type, form_data,
             status, external_ref, submitted_at, updated_at
-       FROM cp_submissions WHERE user_id = ? AND client_id = ?`,
-    [userId, clientId]
+       FROM cp_submissions WHERE client_id = ? AND ${OWN_SUBMISSIONS}`,
+    [clientId, ...ownParams(userId, profile)]
   );
   const subIds = submissions.map(s => s.id);
   let attachments = [];
@@ -219,12 +225,13 @@ async function eraseUser(userId, clientId) {
   try {
     await conn.beginTransaction();
 
-    // Split submissions: retain AE/PC (sever identity), delete the rest.
-    const [subs] = await conn.execute(
-      `SELECT id, submission_type, submitter_name, submitter_email, form_data FROM cp_submissions WHERE user_id = ? AND client_id = ?`, [userId, clientId]);
     // CPPM-69: what identifies them, read before any of it is changed.
     const [[person]] = await conn.execute(
-      'SELECT first_name, last_name, email, phone FROM cp_portal_users WHERE id = ? AND client_id = ?', [userId, clientId]);
+      'SELECT first_name, last_name, email, phone, email_verified FROM cp_portal_users WHERE id = ? AND client_id = ?', [userId, clientId]);
+    // Split submissions: retain AE/PC (sever identity), delete the rest.
+    const [subs] = await conn.execute(
+      `SELECT id, submission_type, submitter_name, submitter_email, form_data FROM cp_submissions WHERE client_id = ? AND ${OWN_SUBMISSIONS}`,
+      [clientId, ...ownParams(userId, person)]);
     const ids = collectIdentifiers(person || {}, subs);
     const allSubIds = subs.map(s => s.id);
     // CPPM-66: a request that raised a safety review — on the form, or in a reply to
