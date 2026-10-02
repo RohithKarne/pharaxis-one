@@ -37,7 +37,7 @@ const REVIEW_WARNING_DAYS   = 30;
 
 const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
-const { sendEmail } = require('../../utils/mailer');
+const { queueEmail } = require('../../utils/emailOutbox');
 const { autoTranslate } = require('../../utils/translator');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
@@ -240,14 +240,19 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
     }
     if (admins.length === 0) return res.status(400).json({ error: 'No admin email addresses found for this client.' });
 
+    // CPPM-73: expires_at arrives as a Date, not text, so .slice() threw and every
+    // press of "Send Email Alert" ended in "Server error". Titles are escaped: they
+    // are typed by staff and go into an HTML email.
+    const day = v => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+    const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const today = new Date().toISOString().slice(0, 10);
     const rows = expiring.map(d => {
-      const isExpired = d.expires_at.slice(0, 10) < today;
+      const isExpired = day(d.expires_at) < today;
       return `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.title}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.expires_at.slice(0, 10)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${esc(d.title)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${day(d.expires_at)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;color:${isExpired ? '#DC2626' : '#D97706'};font-weight:600">${isExpired ? 'EXPIRED' : 'Expiring Soon'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.status}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${esc(d.status)}</td>
       </tr>`;
     }).join('');
 
@@ -266,17 +271,20 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
       <p style="font-family:sans-serif;color:#6B7280;font-size:12px;margin-top:24px">Please log in to the CP Portal Admin Console to update these documents.</p>
     `;
 
-    let sent = 0;
+    // Through the email outbox (CPPM-36), like every other email: recorded first,
+    // retried, and visible under Email Delivery if it finally fails — not lost
+    // because the mail server was briefly unreachable.
+    let queued = 0;
     for (const admin of admins) {
-      try {
-        await sendEmail(Number(clientId), { to: admin.email, subject: `Document Expiry Alert — ${expiring.length} document(s) require attention`, html });
-        sent++;
-      } catch { /* skip failed individual sends */ }
+      const row = await queueEmail(Number(clientId), {
+        to: admin.email, subject: `Document Expiry Alert — ${expiring.length} document(s) require attention`, html,
+      }, { kind: 'document_expiry_alert', relatedType: 'document', relatedId: null });
+      if (row) queued++;
     }
 
-    await audit(req.admin, clientId, 'EXPIRY_ALERT_SENT', 'document', null, { count: expiring.length, recipients: sent });
-    if (sent === 0) return res.status(502).json({ error: 'Email config not active or send failed. Check Email Settings.' });
-    res.json({ message: `Alert sent to ${sent} admin(s) for ${expiring.length} document(s).` });
+    await audit(req.admin, clientId, 'EXPIRY_ALERT_SENT', 'document', null, { count: expiring.length, recipients: queued });
+    if (queued === 0) return res.status(502).json({ error: 'The alert could not be queued. Please try again.' });
+    res.json({ message: `Alert queued for ${queued} admin(s) about ${expiring.length} document(s). Delivery is shown under Email Delivery.` });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'POST /:clientId/expiry-alerts/send', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
