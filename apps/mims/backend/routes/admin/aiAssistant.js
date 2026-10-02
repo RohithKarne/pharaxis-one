@@ -37,6 +37,10 @@ function targetOrgId(req) {
   return hasGlobalAdminScope(req.user) ? (req.body?.org_id || req.user.orgId) : req.user.orgId;
 }
 
+// MIPM-27: classification, extraction, response drafting and quality checks are fixed
+// rules (keywords and a letter template), not a model; they are recorded and answered as such.
+const RULES = { model: 'rules-based' };
+
 async function logSuggestion(req, caseId, type, payload, meta = {}) {
   const hash = crypto.createHash('sha256').update(JSON.stringify(payload || {})).digest('hex');
   const [result] = await pool.execute(
@@ -89,8 +93,8 @@ router.post('/cases/:id/ai/classify', authenticate, async (req, res) => {
     const row = await loadCase(req, req.params.id);
     if (!row) return res.status(404).json({ error: 'Case not found.' });
     const suggestion = classifyText([row.subject, row.description, req.body?.text].filter(Boolean).join('\n'));
-    const sid = await logSuggestion(req, row.id, 'classification', suggestion);
-    res.json({ suggestion_id: sid, suggestion });
+    const sid = await logSuggestion(req, row.id, 'classification', suggestion, RULES);
+    res.json({ suggestion_id: sid, suggestion, source: 'rules' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -99,8 +103,8 @@ router.post('/cases/:id/ai/extract', authenticate, async (req, res) => {
     const row = await loadCase(req, req.params.id);
     if (!row) return res.status(404).json({ error: 'Case not found.' });
     const suggestion = extractFields(req.body?.text || row.description || row.subject || '', req.body?.schema || {});
-    const sid = await logSuggestion(req, row.id, 'extraction', suggestion);
-    res.json({ suggestion_id: sid, suggestion });
+    const sid = await logSuggestion(req, row.id, 'extraction', suggestion, RULES);
+    res.json({ suggestion_id: sid, suggestion, source: 'rules' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -110,8 +114,8 @@ router.post('/cases/:id/ai/suggest-response', authenticate, async (req, res) => 
     if (!row) return res.status(404).json({ error: 'Case not found.' });
     const context = await vectorSearch(row.subject || row.description || '', 'document', row.org_id, 5).catch(() => []);
     const suggestion = draftResponse(row, context);
-    const sid = await logSuggestion(req, row.id, 'response', suggestion);
-    res.json({ suggestion_id: sid, suggestion });
+    const sid = await logSuggestion(req, row.id, 'response', suggestion, RULES);
+    res.json({ suggestion_id: sid, suggestion, source: 'rules' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -120,11 +124,16 @@ router.post('/cases/:id/ai/summarize', authenticate, async (req, res) => {
     const row = await loadCase(req, req.params.id);
     if (!row) return res.status(404).json({ error: 'Case not found.' });
     const provider = await getProvider(row.org_id);
+    // MIPM-27: without a real model this used to hand back the case text labelled
+    // "AI draft summary". Say there is no model instead.
+    if (!provider.real) {
+      return res.status(409).json({ error: 'No AI model is switched on for this organisation, so no AI summary can be made.', code: 'AI_PROVIDER_OFF' });
+    }
     const start = Date.now();
     const chat = await provider.chat([{ role: 'user', content: JSON.stringify(row) }], { purpose: 'summary' });
     const suggestion = { narrative: summarizeCase({ ...row, narrative: chat.content }) };
     const sid = await logSuggestion(req, row.id, 'summary', suggestion, { ...chat, latency_ms: Date.now() - start });
-    res.json({ suggestion_id: sid, suggestion });
+    res.json({ suggestion_id: sid, suggestion, source: 'ai', model: chat.model });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -149,7 +158,7 @@ router.post('/cases/:id/ai/quality-check', authenticate, async (req, res) => {
         [row.id, c.check_name, c.severity, c.message]
       );
     }
-    res.json({ checks, blocked: checks.some(c => c.severity === 'block') });
+    res.json({ checks, blocked: checks.some(c => c.severity === 'block'), source: 'rules' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
