@@ -34,7 +34,7 @@ function isLiveContent(row) {
 
 // Route guard for GET /<content>/:id… — a reader asking for content that is not
 // live gets the same 404 as content that does not exist.
-const LIVE_TABLES = new Set(['cm_documents', 'cm_faqs', 'cm_modules']);
+const LIVE_TABLES = new Set(['cm_documents', 'cm_faqs', 'cm_modules', 'cm_templates']);
 function liveOnlyForReaders(table) {
   if (!LIVE_TABLES.has(table)) throw new Error(`liveOnlyForReaders: unknown table ${table}`);
   return async (req, res, next) => {
