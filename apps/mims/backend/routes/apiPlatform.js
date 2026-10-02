@@ -305,13 +305,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     }
     const caseId = result.insertId;
 
+    // A reporter whose type the source did not say stays untyped. It was recorded as
+    // 'HCP' — a qualification nobody stated, on a record where it changes how a
+    // safety report is assessed (see migration 110 for the same rule at New Case).
     const reporter = req.body.reporter;
     if (reporter && typeof reporter === 'object') {
       await conn.execute(
         `INSERT INTO case_reporter (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
-         reporter.phone || null, reporter.reporter_type || 'HCP', reporter.country || null, reporter.organisation || null]
+         reporter.phone || null, reporter.reporter_type || null, reporter.country || null, reporter.organisation || null]
       );
     }
 
@@ -378,7 +381,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       await conn.execute(
         `INSERT INTO case_contacts (case_id, contact_role, is_primary, first_name, last_name, contact_type, reporter_type, phone, email)
          VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?)`,
-        [caseId, reporter.first_name || null, reporter.last_name || null, 'Reporter', reporter.reporter_type || 'HCP', reporter.phone || null, reporter.email || null]
+        [caseId, reporter.first_name || null, reporter.last_name || null, 'Reporter', reporter.reporter_type || null, reporter.phone || null, reporter.email || null]
       );
     }
 
