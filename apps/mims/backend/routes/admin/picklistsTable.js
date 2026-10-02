@@ -23,6 +23,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { isPlatformAdmin } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const ROLE = ['admin', 'platform_admin'];
 const NOT_YOUR_ORG = "You can only manage your own organisation's picklists.";
@@ -53,13 +54,7 @@ async function allIdsInScope(db, req, table, ids) {
 }
 
 async function audit(userId, action, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'picklist_value', ?, ?, ?)`,
-      [userId, entityId, action, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'picklist_value', entityId, details);
 }
 
 function parseJsonField(value, fallback = null) {

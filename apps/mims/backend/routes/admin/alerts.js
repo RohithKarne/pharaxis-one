@@ -4,6 +4,7 @@ const express = require('express');
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { parseJson } = require('../../services/alertService');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const adminAlertAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
@@ -35,13 +36,7 @@ function normalizeAlertRulePayload(input, fallback = {}) {
 }
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 // GET /api/admin/alerts/rules

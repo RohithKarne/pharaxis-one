@@ -18,6 +18,7 @@ const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitPlatformAdminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 const { LAST_PLATFORM_ADMIN_ERROR, PLATFORM_ADMIN_CONSOLE_SQL, leavesNoActivePlatformAdmin } = require('../utils/adminScope');
+const { logAudit } = require('../utils/auditLog');
 const {
   bootstrapOrg,
   getOrgReadiness,
@@ -32,12 +33,7 @@ const PLATFORM_ADMIN_EXCLUSION_SQL =
   "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function parseIntSafe(value, fallback) {

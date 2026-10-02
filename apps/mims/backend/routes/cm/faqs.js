@@ -12,14 +12,10 @@ const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 async function addVersionHistory(entityId, version, status, notes, authorId) {

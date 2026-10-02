@@ -24,6 +24,7 @@ const { assess: assessCaseValidity } = require('../../services/caseValidityServi
 const { redact: redactPii } = require('../../services/piiRedactionService');
 const { createFollowup, createAmendment, createNullification } = require('../../services/icsrLifecycleService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const adminOnly = [authenticate, requireRole('admin', 'platform_admin')];
@@ -33,11 +34,7 @@ function orgScope(req, alias = 'r') {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, details || {});
 }
 
 async function verifyElectronicSignature(req, action, entityId) {

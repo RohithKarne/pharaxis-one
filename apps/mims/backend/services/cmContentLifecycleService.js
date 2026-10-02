@@ -5,6 +5,7 @@
  * Archives Published documents and FAQs whose expiry_date has passed.
  */
 const pool = require('../database/db');
+const { logAudit } = require('../utils/auditLog');
 
 async function addVersionHistory(entityType, entityId, version, status, notes) {
   try {
@@ -17,13 +18,7 @@ async function addVersionHistory(entityType, entityId, version, status, notes) {
 }
 
 async function addAuditLog(action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-       VALUES (NULL, 'system', ?, ?, ?, ?)`,
-      [action, entity, entityId, JSON.stringify(details || {})]
-    );
-  } catch (_) {}
+  await logAudit(null, 'system', action, entity, entityId, details || {});
 }
 
 async function addNotification(userId, title, message, metadata) {

@@ -25,6 +25,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { CONFIG_DEFAULTS } = require('../../services/emailCaseImportService');
+const { logAudit } = require('../../utils/auditLog');
 
 const ADMIN = ['admin', 'platform_admin'];
 
@@ -35,11 +36,7 @@ function resolveOrgId(req) {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user?.userId || null, req.user?.email || 'unknown', action, entity, entityId, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user?.userId || null, req.user?.email || 'unknown', action, entity, entityId, details || {});
 }
 
 // Mapping allowlists — an intake definition may only target these columns.

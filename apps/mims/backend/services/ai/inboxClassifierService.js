@@ -2,6 +2,7 @@
 
 const pool = require('../../database/db');
 const { classifyText } = require('./classifier');
+const { logAudit } = require('../../utils/auditLog');
 
 async function classifyInquiry(inquiryId, userId = null) {
   const [[row]] = await pool.execute('SELECT id, org_id, sender, subject, body FROM inquiries WHERE id = ? LIMIT 1', [inquiryId]);
@@ -18,10 +19,7 @@ async function classifyInquiry(inquiryId, userId = null) {
      VALUES (0, 'classification', SHA2(?, 256), ?, 'deterministic-local', ?, ?, 0)`,
     [JSON.stringify(suggestion), JSON.stringify({ inquiry_id: inquiryId, ...suggestion }), Math.ceil(JSON.stringify(row).length / 4), Math.ceil(JSON.stringify(suggestion).length / 4)]
   ).catch(() => {});
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, 'AI Assistant', 'CLASSIFY', 'inquiry', ?, ?)`,
-    [userId, inquiryId, JSON.stringify(suggestion)]
-  ).catch(() => {});
+  await logAudit(userId, 'AI Assistant', 'CLASSIFY', 'inquiry', inquiryId, suggestion);
   return suggestion;
 }
 
