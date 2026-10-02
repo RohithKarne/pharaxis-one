@@ -241,6 +241,7 @@ router.post('/:clientCode/report-unwell', authenticatePortal, requirePortalAuth,
         [client.id, conversationId, detail]);
       taskId = r.insertId;
       systemAudit('portal', client.id, 'AE_REVIEW_TASK_CREATED', 'chat_conversation', conversationId, { task_id: taskId });
+      require('./submit').raiseSafetyTaskAlert(client.id, taskId, 'the portal chat');
     }
 
     await bestEffort('safety_flag_message', () => recordMessage({

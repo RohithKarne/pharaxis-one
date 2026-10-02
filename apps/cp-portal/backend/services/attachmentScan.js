@@ -12,7 +12,8 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { pool } = require('../database/db');
+const { pool } = require('../database/db')
+const { clearAlerts } = require('./adminAlerts');
 const { scanFile } = require('../utils/virusScan');
 const { systemAudit } = require('../utils/audit');
 const log = require('../utils/logger');
@@ -30,6 +31,7 @@ async function rescanHeldAttachments() {
       // Nothing left to scan or to serve; without this the row would be retried forever.
       await pool.execute(
         `UPDATE cp_submission_attachments SET scan_status = 'missing', scanned_at = NOW(), scan_detail = 'file not on disk' WHERE id = ?`, [a.id]);
+      await clearAlerts(a.client_id, `held:${a.id}`, 'system: the file is no longer on disk');
       continue;
     }
 
@@ -44,6 +46,7 @@ async function rescanHeldAttachments() {
       await pool.execute(
         `UPDATE cp_submission_attachments SET scan_status = 'clean', scan_detail = NULL, scanned_at = NOW() WHERE id = ?`, [a.id]);
       systemAudit('virus scan', a.client_id, 'ATTACHMENT_RELEASED', 'submission', a.submission_id, { file: a.file_name });
+      await clearAlerts(a.client_id, `held:${a.id}`, 'system: the file was scanned and released');
       const { forwardReleasedAttachment } = require('../routes/portal/submit');
       await forwardReleasedAttachment(a.id)
         .catch(err => log.error('attachments.forward_after_release_failed', { err, attachment_id: a.id }));
@@ -54,6 +57,7 @@ async function rescanHeldAttachments() {
         [String(result.virus).slice(0, 255), a.id]);
       systemAudit('virus scan', a.client_id, 'ATTACHMENT_BLOCKED_VIRUS', 'submission', a.submission_id,
         { file: a.file_name, virus: result.virus });
+      await clearAlerts(a.client_id, `held:${a.id}`, 'system: a virus was found and the file removed');
     }
   }
 }

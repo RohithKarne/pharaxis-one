@@ -20,7 +20,10 @@ const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
 const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
-const { writeCaseAudit } = require('../services/caseHelpers');
+const { writeCaseAudit, writeAuditLog } = require('../services/caseHelpers');
+const { logger } = require('../services/logger');
+const { notifyIntakeArrival } = require('../services/intakeAlertService');
+const { eraseReporterIdentity } = require('../services/reporterErasureService');
 
 const router = express.Router();
 
@@ -87,6 +90,60 @@ router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'platfo
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Bridge row 6: the organisation's connected systems — what each may do, where its
+// cases land, and how its calls are going (last 24 hours, from api_call_log).
+router.get('/api/admin/api-clients', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
+    if (!orgId) return res.status(400).json({ error: 'Choose an organisation.' });
+    const [clients] = await pool.execute(
+      `SELECT c.id, c.client_id, c.name, c.scopes, c.status, c.rate_limit_per_min, c.default_site_id, c.initial_status_id,
+              c.created_at, c.last_used_at,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h,
+              (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
+              (SELECT CONCAT(l.status_code, ' ', l.method, ' ', l.path) FROM api_call_log l WHERE l.client_id = c.id AND l.status_code >= 400 ORDER BY l.id DESC LIMIT 1) AS last_failure,
+              (SELECT COUNT(*) FROM cases k WHERE k.source_api_client_id = c.id) AS cases_created
+         FROM api_clients c WHERE c.org_id = ? ORDER BY c.status = 'active' DESC, c.name`, [orgId]);
+    const [sites] = await pool.execute('SELECT id, name FROM sites WHERE org_id = ? ORDER BY name', [orgId]);
+    const [states] = await pool.execute(
+      'SELECT id, name, is_closed FROM workflow_states WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1 ORDER BY name', [orgId]);
+    res.json({ clients: clients.map(c => ({ ...c, scopes: Array.isArray(c.scopes) ? c.scopes : JSON.parse(c.scopes || '[]') })), sites, states, allowed_scopes: ALLOWED_API_SCOPES });
+  } catch (err) { res.status(500).json({ error: 'Could not load API connections.' }); }
+});
+
+router.put('/api/admin/api-clients/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT * FROM api_clients WHERE id = ?', [req.params.id]);
+    if (!client || (!hasGlobalAdminScope(req.user) && Number(client.org_id) !== Number(req.user.orgId))) {
+      return res.status(404).json({ error: 'Connection not found.' });
+    }
+    const siteId = req.body.default_site_id ? Number(req.body.default_site_id) : null;
+    const statusId = req.body.initial_status_id ? Number(req.body.initial_status_id) : null;
+    if (siteId) {
+      const [[site]] = await pool.execute('SELECT id FROM sites WHERE id = ? AND org_id = ?', [siteId, client.org_id]);
+      if (!site) return res.status(400).json({ error: 'That site does not belong to this organisation.' });
+    }
+    if (statusId) {
+      const [[st]] = await pool.execute('SELECT id, is_closed FROM workflow_states WHERE id = ? AND (org_id = ? OR org_id IS NULL) AND is_active = 1', [statusId, client.org_id]);
+      if (!st) return res.status(400).json({ error: 'That status is not available to this organisation.' });
+      if (Number(st.is_closed) === 1) return res.status(400).json({ error: 'A new case cannot start in a status that closes the case.' });
+    }
+    const status = ['active', 'revoked'].includes(req.body.status) ? req.body.status : client.status;
+    await pool.execute('UPDATE api_clients SET default_site_id = ?, initial_status_id = ?, status = ? WHERE id = ?',
+      [siteId, statusId, status, client.id]);
+    if (status === 'revoked' && client.status !== 'revoked') {
+      // Switching a connection off ends its current access at once, not when its hour-long token runs out.
+      await pool.execute('UPDATE api_tokens SET revoked = 1 WHERE client_id = ?', [client.id]);
+    }
+    await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'api_client', client.id, {
+      before: { default_site_id: client.default_site_id, initial_status_id: client.initial_status_id, status: client.status },
+      after: { default_site_id: siteId, initial_status_id: statusId, status },
+    });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not save the connection.' }); }
+});
+
 router.get('/api/openapi.yaml', (_req, res) => {
   res.type('text/yaml').send(buildOpenApiYaml());
 });
@@ -111,9 +168,87 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
 
 // Fetch a single case's current status — used by the CP portal close-sync poller.
 // Org-scoped by the API key so a client can only read its own cases.
+// Bridge row 4: what changed among THIS connection's cases since a point in time —
+// one call instead of one per case. `closed` is the state's fixed marker, not a
+// guess from its name, so a renamed state and a reopened case both come through.
+// Paged by (updated_at, id); times are UTC 'YYYY-MM-DD HH:MM:SS'. Registered before
+// '/api/v1/cases/:id' so 'changes' is not read as a case id.
+router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+  const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(req.query.since) ? req.query.since : null;
+  if (req.query.since && !since) return res.status(400).json({ error: "since must be 'YYYY-MM-DD HH:MM:SS' (UTC)." });
+  const afterId = Math.max(parseInt(req.query.after_id, 10) || 0, 0);
+  const [rows] = await pool.execute(
+    `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
+            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
+            c.case_owner_id IS NOT NULL AS owner_assigned,
+            c.reporter_erased_at IS NOT NULL AS reporter_erased,
+            -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
+            -- or a superseded one), and whether it was addressed to the person who
+            -- reported — only then does its text travel back to them.
+            (SELECT r.id FROM case_mi_responses r
+              WHERE r.case_id = c.id AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
+              ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
+       FROM cases c
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0
+        -- A change stamped in the future (a writer on the wrong clock) is not handed out
+        -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
+        -- every real change after it is skipped, with no error anywhere.
+        AND c.updated_at <= NOW() + INTERVAL 1 MINUTE
+        ${since ? 'AND (c.updated_at > ? OR (c.updated_at = ? AND c.id > ?))' : ''}
+      ORDER BY c.updated_at ASC, c.id ASC
+      LIMIT ${limit + 1}`,
+    since ? [req.apiClient.org_id, req.apiClient.id, since, since, afterId] : [req.apiClient.org_id, req.apiClient.id]
+  );
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+  const answers = {};
+  const answerIds = page.map(r => r.answer_id).filter(Boolean);
+  if (answerIds.length) {
+    const [ans] = await pool.execute(
+      `SELECT r.id, r.case_id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
+              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at,
+              (SELECT cr.email FROM case_reporter cr WHERE cr.case_id = r.case_id ORDER BY cr.id LIMIT 1) AS reporter_email
+         FROM case_mi_responses r WHERE r.id IN (${answerIds.map(() => '?').join(',')})`, answerIds);
+    for (const a of ans) {
+      const toReporter = !!a.recipient_email && !!a.reporter_email
+        && a.recipient_email.trim().toLowerCase() === a.reporter_email.trim().toLowerCase();
+      const text = a.response_text || String(a.response_body_html || '')
+        .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+      answers[a.case_id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
+    }
+  }
+  res.json({
+    changes: page.map(r => ({
+      id: r.id, case_number: r.case_number, status: r.status, closed: !!Number(r.closed), updated_at: r.updated_at,
+      owner_assigned: !!Number(r.owner_assigned), answer: answers[r.id] || null,
+      // Bridge row 10: the reporter's identity has been erased on this case.
+      reporter_erased: !!Number(r.reporter_erased),
+    })),
+    has_more: rows.length > limit,
+    next: last ? { since: last.updated_at, after_id: last.id } : null,
+  });
+});
+
+// Bridge row 4: a connection claims the cases it created before MIMS recorded which
+// connection created each case. The portal stores the MIMS id of every case it made,
+// so it sends that list once; only cases in this organisation with no recorded
+// creator are claimed, and updated_at is left alone.
+router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 1000) : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids must be a list of case ids (at most 1000).' });
+  const [r] = await pool.execute(
+    `UPDATE cases SET source_api_client_id = ?, source_reference = COALESCE(source_reference, case_number), updated_at = updated_at
+      WHERE org_id = ? AND source_api_client_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+    [req.apiClient.id, req.apiClient.org_id, ...ids]);
+  res.json({ claimed: r.affectedRows, sent: ids.length });
+});
+
 router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   const [[row]] = await pool.execute(
-    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, c.priority, c.created_at, c.updated_at
+    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, COALESCE(ws.is_closed, 0) = 1 AS closed, c.priority, c.created_at, c.updated_at
        FROM cases c
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
       WHERE c.id = ? AND c.org_id = ? AND c.is_deleted = 0
@@ -142,43 +277,15 @@ router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), asyn
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
     await conn.beginTransaction();
-    // Whether any identity is still there, so a repeat call logs no second removal.
-    const [[{ present }]] = await conn.execute(
-      `SELECT (SELECT COUNT(*) FROM case_reporter WHERE case_id = ?
-                 AND COALESCE(first_name, last_name, email, phone, organisation) IS NOT NULL)
-            + (SELECT COUNT(*) FROM case_contacts WHERE case_id = ? AND contact_role = 'reporter'
-                 AND COALESCE(first_name, last_name, email, phone, address, institution) IS NOT NULL) AS present`,
-      [c.id, c.id]
-    );
-    // Intake records the reporter twice: case_reporter (the intake record) and
-    // case_contacts (what the case screen shows). Both carry the identity, so
-    // both are blanked or the identity survives on screen.
-    const [rep] = await conn.execute(
-      `UPDATE case_reporter
-          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, organisation = NULL
-        WHERE case_id = ?`,
-      [c.id]
-    );
-    const [con] = await conn.execute(
-      `UPDATE case_contacts
-          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, address = NULL, institution = NULL
-        WHERE case_id = ? AND contact_role = 'reporter'`,
-      [c.id]
-    );
-    // Part 11: the removal goes into the case's own history, in this transaction —
-    // writeCaseAudit re-throws inside one, so no audit row means no redaction. The
-    // actor is the API client, not a person (user_id 0). The erased values are
-    // deliberately not kept as old_value: that would undo the erasure (Vasu, CCO).
-    if (present > 0) {
-      await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
-        'REPORTER_IDENTITY_REDACTED', 'reporter_identity', null,
-        "removed on the source portal's erasure request", conn);
-    }
+    const { reporter_rows, contact_rows } = await eraseReporterIdentity(conn, c.id, {
+      userId: 0, userName: `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+      note: "removed on the source portal's erasure request",
+    });
     await conn.commit();
     // Counts are rows MATCHED (the pool runs with FOUND_ROWS), so they are the
     // same on a repeat call — the caller reads them as "a reporter row exists",
     // never as "something changed this time".
-    res.json({ id: c.id, redacted: true, reporter_rows: rep.affectedRows, contact_rows: con.affectedRows });
+    res.json({ id: c.id, redacted: true, reporter_rows, contact_rows });
   } catch (err) {
     await conn.rollback().catch(() => {});
     res.status(500).json({ error: 'Failed to redact the reporter identity.' });
@@ -197,28 +304,72 @@ function parseAwarenessDate(value) {
   return value;
 }
 
+// Longest value each intake field can hold. The database runs in strict mode, so a
+// longer value used to make the whole case fail — a safety report lost because
+// someone typed a long phone number. It is now shortened to fit, and the full value
+// is written into the case history so nothing the person sent is lost.
+const INTAKE_LIMITS = {
+  priority: 20,
+  'reporter.first_name': 100, 'reporter.last_name': 100, 'reporter.email': 255, 'reporter.phone': 50,
+  'reporter.reporter_type': 50, 'reporter.country': 100, 'reporter.organisation': 255,
+  'patient.initials': 20, 'patient.age_unit': 20, 'patient.gender': 20,
+  'ae_intake.suspect_drug_name': 255, 'ae_intake.batch_lot_number': 100, 'ae_intake.dose': 100,
+  'ae_intake.route_of_admin': 100, 'ae_intake.outcome': 100,
+  'pc_intake.product_name': 255, 'pc_intake.batch_lot_number': 100, 'pc_intake.complaint_category': 100,
+  'mi_intake.mi_category': 255,
+};
+
+function fitIntakeToLimits(body) {
+  const shortened = [];
+  for (const [path, max] of Object.entries(INTAKE_LIMITS)) {
+    const [a, b] = path.split('.');
+    const holder = b ? body[a] : body;
+    const key = b || a;
+    if (!holder || typeof holder !== 'object' || holder[key] == null) continue;
+    const full = String(holder[key]);
+    if (full.length <= max) continue;
+    holder[key] = full.slice(0, max);
+    shortened.push({ path, full, kept: holder[key] });
+  }
+  return shortened;
+}
+
+// A failed intake tells the sending system why, without exposing the database: the
+// full error goes to the MIMS log under the request number the caller is given.
+function intakeFailure(err, req, what) {
+  logger.error({ err, request_id: req.id || null, api_client_id: req.apiClient?.id || null }, what);
+  return { error: `${what} MIMS log reference: ${req.id || 'none'}.`, request_id: req.id || null };
+}
+
 router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
   const orgId = req.apiClient.org_id;
+  const shortened = fitIntakeToLimits(req.body || {});
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    const [[site]] = await conn.execute('SELECT id FROM sites WHERE org_id=? ORDER BY id ASC LIMIT 1', [orgId]);
+    // Bridge row 6: the connection's own site and starting status when set; else the
+    // first site, and the state named "New" (the organisation's, else the platform's).
+    // Before, every case went to the first site and the first state by id — "Email Intake".
+    const [[site]] = await conn.execute(
+      `SELECT id FROM sites WHERE org_id = ? ORDER BY (id = ?) DESC, id ASC LIMIT 1`,
+      [orgId, req.apiClient.default_site_id || 0]);
     if (!site?.id) { await conn.rollback(); return res.status(400).json({ error: 'No site is configured for this organisation.' }); }
-    const [[state]] = await conn.execute('SELECT id FROM workflow_states WHERE org_id=? OR org_id IS NULL ORDER BY org_id IS NULL DESC, id ASC LIMIT 1', [orgId]);
+    const [[state]] = await conn.execute(
+      `SELECT id FROM workflow_states WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1
+        ORDER BY (id = ?) DESC, (LOWER(name) = 'new') DESC, org_id IS NULL ASC, id ASC LIMIT 1`,
+      [orgId, req.apiClient.initial_status_id || 0]);
 
     const caseType = ['MI', 'AE', 'PC'].includes(req.body.case_type) ? req.body.case_type : 'MI';
     // Intake data is captured at the MINIMUM at the source portal; MIMS triage
     // completes the regulated fields. Values are stored as received (no strict
     // picklist rejection) so a valid submission is never dropped at the boundary.
     const intakeChannel = String(req.body.intake_channel || 'api').slice(0, 50);
-    // T1: stamp the source reference (e.g. CP-0000NN) as the case number so the
-    // case is identifiable and searchable in MIMS by the originating portal
-    // reference. case_number is unique per org — fall back to a suffixed value on
-    // the rare collision rather than failing the intake.
-    const caseNumber = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
+    // T1: the source reference (e.g. CP-0000NN) is kept as given and is the case
+    // number where that number is free, so the case can be found by it in MIMS.
+    const reference = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
     const desc = req.body.description || req.body.subject || null;
     const priority = req.body.priority || 'normal';
     // CPPM-18: when the report first reached the company, per the source portal
@@ -229,36 +380,64 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     // date_received exactly as before — an intake is never rejected for this.
     const awarenessDate = parseAwarenessDate(req.body.awareness_date);
     if (req.body.awareness_date && !awarenessDate) {
-      console.warn(`[api/v1/cases] ignored invalid awareness_date for ${caseNumber || 'unreferenced case'}`);
+      console.warn(`[api/v1/cases] ignored invalid awareness_date for ${reference || 'unreferenced case'}`);
     }
 
-    // R2: idempotency — a repeated push of the same submission (same reference)
-    // must NOT create a duplicate case. If one already exists for this org with
-    // this reference, return it unchanged. Safe under retries.
-    if (caseNumber) {
+    // R2 + bridge row 5: a repeated push of the same report must not create a second
+    // case — and a DIFFERENT sender using the same reference must not be handed this
+    // one. A case is the same report only if this connection sent it with this
+    // reference.
+    if (reference) {
       const [[existing]] = await conn.execute(
-        'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
-        [orgId, caseNumber]
+        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, reference]
       );
       if (existing) {
         await conn.commit();
         return res.status(200).json({ id: existing.id, idempotent: true });
+      }
+      // Created by this connection before MIMS recorded who created a case: same
+      // number, no recorded creator, same intake channel. Claimed, then treated as ours.
+      const [[legacy]] = await conn.execute(
+        `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
+            AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
+        [orgId, reference, intakeChannel]
+      );
+      if (legacy) {
+        await conn.execute(
+          'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
+          [req.apiClient.id, reference, legacy.id]);
+        await conn.commit();
+        return res.status(200).json({ id: legacy.id, idempotent: true });
+      }
+    }
+
+    // The case number is the reference where free in this organisation; where another
+    // source already uses it, the first free of REF-2, REF-3 … (the reference itself is
+    // still kept as given, in source_reference).
+    let caseNumber = reference;
+    if (reference) {
+      for (let n = 2; n <= 50; n++) {
+        const [[taken]] = await conn.execute('SELECT id FROM cases WHERE org_id = ? AND case_number = ? LIMIT 1', [orgId, caseNumber]);
+        if (!taken) break;
+        caseNumber = `${reference.slice(0, 95)}-${n}`;
       }
     }
 
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, reference]
       );
     } catch (err) {
-      // Race: another request created the same reference between our check and insert.
-      if (err.code === 'ER_DUP_ENTRY' && caseNumber) {
+      // Race: the same report pushed twice at once — the second loses on the
+      // (connection, reference) key and gets the first one's case.
+      if (err.code === 'ER_DUP_ENTRY' && reference) {
         const [[dup]] = await conn.execute(
-          'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
-          [orgId, caseNumber]
+          'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+          [req.apiClient.id, reference]
         );
         if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
       }
@@ -266,13 +445,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     }
     const caseId = result.insertId;
 
+    // A reporter whose type the source did not say stays untyped. It was recorded as
+    // 'HCP' — a qualification nobody stated, on a record where it changes how a
+    // safety report is assessed (see migration 110 for the same rule at New Case).
     const reporter = req.body.reporter;
     if (reporter && typeof reporter === 'object') {
       await conn.execute(
         `INSERT INTO case_reporter (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
-         reporter.phone || null, reporter.reporter_type || 'HCP', reporter.country || null, reporter.organisation || null]
+         reporter.phone || null, reporter.reporter_type || null, reporter.country || null, reporter.organisation || null]
       );
     }
 
@@ -339,7 +521,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       await conn.execute(
         `INSERT INTO case_contacts (case_id, contact_role, is_primary, first_name, last_name, contact_type, reporter_type, phone, email)
          VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?)`,
-        [caseId, reporter.first_name || null, reporter.last_name || null, 'Reporter', reporter.reporter_type || 'HCP', reporter.phone || null, reporter.email || null]
+        [caseId, reporter.first_name || null, reporter.last_name || null, 'Reporter', reporter.reporter_type || null, reporter.phone || null, reporter.email || null]
       );
     }
 
@@ -385,11 +567,92 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       }
     }
 
+    // Bridge row 6: the case's own history says where it came from.
+    const apiActor = `API client: ${req.apiClient.name} (#${req.apiClient.id})`;
+    await writeCaseAudit(caseId, 0, apiActor, 'CASE_CREATED_VIA_API', 'source_reference', null,
+      `${reference || '(no reference)'} — created from ${req.apiClient.name}`, conn);
+
+    // Bridge row 6: a report raised from an earlier one (a side effect confirmed from an
+    // enquiry) is linked to that case both ways, so either case shows the other.
+    if (req.body.related_reference) {
+      const [[related]] = await conn.execute(
+        'SELECT id, case_number FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, String(req.body.related_reference).slice(0, 100)]);
+      if (related) {
+        const note = `Raised from ${req.body.related_reference} on ${req.apiClient.name}`;
+        await conn.execute(
+          `INSERT IGNORE INTO case_links (case_id, linked_case_id, link_type, created_by, notes) VALUES (?, ?, 'related', NULL, ?), (?, ?, 'related', NULL, ?)`,
+          [caseId, related.id, note, related.id, caseId, note]);
+        await writeCaseAudit(caseId, 0, apiActor, 'CASE_LINKED', 'linked_case_id', null, related.case_number, conn);
+        await writeCaseAudit(related.id, 0, apiActor, 'CASE_LINKED', 'linked_case_id', null, caseNumber, conn);
+      }
+    }
+
+    for (const s of shortened) {
+      await writeCaseAudit(caseId, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+        'INTAKE_VALUE_SHORTENED', s.path, s.full, s.kept, conn);
+    }
+
     await conn.commit();
-    res.status(201).json({ id: caseId });
+    res.status(201).json({ id: caseId, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
+    // Bridge row 7: an unassigned side-effect or complaint case tells the supervisors.
+    notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName: req.apiClient.name });
   } catch (err) {
     await conn.rollback().catch(() => {});
-    res.status(500).json({ error: 'Failed to create case.' });
+    res.status(500).json(intakeFailure(err, req, 'Failed to create case.'));
+  } finally {
+    conn.release();
+  }
+});
+
+// Bridge row 9: the person adds information to a report already sent. It becomes a case
+// comment, a history line and the case's follow-up date, and the case owner (or the
+// supervisors) is told — new information can change how a side effect is assessed.
+// Only on a case this connection created; once per sender's follow-up id.
+router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (req, res) => {
+  const text = String(req.body?.text || '').trim();
+  const followupId = String(req.body?.followup_id || '').slice(0, 100);
+  if (text.length < 2 || text.length > 5000) return res.status(400).json({ error: 'text must be 2 to 5000 characters.' });
+  if (!followupId) return res.status(400).json({ error: 'followup_id is required.' });
+  const conn = await pool.getConnection();
+  try {
+    const [[c]] = await conn.execute(
+      `SELECT c.id, c.case_number, c.case_type, c.org_id, c.case_owner_id, COALESCE(ws.is_closed, 0) AS closed
+         FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id
+        WHERE c.id = ? AND c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0 LIMIT 1`,
+      [req.params.id, req.apiClient.org_id, req.apiClient.id]);
+    if (!c) return res.status(404).json({ error: 'Case not found.' });
+    const [[done]] = await conn.execute(
+      'SELECT comment_id FROM api_case_followups WHERE api_client_id = ? AND external_followup_id = ?', [req.apiClient.id, followupId]);
+    if (done) return res.status(200).json({ id: done.comment_id, idempotent: true });
+
+    await conn.beginTransaction();
+    const reference = req.body?.reference ? String(req.body.reference).slice(0, 100) : c.case_number;
+    const [cm] = await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
+      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}):\n${text}`]);
+    await conn.execute('UPDATE cases SET follow_up_received_date = CURDATE(), updated_at = NOW() WHERE id = ?', [c.id]);
+    await conn.execute(
+      'INSERT INTO api_case_followups (api_client_id, external_followup_id, case_id, comment_id) VALUES (?, ?, ?, ?)',
+      [req.apiClient.id, followupId, c.id, cm.insertId]);
+    await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+      'FOLLOW_UP_RECEIVED', 'case_comment', null, `comment #${cm.insertId} from ${reference}`, conn);
+    await conn.commit();
+    res.status(201).json({ id: cm.insertId });
+
+    const { getCaseSupervisors } = require('../services/intakeAlertService');
+    const users = c.case_owner_id ? [c.case_owner_id] : await getCaseSupervisors(c.org_id);
+    require('../services/notificationCenterService').createNotifications(users, {
+      category: 'follow_up',
+      severity: c.case_type === 'AE' || Number(c.closed) ? 'warning' : 'info',
+      title: `${Number(c.closed) ? 'Follow-up on a closed case' : 'Follow-up received'}: ${c.case_number}`,
+      message: 'The reporter added information through the portal. Read it in the case comments.',
+      linkUrl: `/cases/${c.id}`,
+      metadata: { case_id: c.id, comment_id: cm.insertId },
+      eventKey: `follow-up:${cm.insertId}`,
+    }).catch(() => {});
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (!res.headersSent) res.status(500).json(intakeFailure(err, req, 'Failed to add the follow-up.'));
   } finally {
     conn.release();
   }
@@ -406,6 +669,16 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
+    // The sending portal retries a file it could not confirm (a timeout, a crash after
+    // MIMS stored it). The same file on the same case is kept once: its fingerprint
+    // matches, so the existing attachment is returned instead of a second copy.
+    const checksum = attSha256(req.file.buffer);
+    const [[same]] = await pool.execute(
+      `SELECT id FROM attachments WHERE org_id = ? AND entity_type = 'case' AND entity_id = ? AND checksum_sha256 = ? LIMIT 1`,
+      [req.apiClient.org_id, c.id, checksum]
+    );
+    if (same) return res.status(200).json({ id: same.id, idempotent: true });
+
     const ext = (String(req.file.originalname || '').match(/\.[a-z0-9]+$/i) || [''])[0];
     const key = storage.generateKey(ext);
     const stored = await storage.put({ orgId: req.apiClient.org_id, key, body: req.file.buffer, contentType: req.file.mimetype });
@@ -416,11 +689,11 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
           original_name, mime_type, size_bytes, checksum_sha256, uploaded_by, ocr_status)
        VALUES (?, 'case', ?, ?, ?, ?, ?, ?, ?, NULL, 'skipped')`,
       [req.apiClient.org_id, c.id, stored.provider, stored.key,
-       String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, attSha256(req.file.buffer)]
+       String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, checksum]
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to store attachment.' });
+    res.status(500).json(intakeFailure(err, req, 'Failed to store attachment.'));
   }
 });
 

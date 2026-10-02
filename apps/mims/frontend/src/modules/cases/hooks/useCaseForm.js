@@ -9,6 +9,9 @@ export default function useCaseForm(id, token) {
 
   const [caseData,       setCaseData]       = useState(null)
   const [loading,        setLoading]        = useState(true)
+  // What the organisation's change-control rules still need before this save can go
+  // through: { needs: 'reason' | 'password', message }. Answered in CaseChangeControlModal.
+  const [changeControlAsk, setChangeControlAsk] = useState(null)
   const [saving,         setSaving]         = useState(false)
   const [savedMsg,       setSavedMsg]       = useState('')
   const [statuses,       setStatuses]       = useState([])
@@ -158,22 +161,32 @@ export default function useCaseForm(id, token) {
     }
   }
 
-  async function saveInfo(isAutoSave = false) {
+  async function saveInfo(isAutoSave = false, changeControl = {}) {
     setSaving(true)
     try {
       const payload = {
         ...infoForm,
+        ...changeControl,
         status_id:     infoForm.status_id     ? Number(infoForm.status_id)     : null,
         case_owner_id: infoForm.case_owner_id ? Number(infoForm.case_owner_id) : null,
         expected_version_stamp: caseData?.version_stamp ?? undefined,
       }
       const res  = await httpFetch(`${API}/cases/${id}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
       const data = await res.json()
-      if (res.status === 409) {
+      // Only a real version clash says "reload to merge". Other refusals use 409 too —
+      // "This case is closed. Reopen it…" — and were shown as a version conflict.
+      if (res.status === 409 && (data.code === 'VERSION_CONFLICT' || !data.error)) {
         setSavedMsg('Version conflict - reload to merge latest changes')
         const conflictErr = new Error(data.error || 'Version conflict')
         conflictErr.isConflict = true  // WP6: so the catch keeps this actionable message
         throw conflictErr
+      }
+      // Closing or reopening under the organisation's change-control rules: ask for the
+      // reason or the e-signature and save again, instead of a dead-end "Save failed".
+      if (!res.ok && (data.code === 'REASON_REQUIRED' || data.code === 'PASSWORD_REQUIRED')) {
+        if (!isAutoSave) setChangeControlAsk({ needs: data.code === 'PASSWORD_REQUIRED' ? 'password' : 'reason', message: data.error })
+        setSavedMsg('')
+        return
       }
       if (!res.ok) {
         // The server returns field-level validation detail, but this used to be
@@ -372,6 +385,7 @@ export default function useCaseForm(id, token) {
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus, draftRestored, discardDraft,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
+    changeControlAsk, setChangeControlAsk,
     loadDynFields, saveDynFields, dynFieldsChanged,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,

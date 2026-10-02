@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import AlertsPanel from '../components/AlertsPanel'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
 import Icon from '../../shared/components/Icon'
@@ -184,6 +185,7 @@ export default function ClientDetailPage() {
   const [readiness, setReadiness]     = useState(null)
   const [integrationData, setIntegrationData] = useState(null)
   const [recentActivity, setRecentActivity]   = useState([])
+  const [openAlerts, setOpenAlerts]           = useState([])
   const [urlCopied, setUrlCopied]     = useState(false)
   const [qrDataUrl, setQrDataUrl]     = useState('')
 
@@ -229,7 +231,14 @@ export default function ClientDetailPage() {
   const enabledCount = features?.filter(f => f.is_enabled).length || 0
   const healthScore  = computeHealthScore(data, submissionStats)
   const health       = healthMeta(healthScore)
-  const urgentIssues = getUrgentIssues(data, integrationData)
+  // Bridge row 2: open alerts belong in "Attention Required" — it said "No issues
+  // detected" while reports were failing to reach MIMS.
+  const alertIssues = ['integration', 'safety'].flatMap(aud => {
+    const n = openAlerts.filter(a => a.audience === aud).length
+    if (!n) return []
+    return [{ sev: 'red', text: `${n} ${aud} alert${n === 1 ? '' : 's'} open`, path: aud === 'safety' ? 'safety-queue' : 'sync-health' }]
+  })
+  const urgentIssues = [...alertIssues, ...getUrgentIssues(data, integrationData)]
 
   const checklist     = readiness?.checks || []
   const checklistDone = readiness?.done   || 0
@@ -308,6 +317,8 @@ export default function ClientDetailPage() {
         </div>
 
       </div>
+
+      <AlertsPanel clientId={clientId} onOpenAlerts={setOpenAlerts} />
 
       {/* ── SEARCH ───────────────────────────────────────────────────── */}
       <div className="cp-config-search-bar">

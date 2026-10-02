@@ -34,7 +34,11 @@ async function fetchOauthToken(integration) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
   });
-  if (!r.ok) throw new Error(`Token request failed (HTTP ${r.status}).`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    const said = body && (body.error_description || body.error);
+    throw new Error(`MIMS refused the sign-in (HTTP ${r.status}${said ? `: ${said}` : ''}).`);
+  }
   const data = await r.json().catch(() => ({}));
   if (!data.access_token) throw new Error('Token response missing access_token.');
 

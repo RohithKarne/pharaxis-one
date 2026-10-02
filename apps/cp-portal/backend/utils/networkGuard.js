@@ -102,10 +102,26 @@ async function assertSafeOutboundUrl(rawUrl) {
  * This closes the redirect-to-internal bypass where a vetted host 302s the request
  * to http://169.254.169.254/ (cloud metadata) or another internal service.
  */
+// Every outbound call has a time limit. Without one, a system that accepts the
+// connection and never answers held a report in "sending" until the process died.
+const OUTBOUND_TIMEOUT_MS = Number(process.env.OUTBOUND_TIMEOUT_MS || 30000)
+
 async function safeFetch(rawUrl, options = {}, maxRedirects = 3) {
   let target = (await assertSafeOutboundUrl(rawUrl)).toString()
+  const signal = options.signal || AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const res = await fetch(target, { ...options, redirect: 'manual' })
+    let res
+    try {
+      res = await fetch(target, { ...options, signal, redirect: 'manual' })
+    } catch (err) {
+      // Turn the bare "fetch failed" / "operation aborted" into a reason a person can act on.
+      const host = new URL(target).host
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        throw new Error(`${host} did not answer within ${Math.round(OUTBOUND_TIMEOUT_MS / 1000)} seconds.`)
+      }
+      const code = err.cause?.code || err.cause?.message || err.message
+      throw new Error(`Could not reach ${host} (${code}).`)
+    }
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       if (hop === maxRedirects) throw new Error('Too many outbound redirects')
       const next = new URL(res.headers.get('location'), target).toString()

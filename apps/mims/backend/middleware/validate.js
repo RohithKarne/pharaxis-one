@@ -118,6 +118,11 @@ const schemas = {
     follow_up_received_date: isoDate().optional().allow('', null),
     internal_notes:    str(5000).optional().allow('', null),
     expected_version_stamp: Joi.number().integer().min(0).optional(),
+    // Change-control answers (division_parameters cc_* rules). Stripped as unknown
+    // fields until now, so a required reopen reason or close e-signature could never
+    // be satisfied and no case could be closed or reopened once a rule was on.
+    reason:            str(1000).optional().allow('', null),
+    password:          Joi.string().max(200).optional(),
   }).min(1),
 
   savedView: Joi.object({
@@ -188,6 +193,7 @@ const schemas = {
     name:      str().required(),
     org_id:    id().optional(),
     is_active: bool().optional(),
+    is_closed: bool().optional(),
   }),
 
   createWorkflowRule: Joi.object({

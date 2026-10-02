@@ -19,7 +19,7 @@ import { httpFetch } from '../../api/httpFetch.js'
 
 export default function AttachmentGallery({
   entityType, entityId, field = null,
-  onOpen, compact = false, reloadKey,
+  onOpen, compact = false, reloadKey, readOnly = false,
 }) {
   const { token } = useAuth()
   const [items, setItems] = useState([])
@@ -42,6 +42,23 @@ export default function AttachmentGallery({
   }, [entityType, entityId, field, token])
 
   useEffect(() => { load() }, [load, reloadKey])
+
+  // No screen passed onOpen, so a file on a case could be seen but never opened.
+  // Default: download it with the user's session — the server serves case files as
+  // downloads, and a download is not stopped by a pop-up blocker.
+  async function openFile(a) {
+    if (onOpen) return onOpen(a)
+    const r = await httpFetch(`/api/attachments/${a.id}/content`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!r.ok) { alert('This file could not be opened.'); return }
+    const url = URL.createObjectURL(await r.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = a.original_name || 'attachment'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  }
 
   async function del(id) {
     if (!confirm('Delete attachment?')) return
@@ -67,7 +84,7 @@ export default function AttachmentGallery({
           display: 'flex', flexDirection: 'column',
         }}>
           <div
-            onClick={() => onOpen?.(a)}
+            onClick={() => openFile(a)}
             style={{
               position: 'relative', height: size, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -89,7 +106,7 @@ export default function AttachmentGallery({
             }}>{a.original_name}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginTop: 2 }}>
               <span>{fmtSize(a.size_bytes)}</span>
-              <span style={{ display: 'flex', gap: 4 }}>
+              {!readOnly && <span style={{ display: 'flex', gap: 4 }}>
                 {/* Sprint 2 #14 — open tag/source picker */}
                 <button onClick={(e) => { e.stopPropagation(); setTagPicker(a.id) }} title="Tag / source" style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
@@ -99,7 +116,7 @@ export default function AttachmentGallery({
                   background: 'transparent', border: 'none', cursor: 'pointer',
                   color: '#b91c1c', fontSize: 11,
                 }}>✕</button>
-              </span>
+              </span>}
             </div>
           </div>
         </div>

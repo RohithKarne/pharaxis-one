@@ -3,6 +3,8 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { WiredField, WiredSelect, WiredTextarea } from '../../../shared/components/WiredField'
+import { useAuth } from '../../../shared/context/AuthContext'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const CONTACT_SECTION = 'Contact / Requestor'
@@ -79,6 +81,9 @@ export default function CaseContactsTab({
   // A case contact can be edited in place; it could only be removed and added
   // again, e.g. to give the reporter a missing email (M-104).
   const [editingId, setEditingId] = useState(null)
+  // Bridge row 10: an administrator can erase the reporter's identity on this case.
+  const { user } = useAuth()
+  const [erasing, setErasing] = useState(false)
 
   useDraft(`mims_case_${id}_contact_draft`, addContactForm, setAddContactForm)
   useEffect(() => {
@@ -256,8 +261,18 @@ export default function CaseContactsTab({
           </div>
           <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
           <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
+          {c.contact_role === 'reporter' && hasIdentity(c) && isAdminUser(user) && (
+            <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>
+          )}
+          {c.contact_role === 'reporter' && !hasIdentity(c) && (
+            <span className="cf-dnumd-badge" style={{ marginLeft: 6 }}>Identity erased</span>
+          )}
         </div>
       ))}
+      {erasing && (
+        <ReporterErasureModal caseId={id} headers={headers}
+          onDone={() => { setErasing(false); loadContacts() }} onCancel={() => setErasing(false)} />
+      )}
 
       {showContactAdd && (
         <div className="cf-add-contact-form">
@@ -343,6 +358,69 @@ export default function CaseContactsTab({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function hasIdentity(c) {
+  return [c.first_name, c.last_name, c.email, c.phone, c.address, c.institution].some(v => v && String(v).trim())
+}
+
+// Bridge row 10: erasing the reporter cannot be undone, so it takes a reason and the
+// user's password, and says plainly what goes and what stays.
+function ReporterErasureModal({ caseId, headers, onDone, onCancel }) {
+  const [reason, setReason] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setBusy(true); setError('')
+    try {
+      const res = await httpFetch(`${API}/cases/${caseId}/erase-reporter`, {
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason, password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || 'Could not erase the reporter\'s identity.'); return }
+      toast.success('The reporter\'s identity was erased from this case.')
+      onDone()
+    } catch {
+      setError('Could not erase the reporter\'s identity. Check your connection and try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(20,28,42,0.55)', zIndex: 9990, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <form onClick={e => e.stopPropagation()} onSubmit={submit}
+        style={{ width: 480, maxWidth: '92vw', background: 'var(--surface,#fff)', borderRadius: 10, boxShadow: '0 12px 48px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+          <strong>Erase the reporter's identity</strong>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            Removes the reporter's name, email, phone, organisation, address and institution from this case.
+            The case itself, the reporter type and the country stay. If the case came from a portal, the portal removes them from its copy too.
+            This cannot be undone.
+          </div>
+        </div>
+        <div style={{ padding: 16, display: 'grid', gap: 10 }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Reason
+            <textarea autoFocus rows={2} value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="For example: erasure request received by email on 2 October"
+              style={{ width: '100%', padding: '8px 10px', fontSize: 13, marginTop: 4 }} />
+          </label>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Your password (electronic signature)
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password"
+              style={{ width: '100%', padding: '8px 10px', fontSize: 13, marginTop: 4 }} />
+          </label>
+          {error && <div style={{ color: '#b91c1c', fontSize: 12 }}>{error}</div>}
+        </div>
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={busy || reason.trim().length < 3 || !password}>{busy ? 'Erasing…' : 'Sign and erase'}</button>
+        </div>
+      </form>
     </div>
   )
 }

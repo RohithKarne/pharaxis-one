@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 // FIX-2: the Sync Health dashboard — live view over the O2 sync-health API.
 // Answers "is the MIMS integration healthy, and what failed?" at a glance.
@@ -16,8 +16,12 @@ const STATUS_TILES = [
 
 export default function SyncHealthPage() {
   const { clientId } = useParams()
+  const { canChange } = useAdminAuth()
   const [counts, setCounts]     = useState({})
   const [failures, setFailures] = useState([])
+  const [files, setFiles]       = useState([])
+  const [followups, setFollowups] = useState([])
+  const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
   const [retrying, setRetrying] = useState(null)
@@ -33,6 +37,8 @@ export default function SyncHealthPage() {
       const d = await res.json()
       setCounts(d.counts || {})
       setFailures(d.failures || [])
+      setFiles(d.files || [])
+      setFollowups(d.followups || [])
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -49,6 +55,36 @@ export default function SyncHealthPage() {
       load()
     } catch {
       setRetryResult(r => ({ ...r, [submissionId]: { error: 'Network error' } }))
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  // Bridge row 3: send one file to its MIMS case again.
+  async function retryFile(attachmentId) {
+    setRetrying(`file-${attachmentId}`)
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/attachments/${attachmentId}/retry`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      setFileResult(r => ({ ...r, [attachmentId]: res.ok ? d : { error: d.error || `Error ${res.status}` } }))
+      load()
+    } catch {
+      setFileResult(r => ({ ...r, [attachmentId]: { error: 'Network error' } }))
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  // Bridge row 9: send information a person added to its MIMS case again.
+  async function retryFollowUp(followupId) {
+    setRetrying(`fu-${followupId}`)
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/followups/${followupId}/retry`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      setFileResult(r => ({ ...r, [`fu-${followupId}`]: res.ok ? d : { error: d.error || `Error ${res.status}` } }))
+      load()
+    } catch {
+      setFileResult(r => ({ ...r, [`fu-${followupId}`]: { error: 'Network error' } }))
     } finally {
       setRetrying(null)
     }
@@ -115,6 +151,82 @@ export default function SyncHealthPage() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="cp-section-header" style={{ marginTop: 24 }}>
+            <h2>Files not delivered {files.length > 0 ? `(${files.length})` : ''}</h2>
+          </div>
+          {files.length === 0 ? (
+            <div className="cp-empty"><p>Every file sent with a report has reached its MIMS case.</p></div>
+          ) : (
+            <table className="cp-table">
+              <thead>
+                <tr><th>Reference</th><th>File</th><th>MIMS case</th><th>Attempts</th><th>Last Error</th><th>Last Attempt</th><th /></tr>
+              </thead>
+              <tbody>
+                {files.map(f => (
+                  <tr key={f.id}>
+                    <td><Link to={`/admin/clients/${clientId}/submissions`}>{f.reference}</Link></td>
+                    <td>{f.file_name}</td>
+                    <td>{f.external_ref || '—'}</td>
+                    <td>{f.forward_attempts}</td>
+                    <td style={{ maxWidth: 260 }}>{f.forward_error || '—'}</td>
+                    <td>{f.last_forward_at ? new Date(f.last_forward_at).toLocaleString() : '—'}</td>
+                    <td>
+                      {canChange('submissions') && (
+                        <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFile(f.id)} disabled={retrying === `file-${f.id}`}>
+                          {retrying === `file-${f.id}` ? 'Sending…' : '↻ Send again'}
+                        </button>
+                      )}
+                      {fileResult[f.id] && (
+                        <div style={{ fontSize: 12, marginTop: 4, color: fileResult[f.id].status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
+                          {fileResult[f.id].status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${fileResult[f.id].error || 'failed'}`}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="cp-section-header" style={{ marginTop: 24 }}>
+            <h2>Added information not delivered {followups.length > 0 ? `(${followups.length})` : ''}</h2>
+          </div>
+          {followups.length === 0 ? (
+            <div className="cp-empty"><p>Everything people added to their requests has reached MIMS.</p></div>
+          ) : (
+            <table className="cp-table">
+              <thead>
+                <tr><th>Reference</th><th>MIMS case</th><th>Attempts</th><th>Last Error</th><th>Last Attempt</th><th /></tr>
+              </thead>
+              <tbody>
+                {followups.map(f => {
+                  const result = fileResult[`fu-${f.id}`]
+                  return (
+                    <tr key={f.id}>
+                      <td><Link to={`/admin/clients/${clientId}/submissions`}>{f.reference}</Link></td>
+                      <td>{f.external_ref || '—'}</td>
+                      <td>{f.forward_attempts}</td>
+                      <td style={{ maxWidth: 260 }}>{f.forward_error || '—'}</td>
+                      <td>{f.last_forward_at ? new Date(f.last_forward_at).toLocaleString() : '—'}</td>
+                      <td>
+                        {canChange('submissions') && (
+                          <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFollowUp(f.id)} disabled={retrying === `fu-${f.id}`}>
+                            {retrying === `fu-${f.id}` ? 'Sending…' : '↻ Send again'}
+                          </button>
+                        )}
+                        {result && (
+                          <div style={{ fontSize: 12, marginTop: 4, color: result.status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
+                            {result.status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${result.error || 'failed'}`}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

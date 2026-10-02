@@ -194,6 +194,10 @@ CREATE TABLE IF NOT EXISTS cp_integration_config (
   last_sync_at       DATETIME     NULL,
   last_sync_status   VARCHAR(50)  NOT NULL DEFAULT 'unknown',
   last_sync_error    TEXT         NULL,
+  changes_since      VARCHAR(19)  NULL,
+  changes_after_id   INT          NULL,
+  changes_read_at    DATETIME     NULL,
+  consecutive_failures INT          NOT NULL DEFAULT 0,
   created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -236,6 +240,7 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   owner_id        INT          NULL,   -- CPPM-61 (0026): who holds it now
   owner_since     DATETIME     NULL,
+  identity_erased_at DATETIME  NULL,
   PRIMARY KEY (id),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
@@ -849,7 +854,7 @@ CREATE TABLE IF NOT EXISTS cp_msl_slots (
   CONSTRAINT fk_slots_msl    FOREIGN KEY (msl_id)    REFERENCES cp_msls(id)    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── SUBMISSION ATTACHMENTS (from 0003; scan columns from 0021, CPPM-39) ──
+-- ── SUBMISSION ATTACHMENTS (from 0003; scan columns from 0021, CPPM-39; delivery from 0031, bridge row 3) ──
 CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   id            INT          NOT NULL AUTO_INCREMENT,
   submission_id INT          NOT NULL,
@@ -862,9 +867,16 @@ CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   scan_status   VARCHAR(20)  NOT NULL DEFAULT 'pending',
   scan_detail   VARCHAR(255) NULL,
   scanned_at    DATETIME     NULL,
+  forward_status     VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  forward_attempts   INT           NOT NULL DEFAULT 0,
+  forward_error      VARCHAR(1000) NULL,
+  forwarded_at       DATETIME      NULL,
+  last_forward_at    DATETIME      NULL,
+  mims_attachment_id INT           NULL,
   PRIMARY KEY (id),
   KEY idx_subatt_submission (submission_id),
   KEY idx_subatt_scan (scan_status),
+  KEY idx_subatt_forward (forward_status),
   CONSTRAINT fk_subatt_sub    FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
   CONSTRAINT fk_subatt_client FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1009,6 +1021,8 @@ CREATE TABLE IF NOT EXISTS cp_submission_answers (
   approved_at    DATETIME     NULL,
   sent_at        DATETIME     NULL,
   send_error     TEXT         NULL,
+  source           VARCHAR(20) NOT NULL DEFAULT 'portal',
+  mims_response_id INT         NULL,
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -1112,6 +1126,54 @@ CREATE TABLE IF NOT EXISTS cp_login_attempts (
   PRIMARY KEY (login_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── ADMIN ALERTS (from 0030, bridge row 2) ──────────────────────
+CREATE TABLE IF NOT EXISTS cp_admin_alerts (
+  id            INT          NOT NULL AUTO_INCREMENT,
+  client_id     INT          NOT NULL,
+  kind          VARCHAR(50)  NOT NULL,
+  audience      VARCHAR(20)  NOT NULL,
+  title         VARCHAR(255) NOT NULL,
+  body          TEXT         NULL,
+  link_path     VARCHAR(255) NULL,
+  related_type  VARCHAR(50)  NULL,
+  related_id    INT          NULL,
+  dedupe_key    VARCHAR(191) NOT NULL,
+  emailed_to    TEXT         NULL,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at   DATETIME     NULL,
+  resolved_by   VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_admin_alert_dedupe (client_id, dedupe_key),
+  KEY idx_admin_alert_open (client_id, resolved_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cp_alert_settings (
+  client_id            INT      NOT NULL,
+  integration_emails   TEXT     NULL,
+  safety_emails        TEXT     NULL,
+  safety_wait_hours    INT      NOT NULL DEFAULT 4,
+  updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── SUBMISSION FOLLOW-UPS (from 0035, bridge row 9) ─────────────
+CREATE TABLE IF NOT EXISTS cp_submission_followups (
+  id                 INT           NOT NULL AUTO_INCREMENT,
+  submission_id      INT           NOT NULL,
+  client_id          INT           NOT NULL,
+  body               TEXT          NOT NULL,
+  forward_status     VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  forward_attempts   INT           NOT NULL DEFAULT 0,
+  forward_error      VARCHAR(1000) NULL,
+  last_forward_at    DATETIME      NULL,
+  mims_comment_id    INT           NULL,
+  created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_followup_submission (submission_id),
+  KEY idx_followup_forward (forward_status),
+  CONSTRAINT fk_followup_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1145,4 +1207,11 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0024_add_training_records.sql',             NULL),
   ('0025_add_ae_task_owner.sql',                NULL),
   ('0026_add_work_owners.sql',                  NULL),
-  ('0027_add_submission_messages.sql',          NULL);
+  ('0027_add_submission_messages.sql',          NULL),
+  ('0030_add_admin_alerts.sql',                 NULL),
+  ('0031_add_attachment_delivery.sql',          NULL),
+  ('0032_add_mims_change_checkpoint.sql',       NULL),
+  ('0033_add_connection_failure_count.sql',     NULL),
+  ('0034_add_answer_source.sql',                NULL),
+  ('0035_add_submission_followups.sql',         NULL),
+  ('0036_add_submission_identity_erased.sql',   NULL);

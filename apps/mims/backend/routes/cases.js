@@ -824,6 +824,39 @@ router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('c
   }
 });
 
+// POST /api/cases/:id/erase-reporter — bridge row 10: erase the reporter's identity on
+// this case when the person asks MIMS (or the company running it) for erasure. The case
+// is kept; name, email, phone, organisation, address and institution are blanked. Needs
+// a reason and the user's password (electronic signature), because it cannot be undone.
+// A case sent by a portal is then reported on the change feed, and the portal blanks
+// its own copy.
+router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const reason = String(req.body?.reason || '').trim();
+  if (reason.length < 3) return res.status(400).json({ error: 'Give the reason for the erasure (for example, the request it answers).', code: 'REASON_REQUIRED' });
+  if (!(await changeControl.verifyPassword(req.user.userId, req.body?.password))) {
+    return res.status(401).json({ error: 'Password is incorrect. Erasure was not done.', code: 'PASSWORD_REQUIRED' });
+  }
+  const owned = await verifyCaseOrg(req.params.id, req);
+  if (!owned) return res.status(403).json({ error: 'Access denied' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const { eraseReporterIdentity } = require('../services/reporterErasureService');
+    await eraseReporterIdentity(conn, owned.id, {
+      userId: req.user.userId, userName: req.user.email,
+      note: `erased in MIMS: ${reason.slice(0, 500)}`, always: true,
+    });
+    await conn.commit();
+    res.json({ erased: true });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    logger.error({ err, route: 'POST /api/cases/:id/erase-reporter', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to erase the reporter identity');
+    res.status(500).json({ error: 'Could not erase the reporter\'s identity. Nothing was changed.' });
+  } finally {
+    conn.release();
+  }
+});
+
 // GET /api/cases/:id/comments — list case comments newest-first
 router.get('/cases/:id/comments', authenticate, async (req, res) => {
   try {
@@ -1699,9 +1732,11 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     // clock) unless the same request reopens it via a status transition.
     if (currentCase.status_id) {
       const [[curState]] = await pool.execute(
-        'SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [currentCase.status_id]
+        'SELECT name, is_closed FROM workflow_states WHERE id = ? LIMIT 1', [currentCase.status_id]
       );
-      const isClosed = curState && /closed|complete|cancel/i.test(curState.name || '');
+      // Bridge row 4: the state's own "closes the case" marker (migration 140), set by
+      // an admin and kept on rename — not a guess from the state's name.
+      const isClosed = !!curState && Number(curState.is_closed) === 1;
       const reopening = hasOwn(body, 'status_id') && body.status_id !== '' && body.status_id !== null
         && Number(parseInt(body.status_id, 10)) !== Number(currentCase.status_id || 0);
       if (isClosed && !reopening) {
@@ -1757,12 +1792,13 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         }
 
         // Division change-control: close-password and reopen-reason rules.
-        // "Closed" is detected by workflow state name (matches caseGovernanceService).
-        const [[oldState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [currentCase.status_id]);
-        const [[newState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [nextStatusId]);
-        const oldName = oldState?.name || '', newName = newState?.name || '';
-        const isClose = newName === 'Closed' && oldName !== 'Closed';
-        const isReopen = oldName === 'Closed' && newName !== 'Closed';
+        // "Closed" is the state's "closes the case" marker (migration 140), so a state an
+        // admin named "Resolved" carries the same e-signature and reopen-reason rules.
+        const [[oldState]] = await pool.execute('SELECT is_closed FROM workflow_states WHERE id = ?', [currentCase.status_id]);
+        const [[newState]] = await pool.execute('SELECT is_closed FROM workflow_states WHERE id = ?', [nextStatusId]);
+        const wasClosed = Number(oldState?.is_closed) === 1, nowClosed = Number(newState?.is_closed) === 1;
+        const isClose = nowClosed && !wasClosed;
+        const isReopen = wasClosed && !nowClosed;
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
           return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }
@@ -1770,7 +1806,12 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         if (isClose) {
           const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
           if (needPwd && !(await changeControl.verifyPassword(req.user.userId, body.password))) {
-            return res.status(401).json({ error: 'Password (electronic signature) required to close this case.', code: 'PASSWORD_REQUIRED' });
+            return res.status(401).json({
+              error: body.password
+                ? 'That password was not accepted — electronic signature rejected. Enter your own password to close this case.'
+                : 'Password (electronic signature) required to close this case.',
+              code: 'PASSWORD_REQUIRED',
+            });
           }
         }
         if (isReopen) {
@@ -1911,6 +1952,10 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
       caseRef = updated.case_number || currentCase.case_number || `Case ${req.params.id}`;
       if (statusChanged) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', previousStatusId, updatedStatusId, conn);
+        // The reason the user gave for closing or reopening goes into the case's own history.
+        if (body.reason && String(body.reason).trim()) {
+          await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGE_REASON', 'reason', null, String(body.reason).trim().slice(0, 1000), conn);
+        }
         await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'case_status', req.params.id, {
           case_id: Number(req.params.id),
           from_status_id: previousStatusId,
@@ -2543,6 +2588,9 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
       );
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
+      // Bridge row 8: an answer going out is a change to the case, so a connected
+      // portal's change list picks it up and shows the person their answer.
+      if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
       await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
         case_id: Number(req.params.id),
         from_status: existing.response_status,
@@ -3042,7 +3090,10 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
     const caseId = req.params.id;
     const validationDate = toDateOnlyOrNull(new Date());
 
-    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    // Only a type the caller sends is checked against the organisation's list. With
+    // none sent, the case keeps the type it has: defaulting to 'HCP' made every save
+    // without a type fail where the list says 'Healthcare Professional' (bridge row 10).
+    let reporterTypeValue = reporter?.reporter_type || null;
     let patientGenderValue = patient?.gender || null;
     let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
     let aeRouteValue = ae_intake?.route_of_admin || null;
@@ -3082,6 +3133,16 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
     }
 
     if (reporter) {
+      if (!reporterTypeValue) {
+        const [[current]] = await pool.execute('SELECT reporter_type FROM case_reporter WHERE case_id = ?', [caseId]);
+        reporterTypeValue = current?.reporter_type || 'HCP';
+      }
+      // Bridge row 10: once the reporter's identity has been erased on this case, an
+      // intake save cannot put it back — only reporter type and country are kept.
+      const [[erased]] = await pool.execute('SELECT reporter_erased_at FROM cases WHERE id = ?', [caseId]);
+      if (erased?.reporter_erased_at) {
+        reporter.first_name = reporter.last_name = reporter.email = reporter.phone = reporter.organisation = null;
+      }
       await pool.execute(
         `INSERT INTO case_reporter (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE
@@ -3150,7 +3211,7 @@ router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.upda
       updated_by: req.user.userId,
     }, 'case', String(caseId)).catch(() => {});
     res.json({ message: 'Intake data updated.' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 // ─── SOFT DELETE ──────────────────────────────────────────────────────────────

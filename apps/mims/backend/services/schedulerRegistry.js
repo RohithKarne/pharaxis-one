@@ -89,6 +89,14 @@ module.exports = [
     configRoute:    '/transmissions',
   },
   {
+    name:           'ae-handoff-deadlines',
+    source:         'Transmissions',
+    cronExpression: '*/30 * * * *',
+    description:    'Warns when a side-effect case has no hand-off started and its deadline is two days away or less (bridge row 7)',
+    type:           'cron',
+    configRoute:    '/transmissions',
+  },
+  {
     name:           'inbox-operational-sla',
     source:         'Inbox',
     cronExpression: '*/30 * * * *',

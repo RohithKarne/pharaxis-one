@@ -20,6 +20,14 @@ const PUBLIC_LABELS = {
   submitted: 'Received',
   synced:    'With the medical team',
   closed:    'Closed',
+  // Bridge row 4: the case was closed in MIMS and then opened again — the person's
+  // request is with the medical team again, and says so rather than looking unchanged.
+  reopened:  'Reopened — with the medical team again',
+  // Bridge row 8: what MIMS says is happening, in the person's words.
+  in_review: 'A medical information specialist is working on it',
+  answered:  'Answer sent',
+  // Bridge row 9: the person added information to the request after sending it.
+  follow_up: 'You added more information',
 };
 
 // The note a reply writes when it reopens a closed request (routes/portal/submit.js).

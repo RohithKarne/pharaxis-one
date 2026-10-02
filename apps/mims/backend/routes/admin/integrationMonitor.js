@@ -58,7 +58,16 @@ router.get('/integrations/health', authenticate, requireRole('admin', 'platform_
       };
     });
 
-    res.json({ integrations });
+    // Bridge row 6: systems that send cases in (CP Portal and others), from what their
+    // calls actually did in the last 24 hours — not a stored "enabled" flag.
+    const [connections] = await pool.query(
+      `SELECT c.id, c.name, c.status,
+              (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h
+         FROM api_clients c WHERE c.org_id = ? ORDER BY c.name`, [orgId]);
+
+    res.json({ integrations, connections });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch integration health' });
   }

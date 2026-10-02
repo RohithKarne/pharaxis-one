@@ -29,7 +29,7 @@ const STATUS_LABELS = {
 }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
-function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged }) {
+function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, sentToMims }) {
   const [answer, setAnswer] = useState(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -64,9 +64,16 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged })
         <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
           {answer.body}
           <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
-            Approved by {answer.approved_by_name || 'unknown'} · sent {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}
+            {answer.source === 'mims'
+              ? <>Approved and sent in MIMS · {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}</>
+              : <>Approved by {answer.approved_by_name || 'unknown'} · sent {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}</>}
             {answer.send_error ? ` · ${answer.send_error}` : ''}
           </div>
+        </div>
+      ) : sentToMims ? (
+        // Bridge row 8: one answer path — this request is answered in MIMS.
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 6, padding: 12, fontSize: 13, color: '#475569' }}>
+          This request was sent to MIMS, so it is answered there. The answer MIMS approves and sends will appear here and on the person's My Submissions page.
         </div>
       ) : (
         <>
@@ -95,7 +102,8 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged })
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
       {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
     </div>
-    {sent && <ConversationPanel clientId={clientId} submissionId={submissionId} canApprove={canApprove} canEdit={canEdit} onChanged={onChanged} />}
+    {/* Bridge row 8: a request in MIMS is answered there, so no follow-up is written here. */}
+    {sent && !sentToMims && <ConversationPanel clientId={clientId} submissionId={submissionId} canApprove={canApprove} canEdit={canEdit} onChanged={onChanged} />}
     </>
   )
 }
@@ -536,7 +544,26 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} />
+                        {/* Bridge row 9: what the person added after sending, and whether it reached MIMS. */}
+                        {s.followups?.length > 0 && (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Information the person added ({s.followups.length})</div>
+                            {s.followups.map(f => (
+                              <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
+                                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>
+                                  {new Date(f.created_at).toLocaleString()} · {{
+                                    forwarded: 'On the MIMS case',
+                                    pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
+                                    failed: `Not yet on the MIMS case: ${f.forward_error || 'unknown reason'}`,
+                                    local: 'Kept in the portal (this request type does not go to MIMS)',
+                                  }[f.forward_status] || f.forward_status}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{f.body}</div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} sentToMims={!!s.external_ref} />
                       </td>
                     </tr>
                   )}

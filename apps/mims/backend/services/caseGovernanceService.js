@@ -68,12 +68,19 @@ async function computeAeHandoffClock(caseId) {
   const reason = priority === '7-day-expedited'
     ? 'fatal or life-threatening, from a clinical trial'
     : priority === '15-day-expedited' ? 'serious' : 'not serious';
-  const awareness = general?.date_of_awareness ? new Date(general.date_of_awareness) : null;
-  const start = awareness && !Number.isNaN(awareness.getTime()) ? awareness : new Date();
+  // The AE form's awareness date first; else the case's own awareness date (set at
+  // intake — e.g. the day a person reported it on the portal, CPPM-18); else the day
+  // MIMS received it. Falling straight to "today" made a portal case's deadline move
+  // forward every day it sat unhandled, so it never came due.
+  const [[caseDates]] = await pool.execute('SELECT awareness_date, date_received FROM cases WHERE id = ? LIMIT 1', [caseId]);
+  const valid = (v) => { const d = v ? new Date(v) : null; return d && !Number.isNaN(d.getTime()) ? d : null; };
+  const awareness = valid(general?.date_of_awareness) || valid(caseDates?.awareness_date);
+  const received = valid(caseDates?.date_received);
+  const start = awareness || received || new Date();
   return {
     priority,
     reason,
-    from: awareness && !Number.isNaN(awareness.getTime()) ? 'awareness date' : 'today (no awareness date)',
+    from: awareness ? 'awareness date' : received ? 'date received (no awareness date)' : 'today (no awareness date)',
     dueDate: shiftDateOnly(AE_CLOCK_DAYS[priority], start),
   };
 }
@@ -91,6 +98,9 @@ function calculatePcDueDate(priority, requestedDate) {
 
 function computeTransmissionSlaStatus(dueDate, status) {
   if (!dueDate) return 'untracked';
+  // A Date from MySQL compared with 'YYYY-MM-DD' text is always false (see
+  // refreshTransmissionSlaAlerts) — compare text with text.
+  if (dueDate instanceof Date) dueDate = dueDate.toISOString().slice(0, 10);
   if (['Closed'].includes(status)) return 'closed';
 
   const today = toDateOnly();
@@ -254,7 +264,8 @@ async function refreshTransmissionSlaAlerts() {
         t.escalated_at,
         t.reminder_sent_at,
         c.case_number,
-        c.case_owner_id
+        c.case_owner_id,
+        c.org_id
       FROM case_ae_transmissions t
       JOIN cases c ON c.id = t.case_id
       WHERE c.is_deleted = 0
@@ -272,7 +283,8 @@ async function refreshTransmissionSlaAlerts() {
         t.escalated_at,
         t.reminder_sent_at,
         c.case_number,
-        c.case_owner_id
+        c.case_owner_id,
+        c.org_id
       FROM case_pc_transmissions t
       JOIN cases c ON c.id = t.case_id
       WHERE c.is_deleted = 0
@@ -285,6 +297,10 @@ async function refreshTransmissionSlaAlerts() {
   const tomorrow = shiftDateOnly(1);
 
   for (const row of rows) {
+    // due_date comes back from MySQL as a Date object; every comparison below is
+    // against 'YYYY-MM-DD' text, and Date-vs-text is always false — so no reminder or
+    // overdue warning was ever sent and every hand-off stayed "on track". Compare text.
+    if (row.due_date instanceof Date) row.due_date = row.due_date.toISOString().slice(0, 10);
     const nextSlaStatus = computeTransmissionSlaStatus(row.due_date, row.status);
     const tableName = row.transmission_type === 'AE' ? 'case_ae_transmissions' : 'case_pc_transmissions';
     const isBreach = row.due_date < today;
@@ -298,7 +314,10 @@ async function refreshTransmissionSlaAlerts() {
     );
 
     if (isAtRisk && !row.reminder_sent_at) {
-      const targetUsers = [row.assigned_to, row.case_owner_id].filter(Boolean);
+      // Nobody assigned and no owner (an unassigned portal case): the case supervisors,
+      // not nobody — the reminder used to go to an empty list.
+      let targetUsers = [row.assigned_to, row.case_owner_id].filter(Boolean);
+      if (!targetUsers.length) targetUsers = await require('./intakeAlertService').getCaseSupervisors(row.org_id);
       await createNotifications(targetUsers, {
         category: 'transmission_sla',
         severity: 'warning',
@@ -316,7 +335,10 @@ async function refreshTransmissionSlaAlerts() {
     }
 
     if (isBreach && !row.escalated_at) {
-      const targetUsers = [row.assigned_to, row.case_owner_id].filter(Boolean);
+      // Nobody assigned and no owner (an unassigned portal case): the case supervisors,
+      // not nobody — the reminder used to go to an empty list.
+      let targetUsers = [row.assigned_to, row.case_owner_id].filter(Boolean);
+      if (!targetUsers.length) targetUsers = await require('./intakeAlertService').getCaseSupervisors(row.org_id);
       await createNotifications(targetUsers, {
         category: 'transmission_sla',
         severity: 'critical',

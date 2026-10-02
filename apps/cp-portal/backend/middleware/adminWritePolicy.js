@@ -42,6 +42,8 @@ const WRITE_ROLES = {
   // Work queues — finer rules live in the routes
   news: STAFF, documents: STAFF, 'ae-review': STAFF, submissions: STAFF,
   'chat-records': STAFF, feedback: STAFF, 'review-queue': STAFF,
+  // Bridge row 2: staff resolve the alerts for their own work; settings stay admin-only in the route.
+  alerts: STAFF,
 };
 
 const AREA_NAMES = {
@@ -49,6 +51,7 @@ const AREA_NAMES = {
   'data-requests': 'data requests', 'ae-review': 'the Safety Queue', submissions: 'enquiries',
   sso: 'single sign-on settings', gate: 'the user gate', msls: 'the MSL directory', faq: 'the FAQ',
   safety: 'safety alerts', 'chat-records': 'chat records', 'review-queue': 'the review queue',
+  alerts: 'alerts',
 };
 
 const READS = new Set(['GET', 'HEAD', 'OPTIONS']);

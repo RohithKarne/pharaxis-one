@@ -35,7 +35,8 @@ const ERASED = '[erased]';
 // or someone else's name cannot be recognised by a machine and stays.
 
 // Form fields that identify the reporter rather than describe what happened.
-const IDENTITY_FIELD = /^(first_?name|last_?name|full_?name|name|surname|e_?mail(_address)?|phone(_number)?|telephone|mobile|address|postcode|zip|(reporter|submitter|contact|requester)_.+)$/i;
+// Bridge row 10: organisation and institution too — MIMS blanks both on the case.
+const IDENTITY_FIELD = /^(first_?name|last_?name|full_?name|name|surname|e_?mail(_address)?|phone(_number)?|telephone|mobile|address|postcode|zip|organi[sz]ation|institution|(reporter|submitter|contact|requester)_.+)$/i;
 
 const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -215,6 +216,56 @@ async function buildExport(userId, clientId) {
 }
 
 /**
+ * Bridge row 10: the reporter's identity was erased on the MIMS case — remove it from
+ * the portal's copy of those requests and keep the requests, with the same scrubbing
+ * as a full erasure (CPPM-69): name and email columns, the link to the portal account,
+ * the IP address, identity answers in the stored form, and the person's name, email
+ * and phone inside the answer, replies, added information, safety review notes and the
+ * emails about the request (one not yet sent is never sent). Runs on the caller's
+ * transaction. A request already erased is left as it is. The portal account itself is
+ * not touched: the person asked MIMS, not the portal, and may have other requests.
+ */
+async function eraseSubmissionIdentity(conn, clientId, subIds) {
+  if (!subIds.length) return 0;
+  const [rows] = await conn.execute(
+    `SELECT s.id, s.submitter_name, s.submitter_email, s.form_data,
+            u.first_name, u.last_name, u.email, u.phone
+       FROM cp_submissions s LEFT JOIN cp_portal_users u ON u.id = s.user_id
+      WHERE s.client_id = ? AND s.identity_erased_at IS NULL AND s.id IN (${subIds.map(() => '?').join(',')})`,
+    [clientId, ...subIds]);
+  for (const r of rows) {
+    const ids = collectIdentifiers(r, [r]);
+    await conn.execute(
+      `UPDATE cp_submissions
+          SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+              form_data = ?, identity_erased_at = NOW()
+        WHERE id = ?`, [ERASED, ERASED, redactJsonText(r.form_data, ids, true), r.id]);
+    const [ans] = await conn.execute('SELECT id, body FROM cp_submission_answers WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_answers', 'body', ans, t => redactText(t, ids));
+    const [msgs] = await conn.execute('SELECT id, body, ae_screen_detail FROM cp_submission_messages WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_messages', 'body', msgs, t => redactText(t, ids));
+    await rewriteColumn(conn, 'cp_submission_messages', 'ae_screen_detail', msgs, t => redactText(t, ids));
+    const [fus] = await conn.execute('SELECT id, body FROM cp_submission_followups WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_submission_followups', 'body', fus, t => redactText(t, ids));
+    const [tasks] = await conn.execute('SELECT id, reported_detail, outcome_reason FROM cp_ae_review_tasks WHERE submission_id = ?', [r.id]);
+    await rewriteColumn(conn, 'cp_ae_review_tasks', 'reported_detail', tasks, t => redactText(t, ids));
+    await rewriteColumn(conn, 'cp_ae_review_tasks', 'outcome_reason', tasks, t => redactText(t, ids));
+    const [mail] = await conn.execute(
+      `SELECT id, to_email, subject, html, text_body, status FROM cp_email_outbox
+        WHERE client_id = ? AND related_type = 'submission' AND related_id = ?`, [clientId, r.id]);
+    for (const m of mail) {
+      const to = ids.emails.has(String(m.to_email || '').toLowerCase()) ? ERASED : redactText(m.to_email, ids);
+      await conn.execute(
+        `UPDATE cp_email_outbox SET to_email = ?, subject = ?, html = ?, text_body = ?,
+                status = IF(status = 'pending', 'failed', status),
+                last_error = IF(status = 'pending', 'Not sent: the recipient asked for their data to be erased.', last_error)
+          WHERE id = ?`, [to, redactText(m.subject, ids), redactText(m.html, ids), redactText(m.text_body, ids), m.id]);
+    }
+  }
+  return rows.length;
+}
+
+/**
  * GDPR Art. 17 erasure with regulated-retention holds. Runs in a transaction and
  * returns a summary of what was deleted / retained / anonymized for the audit log.
  */
@@ -248,6 +299,18 @@ async function eraseUser(userId, clientId) {
     const retainIds = subs.filter(keep).map(s => s.id);
     const deleteIds = subs.filter(s => !keep(s)).map(s => s.id);
 
+    // CPPM-11: every request already sent to MIMS holds the identity over there too —
+    // the kept ones, and (bridge row 10) the medical enquiries deleted below, whose
+    // MIMS cases kept the name and email until now. Recorded inside this transaction,
+    // so the outstanding work either lands with the erasure or not at all.
+    if (allSubIds.length) {
+      const [synced] = await conn.execute(
+        `SELECT id, external_ref FROM cp_submissions
+          WHERE id IN (${allSubIds.map(() => '?').join(',')}) AND external_ref IS NOT NULL AND external_ref <> ''`, allSubIds);
+      mimsTargets = synced;
+      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
+    }
+
     // Delete non-regulated submissions + their attachment rows (and files best-effort).
     if (deleteIds.length) {
       const ph = deleteIds.map(() => '?').join(',');
@@ -263,17 +326,10 @@ async function eraseUser(userId, clientId) {
     // Retain regulated submissions but sever the reporter identity.
     if (retainIds.length) {
       const ph = retainIds.map(() => '?').join(',');
-      // CPPM-11: the ones already sent to MIMS hold the identity over there too.
-      // Recorded inside this transaction, so the outstanding work either lands
-      // with the erasure or not at all — it can never be lost between the two.
-      const [synced] = await conn.execute(
-        `SELECT id, external_ref FROM cp_submissions
-          WHERE id IN (${ph}) AND external_ref IS NOT NULL AND external_ref <> ''`, retainIds);
-      mimsTargets = synced;
-      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
-
+      // Bridge row 10: stamped, so a later report of the same erasure from MIMS changes nothing.
       await conn.execute(
-        `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL WHERE id IN (${ph})`,
+        `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+                identity_erased_at = COALESCE(identity_erased_at, NOW()) WHERE id IN (${ph})`,
         [ERASED, ERASED, ...retainIds]
       );
       summary.retained.push(`submissions(${retainIds.length}) [AE/PC or safety review raised — identity severed, safety record retained]`);
@@ -329,7 +385,9 @@ async function eraseUser(userId, clientId) {
       const [msgs] = await conn.execute(`SELECT id, body, ae_screen_detail FROM cp_submission_messages WHERE submission_id IN (${ph})`, retainIds);
       const nMsg = await rewriteColumn(conn, 'cp_submission_messages', 'body', msgs, t => redactText(t, ids))
         + await rewriteColumn(conn, 'cp_submission_messages', 'ae_screen_detail', msgs, t => redactText(t, ids));
-      if (nForm || nAns || nMsg) scrubbed.push(`submissions(form answers ${nForm}, answers ${nAns}, replies ${nMsg})`);
+      const [fus] = await conn.execute(`SELECT id, body FROM cp_submission_followups WHERE submission_id IN (${ph})`, retainIds);
+      const nFu = await rewriteColumn(conn, 'cp_submission_followups', 'body', fus, t => redactText(t, ids));
+      if (nForm || nAns || nMsg || nFu) scrubbed.push(`submissions(form answers ${nForm}, answers ${nAns}, replies ${nMsg}, added information ${nFu})`);
     }
     const chatIds = keptChats.map(c => c.id);
     {
@@ -425,4 +483,4 @@ async function eraseUser(userId, clientId) {
   }
 }
 
-module.exports = { buildExport, eraseUser, RETAINED_SUBMISSION_TYPES };
+module.exports = { buildExport, eraseUser, eraseSubmissionIdentity, RETAINED_SUBMISSION_TYPES };

@@ -100,6 +100,10 @@ const HANDLERS = {
     const { runScheduledExports } = require('./scheduledExportService')
     await runScheduledExports()
   },
+  'ae-handoff-deadlines': async () => {
+    const { sweepAeHandoffDeadlines } = require('./intakeAlertService')
+    await sweepAeHandoffDeadlines()
+  },
   'case-transmission-sla': async () => {
     const { refreshTransmissionSlaAlerts } = require('./caseGovernanceService')
     await refreshTransmissionSlaAlerts()

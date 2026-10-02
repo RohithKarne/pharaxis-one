@@ -81,6 +81,13 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       const bySub = {};
       atts.forEach(a => { (bySub[a.submission_id] = bySub[a.submission_id] || []).push(a); });
       rows.forEach(r => { r.attachments = bySub[r.id] || []; });
+      // Bridge row 9: information the person added after sending, with where it got to.
+      const [fus] = await pool.execute(
+        `SELECT id, submission_id, body, forward_status, forward_error, created_at
+           FROM cp_submission_followups WHERE submission_id IN (${ph}) ORDER BY id ASC`, ids);
+      const fuBySub = {};
+      fus.forEach(f => { (fuBySub[f.submission_id] = fuBySub[f.submission_id] || []).push(f); });
+      rows.forEach(r => { r.followups = fuBySub[r.id] || []; });
     }
 
     // Summary counts
@@ -257,9 +264,68 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
         WHERE client_id = ? AND status = 'failed_sync'
         ORDER BY updated_at DESC LIMIT 100`, [req.params.clientId]);
     failures.forEach(f => { f.reference = `CP-${String(f.id).padStart(6, '0')}`; });
-    res.json({ counts: byStatus, failures });
+    // Bridge row 3: files whose report reached MIMS but which did not.
+    const [files] = await pool.execute(
+      `SELECT a.id, a.submission_id, a.file_name, a.forward_attempts, a.forward_error, a.last_forward_at, s.external_ref
+         FROM cp_submission_attachments a JOIN cp_submissions s ON s.id = a.submission_id
+        WHERE a.client_id = ? AND a.forward_status = 'failed'
+        ORDER BY a.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
+    files.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
+    // Bridge row 9: information people added to a request that did not reach its MIMS case.
+    const [followups] = await pool.execute(
+      `SELECT f.id, f.submission_id, f.forward_attempts, f.forward_error, f.last_forward_at, s.external_ref
+         FROM cp_submission_followups f JOIN cp_submissions s ON s.id = f.submission_id
+        WHERE f.client_id = ? AND f.forward_status = 'failed'
+        ORDER BY f.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
+    followups.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
+    res.json({ counts: byStatus, failures, files, followups });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/attachments/:attachmentId/retry — send one
+// file to its MIMS case again (bridge row 3). Not limited by the automatic try cap.
+router.post('/:clientId/attachments/:attachmentId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    if (req.admin.role === 'viewer') return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    const [[att]] = await pool.execute(
+      `SELECT a.id, a.submission_id, s.status, s.external_ref FROM cp_submission_attachments a
+         JOIN cp_submissions s ON s.id = a.submission_id
+        WHERE a.id = ? AND a.client_id = ?`, [req.params.attachmentId, req.params.clientId]);
+    if (!att) return res.status(404).json({ error: 'File not found.' });
+    if (!att.external_ref) return res.status(409).json({ error: 'Its report has not reached MIMS yet — send the report first.' });
+    await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'attachment', att.id, { submission_id: att.submission_id });
+    const { forwardReleasedAttachment } = require('../portal/submit');
+    await forwardReleasedAttachment(att.id);
+    const [[after]] = await pool.execute('SELECT forward_status, forward_error FROM cp_submission_attachments WHERE id = ?', [att.id]);
+    res.json({ status: after.forward_status, error: after.forward_error });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/attachments/:attachmentId/retry', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/followups/:followupId/retry — send information a
+// person added to its MIMS case again (bridge row 9). Not limited by the automatic try cap.
+router.post('/:clientId/followups/:followupId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    if (req.admin.role === 'viewer') return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    const [[f]] = await pool.execute(
+      `SELECT f.id, f.submission_id, f.forward_status, s.external_ref FROM cp_submission_followups f
+         JOIN cp_submissions s ON s.id = f.submission_id
+        WHERE f.id = ? AND f.client_id = ?`, [req.params.followupId, req.params.clientId]);
+    if (!f) return res.status(404).json({ error: 'Follow-up not found.' });
+    if (!f.external_ref) return res.status(409).json({ error: 'Its report has not reached MIMS yet — send the report first.' });
+    if (f.forward_status === 'forwarded') return res.json({ status: 'forwarded', error: null });
+    await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'followup', f.id, { submission_id: f.submission_id });
+    const { forwardFollowUp } = require('../portal/submit');
+    await forwardFollowUp(f.id);
+    const [[after]] = await pool.execute('SELECT forward_status, forward_error FROM cp_submission_followups WHERE id = ?', [f.id]);
+    res.json({ status: after.forward_status, error: after.forward_error });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/followups/:followupId/retry', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -309,7 +375,7 @@ function answerEmail({ reference, body, hasAccount, followUp }) {
 router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const [[answer]] = await pool.execute(
-      `SELECT a.id, a.body, a.status, a.approved_at, a.sent_at, a.send_error,
+      `SELECT a.id, a.body, a.status, a.approved_at, a.sent_at, a.send_error, a.source,
               d.name AS drafted_by_name, p.name AS approved_by_name
          FROM cp_submission_answers a
     LEFT JOIN cp_admin_users d ON d.id = a.drafted_by
@@ -323,6 +389,8 @@ router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAc
   }
 });
 
+const ANSWERED_IN_MIMS = 'This request was sent to MIMS, so it is answered there. The answer MIMS approves and sends appears here and on the person\'s My Submissions page automatically.';
+
 // PUT /api/admin/submissions/:clientId/:submissionId/answer — save or update the draft
 router.put('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
@@ -330,8 +398,10 @@ router.put('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAc
     if (body.length < 10) return res.status(400).json({ error: 'Write the answer before saving it.' });
 
     const [[submission]] = await pool.execute(
-      'SELECT id FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+      'SELECT id, external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
     if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    // Bridge row 8: one answer path — a request that went to MIMS is answered there.
+    if (submission.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
 
     const [[existing]] = await pool.execute(
       'SELECT id, status FROM cp_submission_answers WHERE submission_id = ? AND client_id = ?',
@@ -363,6 +433,8 @@ router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireCl
       [req.params.submissionId, req.params.clientId]);
     if (!answer) return res.status(404).json({ error: 'Write the answer first.' });
     if (answer.status === 'sent') return res.status(409).json({ error: 'This answer has already been sent.' });
+    const [[linked]] = await pool.execute('SELECT external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (linked?.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
 
     const [[submission]] = await pool.execute(
       `SELECT s.id, s.submission_type, s.submitter_email, s.user_id, u.email AS user_email
@@ -443,6 +515,9 @@ router.get('/:clientId/:submissionId/messages', authenticateAdmin, requireClient
 // PUT /api/admin/submissions/:clientId/:submissionId/messages/draft — save the follow-up draft
 router.put('/:clientId/:submissionId/messages/draft', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
+    // Bridge row 8: a request in MIMS is answered there — no second answer path here.
+    const [[inMims]] = await pool.execute('SELECT external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (inMims?.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
     const body = String(req.body.body || '').trim();
     if (body.length < 10) return res.status(400).json({ error: 'Write the follow-up before saving it.' });
     if (body.length > 20000) return res.status(400).json({ error: 'The follow-up is too long.' });
@@ -476,6 +551,9 @@ router.put('/:clientId/:submissionId/messages/draft', authenticateAdmin, require
 // POST /api/admin/submissions/:clientId/:submissionId/messages/draft/send — approve and send the follow-up
 router.post('/:clientId/:submissionId/messages/draft/send', authenticateAdmin, requireClientAccess, ANSWER_APPROVERS, async (req, res) => {
   try {
+    // Bridge row 8: a request in MIMS is answered there — no second answer path here.
+    const [[inMims]] = await pool.execute('SELECT external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (inMims?.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
     const [[draft]] = await pool.execute(
       "SELECT id, body FROM cp_submission_messages WHERE submission_id = ? AND client_id = ? AND direction = 'out' AND status = 'draft'",
       [req.params.submissionId, req.params.clientId]);

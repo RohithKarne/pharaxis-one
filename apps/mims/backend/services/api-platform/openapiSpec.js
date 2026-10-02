@@ -30,6 +30,15 @@ paths:
   /cases/{id}/redact-reporter:
     post:
       summary: Remove the reporter's identity from a case, keeping the case (GDPR erasure)
+  /cases/changes:
+    get:
+      summary: Cases this connection sent that changed since a checkpoint (status, closed, owner, sent answer, reporter erased)
+  /cases/claim:
+    post:
+      summary: Record this connection as the sender of cases it created before senders were recorded
+  /cases/{id}/follow-ups:
+    post:
+      summary: Add information the reporter sent after the case was created, as a case comment (idempotent on followup_id)
   /picklists:
     get:
       summary: List picklist values

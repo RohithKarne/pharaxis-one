@@ -35,6 +35,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { auditWithin } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const { syncToIntegration, toDateOnly } = require('../portal/submit');
+const { clearAlerts } = require('../../services/adminAlerts');
 
 const OUTCOMES = ['reviewed_not_ae', 'cleared_administrative', 'confirmed_ae'];
 const CLINICAL_ROLES = ['safety_reviewer', 'superadmin'];
@@ -121,6 +122,8 @@ async function createAeSubmission(conn, clientId, task, { productName, eventDesc
     product_name: productName, event_description: eventDescription, event_date: eventDate,
     source: task.submission_id ? 'safety_review_form' : 'safety_review_chat',
     review_task_id: task.id, confirmed_by: reviewer || null,
+    // Bridge row 6: the enquiry this side effect was found in, so MIMS links the two cases.
+    related_reference: task.submission_id ? `CP-${String(task.submission_id).padStart(6, '0')}` : null,
     // Day zero is when the person told us, not when a reviewer confirmed it.
     awareness_date: toDateOnly(reporter.reportedAt),
   };
@@ -377,6 +380,7 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
           ...(heldByOther ? { held_by_id: task.owner_id, held_by: task.owner_name } : {}) });
     });
     if (!done) return;
+    clearAlerts(req.params.clientId, [`safety_new:${task.id}`, `safety_wait:${task.id}`], `task closed by ${req.admin.name || req.admin.email}`);
 
     if (!aeSubmissionId) return res.json({ message: 'Task closed.' });
 

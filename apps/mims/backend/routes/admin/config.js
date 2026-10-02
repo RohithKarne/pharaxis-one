@@ -154,10 +154,13 @@ router.post('/workflow-states', authenticate, requireRole('admin', 'platform_adm
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
     const orgId = getScopedOrgId(req, req.body.org_id);
-    const [result] = await pool.execute('INSERT INTO workflow_states (name, org_id) VALUES (?, ?)', [name.trim(), orgId]);
-    await audit(req.user.userId, req.user.email, 'CREATE', 'workflow_state', result.insertId, { name });
+    // Bridge row 4: whether a case in this state is finished. Defaults from the name
+    // (the whole words closed / complete(d) / cancel(led)) unless the admin says otherwise.
+    const isClosed = typeof req.body.is_closed === 'boolean' ? req.body.is_closed : /\b(closed|complete|completed|cancel|cancelled|canceled)\b/i.test(name.trim());
+    const [result] = await pool.execute('INSERT INTO workflow_states (name, org_id, is_closed) VALUES (?, ?, ?)', [name.trim(), orgId, isClosed ? 1 : 0]);
+    await audit(req.user.userId, req.user.email, 'CREATE', 'workflow_state', result.insertId, { name, is_closed: isClosed });
     const [[row]] = await pool.execute('SELECT created_at FROM workflow_states WHERE id = ?', [result.insertId]);
-    res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at });
+    res.status(201).json({ id: result.insertId, name, is_active: 1, is_closed: isClosed ? 1 : 0, created_at: row.created_at });
   } catch { res.status(409).json({ error: 'Workflow state already exists.' }); }
 });
 
@@ -172,8 +175,8 @@ router.put('/workflow-states/:id', authenticate, requireRole('admin', 'platform_
     );
     if (!existing) return res.status(404).json({ error: 'Workflow state not found.' });
     await pool.execute(
-      'UPDATE workflow_states SET name = ?, is_active = ? WHERE id = ?',
-      [name ?? null, is_active ? 1 : 0, req.params.id]
+      'UPDATE workflow_states SET name = ?, is_active = ?, is_closed = COALESCE(?, is_closed) WHERE id = ?',
+      [name ?? null, is_active ? 1 : 0, typeof req.body.is_closed === 'boolean' ? (req.body.is_closed ? 1 : 0) : null, req.params.id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'workflow_state', req.params.id, req.body);
     res.json({ message: 'Updated.' });
