@@ -372,10 +372,10 @@ async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
   await applyPlatformCoreKeys(conn, orgId);
   await applyCatalogueFieldMarks(conn, orgId); // MIPM-106
-  await applySectionRouting(conn, orgId); // MIPM-106
   await seedPicklists(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
   await seedCustomizeFormsPlaceholders(conn, orgId);
+  await applySectionRouting(conn, orgId); // MIPM-106: last, so the placeholder rows are routed too
 }
 
 async function seedNewOrg(orgId, userId) {
