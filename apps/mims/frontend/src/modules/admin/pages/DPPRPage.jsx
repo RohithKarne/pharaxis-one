@@ -164,10 +164,15 @@ export default function DPPRPage({ embedded = false } = {}) {
       const method = editing ? 'PUT' : 'POST'
       const res    = await httpFetch(url, {
         method, headers: { ...H, 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        // MIPM-96: the server takes is_active as true/false; the form held 1 (or the stored 1/0).
+        body: JSON.stringify({ ...form, is_active: !!Number(form.is_active) }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Save failed.'); return }
+      if (!res.ok) {
+        const detail = Array.isArray(data.details) ? data.details.map(d => d.message).join('; ') : ''
+        setError(detail ? `${data.error || 'Save failed.'}: ${detail}` : (data.error || 'Save failed.'))
+        return
+      }
       setModal(null)
       fetchRules(1)
       setPage(1)
