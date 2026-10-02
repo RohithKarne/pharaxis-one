@@ -320,9 +320,9 @@ export default function CaseMITab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Conversion failed')
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab
-        ? { ...t, converted_to_case_id: data.case_id, converted_to_type: target, converted_at: new Date().toISOString() }
+        ? { ...t, converted_to_case_id: data.case_id, converted_to_case_number: data.case_number, converted_to_type: target, converted_at: new Date().toISOString() }
         : t))
-      setSavedMsg(`Converted to ${String(target).toUpperCase()} Case #${data.case_id}`)
+      setSavedMsg(`Converted to ${String(target).toUpperCase()} case ${data.case_number || `#${data.case_id}`}`)
       setTimeout(() => setSavedMsg(''), 2500)
     } catch (err) { toast.error(err.message) }
   }
@@ -568,7 +568,10 @@ export default function CaseMITab({
             )}
             {miTabs[activeMiTab]?.converted_to_case_id && (
               <div className="cf-inline-note">
-                Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} Case #{miTabs[activeMiTab].converted_to_case_id}
+                Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} case{' '}
+                <a href={`/mims/cases/${miTabs[activeMiTab].converted_to_case_id}`}>
+                  {miTabs[activeMiTab].converted_to_case_number || `#${miTabs[activeMiTab].converted_to_case_id}`}
+                </a>
               </div>
             )}
             <div className="cf-form-grid">
@@ -633,8 +636,10 @@ export default function CaseMITab({
               <CaseAssociatedDocs miTab={miTabs[activeMiTab]} token={token} />
             </div>
             <div className="cf-form-actions">
-              <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
-              <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
+              {hasCapability('case.create') && <>
+                <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
+                <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
+              </>}
               <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
               <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
             </div>
