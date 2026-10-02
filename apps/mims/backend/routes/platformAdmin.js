@@ -670,6 +670,14 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
       dropRole: role ? [req.params.id] : [],
     });
     if (leavesNone) return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
+    // MIPM-35: switching someone back on needs a reason; switching off records why and when.
+    const [[before]] = await pool.execute('SELECT is_active, is_disabled FROM users WHERE id = ?', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'User not found.' });
+    const wasOff = !before.is_active || !!before.is_disabled;
+    const reason = String(req.body.reason || '').trim().slice(0, 255);
+    const switchingOn = wasOff && !!is_active && !before.is_disabled;
+    const switchingOff = !wasOff && is_active !== undefined && !is_active;
+    if (switchingOn && !reason) return res.status(400).json({ error: 'A reason is required to switch this user back on.' });
     // C-07: COALESCE every column so a partial payload (e.g. only is_active) can no longer
     // null out name/email/role. Org membership is managed via the /users/:id/org-access
     // routes (user_org_access); users.org_id is a legacy mirror kept in sync best-effort.
@@ -696,7 +704,17 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
     } else if (is_active) {
       await pool.execute('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1', [req.params.id]);
     }
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, { name, email, role, org_id, is_active });
+    if (switchingOff) {
+      await pool.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?',
+        [reason || 'Switched off by a platform administrator', req.params.id]);
+    } else if (switchingOn) {
+      await pool.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
+    }
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, {
+      name, email, role, org_id, is_active,
+      ...(switchingOff ? { status_change: 'switched_off', reason: reason || 'Switched off by a platform administrator' } : {}),
+      ...(switchingOn ? { status_change: 'switched_back_on', reason } : {}),
+    });
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -772,6 +790,13 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
     if (!['activate', 'deactivate', 'force_password_reset'].includes(action)) {
       return res.status(400).json({ error: 'Unsupported bulk action.' });
     }
+    // MIPM-35: switching people back on needs a reason; switching off records why and when.
+    const reason = String(req.body?.reason || '').trim().slice(0, 255);
+    if (action === 'activate' && !reason) {
+      return res.status(400).json({ error: 'A reason is required to switch users back on.' });
+    }
+    const [wasOffRows] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = 0', [ids]);
+    const wasOff = new Set(wasOffRows.map((r) => r.id));
     if (action === 'deactivate') {
       // The update below skips console-permission holders, so only the others can drop out.
       const [targets] = await pool.query(`SELECT u.id FROM users u WHERE u.id IN (?) AND NOT ${PLATFORM_ADMIN_CONSOLE_SQL}`, [ids]);
@@ -808,12 +833,20 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
       if (action === 'deactivate' && changedIds.length) {
         await pool.query('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id IN (?) AND is_active = 1', [changedIds]);
         for (const id of changedIds) await endAllSessions(id);
+        const nowOffIds = changedIds.filter((id) => !wasOff.has(id));
+        if (nowOffIds.length) {
+          await pool.query('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id IN (?)',
+            [reason || 'Switched off by a platform administrator', nowOffIds]);
+        }
       }
       if (action === 'activate' && changedIds.length) {
         await pool.query('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id IN (?) AND ended_with_user = 1', [changedIds]);
+        await pool.query('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id IN (?)', [changedIds]);
       }
     }
-    await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, { action, userIds: ids });
+    await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, {
+      action, userIds: ids, ...(action === 'force_password_reset' ? {} : { reason: reason || 'Switched off by a platform administrator' }),
+    });
     res.json({ message: 'Bulk action completed.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
