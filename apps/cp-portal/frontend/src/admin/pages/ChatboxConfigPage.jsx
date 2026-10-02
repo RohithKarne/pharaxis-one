@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 export default function ChatboxConfigPage() {
@@ -41,6 +42,7 @@ export default function ChatboxConfigPage() {
 
   return (
     <AdminLayout title="Chatbox AI Configuration">
+      <ReadOnlyUnless area="chatbox" what="the chatbox settings">
       <form onSubmit={handleSave}>
         <div className="cp-card">
           <div className="cp-card-title">AI Provider</div>
@@ -109,6 +111,7 @@ export default function ChatboxConfigPage() {
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Configuration'}</button>
         </div>
       </form>
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

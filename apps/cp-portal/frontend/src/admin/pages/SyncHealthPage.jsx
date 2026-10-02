@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 // FIX-2: the Sync Health dashboard — live view over the O2 sync-health API.
@@ -100,9 +101,11 @@ export default function SyncHealthPage() {
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
                           🔍 Inspect
                         </button>
+                        <CanChange area="submissions">
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
                           {retrying === f.id ? 'Retrying…' : '↻ Retry'}
                         </button>
+                        </CanChange>
                       </div>
                       {retryResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: retryResult[f.id].status === 'synced' ? '#16a34a' : '#dc2626' }}>

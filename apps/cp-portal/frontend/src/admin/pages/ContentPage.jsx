@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const TABS = ['Therapeutic Areas', 'Drugs', 'Events', 'Resources']
@@ -146,7 +147,9 @@ export default function ContentPage() {
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
             Show inactive
           </label>
+          <CanChange area="content">
           <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setSlugManuallyEdited(false); setShowForm(true) }}>+ Add</button>
+          </CanChange>
         </div>
       </div>
 
@@ -281,11 +284,15 @@ export default function ContentPage() {
                   <div className="cp-content-sub">{item.slug || item.generic_name || item.city || item.resource_type}</div>
                 </div>
                 {statusBadge(item)}
+                <CanChange area="content">
                 <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(item)}>Edit</button>
+                </CanChange>
+                <CanChange area="content">
                 {item.is_active !== 0
                   ? <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(endpoints[tab], item.id)}>Deactivate</button>
                   : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#16A34A', borderColor: '#16A34A' }} onClick={() => reactivate(endpoints[tab], item.id)}>Reactivate</button>
                 }
+                </CanChange>
               </div>
             )
           })

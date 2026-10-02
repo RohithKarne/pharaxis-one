@@ -7,6 +7,7 @@ const express = require('express');
 const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
 const log     = require('../../utils/logger');
+const { canChangeByArea } = require('../../middleware/adminWritePolicy'); // CPPM-60
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
@@ -72,7 +73,7 @@ router.post('/login', async (req, res) => {
 
     // SEC: token is delivered only via the httpOnly cookie, never in the body.
     res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
-       .json({ admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
+       .json({ admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null, can_change: canChangeByArea(user.role) } });
   } catch (err) {
     // SEC: log the error only — `password` is in scope here and must never reach
     // the logs. logger.js serializes an Error to name/message/stack, so mysql2's
@@ -87,7 +88,7 @@ router.get('/me', authenticateAdmin, async (req, res) => {
   try {
     const [[user]] = await pool.execute('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
     if (!user) return res.status(404).json({ error: 'Admin user not found.' });
-    res.json({ admin: { ...user, clientId: user.client_id ?? null } });
+    res.json({ admin: { ...user, clientId: user.client_id ?? null, can_change: canChangeByArea(user.role) } });
   } catch (err) {
     log.error('admin.auth.error', { err, route: 'GET /me', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

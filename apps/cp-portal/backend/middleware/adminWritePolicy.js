@@ -71,4 +71,10 @@ function adminWritePolicy(req, res, next) {
   });
 }
 
-module.exports = { adminWritePolicy, WRITE_ROLES };
+// CPPM-60: what a role may change, area by area, so the screens can hide controls
+// the server would refuse. The screens ask; this table stays the only copy.
+function canChangeByArea(role) {
+  return Object.fromEntries(Object.entries(WRITE_ROLES).map(([area, roles]) => [area, roles.includes(role)]));
+}
+
+module.exports = { adminWritePolicy, WRITE_ROLES, canChangeByArea };

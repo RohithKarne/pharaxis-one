@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { apiJson } from '../../shared/api/client'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
@@ -72,7 +73,9 @@ export default function ClientsPage() {
     <AdminLayout title="Clients">
       <div className="cp-section-header">
         <h2>All Clients</h2>
+        <CanChange area="clients">
         <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Client</button>
+        </CanChange>
       </div>
 
       {showAdd && (
@@ -152,9 +155,11 @@ export default function ClientsPage() {
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cp-btn cp-btn-sm" onClick={() => navigate(`/admin/clients/${c.id}`)}>Configure</button>
+                    <CanChange area="clients">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(c.id, c.is_active)}>
                       {c.is_active ? 'Deactivate' : 'Activate'}
                     </button>
+                    </CanChange>
                   </div>
                 </td>
               </tr>

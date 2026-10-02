@@ -117,9 +117,17 @@ export function AdminAuthProvider({ children }) {
   const canApprove  = hasRole('superadmin', 'admin', 'reviewer');
   // S4-10: true if admin can publish / archive content
   const canPublish  = hasRole('superadmin', 'admin');
+  // CPPM-60: may this person change things in an area (the first part of the API
+  // path, e.g. 'faq', 'branding')? The server sends its own table with the session,
+  // so the screens offer only what the server will accept. An area it does not
+  // list is admin only, as on the server.
+  function canChange(area) {
+    const known = admin?.can_change?.[area]
+    return known === undefined ? hasRole('superadmin', 'admin') : known
+  }
 
   return (
-    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
+    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish, canChange }}>
       {children}
     </AdminAuthContext.Provider>
   )

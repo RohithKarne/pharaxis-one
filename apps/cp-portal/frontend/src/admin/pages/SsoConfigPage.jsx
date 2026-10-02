@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const LOGIN_MODES = [
@@ -78,6 +79,7 @@ export default function SsoConfigPage() {
 
   return (
     <AdminLayout title="Single Sign-On">
+      <ReadOnlyUnless area="sso" what="the single sign-on settings">
       <div style={{ maxWidth: 820 }}>
         <p style={{ color: 'var(--cp-text-muted, #6b7280)', marginBottom: 20, lineHeight: 1.6 }}>
           Let this portal's users sign in with their organisation's identity provider (OIDC).
@@ -163,6 +165,7 @@ export default function SsoConfigPage() {
           {saved && <span style={{ color: '#16A34A', fontSize: 13 }}>✓ Saved</span>}
         </div>
       </div>
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

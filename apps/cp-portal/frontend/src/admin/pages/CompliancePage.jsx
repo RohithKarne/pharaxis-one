@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const JURISDICTIONS = [
@@ -138,6 +139,7 @@ export default function CompliancePage() {
 
   return (
     <AdminLayout title="Compliance & Consent">
+      <ReadOnlyUnless area="compliance" what="the consent settings">
       <form onSubmit={handleSave}>
 
         {/* Jurisdictions */}
@@ -240,6 +242,8 @@ export default function CompliancePage() {
           )}
         </div>
       </div>
+
+      </ReadOnlyUnless>
 
       {/* Audit Log */}
       <div className="cp-card" style={{ marginTop: 24 }}>

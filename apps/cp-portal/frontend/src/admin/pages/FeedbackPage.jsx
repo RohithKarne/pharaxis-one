@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 function Stars({ rating }) {
@@ -90,7 +91,9 @@ export default function FeedbackPage() {
                   <td style={{ fontSize: 12, color: '#6B7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.page_url || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{f.submitted_at ? new Date(f.submitted_at).toLocaleString() : '—'}</td>
                   <td>
+                    <CanChange area="feedback">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => handleDelete(f.id)}>Delete</button>
+                    </CanChange>
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const FEATURE_DESCRIPTIONS = {
@@ -78,6 +79,7 @@ export default function FeaturesPage() {
 
   return (
     <AdminLayout title="Features">
+      <ReadOnlyUnless area="features" what="which features are on">
       <p className="cp-page-desc">Control which sections of the portal are visible and accessible to users.</p>
       <div className="cp-features-summary">
         <span className="cp-badge badge-active">{enabled.length} enabled</span>
@@ -113,6 +115,7 @@ export default function FeaturesPage() {
           </div>
         ))}
       </div>
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

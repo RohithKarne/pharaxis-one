@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const EMPTY = { question: '', answer: '', category: '', sort_order: 0, is_published: true }
@@ -63,7 +64,9 @@ export default function FAQPage() {
     <AdminLayout>
       <div className="cp-section-header">
         <h2>FAQ</h2>
+        <CanChange area="faq">
         <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add FAQ Item</button>
+        </CanChange>
       </div>
 
       {showForm && (
@@ -122,8 +125,12 @@ export default function FAQPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                   {!f.is_published && <span style={{ fontSize: 11, background: '#F3F4F6', color: '#9CA3AF', padding: '2px 6px', borderRadius: 10 }}>Draft</span>}
+                  <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(f)}>Edit</button>
+                  </CanChange>
+                  <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => handleDelete(f.id)}>Delete</button>
+                  </CanChange>
                 </div>
               </div>
             ))}

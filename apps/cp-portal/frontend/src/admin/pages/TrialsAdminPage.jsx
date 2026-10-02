@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 export default function TrialsAdminPage() {
@@ -70,6 +71,7 @@ export default function TrialsAdminPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
+        <ReadOnlyUnless area="trials" what="the trial listings">
         <form onSubmit={handleAdd} className="cp-card" style={{ padding: 20, background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Add Clinical Trial Listing</h3>
           <div style={{ marginBottom: 12 }}>
@@ -121,6 +123,7 @@ export default function TrialsAdminPage() {
             </button>
           )}
         </form>
+        </ReadOnlyUnless>
 
         <div className="cp-card" style={{ padding: 20, background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Active Published Trials ({trials.length})</h3>
@@ -143,8 +146,12 @@ export default function TrialsAdminPage() {
                     <td style={{ padding: 8 }}>{t.phase}</td>
                     <td style={{ padding: 8 }}>{t.status}</td>
                     <td style={{ padding: 8 }}>
+                      <CanChange area="trials">
                       <button onClick={() => startEdit(t)} style={{ color: '#6B3FA0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
+                      </CanChange>
+                      <CanChange area="trials">
                       <button onClick={() => handleDelete(t.id)} style={{ color: '#DC2626', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
+                      </CanChange>
                     </td>
                   </tr>
                 ))}
