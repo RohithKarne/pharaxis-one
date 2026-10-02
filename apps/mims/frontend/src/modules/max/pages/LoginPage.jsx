@@ -63,7 +63,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [twoFactorMethod, setTwoFactorMethod] = useState('email')
   const [twoFactorCode, setTwoFactorCode] = useState('')
   const [backupCode, setBackupCode] = useState('')
-  const [rememberDevice, setRememberDevice] = useState(true)
+  // MIPM-108: remembering a device (skipping the code next time) is opted into, never preset.
+  const [rememberDevice, setRememberDevice] = useState(false)
   const [emailCodeSent, setEmailCodeSent] = useState(false)
   const [totpSetup, setTotpSetup] = useState(null)
   const [postLoginData, setPostLoginData] = useState(null)
@@ -109,7 +110,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     setTwoFactorMethod('email')
     setTwoFactorCode('')
     setBackupCode('')
-    setRememberDevice(true)
+    setRememberDevice(false)
     setEmailCodeSent(false)
     setTotpSetup(null)
     setPostLoginData(null)
@@ -398,7 +399,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       if (data.twoFactorRequired || data.twoFactorSetupAvailable) {
         setTwoFactor(data)
         setTwoFactorMethod(data.preferredMethod || data.availableMethods?.[0] || 'email')
-        setRememberDevice(true)
+        setRememberDevice(false)
         setTwoFactorCode('')
         setBackupCode('')
         setEmailCodeSent(false)
