@@ -51,10 +51,16 @@ function blockedTransport() {
   };
 }
 
+// MIPM-87: nodemailer only bounds the TCP connect by default; a server that answers and
+// then stalls held a send (and the sign-in screen waiting on it) for its 10-minute default.
+const SEND_TIME_LIMITS = { greetingTimeout: 10000, socketTimeout: 30000 };
+
 function createTransport(kind, options) {
   const isOperational = kind === 'operational';
   // MIPM-63: every sender comes through here, so this is where "never in the clear" is held.
-  if (isOperational || alertEmailEnabled()) return nodemailer.createTransport(smtpWithRequiredTls(options));
+  if (isOperational || alertEmailEnabled()) {
+    return nodemailer.createTransport(smtpWithRequiredTls({ ...SEND_TIME_LIMITS, ...options }));
+  }
   return blockedTransport();
 }
 
