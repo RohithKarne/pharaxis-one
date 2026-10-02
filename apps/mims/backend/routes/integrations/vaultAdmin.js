@@ -121,7 +121,7 @@ router.delete(['/admin/platform/vault-config/:id', '/admin/platform/vault-config
   }
 });
 
-router.post('/admin/integrations/vault/test-connection', authenticate, async (req, res) => {
+router.post('/admin/integrations/vault/test-connection', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const [rows] = await pool.query(

@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { getVaultSession, runVQL } = require('../../services/vaultService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
@@ -13,7 +13,7 @@ function normalizeVaultDocId(rawValue) {
   return value;
 }
 
-router.get('/admin/vault/documents', authenticate, async (req, res) => {
+router.get('/admin/vault/documents', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     let orgId = req.user.orgId;
     if (hasGlobalAdminScope(req.user)) {
@@ -30,7 +30,7 @@ router.get('/admin/vault/documents', authenticate, async (req, res) => {
   }
 });
 
-router.post('/admin/vault/pull', authenticate, async (req, res) => {
+router.post('/admin/vault/pull', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { case_id } = req.body;
     const vaultDocId = normalizeVaultDocId(req.body?.vault_doc_id);
