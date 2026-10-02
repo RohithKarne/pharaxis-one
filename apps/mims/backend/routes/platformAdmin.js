@@ -688,10 +688,13 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
       ]
     );
     // M-16: when a user is deactivated, also deactivate their org-access rows so
-    // they no longer appear as active members.
+    // they no longer appear as active members. MIPM-35: mark the rows this switched
+    // off, so switching the user back on gives exactly that access back.
     if (is_active !== undefined && !is_active) {
-      await pool.execute('UPDATE user_org_access SET is_active = 0 WHERE user_id = ?', [req.params.id]);
+      await pool.execute('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id = ? AND is_active = 1', [req.params.id]);
       await endAllSessions(req.params.id); // MIPM-32: out at once, on every device
+    } else if (is_active) {
+      await pool.execute('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1', [req.params.id]);
     }
     await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, { name, email, role, org_id, is_active });
     res.json({ message: 'Updated.' });
@@ -797,11 +800,17 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
          )`,
         [action === 'activate' ? 1 : 0, ids]
       );
-      if (action === 'deactivate') {
-        await pool.query('UPDATE user_org_access SET is_active = 0 WHERE user_id IN (?)', [ids]);
-        // MIPM-32: only those the update above really switched off (it skips console holders).
-        const [nowOff] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = 0', [ids]);
-        for (const row of nowOff) await endAllSessions(row.id);
+      // MIPM-32 / MIPM-35: act only on those the update above really changed (it skips
+      // console holders). Switching off marks the org access it ends; switching back
+      // on gives exactly that back.
+      const [changed] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = ?', [ids, action === 'activate' ? 1 : 0]);
+      const changedIds = changed.map((row) => row.id);
+      if (action === 'deactivate' && changedIds.length) {
+        await pool.query('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id IN (?) AND is_active = 1', [changedIds]);
+        for (const id of changedIds) await endAllSessions(id);
+      }
+      if (action === 'activate' && changedIds.length) {
+        await pool.query('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id IN (?) AND ended_with_user = 1', [changedIds]);
       }
     }
     await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, { action, userIds: ids });
@@ -1156,7 +1165,7 @@ router.post('/users/:id/org-access', authenticate, requireRole('platform_admin')
       `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission)
        VALUES (?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE primary_site_id = VALUES(primary_site_id),
-         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1`,
+         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1, ended_with_user = 0`,
       [req.params.id, org_id, primary_site_id || null, role_at_org || 'user', site_permission || 'full']
     );
     await audit(req.user.userId, req.user.email, 'ASSIGN_ORG', 'user_org_access', result.insertId,
@@ -1170,7 +1179,8 @@ router.put('/users/:id/org-access/:orgId', authenticate, requireRole('platform_a
   try {
     const { primary_site_id, role_at_org, site_permission, is_active } = req.body;
     await pool.execute(
-      `UPDATE user_org_access SET primary_site_id = ?, role_at_org = ?, site_permission = ?, is_active = ?
+      `UPDATE user_org_access SET primary_site_id = ?, role_at_org = ?, site_permission = ?, is_active = ?,
+         ended_with_user = 0
        WHERE user_id = ? AND org_id = ?`,
       [primary_site_id || null, role_at_org || 'user', site_permission || 'full',
        is_active !== undefined ? (is_active ? 1 : 0) : 1, req.params.id, req.params.orgId]
