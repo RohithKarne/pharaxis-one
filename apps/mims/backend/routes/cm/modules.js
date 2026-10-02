@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const {
   archiveLinkedDocumentsForModule,
@@ -304,7 +304,7 @@ router.get('/modules/:id', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/modules — create module
-router.post('/modules', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.post('/modules', authenticate, requireCapability('content.module.manage'), upload.single('file'), validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await ensureCmModulesSchema();
@@ -404,7 +404,7 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
 });
 
 // PUT /api/cm/modules/:id — update module
-router.put('/modules/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.put('/modules/:id', authenticate, requireCapability('content.module.manage'), upload.single('file'), validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await ensureCmModulesSchema();
@@ -510,7 +510,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
 });
 
 // POST /api/cm/modules/:id/archive — archive module + cascade archive linked docs
-router.post('/modules/:id/archive', authenticate, async (req, res) => {
+router.post('/modules/:id/archive', authenticate, requireCapability('content.module.manage'), async (req, res) => {
   try {
     await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);

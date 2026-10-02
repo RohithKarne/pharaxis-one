@@ -197,7 +197,7 @@ router.get('/faqs/:id', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/faqs/:id — update FAQ
-router.put('/faqs/:id', authenticate, async (req, res) => {
+router.put('/faqs/:id', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const faq = await getScopedFaq(req, id);
@@ -244,7 +244,7 @@ router.put('/faqs/:id', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/checkout — check out FAQ
-router.post('/faqs/:id/checkout', authenticate, async (req, res) => {
+router.post('/faqs/:id/checkout', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const faq = await getScopedFaq(req, id);
@@ -266,7 +266,7 @@ router.post('/faqs/:id/checkout', authenticate, async (req, res) => {
 
 // POST /api/cm/faqs/:id/checkin — check in
 // Special: if approval_required=false, go directly to Published
-router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
+router.post('/faqs/:id/checkin', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
@@ -419,7 +419,7 @@ router.post('/faqs/:id/view', authenticate, async (req, res) => {
 });
 
 // PATCH /api/cm/faqs/bulk-tags — bulk assign tags to multiple FAQs (CM-E6)
-router.patch('/faqs/bulk-tags', authenticate, async (req, res) => {
+router.patch('/faqs/bulk-tags', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const { ids, tags } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
@@ -439,7 +439,7 @@ router.patch('/faqs/bulk-tags', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/archive — archive
-router.post('/faqs/:id/archive', authenticate, async (req, res) => {
+router.post('/faqs/:id/archive', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;

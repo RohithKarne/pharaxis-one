@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function orgId(req) { return Number(req.user?.orgId || 0); }
@@ -117,7 +117,7 @@ router.get('/overview', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/settings — upsert a setting key
-router.put('/settings', authenticate, async (req, res) => {
+router.put('/settings', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { setting_key, setting_value } = req.body;
     if (!setting_key) return res.status(400).json({ error: 'setting_key is required.' });

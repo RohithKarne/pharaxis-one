@@ -144,7 +144,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         disabled={!canAccessAny('browse_content', 'content_mgmt')} />
 
       {/* Content Management */}
-      {(isAdmin && canAccess('content_mgmt')) && (
+      {canAccess('content_mgmt') && (
         <NavItem collapsed={collapsed} to="/content" icon={<Icon name="content" />} label="Content Management"
           active={isActive('/content')}
         />

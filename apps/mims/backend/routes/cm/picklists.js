@@ -17,7 +17,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 
 function orgId(req) {
   return Number(req.user?.orgId || 0);
@@ -61,7 +61,7 @@ router.get('/picklists', authenticate, async (req, res) => {
 });
 
 // ── POST /api/cm/picklists ────────────────────────────────────────────────────
-router.post('/picklists', authenticate, async (req, res) => {
+router.post('/picklists', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { field_type, value, label, sort_order = 0 } = req.body;
     if (!field_type?.trim()) return res.status(400).json({ error: 'field_type is required.' });
@@ -83,7 +83,7 @@ router.post('/picklists', authenticate, async (req, res) => {
 });
 
 // ── PUT /api/picklists/:id ─────────────────────────────────────────────────
-router.put('/picklists/:id', authenticate, async (req, res) => {
+router.put('/picklists/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { field_type, value, label, sort_order, is_active } = req.body;
@@ -120,7 +120,7 @@ router.put('/picklists/:id', authenticate, async (req, res) => {
 });
 
 // ── DELETE /api/picklists/:id ──────────────────────────────────────────────
-router.delete('/picklists/:id', authenticate, async (req, res) => {
+router.delete('/picklists/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const org = orgId(req);

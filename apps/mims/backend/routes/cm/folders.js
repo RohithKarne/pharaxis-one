@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 
@@ -115,7 +115,7 @@ router.get('/folders', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/folders — create folder
-router.post('/folders', authenticate, async (req, res) => {
+router.post('/folders', authenticate, requireCapability('content.folder.configure'), async (req, res) => {
   try {
     const { name, product_id, site_id, description } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -138,7 +138,7 @@ router.post('/folders', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/folders/:id — update folder
-router.put('/folders/:id', authenticate, async (req, res) => {
+router.put('/folders/:id', authenticate, requireCapability('content.folder.configure'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
@@ -167,7 +167,7 @@ router.put('/folders/:id', authenticate, async (req, res) => {
 });
 
 // DELETE /api/cm/folders/:id — inactivate (only if no active documents in folder)
-router.delete('/folders/:id', authenticate, async (req, res) => {
+router.delete('/folders/:id', authenticate, requireCapability('content.folder.configure'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
@@ -227,7 +227,7 @@ router.get('/folders/:id/permissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/folders/:id/permissions
-router.post('/folders/:id/permissions', authenticate, async (req, res) => {
+router.post('/folders/:id/permissions', authenticate, requireCapability('content.folder.configure'), async (req, res) => {
   try {
     const folder = await getScopedFolder(req, req.params.id);
     if (!folder) return res.status(404).json({ error: 'Folder not found.' });
@@ -254,7 +254,7 @@ router.post('/folders/:id/permissions', authenticate, async (req, res) => {
 });
 
 // DELETE /api/cm/folders/:id/permissions/:groupId
-router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res) => {
+router.delete('/folders/:id/permissions/:groupId', authenticate, requireCapability('content.folder.configure'), async (req, res) => {
   try {
     const folder = await getScopedFolder(req, req.params.id);
     if (!folder) return res.status(404).json({ error: 'Folder not found.' });

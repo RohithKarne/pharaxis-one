@@ -10,7 +10,7 @@ const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
 const { getCaseProductName } = require('../../services/caseProductName');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 
 const multer = require('multer');
@@ -154,7 +154,7 @@ router.get('/merge-reports', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/merge-reports — create merge report
-router.post('/merge-reports', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.post('/merge-reports', authenticate, requireCapability('content.author'), upload.single('file'), validateUpload(['doc']), async (req, res) => {
   try {
     const { folder_id, name, content_html, content } = req.body;
     if (!folder_id || !name) return res.status(400).json({ error: 'folder_id and name are required.' });
@@ -217,7 +217,7 @@ router.get('/merge-reports/:id', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/merge-reports/:id — update merge report
-router.put('/merge-reports/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.put('/merge-reports/:id', authenticate, requireCapability('content.author'), upload.single('file'), validateUpload(['doc']), async (req, res) => {
   try {
     const { id } = req.params;
     const report = await getScopedMergeReport(req, id);
@@ -248,7 +248,7 @@ router.put('/merge-reports/:id', authenticate, upload.single('file'), validateUp
 });
 
 // POST /api/cm/merge-reports/:id/checkout — check out
-router.post('/merge-reports/:id/checkout', authenticate, async (req, res) => {
+router.post('/merge-reports/:id/checkout', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const report = await getScopedMergeReport(req, id);
@@ -269,7 +269,7 @@ router.post('/merge-reports/:id/checkout', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/merge-reports/:id/checkin — check in
-router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
+router.post('/merge-reports/:id/checkin', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
@@ -307,7 +307,7 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
 //   {{org_name}}, {{date}}, {{report_name}}, {{case_status}}, {{case_priority}},
 //   {{case_assigned_to}}. {{patient_email}} is kept but always blank.
 // Body: { case_number } (what users type) or { case_id }.
-router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
+router.post('/merge-reports/:id/generate', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const caseNumber = String(req.body?.case_number || '').trim();
     let case_id = req.body?.case_id;
@@ -442,7 +442,7 @@ router.get('/merge-reports/:id/schedule', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/merge-reports/:id/schedule
-router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
+router.post('/merge-reports/:id/schedule', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const report = await getScopedMergeReport(req, req.params.id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
@@ -484,7 +484,7 @@ router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/merge-reports/:id/schedule', authenticate, async (req, res) => {
+router.delete('/merge-reports/:id/schedule', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const report = await getScopedMergeReport(req, req.params.id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
@@ -504,7 +504,7 @@ router.delete('/merge-reports/:id/schedule', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/merge-reports/:id/archive — archive a merge report
-router.post('/merge-reports/:id/archive', authenticate, async (req, res) => {
+router.post('/merge-reports/:id/archive', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
     const report = await getScopedMergeReport(req, req.params.id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });

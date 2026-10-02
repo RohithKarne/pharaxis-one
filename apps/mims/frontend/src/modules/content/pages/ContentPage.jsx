@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 const AdminContentIntelligenceSection = lazy(() => import('../../admin/components/AdminContentIntelligenceSection'))
 const AdminMICategoriesSection = lazy(() => import('../../admin/components/AdminMICategoriesSection'))
 const AdminPolicyGraphSection = lazy(() => import('../../admin/components/AdminPolicyGraphSection'))
@@ -25,7 +26,11 @@ function ContentSectionLoader() {
 }
 
 export default function ContentPage() {
-  const { user, token } = useAuth()
+  const { user, token, hasCapability } = useAuth()
+  // Content settings, lists and the MI taxonomy are organisation configuration (admin-only on
+  // the server); folders need Configure Folders. Others are not offered what can only fail.
+  const isAdmin = isAdminUser(user)
+  const canConfigureFolders = hasCapability('content.folder.configure')
   const [searchParams] = useSearchParams()
   const standalone = searchParams.get('standalone') === '1'
   const [activeTab, setActiveTab] = useState(['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents')
@@ -53,7 +58,7 @@ export default function ContentPage() {
       items: [
         { key: 'operations', label: 'Operations Dashboard', description: 'Work queues, expiring content, and CM follow-up items.' },
         { key: 'browse', label: 'Browse Content', description: 'The consumer-facing approved content library.' },
-        { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
+        ...(isAdmin ? [{ key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' }] : []),
       ],
     },
     {
@@ -61,20 +66,20 @@ export default function ContentPage() {
       label: 'Taxonomy',
       description: 'MI category taxonomy and inquiry framing for content operations.',
       items: [
-        { key: 'mi-categories', label: 'MI Categories', description: 'Taxonomy and inquiry framing for content operations.' },
+        ...(isAdmin ? [{ key: 'mi-categories', label: 'MI Categories', description: 'Taxonomy and inquiry framing for content operations.' }] : []),
         // CUT (rationalization): speculative "Intelligence" stubs removed — Policy Graph Engine,
         // Evidence Chain Compiler, Contradiction Radar, Digital Twin Release Simulator, Adaptive Risk Workflow.
       ],
     },
   ]
-  const allTabs = tabGroups.flatMap((group) => group.items)
+  const allTabs = tabGroups.filter((group) => group.items.length).flatMap((group) => group.items)
   const activeTabMeta = allTabs.find((tab) => tab.key === activeTab) || allTabs[0]
   const activeGroup = tabGroups.find((group) => group.items.some((tab) => tab.key === activeTab)) || tabGroups[0]
   const content = (
     <div className="workspace-page workspace-page--content">
       <div className="workspace-main-grid workspace-main-grid--content">
         <aside className="workspace-rail">
-          {tabGroups.map((group) => (
+          {tabGroups.filter((group) => group.items.length).map((group) => (
             <section key={group.key} className="workspace-rail-group">
               <div className="workspace-rail-title">{group.label}</div>
               <div className="workspace-rail-copy">{group.description}</div>
@@ -102,7 +107,7 @@ export default function ContentPage() {
               <h2>{activeTabMeta.label}</h2>
               <p>{activeTabMeta.description}</p>
             </div>
-            <button className="btn btn-outline" onClick={() => setShowFolders(true)}>Folder Manager</button>
+            {canConfigureFolders && <button className="btn btn-outline" onClick={() => setShowFolders(true)}>Folder Manager</button>}
           </div>
 
           <div className="cm-content workspace-panel-body">
@@ -114,13 +119,13 @@ export default function ContentPage() {
               {activeTab === 'templates' && <TemplatesSection token={token} />}
               {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
               {activeTab === 'browse' && <BrowseSection token={token} />}
-              {activeTab === 'settings' && <CMSettingsSection token={token} />}
-              {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-              {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-              {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-              {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-              {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-              {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
+              {isAdmin && activeTab === 'settings' && <CMSettingsSection token={token} />}
+              {isAdmin && activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
+              {isAdmin && activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
+              {isAdmin && activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
+              {isAdmin && activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
+              {isAdmin && activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
+              {isAdmin && activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
             </Suspense>
           </div>
         </section>

@@ -11,7 +11,6 @@ import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import ExceptionToast from '../../shared/components/ExceptionToast'
 import adminRouteMap from '../../shared/config/adminRouteMap.json'
-import { isAdminUser } from '../../shared/utils/adminScope.js'
 
 // ── Eagerly loaded — part of the critical navigation path ────────────────────
 import LoginPage            from './pages/LoginPage'
@@ -46,12 +45,6 @@ function PageLoader() {
       Loading…
     </div>
   )
-}
-
-function AdminRoleGuard({ children }) {
-  const { user } = useAuth()
-  if (isAdminUser(user)) return children
-  return <Navigate to="/no-access" replace />
 }
 
 function LegacyAdminConsoleRedirect({ to }) {
@@ -268,10 +261,11 @@ function AppRoutes() {
           } />
           <Route path="/content" element={
             <ProtectedRoute loginPath="/content/login">
+              {/* MIPM-88: the Content Management grant decides who opens it; the server
+                  checks the content permission on every write. An extra admin-role guard
+                  sent granted content managers to "no access" (same as M-31, Reports). */}
               <ModuleAccessGuard moduleKey="content_mgmt">
-                <AdminRoleGuard>
-                  <ContentPage />
-                </AdminRoleGuard>
+                <ContentPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

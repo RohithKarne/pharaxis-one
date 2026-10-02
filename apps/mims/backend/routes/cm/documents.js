@@ -292,7 +292,7 @@ router.get('/documents', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents — create document (status=Draft, auto-generate doc_id)
-router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
+router.post('/documents', authenticate, requireCapability('content.author'), uploadFields, validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -567,7 +567,7 @@ router.get('/documents/:id/attachments/:attId/download', authenticate, async (re
 });
 
 // PUT /api/cm/documents/:id — update (only Draft or CheckedOut-by-me)
-router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
+router.put('/documents/:id', authenticate, requireCapability('content.author'), uploadFields, validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -705,7 +705,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
 });
 
 // POST /api/cm/documents/:id/checkout — check out document (Draft or Published)
-router.post('/documents/:id/checkout', authenticate, async (req, res) => {
+router.post('/documents/:id/checkout', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
@@ -726,7 +726,7 @@ router.post('/documents/:id/checkout', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/checkin — check in (Draft or CheckedOut → Pending)
-router.post('/documents/:id/checkin', authenticate, async (req, res) => {
+router.post('/documents/:id/checkin', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
@@ -773,7 +773,7 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/initiate-review — create cm_review
-router.post('/documents/:id/initiate-review', authenticate, async (req, res) => {
+router.post('/documents/:id/initiate-review', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, planned_end_date, reviewer_ids, is_non_amendable, description } = req.body;
@@ -969,7 +969,7 @@ router.post('/documents/:id/archive', authenticate, requireCapability('content.p
 });
 
 // POST /api/cm/documents/:id/release — owner releases lock → back to Draft
-router.post('/documents/:id/release', authenticate, async (req, res) => {
+router.post('/documents/:id/release', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
@@ -1018,7 +1018,7 @@ router.get('/documents/:id/relations', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/relations — link a related document
-router.post('/documents/:id/relations', authenticate, async (req, res) => {
+router.post('/documents/:id/relations', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { related_doc_id, relation_type = 'Supports' } = req.body;
     if (!related_doc_id) return res.status(400).json({ error: 'related_doc_id is required.' });
@@ -1045,7 +1045,7 @@ router.post('/documents/:id/relations', authenticate, async (req, res) => {
 });
 
 // DELETE /api/cm/documents/:id/relations/:rel_id
-router.delete('/documents/:id/relations/:rel_id', authenticate, async (req, res) => {
+router.delete('/documents/:id/relations/:rel_id', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
@@ -1081,7 +1081,7 @@ router.get('/documents/:id/alert-config', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/documents/:id/alert-config — save alert days + email account
-router.put('/documents/:id/alert-config', authenticate, async (req, res) => {
+router.put('/documents/:id/alert-config', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { alert_days, alert_email_account_id } = req.body;
     const doc = await getScopedDocument(req, req.params.id);
@@ -1490,7 +1490,7 @@ router.post('/documents/:id/view', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/clone — duplicate document as Draft (#8)
-router.post('/documents/:id/clone', authenticate, async (req, res) => {
+router.post('/documents/:id/clone', authenticate, requireCapability('content.author'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const src = await getScopedDocument(req, req.params.id);
