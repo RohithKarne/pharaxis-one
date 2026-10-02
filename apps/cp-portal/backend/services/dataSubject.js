@@ -134,8 +134,19 @@ async function eraseUser(userId, clientId) {
     // Split submissions: retain AE/PC (sever identity), delete the rest.
     const [subs] = await conn.execute(
       `SELECT id, submission_type FROM cp_submissions WHERE user_id = ? AND client_id = ?`, [userId, clientId]);
-    const retainIds = subs.filter(s => RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
-    const deleteIds = subs.filter(s => !RETAINED_SUBMISSION_TYPES.has(s.submission_type)).map(s => s.id);
+    // CPPM-66: a request that raised a safety review — on the form, or in a reply to
+    // our answer — is a safety record whatever its type, as a flagged chat is below.
+    // Deleting it left the review pointing at nothing, and it could not be confirmed.
+    let reviewed = new Set();
+    if (subs.length) {
+      const [flagged] = await conn.execute(
+        `SELECT DISTINCT submission_id FROM cp_ae_review_tasks WHERE submission_id IN (${subs.map(() => '?').join(',')})`,
+        subs.map(s => s.id));
+      reviewed = new Set(flagged.map(f => f.submission_id));
+    }
+    const keep = s => RETAINED_SUBMISSION_TYPES.has(s.submission_type) || reviewed.has(s.id);
+    const retainIds = subs.filter(keep).map(s => s.id);
+    const deleteIds = subs.filter(s => !keep(s)).map(s => s.id);
 
     // Delete non-regulated submissions + their attachment rows (and files best-effort).
     if (deleteIds.length) {
@@ -165,7 +176,7 @@ async function eraseUser(userId, clientId) {
         `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL WHERE id IN (${ph})`,
         [ERASED, ERASED, ...retainIds]
       );
-      summary.retained.push(`submissions(${retainIds.length}) [AE/PC — identity severed, safety record retained]`);
+      summary.retained.push(`submissions(${retainIds.length}) [AE/PC or safety review raised — identity severed, safety record retained]`);
     }
 
     // CPPM-18: a chat that raised a safety review is a safety record — keep it,

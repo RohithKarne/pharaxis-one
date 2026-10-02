@@ -100,10 +100,15 @@ async function createAeSubmission(conn, clientId, task, { productName, eventDesc
   if (task.submission_id) {
     const [[s]] = await conn.execute(
       'SELECT user_id, submitter_name, submitter_email, submitter_type, submitted_at FROM cp_submissions WHERE id = ?', [task.submission_id]);
+    // CPPM-66: an erasure made before CPPM-66 could delete the request and leave the
+    // review. The side effect is still reported — with the reporter unknown, dated
+    // when the review was raised — rather than the confirmation failing.
     // CPPM-63: a task raised by a reply was told to us when the reply arrived, not
     // when the enquiry did — that is the task's own creation time.
-    reporter = { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type,
-      reportedAt: task.reply_id ? task.created_at : s.submitted_at };
+    reporter = s
+      ? { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type,
+          reportedAt: task.reply_id ? task.created_at : s.submitted_at }
+      : { userId: null, name: null, email: null, type: null, reportedAt: task.created_at };
   } else {
     const [[u]] = await conn.execute(
       `SELECT u.id, u.first_name, u.last_name, u.email, c.user_type FROM cp_chat_conversations c
