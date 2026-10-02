@@ -407,6 +407,25 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
+                        {/* Bridge row 9: what the person added after sending, and whether it reached MIMS. */}
+                        {s.followups?.length > 0 && (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Information the person added ({s.followups.length})</div>
+                            {s.followups.map(f => (
+                              <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
+                                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>
+                                  {new Date(f.created_at).toLocaleString()} · {{
+                                    forwarded: 'On the MIMS case',
+                                    pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
+                                    failed: `Not yet on the MIMS case: ${f.forward_error || 'unknown reason'}`,
+                                    local: 'Kept in the portal (this request type does not go to MIMS)',
+                                  }[f.forward_status] || f.forward_status}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{f.body}</div>
+                              </div>
+                            ))}
+                          </>
+                        )}
                         <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} sentToMims={!!s.external_ref} />
                       </td>
                     </tr>

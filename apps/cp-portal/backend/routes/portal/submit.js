@@ -77,6 +77,52 @@ function streamAttachment(res, att, inline) {
   fs.createReadStream(abs).pipe(res);
 }
 
+// CPPM-39: scan each file against ClamAV's list of known viruses. A report is never
+// lost because of a file: a virus is deleted and the report still goes through; a file
+// that cannot be scanned right now is kept but held ('pending') until the background
+// job has scanned it. Only 'clean' files can be downloaded or forwarded to MIMS.
+// (Shared by a new report and a follow-up — bridge row 9.) Returns the blocked files.
+async function scanUploads(req) {
+  const blockedFiles = [];
+  for (const f of req.files || []) {
+    const result = await scanFile(f.path);
+    if (result.status === 'infected') {
+      try { fs.unlinkSync(f.path); } catch { /* already gone */ }
+      blockedFiles.push({ file: f.originalname, virus: result.virus });
+      f.blocked = true;
+    }
+    f.scanStatus = result.status === 'clean' ? 'clean' : 'pending';
+    f.scanDetail = result.status === 'error' ? String(result.error).slice(0, 255) : null;
+  }
+  if (req.files) req.files = req.files.filter(f => !f.blocked);
+  return blockedFiles;
+}
+
+// Store a request's uploaded files and audit the held and the blocked ones.
+async function storeAttachments(submissionId, clientId, clientCode, files, blockedFiles) {
+  const ids = [];
+  for (const f of files || []) {
+    const [r] = await pool.execute(
+      `INSERT INTO cp_submission_attachments
+         (submission_id, client_id, file_name, file_path, file_size, mime_type, scan_status, scan_detail, scanned_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${f.scanStatus === 'clean' ? 'NOW()' : 'NULL'})`,
+      [submissionId, clientId, f.originalname.slice(0, 255),
+       `/uploads/private/submissions/${clientCode}/${f.filename}`, f.size, f.mimetype,
+       f.scanStatus, f.scanDetail]
+    );
+    ids.push(r.insertId);
+    if (f.scanStatus === 'pending') {
+      systemAudit('portal', clientId, 'ATTACHMENT_HELD', 'submission', submissionId,
+        { file: f.originalname, reason: f.scanDetail });
+    }
+  }
+  // CPPM-39: a file with a known virus was deleted before it was stored.
+  for (const b of blockedFiles || []) {
+    systemAudit('portal', clientId, 'ATTACHMENT_BLOCKED_VIRUS', 'submission', submissionId, b);
+  }
+  return ids;
+}
+
 // POST /api/portal/submit/:clientCode/:formType
 router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (req, res) => {
   try {
@@ -91,22 +137,7 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       if (failure) return res.status(400).json({ error: failure });
     }
 
-    // CPPM-39: scan each file against ClamAV's list of known viruses. A report is never
-    // lost because of a file: a virus is deleted and the report still goes through; a file
-    // that cannot be scanned right now is kept but held ('pending') until the background
-    // job has scanned it. Only 'clean' files can be downloaded or forwarded to MIMS.
-    const blockedFiles = [];
-    for (const f of req.files || []) {
-      const result = await scanFile(f.path);
-      if (result.status === 'infected') {
-        try { fs.unlinkSync(f.path); } catch { /* already gone */ }
-        blockedFiles.push({ file: f.originalname, virus: result.virus });
-        f.blocked = true;
-      }
-      f.scanStatus = result.status === 'clean' ? 'clean' : 'pending';
-      f.scanDetail = result.status === 'error' ? String(result.error).slice(0, 255) : null;
-    }
-    if (req.files) req.files = req.files.filter(f => !f.blocked);
+    const blockedFiles = await scanUploads(req);
 
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -196,26 +227,7 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     }
 
     // Save any uploaded attachments, linked to the new submission.
-    if (req.files && req.files.length > 0) {
-      for (const f of req.files) {
-        await pool.execute(
-          `INSERT INTO cp_submission_attachments
-             (submission_id, client_id, file_name, file_path, file_size, mime_type, scan_status, scan_detail, scanned_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${f.scanStatus === 'clean' ? 'NOW()' : 'NULL'})`,
-          [submissionId, client.id, f.originalname.slice(0, 255),
-           `/uploads/private/submissions/${clientCode}/${f.filename}`, f.size, f.mimetype,
-           f.scanStatus, f.scanDetail]
-        );
-        if (f.scanStatus === 'pending') {
-          systemAudit('portal', client.id, 'ATTACHMENT_HELD', 'submission', submissionId,
-            { file: f.originalname, reason: f.scanDetail });
-        }
-      }
-    }
-    // CPPM-39: a file with a known virus was deleted before it was stored.
-    for (const b of blockedFiles) {
-      systemAudit('portal', client.id, 'ATTACHMENT_BLOCKED_VIRUS', 'submission', submissionId, b);
-    }
+    await storeAttachments(submissionId, client.id, clientCode, req.files, blockedFiles);
 
     // Auto-sync to integrated system if configured
     // CPPM-8: syncToIntegration records its own failures; anything that still
@@ -286,17 +298,86 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
         [...rows.map(r => r.id), client.id, req.portalUser.userId]
       );
       events.forEach(e => byId.get(e.submission_id)?.push(e));
+      // Bridge row 9: what the person added after sending, oldest first.
+      const [fus] = await pool.execute(
+        `SELECT f.submission_id, f.body, f.created_at
+           FROM cp_submission_followups f
+           JOIN cp_submissions s ON s.id = f.submission_id
+          WHERE f.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
+          ORDER BY f.id ASC`,
+        [...rows.map(r => r.id), client.id, req.portalUser.userId]
+      );
+      fus.forEach(f => { const r = rows.find(x => x.id === f.submission_id); (r.followups = r.followups || []).push({ body: f.body, at: f.created_at }); });
     }
     // Surface the user-facing case reference (matches the confirmation email/response).
     const submissions = rows.map(r => ({
       ...r,
       reference: `CP-${String(r.id).padStart(6, '0')}`,
       timeline: publicTimeline(byId.get(r.id) || []),
+      followups: r.followups || [],
+      can_follow_up: r.status !== 'closed',
     }));
     res.json({ submissions });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/submit/:clientCode/submissions/:id/followups — bridge row 9: the
+// person adds information to a request they already sent, instead of starting a new,
+// unconnected one. Stored with the request, then sent to the MIMS case as a comment.
+// Files go through the same checks as a new report and join the request's files.
+const FOLLOWUP_MAX = 5000;
+router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requirePortalAuth, handleUpload, async (req, res) => {
+  const clientCode = req.params.clientCode;
+  // A refused follow-up must not leave its files behind on disk.
+  const refuse = (status, error) => {
+    for (const f of req.files || []) { try { fs.unlinkSync(f.path); } catch { /* already gone */ } }
+    return res.status(status).json({ error });
+  };
+  try {
+    const text = String(req.body?.text || '').trim();
+    if (text.length < 2) return refuse(400, 'Please write what you want to add.');
+    if (text.length > FOLLOWUP_MAX) return refuse(400, `Please keep it under ${FOLLOWUP_MAX} characters.`);
+    const [[s]] = await pool.execute(
+      `SELECT s.id, s.client_id, s.status, s.submission_type, s.external_ref
+         FROM cp_submissions s JOIN cp_clients c ON c.id = s.client_id
+        WHERE s.id = ? AND c.code = ? AND c.is_active = 1 AND s.user_id = ?`,
+      [req.params.id, clientCode, req.portalUser.userId]);
+    if (!s) return refuse(404, 'Request not found.');
+    if (s.status === 'closed') return refuse(409, 'This request is closed. Please send a new one.');
+
+    const uploadError = req.files?.length ? validateUploads(req.files, ATT_ALLOWED) : null;
+    if (uploadError) return res.status(400).json({ error: uploadError });
+    const blockedFiles = await scanUploads(req);
+
+    // A request MIMS never takes (other enquiries) keeps its follow-ups in the portal.
+    const forwardStatus = FORM_TYPE_TO_CASE_TYPE[s.submission_type] ? 'pending' : 'local';
+    const [r] = await pool.execute(
+      'INSERT INTO cp_submission_followups (submission_id, client_id, body, forward_status) VALUES (?, ?, ?, ?)',
+      [s.id, s.client_id, text, forwardStatus]);
+    const attachmentIds = await storeAttachments(s.id, s.client_id, clientCode, req.files, blockedFiles);
+    await recordStatusEvent({ submissionId: s.id, clientId: s.client_id, status: 'follow_up', source: 'portal' });
+    systemAudit('portal', s.client_id, 'SUBMISSION_FOLLOW_UP', 'submission', s.id,
+      { followup_id: r.insertId, files: attachmentIds.length, blocked: blockedFiles.length });
+
+    res.status(201).json({
+      message: 'Thank you. Your information has been added to your request.',
+      blocked_files: blockedFiles.map(b => b.file),
+    });
+
+    // After the reply: send it on to MIMS if the request is already there. If it is
+    // not yet, the retry job sends it once the request has reached MIMS.
+    if (forwardStatus === 'pending' && s.external_ref) {
+      await forwardFollowUp(r.insertId).catch(err => log.error('portal.followup.forward_crashed', { err, followup_id: r.insertId }));
+      for (const id of attachmentIds) {
+        await forwardReleasedAttachment(id).catch(err => log.error('portal.followup.file_crashed', { err, attachment_id: id }));
+      }
+    }
+  } catch (err) {
+    log.error('portal.submit.error', { err, route: 'POST /:clientCode/submissions/:id/followups', path: req.path, request_id: req.requestId || null });
+    if (!res.headersSent) res.status(500).json({ error: 'Server error.' });
   }
 });
 
@@ -667,9 +748,82 @@ async function forwardReleasedAttachment(attachmentId) {
   await forwardAttachments(integration, row.external_ref, row.submission_id, headers, attachmentId);
 }
 
+// Bridge row 9: send one follow-up to its MIMS case as a case comment. MIMS keys it on
+// our follow-up id, so a retry after a lost reply never adds the comment twice.
+async function forwardFollowUp(followupId) {
+  const [[f]] = await pool.execute(
+    `SELECT f.id, f.body, f.forward_attempts, f.submission_id, s.client_id, s.external_ref
+       FROM cp_submission_followups f JOIN cp_submissions s ON s.id = f.submission_id
+      WHERE f.id = ? AND f.forward_status IN ('pending', 'failed') AND s.external_ref IS NOT NULL`, [followupId]);
+  if (!f) return;
+  const [[integration]] = await pool.execute(
+    'SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [f.client_id]);
+  if (!integration) return;
+  const ref = `CP-${String(f.submission_id).padStart(6, '0')}`;
+
+  let reason = null, commentId = null, retryable = true;
+  try {
+    const safeBaseUrl = await assertSafeOutboundUrl(integration.api_base_url);
+    const buildHeaders = async () => {
+      const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(integration)) };
+      if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
+      return headers;
+    };
+    let headers = await buildHeaders();
+    const post = () => safeFetch(new URL(`/api/v1/cases/${encodeURIComponent(f.external_ref)}/follow-ups`, safeBaseUrl).toString(), {
+      method: 'POST', headers, body: JSON.stringify({ text: f.body, followup_id: `cp-followup-${f.id}`, reference: ref }),
+    });
+    let r = await post();
+    if (r.status === 401 && integration.auth_type === 'oauth') {
+      invalidateAuth(integration.id);
+      headers = await buildHeaders();
+      r = await post();
+    }
+    await recordConnectionResult(integration, r.status < 500, r.status < 500 ? null : `MIMS answered HTTP ${r.status}.`);
+    if (r.ok) commentId = (await r.json().catch(() => ({}))).id || null;
+    else {
+      reason = await refusalReason(r);
+      // The case is gone or no longer this connection's: trying again cannot help.
+      if (r.status === 404 || r.status === 403) retryable = false;
+    }
+  } catch (err) {
+    reason = err.message;
+    await recordConnectionResult(integration, false, err.message);
+  }
+
+  if (!reason) {
+    await pool.execute(
+      `UPDATE cp_submission_followups
+          SET forward_status = 'forwarded', forward_attempts = forward_attempts + 1, forward_error = NULL,
+              last_forward_at = NOW(), mims_comment_id = ?
+        WHERE id = ?`, [commentId, f.id]);
+    systemAudit('MIMS integration', f.client_id, 'FOLLOW_UP_FORWARDED', 'submission', f.submission_id,
+      { followup_id: f.id, mims_case_id: f.external_ref, mims_comment_id: commentId });
+    clearAlerts(f.client_id, `followup:${f.id}`, 'system: the follow-up reached MIMS');
+    return;
+  }
+  const attempts = retryable ? f.forward_attempts + 1 : Math.max(f.forward_attempts + 1, MAX_SYNC_ATTEMPTS);
+  await pool.execute(
+    `UPDATE cp_submission_followups
+        SET forward_status = 'failed', forward_attempts = ?, forward_error = ?, last_forward_at = NOW()
+      WHERE id = ?`, [attempts, String(reason).slice(0, 1000), f.id]);
+  systemAudit('MIMS integration', f.client_id, 'FOLLOW_UP_FAILED', 'submission', f.submission_id,
+    { followup_id: f.id, mims_case_id: f.external_ref, attempt: attempts, error: reason });
+  if (attempts >= MAX_SYNC_ATTEMPTS) {
+    await raiseAlert(f.client_id, {
+      kind: 'followup_not_delivered', audience: 'integration',
+      title: `Information added to ${ref} has not reached MIMS`,
+      body: `The reporter added information that is not on MIMS case ${f.external_ref} after ${attempts} tries. Reason: ${asSentence(reason)} It is on the Sync Health page, where it can be sent again.`,
+      linkPath: `/admin/clients/${f.client_id}/sync-health`,
+      relatedType: 'submission', relatedId: f.submission_id, dedupeKey: `followup:${f.id}`,
+    });
+  }
+}
+
 module.exports = router;
 // R1: exposed so the retry poller can re-drive a failed sync without duplicating logic.
 module.exports.syncToIntegration = syncToIntegration;
 module.exports.forwardReleasedAttachment = forwardReleasedAttachment;
 module.exports.toDateOnly = toDateOnly;
 module.exports.raiseSafetyTaskAlert = raiseSafetyTaskAlert;
+module.exports.forwardFollowUp = forwardFollowUp;

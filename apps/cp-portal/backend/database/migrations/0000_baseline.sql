@@ -1118,6 +1118,24 @@ CREATE TABLE IF NOT EXISTS cp_alert_settings (
   PRIMARY KEY (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── SUBMISSION FOLLOW-UPS (from 0035, bridge row 9) ─────────────
+CREATE TABLE IF NOT EXISTS cp_submission_followups (
+  id                 INT           NOT NULL AUTO_INCREMENT,
+  submission_id      INT           NOT NULL,
+  client_id          INT           NOT NULL,
+  body               TEXT          NOT NULL,
+  forward_status     VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  forward_attempts   INT           NOT NULL DEFAULT 0,
+  forward_error      VARCHAR(1000) NULL,
+  last_forward_at    DATETIME      NULL,
+  mims_comment_id    INT           NULL,
+  created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_followup_submission (submission_id),
+  KEY idx_followup_forward (forward_status),
+  CONSTRAINT fk_followup_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1153,4 +1171,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0031_add_attachment_delivery.sql',          NULL),
   ('0032_add_mims_change_checkpoint.sql',       NULL),
   ('0033_add_connection_failure_count.sql',     NULL),
-  ('0034_add_answer_source.sql',                NULL);
+  ('0034_add_answer_source.sql',                NULL),
+  ('0035_add_submission_followups.sql',         NULL);

@@ -629,6 +629,59 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   }
 });
 
+// Bridge row 9: the person adds information to a report already sent. It becomes a case
+// comment, a history line and the case's follow-up date, and the case owner (or the
+// supervisors) is told — new information can change how a side effect is assessed.
+// Only on a case this connection created; once per sender's follow-up id.
+router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (req, res) => {
+  const text = String(req.body?.text || '').trim();
+  const followupId = String(req.body?.followup_id || '').slice(0, 100);
+  if (text.length < 2 || text.length > 5000) return res.status(400).json({ error: 'text must be 2 to 5000 characters.' });
+  if (!followupId) return res.status(400).json({ error: 'followup_id is required.' });
+  const conn = await pool.getConnection();
+  try {
+    const [[c]] = await conn.execute(
+      `SELECT c.id, c.case_number, c.case_type, c.org_id, c.case_owner_id, COALESCE(ws.is_closed, 0) AS closed
+         FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id
+        WHERE c.id = ? AND c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0 LIMIT 1`,
+      [req.params.id, req.apiClient.org_id, req.apiClient.id]);
+    if (!c) return res.status(404).json({ error: 'Case not found.' });
+    const [[done]] = await conn.execute(
+      'SELECT comment_id FROM api_case_followups WHERE api_client_id = ? AND external_followup_id = ?', [req.apiClient.id, followupId]);
+    if (done) return res.status(200).json({ id: done.comment_id, idempotent: true });
+
+    await conn.beginTransaction();
+    const reference = req.body?.reference ? String(req.body.reference).slice(0, 100) : c.case_number;
+    const [cm] = await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
+      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}):\n${text}`]);
+    await conn.execute('UPDATE cases SET follow_up_received_date = CURDATE(), updated_at = NOW() WHERE id = ?', [c.id]);
+    await conn.execute(
+      'INSERT INTO api_case_followups (api_client_id, external_followup_id, case_id, comment_id) VALUES (?, ?, ?, ?)',
+      [req.apiClient.id, followupId, c.id, cm.insertId]);
+    await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+      'FOLLOW_UP_RECEIVED', 'case_comment', null, `comment #${cm.insertId} from ${reference}`, conn);
+    await conn.commit();
+    res.status(201).json({ id: cm.insertId });
+
+    const { getCaseSupervisors } = require('../services/intakeAlertService');
+    const users = c.case_owner_id ? [c.case_owner_id] : await getCaseSupervisors(c.org_id);
+    require('../services/notificationCenterService').createNotifications(users, {
+      category: 'follow_up',
+      severity: c.case_type === 'AE' || Number(c.closed) ? 'warning' : 'info',
+      title: `${Number(c.closed) ? 'Follow-up on a closed case' : 'Follow-up received'}: ${c.case_number}`,
+      message: 'The reporter added information through the portal. Read it in the case comments.',
+      linkUrl: `/cases/${c.id}`,
+      metadata: { case_id: c.id, comment_id: cm.insertId },
+      eventKey: `follow-up:${cm.insertId}`,
+    }).catch(() => {});
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (!res.headersSent) res.status(500).json(intakeFailure(err, req, 'Failed to add the follow-up.'));
+  } finally {
+    conn.release();
+  }
+});
+
 // C1: attach a file to a case. Stored via the shared file-storage service and
 // recorded in the generic attachments table (entity_type='case'). Org-scoped by key.
 router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUpload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {

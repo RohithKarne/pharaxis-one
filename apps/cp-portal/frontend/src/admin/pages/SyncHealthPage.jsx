@@ -19,6 +19,7 @@ export default function SyncHealthPage() {
   const [counts, setCounts]     = useState({})
   const [failures, setFailures] = useState([])
   const [files, setFiles]       = useState([])
+  const [followups, setFollowups] = useState([])
   const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -36,6 +37,7 @@ export default function SyncHealthPage() {
       setCounts(d.counts || {})
       setFailures(d.failures || [])
       setFiles(d.files || [])
+      setFollowups(d.followups || [])
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -67,6 +69,21 @@ export default function SyncHealthPage() {
       load()
     } catch {
       setFileResult(r => ({ ...r, [attachmentId]: { error: 'Network error' } }))
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  // Bridge row 9: send information a person added to its MIMS case again.
+  async function retryFollowUp(followupId) {
+    setRetrying(`fu-${followupId}`)
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/followups/${followupId}/retry`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      setFileResult(r => ({ ...r, [`fu-${followupId}`]: res.ok ? d : { error: d.error || `Error ${res.status}` } }))
+      load()
+    } catch {
+      setFileResult(r => ({ ...r, [`fu-${followupId}`]: { error: 'Network error' } }))
     } finally {
       setRetrying(null)
     }
@@ -168,6 +185,45 @@ export default function SyncHealthPage() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="cp-section-header" style={{ marginTop: 24 }}>
+            <h2>Added information not delivered {followups.length > 0 ? `(${followups.length})` : ''}</h2>
+          </div>
+          {followups.length === 0 ? (
+            <div className="cp-empty"><p>Everything people added to their requests has reached MIMS.</p></div>
+          ) : (
+            <table className="cp-table">
+              <thead>
+                <tr><th>Reference</th><th>MIMS case</th><th>Attempts</th><th>Last Error</th><th>Last Attempt</th><th /></tr>
+              </thead>
+              <tbody>
+                {followups.map(f => {
+                  const result = fileResult[`fu-${f.id}`]
+                  return (
+                    <tr key={f.id}>
+                      <td><Link to={`/admin/clients/${clientId}/submissions`}>{f.reference}</Link></td>
+                      <td>{f.external_ref || '—'}</td>
+                      <td>{f.forward_attempts}</td>
+                      <td style={{ maxWidth: 260 }}>{f.forward_error || '—'}</td>
+                      <td>{f.last_forward_at ? new Date(f.last_forward_at).toLocaleString() : '—'}</td>
+                      <td>
+                        {admin?.role !== 'viewer' && (
+                          <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFollowUp(f.id)} disabled={retrying === `fu-${f.id}`}>
+                            {retrying === `fu-${f.id}` ? 'Sending…' : '↻ Send again'}
+                          </button>
+                        )}
+                        {result && (
+                          <div style={{ fontSize: 12, marginTop: 4, color: result.status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
+                            {result.status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${result.error || 'failed'}`}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

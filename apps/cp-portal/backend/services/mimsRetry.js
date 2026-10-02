@@ -89,6 +89,29 @@ async function retryOnce() {
       .catch(err => log.error('mims.retry.file_crashed', { err, attachment_id: f.id }));
   }
 
+  // Bridge row 9: information a person added to a request that is in MIMS, not yet on
+  // the case. Same backoff; a never-tried one waits two minutes so the route's own send
+  // and the report's sync are not raced.
+  const [followups] = await pool.execute(
+    `SELECT f.id, f.forward_attempts, f.last_forward_at
+       FROM cp_submission_followups f
+       JOIN cp_submissions s ON s.id = f.submission_id
+      WHERE f.forward_status IN ('pending', 'failed') AND f.forward_attempts < ?
+        AND s.external_ref IS NOT NULL
+        AND (f.forward_attempts > 0 OR (f.created_at < NOW() - INTERVAL 2 MINUTE AND s.synced_at < NOW() - INTERVAL 2 MINUTE))
+      ORDER BY f.id ASC LIMIT ${BATCH}`,
+    [MAX_ATTEMPTS]);
+  const { forwardFollowUp } = require('../routes/portal/submit');
+  for (const f of followups) {
+    if (f.forward_attempts > 0) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, f.forward_attempts - 1);
+      if (Date.now() < new Date(f.last_forward_at).getTime() + backoff) continue;
+    }
+    retried++;
+    await forwardFollowUp(f.id)
+      .catch(err => log.error('mims.retry.followup_crashed', { err, followup_id: f.id }));
+  }
+
   // CPPM-11: same sweep drives the erasure redactions that MIMS has not taken yet.
   const { retryDueRedactions } = require('./mimsRedaction');
   await retryDueRedactions().catch(err => log.error('mims.retry.redaction_tick_failed', { err }));

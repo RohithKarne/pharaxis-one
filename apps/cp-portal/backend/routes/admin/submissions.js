@@ -69,6 +69,13 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       const bySub = {};
       atts.forEach(a => { (bySub[a.submission_id] = bySub[a.submission_id] || []).push(a); });
       rows.forEach(r => { r.attachments = bySub[r.id] || []; });
+      // Bridge row 9: information the person added after sending, with where it got to.
+      const [fus] = await pool.execute(
+        `SELECT id, submission_id, body, forward_status, forward_error, created_at
+           FROM cp_submission_followups WHERE submission_id IN (${ph}) ORDER BY id ASC`, ids);
+      const fuBySub = {};
+      fus.forEach(f => { (fuBySub[f.submission_id] = fuBySub[f.submission_id] || []).push(f); });
+      rows.forEach(r => { r.followups = fuBySub[r.id] || []; });
     }
 
     // Summary counts
@@ -227,7 +234,14 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
         WHERE a.client_id = ? AND a.forward_status = 'failed'
         ORDER BY a.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
     files.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
-    res.json({ counts: byStatus, failures, files });
+    // Bridge row 9: information people added to a request that did not reach its MIMS case.
+    const [followups] = await pool.execute(
+      `SELECT f.id, f.submission_id, f.forward_attempts, f.forward_error, f.last_forward_at, s.external_ref
+         FROM cp_submission_followups f JOIN cp_submissions s ON s.id = f.submission_id
+        WHERE f.client_id = ? AND f.forward_status = 'failed'
+        ORDER BY f.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
+    followups.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
+    res.json({ counts: byStatus, failures, files, followups });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -252,6 +266,29 @@ router.post('/:clientId/attachments/:attachmentId/retry', authenticateAdmin, req
     res.json({ status: after.forward_status, error: after.forward_error });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'POST /:clientId/attachments/:attachmentId/retry', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/followups/:followupId/retry — send information a
+// person added to its MIMS case again (bridge row 9). Not limited by the automatic try cap.
+router.post('/:clientId/followups/:followupId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    if (req.admin.role === 'viewer') return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    const [[f]] = await pool.execute(
+      `SELECT f.id, f.submission_id, f.forward_status, s.external_ref FROM cp_submission_followups f
+         JOIN cp_submissions s ON s.id = f.submission_id
+        WHERE f.id = ? AND f.client_id = ?`, [req.params.followupId, req.params.clientId]);
+    if (!f) return res.status(404).json({ error: 'Follow-up not found.' });
+    if (!f.external_ref) return res.status(409).json({ error: 'Its report has not reached MIMS yet — send the report first.' });
+    if (f.forward_status === 'forwarded') return res.json({ status: 'forwarded', error: null });
+    await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'followup', f.id, { submission_id: f.submission_id });
+    const { forwardFollowUp } = require('../portal/submit');
+    await forwardFollowUp(f.id);
+    const [[after]] = await pool.execute('SELECT forward_status, forward_error FROM cp_submission_followups WHERE id = ?', [f.id]);
+    res.json({ status: after.forward_status, error: after.forward_error });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/followups/:followupId/retry', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

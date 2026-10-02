@@ -26,6 +26,8 @@ const PUBLIC_LABELS = {
   // Bridge row 8: what MIMS says is happening, in the person's words.
   in_review: 'A medical information specialist is working on it',
   answered:  'Answer sent',
+  // Bridge row 9: the person added information to the request after sending it.
+  follow_up: 'You added more information',
 };
 
 /** Append one status change. Returns nothing; failures are logged, never thrown. */
