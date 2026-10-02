@@ -1009,6 +1009,8 @@ CREATE TABLE IF NOT EXISTS cp_submission_answers (
   approved_at    DATETIME     NULL,
   sent_at        DATETIME     NULL,
   send_error     TEXT         NULL,
+  source           VARCHAR(20) NOT NULL DEFAULT 'portal',
+  mims_response_id INT         NULL,
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -1150,4 +1152,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0030_add_admin_alerts.sql',                 NULL),
   ('0031_add_attachment_delivery.sql',          NULL),
   ('0032_add_mims_change_checkpoint.sql',       NULL),
-  ('0033_add_connection_failure_count.sql',     NULL);
+  ('0033_add_connection_failure_count.sql',     NULL),
+  ('0034_add_answer_source.sql',                NULL);

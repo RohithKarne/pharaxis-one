@@ -179,7 +179,14 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
   const afterId = Math.max(parseInt(req.query.after_id, 10) || 0, 0);
   const [rows] = await pool.execute(
     `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
-            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
+            c.case_owner_id IS NOT NULL AS owner_assigned,
+            -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
+            -- or a superseded one), and whether it was addressed to the person who
+            -- reported — only then does its text travel back to them.
+            (SELECT r.id FROM case_mi_responses r
+              WHERE r.case_id = c.id AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
+              ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
        FROM cases c
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
       WHERE c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0
@@ -194,8 +201,28 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
   );
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
+  const answers = {};
+  const answerIds = page.map(r => r.answer_id).filter(Boolean);
+  if (answerIds.length) {
+    const [ans] = await pool.execute(
+      `SELECT r.id, r.case_id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
+              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at,
+              (SELECT cr.email FROM case_reporter cr WHERE cr.case_id = r.case_id ORDER BY cr.id LIMIT 1) AS reporter_email
+         FROM case_mi_responses r WHERE r.id IN (${answerIds.map(() => '?').join(',')})`, answerIds);
+    for (const a of ans) {
+      const toReporter = !!a.recipient_email && !!a.reporter_email
+        && a.recipient_email.trim().toLowerCase() === a.reporter_email.trim().toLowerCase();
+      const text = a.response_text || String(a.response_body_html || '')
+        .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+      answers[a.case_id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
+    }
+  }
   res.json({
-    changes: page.map(r => ({ id: r.id, case_number: r.case_number, status: r.status, closed: !!Number(r.closed), updated_at: r.updated_at })),
+    changes: page.map(r => ({
+      id: r.id, case_number: r.case_number, status: r.status, closed: !!Number(r.closed), updated_at: r.updated_at,
+      owner_assigned: !!Number(r.owner_assigned), answer: answers[r.id] || null,
+    })),
     has_more: rows.length > limit,
     next: last ? { since: last.updated_at, after_id: last.id } : null,
   });

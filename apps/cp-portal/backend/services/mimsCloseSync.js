@@ -19,6 +19,7 @@ const { getAuthHeaders, invalidateAuth } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
 const { recordStatusEvent } = require('../utils/submissionStatus');
+const { queueEmail } = require('../utils/emailOutbox');
 const log = require('../utils/logger');
 const { recordConnectionResult } = require('./adminAlerts');
 
@@ -44,12 +45,58 @@ function minusSeconds(ts, seconds) {
   return new Date(d.getTime() - seconds * 1000).toISOString().slice(0, 19).replace('T', ' ');
 }
 
+// Bridge row 8: the person's progress, and the answer MIMS approved and sent.
+async function applyProgress(integ, sub, change) {
+  if (change.owner_assigned && sub.status !== 'closed') {
+    const [[seen]] = await pool.execute(
+      "SELECT 1 AS x FROM cp_submission_status_events WHERE submission_id = ? AND status = 'in_review' LIMIT 1", [sub.id]);
+    if (!seen) await recordStatusEvent({ submissionId: sub.id, clientId: integ.client_id, status: 'in_review', source: 'mims-close-sync' });
+  }
+  const a = change.answer;
+  if (!a) return false;
+  const [[existing]] = await pool.execute('SELECT id, mims_response_id FROM cp_submission_answers WHERE submission_id = ?', [sub.id]);
+  if (existing && Number(existing.mims_response_id) === Number(a.id)) return false;
+  // Only an answer addressed to the person who asked carries its text here; one sent to
+  // someone else (a colleague, a pharmacist) is recorded as sent, without the text.
+  const body = a.text || 'An answer was sent by the medical information team. It was addressed to a different recipient, so it is not shown here — contact us if you need a copy.';
+  if (existing) {
+    await pool.execute(
+      `UPDATE cp_submission_answers SET body = ?, status = 'sent', source = 'mims', mims_response_id = ?, sent_at = ?, send_error = NULL WHERE id = ?`,
+      [body, a.id, a.sent_at, existing.id]);
+  } else {
+    await pool.execute(
+      `INSERT INTO cp_submission_answers (submission_id, client_id, body, status, source, mims_response_id, approved_at, sent_at)
+       VALUES (?, ?, ?, 'sent', 'mims', ?, ?, ?)`,
+      [sub.id, integ.client_id, body, a.id, a.sent_at, a.sent_at]);
+  }
+  await recordStatusEvent({ submissionId: sub.id, clientId: integ.client_id, status: 'answered', source: 'mims-close-sync' });
+  systemAudit('MIMS integration', integ.client_id, 'ANSWER_RECEIVED', 'submission', sub.id,
+    { mims_case_id: change.id, mims_response_id: a.id, to_reporter: !!a.to_reporter });
+  // Tell the person where to read it. MIMS emails the answer itself; this email carries
+  // no medical content, only the pointer to their signed-in history.
+  const [[who]] = await pool.execute(
+    `SELECT s.submitter_email, u.email AS user_email, c.code FROM cp_submissions s
+       JOIN cp_clients c ON c.id = s.client_id LEFT JOIN cp_portal_users u ON u.id = s.user_id WHERE s.id = ?`, [sub.id]);
+  const to = who?.user_email || who?.submitter_email;
+  if (to) {
+    const ref = `CP-${String(sub.id).padStart(6, '0')}`;
+    queueEmail(integ.client_id, {
+      to, subject: `Your answer is ready — ${ref}`,
+      text: `The medical information team has answered your request ${ref}.${who.user_email ? ' Sign in and open My Submissions to read it.' : ' It has been sent to you by email.'}`,
+      html: `<p>The medical information team has answered your request <strong>${ref}</strong>.</p><p>${who.user_email ? 'Sign in and open <em>My Submissions</em> to read it.' : 'It has been sent to you by email.'}</p>`,
+    }, { kind: 'answer_ready', relatedType: 'submission', relatedId: sub.id });
+  }
+  return true;
+}
+
 /** Apply one MIMS change to the request linked to that case. Returns 'closed', 'reopened' or null. */
 async function applyChange(integ, change) {
   const [[sub]] = await pool.execute(
     `SELECT id, status FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
     [integ.client_id, String(change.id)]);
   if (!sub) return null;
+  // Answers always travel — an amended answer can go out after the case closed.
+  await applyProgress(integ, sub, change);
 
   if (change.closed && sub.status === 'synced') {
     const [upd] = await pool.execute(

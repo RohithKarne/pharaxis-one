@@ -285,7 +285,7 @@ const ANSWER_APPROVERS = requireRole('superadmin', 'admin', 'reviewer');
 router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const [[answer]] = await pool.execute(
-      `SELECT a.id, a.body, a.status, a.approved_at, a.sent_at, a.send_error,
+      `SELECT a.id, a.body, a.status, a.approved_at, a.sent_at, a.send_error, a.source,
               d.name AS drafted_by_name, p.name AS approved_by_name
          FROM cp_submission_answers a
     LEFT JOIN cp_admin_users d ON d.id = a.drafted_by
@@ -299,6 +299,8 @@ router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAc
   }
 });
 
+const ANSWERED_IN_MIMS = 'This request was sent to MIMS, so it is answered there. The answer MIMS approves and sends appears here and on the person\'s My Submissions page automatically.';
+
 // PUT /api/admin/submissions/:clientId/:submissionId/answer — save or update the draft
 router.put('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
@@ -306,8 +308,10 @@ router.put('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAc
     if (body.length < 10) return res.status(400).json({ error: 'Write the answer before saving it.' });
 
     const [[submission]] = await pool.execute(
-      'SELECT id FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+      'SELECT id, external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
     if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    // Bridge row 8: one answer path — a request that went to MIMS is answered there.
+    if (submission.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
 
     const [[existing]] = await pool.execute(
       'SELECT id, status FROM cp_submission_answers WHERE submission_id = ? AND client_id = ?',
@@ -339,6 +343,8 @@ router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireCl
       [req.params.submissionId, req.params.clientId]);
     if (!answer) return res.status(404).json({ error: 'Write the answer first.' });
     if (answer.status === 'sent') return res.status(409).json({ error: 'This answer has already been sent.' });
+    const [[linked]] = await pool.execute('SELECT external_ref FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (linked?.external_ref) return res.status(409).json({ error: ANSWERED_IN_MIMS });
 
     const [[submission]] = await pool.execute(
       `SELECT s.id, s.submission_type, s.submitter_email, u.email AS user_email

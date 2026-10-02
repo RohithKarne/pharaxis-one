@@ -2547,6 +2547,9 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
       );
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
+      // Bridge row 8: an answer going out is a change to the case, so a connected
+      // portal's change list picks it up and shows the person their answer.
+      if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
       await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
         case_id: Number(req.params.id),
         from_status: existing.response_status,

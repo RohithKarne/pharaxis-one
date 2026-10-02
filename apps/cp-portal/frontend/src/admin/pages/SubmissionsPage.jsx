@@ -27,7 +27,7 @@ const STATUS_LABELS = {
 }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
-function AnswerPanel({ clientId, submissionId, canApprove }) {
+function AnswerPanel({ clientId, submissionId, canApprove, sentToMims }) {
   const [answer, setAnswer] = useState(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -61,9 +61,16 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
         <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
           {answer.body}
           <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
-            Approved by {answer.approved_by_name || 'unknown'} · sent {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}
+            {answer.source === 'mims'
+              ? <>Approved and sent in MIMS · {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}</>
+              : <>Approved by {answer.approved_by_name || 'unknown'} · sent {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}</>}
             {answer.send_error ? ` · ${answer.send_error}` : ''}
           </div>
+        </div>
+      ) : sentToMims ? (
+        // Bridge row 8: one answer path — this request is answered in MIMS.
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 6, padding: 12, fontSize: 13, color: '#475569' }}>
+          This request was sent to MIMS, so it is answered there. The answer MIMS approves and sends will appear here and on the person's My Submissions page.
         </div>
       ) : (
         <>
@@ -400,7 +407,7 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} />
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} sentToMims={!!s.external_ref} />
                       </td>
                     </tr>
                   )}
