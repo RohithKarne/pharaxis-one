@@ -741,6 +741,48 @@ async function setTwoFactorFailure(userId, orgId) {
   return { failedAttempts: nextAttempts, isLocked };
 }
 
+// MIPM-78 (M-94): a person setting up 2FA has no user_2fa_settings row yet, so
+// setTwoFactorFailure counted nothing and setup codes could be guessed until the
+// rate limiter stepped in. Wrong setup guesses are counted on the setup challenges
+// created since this sign-in began (the challenge token's iat); at the limit the
+// open setup challenges are closed and this sign-in can do no more setup — the
+// person signs in again with their password and starts a fresh count.
+const SETUP_GUESS_LIMIT = 3;
+
+async function countSetupGuesses(pending) {
+  await ensure2faChallengeAttemptsColumn();
+  const [[row]] = await pool.execute(
+    `SELECT COALESCE(SUM(attempts), 0) AS n FROM user_2fa_challenges
+     WHERE user_id = ? AND org_id = ? AND challenge_type IN ('setup_email', 'setup_totp')
+       AND created_at >= FROM_UNIXTIME(?)`,
+    [pending.userId, pending.orgId, Math.floor(Number(pending.iat || 0))]
+  );
+  return Number(row?.n || 0);
+}
+
+async function recordSetupGuess(pending, method) {
+  await ensure2faChallengeAttemptsColumn();
+  const type = method === 'totp' ? 'setup_totp' : 'setup_email';
+  await pool.execute(
+    `UPDATE user_2fa_challenges SET attempts = attempts + 1
+     WHERE user_id = ? AND org_id = ? AND challenge_type = ? AND is_consumed = 0
+       AND created_at >= FROM_UNIXTIME(?)
+     ORDER BY id DESC LIMIT 1`,
+    [pending.userId, pending.orgId, type, Math.floor(Number(pending.iat || 0))]
+  );
+  const used = await countSetupGuesses(pending);
+  if (used >= SETUP_GUESS_LIMIT) {
+    await pool.execute(
+      `UPDATE user_2fa_challenges SET is_consumed = 1
+       WHERE user_id = ? AND org_id = ? AND challenge_type IN ('setup_email', 'setup_totp') AND is_consumed = 0`,
+      [pending.userId, pending.orgId]
+    );
+  }
+  return used;
+}
+
+const SETUP_LOCKED_MESSAGE = 'Too many wrong codes. Sign in again with your password to get a new code.';
+
 async function clearTwoFactorFailures(userId, orgId) {
   await pool.execute(
     `UPDATE user_2fa_settings
@@ -1662,6 +1704,9 @@ const authController = {
       const user = await userModel.findById(pending.userId);
       if (!user) return res.status(404).json({ error: 'User not found.' });
       const challengeType = pending.mode === 'verify' ? 'login_email' : 'setup_email';
+      if (pending.mode !== 'verify' && (await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
+        return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
+      }
       const result = await createEmailChallenge(user, pending.orgId, challengeType);
       await logLoginAudit({
         userId: pending.userId,
@@ -1683,6 +1728,9 @@ const authController = {
       const { challengeToken } = req.body;
       if (!challengeToken) return res.status(400).json({ error: 'challengeToken is required.' });
       const pending = parseTwoFactorToken(challengeToken);
+      if ((await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
+        return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
+      }
       const secret = await beginTotpEnrollment(pending.userId, pending.orgId);
       const issuer = encodeURIComponent('MIMS');
       const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
@@ -1729,6 +1777,10 @@ const authController = {
       if (!user) return res.status(404).json({ error: 'User not found.' });
 
       const settings = await getUser2faSettings(pending.userId, pending.orgId);
+      const isSetup = pending.mode !== 'verify';
+      if (isSetup && !backupCode && (await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
+        return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
+      }
       let verified = false;
       let setupCompleted = false;
       let generatedBackupCodes = null;
@@ -1760,6 +1812,23 @@ const authController = {
             authEvent = '2fa_setup_completed';
           }
         }
+      }
+
+      if (!verified && isSetup && !backupCode) {
+        const used = await recordSetupGuess(pending, method);
+        const closed = used >= SETUP_GUESS_LIMIT;
+        await logLoginAudit({
+          userId: pending.userId,
+          userName: pending.email,
+          role: pending.role,
+          status: 'failed',
+          failReason: closed ? '2FA setup closed after 3 wrong codes.' : 'Invalid 2FA setup code.',
+          authEvent: closed ? '2fa_setup_locked' : '2fa_setup_failed',
+          metadata: { orgId: pending.orgId, method: method || 'email' },
+        });
+        return res.status(closed ? 423 : 401).json(closed
+          ? { error: SETUP_LOCKED_MESSAGE, locked: true, restart: true }
+          : { error: 'Invalid verification code.' });
       }
 
       if (!verified) {
