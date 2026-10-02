@@ -75,19 +75,30 @@ const DEFAULT_EVIDENCE_RULES = [
     severity: 'block',
     priority: 30,
   },
+  // MIPM-91: templates follow Draft → Approved → Published (the old Active/Inactive
+  // model is gone). Expecting 'Active' blocked every template publish and render.
   {
-    rule_name: 'Template response requires active status',
+    rule_name: 'Template publish requires approved status',
+    applies_to: 'template',
+    mode_scope: 'publish',
+    check_type: 'status_in',
+    check_config: { values: ['Approved'] },
+    severity: 'block',
+    priority: 10,
+  },
+  {
+    rule_name: 'Template response requires published status',
     applies_to: 'template',
     mode_scope: 'response',
     check_type: 'status_in',
-    check_config: { values: ['Active'] },
+    check_config: { values: ['Published'] },
     severity: 'block',
     priority: 10,
   },
   {
     rule_name: 'Template should include enough response text',
     applies_to: 'template',
-    mode_scope: 'response',
+    mode_scope: 'both',
     check_type: 'min_content_length',
     check_config: { min: 40 },
     severity: 'block',

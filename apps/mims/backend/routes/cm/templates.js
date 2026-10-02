@@ -137,7 +137,7 @@ async function transitionTemplate(req, res, action) {
         orgId: req.user.orgId,
         contentType: 'template',
         contentId: Number(req.params.id),
-        mode: 'response',
+        mode: 'publish',
         actorUserId: req.user.userId,
         metadata: { route: '/api/cm/templates/:id/publish', action: 'publish' },
       });
