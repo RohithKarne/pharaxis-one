@@ -102,6 +102,14 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     setPostLoginData(null)
   }
 
+  // MIPM-78: after too many wrong setup codes the server closes this sign-in's
+  // setup; send the person back to the password step with the reason.
+  function restartAfterSetupLock(message) {
+    resetTwoFactorState()
+    setLoginForm(f => ({ ...f, password: '' }))
+    showAlert(message)
+  }
+
   function resetForgotPasswordState() {
     setForgotOpen(false)
     setForgotStep('email')
@@ -399,7 +407,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         body: JSON.stringify({ challengeToken: twoFactor.challengeToken }),
       })
       const data = await res.json()
-      if (!res.ok) return showAlert(data.error || 'Could not send verification code.')
+      if (!res.ok) return data.restart ? restartAfterSetupLock(data.error) : showAlert(data.error || 'Could not send verification code.')
       setEmailCodeSent(true)
       showAlert(`Verification code sent to ${data.maskedEmail}.`, 'success')
     } catch {
@@ -420,7 +428,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         body: JSON.stringify({ challengeToken: twoFactor.challengeToken }),
       })
       const data = await res.json()
-      if (!res.ok) return showAlert(data.error || 'Could not start authenticator setup.')
+      if (!res.ok) return data.restart ? restartAfterSetupLock(data.error) : showAlert(data.error || 'Could not start authenticator setup.')
       setTotpSetup(data)
     } catch {
       showAlert('Cannot connect to server.')
@@ -447,7 +455,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) return showAlert(data.error || '2FA verification failed.')
+      if (!res.ok) return data.restart ? restartAfterSetupLock(data.error) : showAlert(data.error || '2FA verification failed.')
       if (data.backupCodes?.length) {
         setPostLoginData(data)
         showAlert('2FA enabled. Save your backup codes before continuing.', 'success')
