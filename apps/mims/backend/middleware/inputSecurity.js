@@ -3,7 +3,9 @@
 const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-const SCRIPT_INJECTION_PATTERN = /<\s*\/?\s*script\b|javascript:|on[a-z]+\s*=/i;
+// MIPM-100: an event-handler name only where it starts a word ( onerror=, "onload=, /onload=);
+// without \b, "configuration=" or "content=" (on inside a word) was refused as an attack.
+const SCRIPT_INJECTION_PATTERN = /<\s*\/?\s*script\b|javascript:|\bon[a-z]+\s*=/i;
 const SQLI_PATTERN = /\bunion\b\s+\bselect\b|\bor\b\s+1\s*=\s*1|\bdrop\b\s+table\b|--|\/\*|\*\//i;
 const COMMAND_INJECTION_PATTERN = /`|\$\(|\|\||&&|;\s*(?:rm|bash|sh|curl|wget|nc|python|node)\b/i;
 const HIGH_RISK_KEY_PATTERN = /(command|cmd|shell|exec|script|query|sql)/i;
