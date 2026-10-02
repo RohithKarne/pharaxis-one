@@ -238,13 +238,31 @@ export default function TemplatesSection({ token }) {
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
 
-  async function transition(t, action) {
+  // Approve and publish are signed (password + reason); archive and revert are not.
+  const [signing, setSigning] = useState(null) // { t, action, password, reason, busy }
+
+  async function transition(t, action, signature) {
+    if ((action === 'approve' || action === 'publish') && !signature) {
+      setSigning({ t, action, password: '', reason: '', busy: false })
+      return false
+    }
     try {
-      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, {
+        method: 'POST', headers: authHeaders, body: signature ? JSON.stringify(signature) : undefined,
+      })
       const d = await res.json().catch(() => ({}))
-      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1) }
-      else toast.error(d.error || 'Action failed.')
+      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1); return true }
+      toast.error(d.error || 'Action failed.')
     } catch { toast.error('Network error.') }
+    return false
+  }
+
+  async function submitSignature() {
+    if (!signing.password || !signing.reason.trim()) return toast.warn('Password and reason are required.')
+    setSigning(s => ({ ...s, busy: true }))
+    const ok = await transition(signing.t, signing.action, { password: signing.password, reason: signing.reason.trim() })
+    if (ok) setSigning(null)
+    else setSigning(s => s && ({ ...s, busy: false, password: '' }))
   }
 
   return (
@@ -331,6 +349,30 @@ export default function TemplatesSection({ token }) {
       )}
       {showDrawer && (
         <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
+      )}
+      {signing && (
+        <div className="cm-modal-overlay">
+          <div className="cm-modal">
+            <h3 className="cm-modal-title">{signing.action === 'approve' ? 'Approve Template' : 'Publish Template'}</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              {signing.action === 'approve' ? 'Approving' : 'Publishing'}: <strong>{signing.t.name}</strong> — electronic signature required
+            </p>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Password <span className="required">*</span></label>
+              <input type="password" className="cm-form-input" value={signing.password} onChange={e => setSigning(s => ({ ...s, password: e.target.value }))} placeholder="Enter your password" />
+            </div>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Reason <span className="required">*</span></label>
+              <textarea className="cm-form-textarea" rows={3} value={signing.reason} onChange={e => setSigning(s => ({ ...s, reason: e.target.value }))} placeholder={`State the reason for ${signing.action === 'approve' ? 'approval' : 'publishing'}…`} />
+            </div>
+            <div className="cm-modal-footer">
+              <button className="cm-btn cm-btn-secondary" onClick={() => setSigning(null)} disabled={signing.busy}>Cancel</button>
+              <button className="cm-btn cm-btn-primary" onClick={submitSignature} disabled={signing.busy}>
+                {signing.busy ? 'Signing…' : (signing.action === 'approve' ? 'Approve' : 'Publish')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {historyTemplate && (
         <VersionHistoryModal entityType="template" entityId={historyTemplate.id} entityName={historyTemplate.name} token={token} onClose={() => setHistoryTemplate(null)} />

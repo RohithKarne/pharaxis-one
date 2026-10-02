@@ -9,7 +9,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { getCaseProductName } = require('../../services/caseProductName');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
+const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
@@ -98,13 +99,35 @@ const TEMPLATE_TRANSITIONS = {
   revert:  { from: ['Approved', 'Published', 'Archived'], to: 'Draft' },
 };
 
+// Approve and publish put wording in front of a doctor, so — as for documents
+// and FAQs — they need an electronic signature (password + reason).
+const SIGNED_ACTIONS = new Set(['approve', 'publish']);
+
+async function verifyEsignPassword(userId, password) {
+  if (!password) return false;
+  const [[user]] = await pool.execute('SELECT password FROM users WHERE id = ?', [userId]);
+  if (!user?.password) return false;
+  return bcrypt.compare(password, user.password);
+}
+
 async function transitionTemplate(req, res, action) {
   try {
     const cfg = TEMPLATE_TRANSITIONS[action];
+    const signed = SIGNED_ACTIONS.has(action);
+    const { password, reason } = req.body || {};
+    if (signed && (!password || !String(reason || '').trim())) {
+      return res.status(400).json({ error: 'password and reason are required.' });
+    }
     const tmpl = await getScopedTemplate(req, req.params.id);
     if (!tmpl) return res.status(404).json({ error: 'Template not found.' });
     if (!cfg.from.includes(tmpl.status)) {
       return res.status(409).json({ error: `Cannot ${action} a template that is '${tmpl.status}'.` });
+    }
+    if (action === 'approve' && Number(req.user.userId) === Number(tmpl.created_by)) {
+      return res.status(403).json({ error: 'The author of a template cannot approve it. An independent reviewer is required.' });
+    }
+    if (signed && !(await verifyEsignPassword(req.user.userId, password))) {
+      return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
     }
 
     // Publishing makes a template live for response use — same gate as activation.
@@ -134,12 +157,12 @@ async function transitionTemplate(req, res, action) {
     params.push(req.params.id);
 
     await pool.execute(`UPDATE cm_templates SET ${sets.join(', ')} WHERE id = ?`, params);
-    await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to });
+    await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to, ...(signed ? { reason: String(reason).trim(), esigned: true } : {}) });
     try {
       await pool.execute(
         `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id)
          VALUES ('template', ?, ?, ?, ?, ?)`,
-        [req.params.id, `${tmpl.version_major || 1}.${tmpl.version_minor || 0}`, cfg.to, `${action} → ${cfg.to}`, req.user.userId]
+        [req.params.id, `${tmpl.version_major || 1}.${tmpl.version_minor || 0}`, cfg.to, signed ? `${action} → ${cfg.to}: ${String(reason).trim()}` : `${action} → ${cfg.to}`, req.user.userId]
       );
     } catch (_) {}
 
@@ -314,10 +337,11 @@ router.put('/templates/:id', authenticate, async (req, res) => {
 // Lifecycle transitions — Draft → Approved → Published → Archived (+ revert).
 // Replaces the old Active/Inactive toggle. Only a Published, non-expired
 // template is offered in the MI response builder.
-router.post('/templates/:id/approve', authenticate, (req, res) => transitionTemplate(req, res, 'approve'));
-router.post('/templates/:id/publish', authenticate, (req, res) => transitionTemplate(req, res, 'publish'));
-router.post('/templates/:id/archive', authenticate, (req, res) => transitionTemplate(req, res, 'archive'));
-router.post('/templates/:id/revert',  authenticate, (req, res) => transitionTemplate(req, res, 'revert'));
+router.post('/templates/:id/approve', authenticate, requireCapability('content.approve'), (req, res) => transitionTemplate(req, res, 'approve'));
+router.post('/templates/:id/publish', authenticate, requireCapability('content.publish'), (req, res) => transitionTemplate(req, res, 'publish'));
+router.post('/templates/:id/archive', authenticate, requireCapability('content.publish'), (req, res) => transitionTemplate(req, res, 'archive'));
+// Revert takes a template out of use and clears its approval — an approver's call, no signature.
+router.post('/templates/:id/revert',  authenticate, requireCapability('content.approve'), (req, res) => transitionTemplate(req, res, 'revert'));
 
 // POST /api/cm/templates/:id/checkin — snapshot current body as a new version
 router.post('/templates/:id/checkin', authenticate, async (req, res) => {
