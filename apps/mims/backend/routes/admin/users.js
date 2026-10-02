@@ -63,7 +63,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
       `SELECT u.id, u.user_id, u.name, u.email, u.role, u.department,
               sg.name AS security_group_name,
               u.is_active, u.is_disabled, u.access_admin_site, u.case_admin,
-              u.password_expires_at, u.created_at, u.updated_at
+              u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
         WHERE ${scope.sql}
@@ -137,7 +137,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          u.access_admin_site, u.case_admin,
          u.network_user_id, u.department,
          u.security_group_id, sg.name AS security_group_name,
-         u.password_expires_at, u.created_at, u.updated_at,
+         u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at,
          (
            SELECT al.user_id FROM audit_logs al
             WHERE al.entity = 'user' AND al.entity_id = u.id
@@ -182,7 +182,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.access_admin_site, u.case_admin,
          u.network_user_id, u.department,
          u.security_group_id, sg.name AS security_group_name,
-         u.password_expires_at, u.created_at, u.updated_at
+         u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
        WHERE u.id = ? AND ${scope.sql}`,
@@ -481,11 +481,20 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[existing]] = await pool.execute(
       canTouchPlatformAdmin
-        ? 'SELECT id, role FROM users WHERE id = ?'
-        : 'SELECT id, role FROM users WHERE id = ? AND role != ?',
+        ? 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ?'
+        : 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ? AND role != ?',
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
+
+    // MIPM-35: switching someone back on needs a reason; switching off records why and when.
+    const wasOff = !existing.is_active || !!existing.is_disabled;
+    const willBeOff = (is_active != null ? !is_active : !existing.is_active)
+      || (is_disabled != null ? !!is_disabled : !!existing.is_disabled);
+    const reactivationReason = String(req.body.reactivation_reason || '').trim();
+    if (wasOff && !willBeOff && !reactivationReason) {
+      return res.status(400).json({ error: 'A reason is required to switch this user back on.' });
+    }
 
     // WP1: a tenant admin may only edit users that belong to their own org.
     if (!canTouchPlatformAdmin) {
@@ -567,17 +576,25 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const switchedOff = (is_active != null && !is_active) || (is_disabled != null && is_disabled);
     const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
 
-    // MIPM-35: switching someone back on gives back the organisation access their switch-off ended.
-    if (!switchedOff && (is_active != null || is_disabled != null)) {
+    // MIPM-35: record why and when on the way off; on the way back, clear it and give
+    // back the organisation access the switch-off ended.
+    let statusChange;
+    if (!wasOff && willBeOff) {
+      const offReason = String(req.body.inactive_reason || '').trim().slice(0, 255) || 'Switched off by an administrator';
+      await pool.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?', [offReason, req.params.id]);
+      statusChange = { status_change: 'switched_off', reason: offReason };
+    } else if (wasOff && !willBeOff) {
+      await pool.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
       await pool.execute(
-        `UPDATE user_org_access uoa JOIN users u ON u.id = uoa.user_id
-            SET uoa.is_active = 1, uoa.ended_with_user = 0
-          WHERE uoa.user_id = ? AND uoa.ended_with_user = 1 AND u.is_active = 1 AND u.is_disabled = 0`,
+        'UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1',
         [req.params.id]
       );
+      statusChange = { status_change: 'switched_back_on', reason: reactivationReason };
     }
 
-    await audit(req.user.userId, 'UPDATE_USER', req.params.id, switchedOff ? { ...req.body, sessions_ended: sessionsEnded } : req.body);
+    await audit(req.user.userId, 'UPDATE_USER', req.params.id, {
+      ...req.body, ...(switchedOff ? { sessions_ended: sessionsEnded } : {}), ...(statusChange || {}),
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /users/:id error:', err);
