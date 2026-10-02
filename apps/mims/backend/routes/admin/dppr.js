@@ -30,7 +30,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
-const { applyDpprRules, isScheduledDpprEnabled } = require('../../services/dpprScheduler');
+const { applyDpprRules, previewDpprRules, isScheduledDpprEnabled } = require('../../services/dpprScheduler');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 
@@ -210,14 +210,36 @@ router.get('/dppr/execution-log', authenticate, async (req, res) => {
 });
 
 // ── POST /api/admin/dppr/run-now ──────────────────────────────────────────────
+// GET /api/admin/dppr/preview — what Run Now would change right now, changing nothing (MIPM-80)
+router.get('/dppr/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const scope = orgScope(req);
+    const targetOrg = scope ?? (req.query.org_id ? parseInt(req.query.org_id, 10) : null);
+    if (!targetOrg) return res.status(400).json({ error: 'org_id required for platform admin preview.' });
+    res.json({ preview: await previewDpprRules(targetOrg) });
+  } catch (err) {
+    console.error('GET /api/admin/dppr/preview error:', err);
+    res.status(500).json({ error: 'The preview could not be calculated.' });
+  }
+});
+
 router.post('/dppr/run-now', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { org_id } = req.body;
+    // MIPM-79: personal data is deleted or anonymised here — a person states why, and it is kept.
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 5) {
+      return res.status(400).json({ error: 'Give a reason for running the privacy cleanup now (at least 5 characters).' });
+    }
     const scope = orgScope(req);
     const targetOrg = scope ?? (org_id ? parseInt(org_id, 10) : null);
     if (!targetOrg) return res.status(400).json({ error: 'org_id required for platform admin manual run.' });
 
     const results = await applyDpprRules(targetOrg, 'manual', req.user.userId);
+    await logAudit(req.user.userId, req.user.email, 'DPPR_RUN_NOW', 'organisation', targetOrg, {
+      reason,
+      rules: results.map((r) => ({ rule_id: r.rule_id, action: r.action, affected: r.affected, status: r.status })),
+    });
     res.json({ message: 'DPPR run complete.', results });
   } catch (err) {
     console.error('POST /api/admin/dppr/run-now error:', err);

@@ -173,6 +173,30 @@ const DOMAIN_HANDLERS = {
  * Apply DPPR rules for a single org.
  * Returns array of per-rule result objects.
  */
+// MIPM-80: what a run would do right now, without changing anything — the same
+// handlers, the same where-clause and the same legal-hold test as applyDpprRules.
+async function previewDpprRules(orgId) {
+  const [rules] = await pool.execute(
+    'SELECT * FROM dppr_rules WHERE org_id = ? AND is_active = 1 ORDER BY domain ASC',
+    [orgId]
+  );
+  const preview = [];
+  for (const rule of rules) {
+    const base = { rule_id: rule.id, rule_name: rule.rule_name, domain: rule.domain, action: rule.action };
+    if (rule.action === 'None') { preview.push({ ...base, would_affect: 0, held: 0 }); continue; }
+    const handler = DOMAIN_HANDLERS[rule.domain];
+    if (!handler) { preview.push({ ...base, skipped: 'No handler for domain' }); continue; }
+    const [[row]] = await pool.execute(
+      `SELECT COUNT(*) AS scanned, COALESCE(SUM(${handler.heldSql}), 0) AS held ${handler.fromSql} WHERE ${handler.buildWhere(rule)}`,
+      []
+    );
+    const scanned = Number(row?.scanned || 0);
+    const held = Number(row?.held || 0);
+    preview.push({ ...base, would_affect: scanned - held, held });
+  }
+  return preview;
+}
+
 async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserId = null) {
   const [rules] = await pool.execute(
     'SELECT * FROM dppr_rules WHERE org_id = ? AND is_active = 1 ORDER BY domain ASC',
@@ -313,4 +337,4 @@ function startDpprScheduler() {
   console.log('[DPPR] Scheduler registered — daily 02:00 UTC; records under legal hold are skipped.');
 }
 
-module.exports = { startDpprScheduler, applyDpprRules, caseHeldSql, isScheduledDpprEnabled };
+module.exports = { startDpprScheduler, applyDpprRules, previewDpprRules, caseHeldSql, isScheduledDpprEnabled };

@@ -54,6 +54,8 @@ export default function DPPRPage({ embedded = false } = {}) {
   const [saving, setSaving]         = useState(false)
   const [running, setRunning]       = useState(false)
   const [runResult, setRunResult]   = useState(null)
+  // MIPM-79/80: Run Now first shows what each rule would change and asks why.
+  const [runConfirm, setRunConfirm] = useState(null)   // null | { loading, preview, error, reason }
   const [error, setError]           = useState(null)
   const [holds, setHolds]           = useState([])
   const [scheduleOn, setScheduleOn] = useState(false)
@@ -188,12 +190,29 @@ export default function DPPRPage({ embedded = false } = {}) {
     fetchRules(page)
   }
 
+  async function openRunConfirm() {
+    setError(null)
+    setRunConfirm({ loading: true, preview: null, error: null, reason: '' })
+    try {
+      const qs = tenantId ? `?org_id=${encodeURIComponent(tenantId)}` : ''
+      const res = await httpFetch(`/api/admin/dppr/preview${qs}`, { headers: H })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'The preview could not be calculated.')
+      setRunConfirm(c => c && { ...c, loading: false, preview: data.preview || [] })
+    } catch (e) {
+      setRunConfirm(c => c && { ...c, loading: false, error: e.message })
+    }
+  }
+
   async function runNow() {
+    const reason = String(runConfirm?.reason || '').trim()
+    if (reason.length < 5) { setRunConfirm(c => ({ ...c, error: 'Give a reason (at least 5 characters).' })); return }
+    setRunConfirm(null)
     setRunning(true); setRunResult(null); setError(null)
     try {
       const res  = await httpFetch('/api/admin/dppr/run-now', {
         method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ org_id: tenantId || undefined }),
+        body: JSON.stringify({ org_id: tenantId || undefined, reason }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Run failed.'); return }
@@ -224,7 +243,7 @@ export default function DPPRPage({ embedded = false } = {}) {
         </div>
         {isAdmin && (
           <div className="dp-header-actions">
-            <button className="dp-btn-run" onClick={runNow} disabled={running}>
+            <button className="dp-btn-run" onClick={openRunConfirm} disabled={running}>
               {running ? '⏳ Running…' : '▶ Run Now'}
             </button>
             <button className="dp-btn-primary" onClick={openAdd}>+ Add Rule</button>
@@ -468,6 +487,48 @@ export default function DPPRPage({ embedded = false } = {}) {
       )}
 
       {/* Place / Release legal hold modal */}
+      {runConfirm && (
+        <div className="dp-modal-overlay" onClick={e => e.target === e.currentTarget && setRunConfirm(null)}>
+          <div className="dp-modal">
+            <div className="dp-modal-title">Run privacy cleanup now?</div>
+            <div className="dp-info-box">
+              Every active rule runs now. Deleted and anonymised personal data cannot be restored.
+              Records under legal hold are left alone.
+            </div>
+            {runConfirm.loading && <div style={{ fontSize: 13, marginBottom: 12 }}>Counting what each rule would change…</div>}
+            {runConfirm.preview && (
+              runConfirm.preview.length === 0
+                ? <div style={{ fontSize: 13, marginBottom: 12 }}>There are no active rules — nothing would change.</div>
+                : <table className="dp-table" style={{ marginBottom: 14 }}>
+                    <thead><tr><th>Rule</th><th>Action</th><th>Would change</th><th>Kept (legal hold)</th></tr></thead>
+                    <tbody>
+                      {runConfirm.preview.map(p => (
+                        <tr key={p.rule_id}>
+                          <td>{p.rule_name}</td>
+                          <td>{p.action}</td>
+                          <td>{p.skipped ? 'Not run — ' + p.skipped : `${p.would_affect} record${p.would_affect === 1 ? '' : 's'}`}</td>
+                          <td>{p.held || 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+            )}
+            {runConfirm.error && <div style={{ padding:'10px 14px', background:'#fee2e2', color:'#dc2626', borderRadius:8, fontSize:13, marginBottom:14 }}>{runConfirm.error}</div>}
+            <div className="dp-form-row">
+              <label className="dp-label">Reason for running now *</label>
+              <textarea className="dp-textarea" maxLength={1000} value={runConfirm.reason}
+                onChange={e => setRunConfirm(c => ({ ...c, reason: e.target.value, error: null }))} />
+            </div>
+            <div className="dp-modal-actions">
+              <button className="dp-btn-secondary" onClick={() => setRunConfirm(null)}>Cancel</button>
+              <button className="dp-btn-primary" onClick={runNow} disabled={runConfirm.loading || String(runConfirm.reason).trim().length < 5}>
+                Run cleanup now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {holdModal && (
         <div className="dp-modal-overlay" onClick={e => e.target === e.currentTarget && setHoldModal(null)}>
           <div className="dp-modal">
