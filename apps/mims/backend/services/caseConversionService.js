@@ -4,6 +4,13 @@ const pool = require('../database/db');
 const { logAudit } = require('../utils/auditLog');
 const { resolveDefaultWorkflowStateId, assignCaseNumberWithConnection } = require('./orgBootstrapService');
 
+const CONTACT_COLUMNS = [
+  'contact_id', 'contact_role', 'do_not_update_master', 'is_primary', 'first_name', 'last_name',
+  'contact_type', 'prefix', 'reporter_type', 'source', 'consent_status', 'specialty', 'institution',
+  'country', 'country_of_reporter', 'qualification', 'preferred_contact_method', 'language_preference',
+  'phone', 'email', 'address',
+];
+
 async function convertMi(miTabId, userId, target) {
   const [[mi]] = await pool.execute(
     `SELECT m.*, c.org_id, c.site_id, c.case_number,
@@ -39,6 +46,13 @@ async function convertMi(miTabId, userId, target) {
     );
     newCaseId = result.insertId;
     caseNumber = await assignCaseNumberWithConnection(conn, { id: newCaseId, org_id: mi.org_id, case_type: type, case_number: null });
+    // MIPM-93: the people on the enquiry come with it — an AE without its reporter
+    // is not a valid report, and the safety team had to re-key it by hand.
+    await conn.execute(
+      `INSERT INTO case_contacts (case_id, ${CONTACT_COLUMNS.join(', ')})
+       SELECT ?, ${CONTACT_COLUMNS.join(', ')} FROM case_contacts WHERE case_id = ? ORDER BY id`,
+      [newCaseId, mi.case_id]
+    );
     await conn.commit();
   } catch (err) {
     await conn.rollback();
@@ -53,6 +67,20 @@ async function convertMi(miTabId, userId, target) {
     if (mi.detailed_question || mi.question_summary) {
       await pool.execute('INSERT INTO case_ae_events (version_id, event_description, outcome) VALUES (?, ?, ?)', [v.insertId, mi.detailed_question || mi.question_summary, 'unknown']).catch(() => {});
     }
+    if (mi.product_id) {
+      // MIPM-93: the product the enquiry was about is the suspect product.
+      await pool.execute(
+        `INSERT INTO case_ae_product_info (version_id, product_id, product_name, is_suspect, is_concomitant)
+         SELECT ?, p.id, p.trade_name, 1, 0 FROM products p WHERE p.id = ?`,
+        [v.insertId, mi.product_id]
+      );
+    }
+  } else if (mi.product_id) {
+    await pool.execute(
+      `INSERT INTO case_pc_intake (case_id, product_name, sample_available, sample_return_requested)
+       SELECT ?, p.trade_name, 0, 0 FROM products p WHERE p.id = ?`,
+      [newCaseId, mi.product_id]
+    );
   }
   await pool.execute('UPDATE case_mi SET converted_to_case_id=?, converted_to_type=?, converted_at=CURRENT_TIMESTAMP, converted_by=? WHERE id=?', [newCaseId, target, userId || null, miTabId]);
   await logAudit(userId || null, String(userId || 'system'), target === 'ae' ? 'MI_CONVERTED_TO_AE' : 'MI_CONVERTED_TO_PC', 'case_mi', miTabId, { source_case_id: mi.case_id, target_case_id: newCaseId, target_case_number: caseNumber });
