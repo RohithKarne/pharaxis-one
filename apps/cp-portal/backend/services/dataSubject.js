@@ -45,12 +45,25 @@ async function buildExport(userId, clientId) {
   );
   const subIds = submissions.map(s => s.id);
   let attachments = [];
+  let answers = [];
+  let messages = [];
   if (subIds.length) {
+    const ph = subIds.map(() => '?').join(',');
     attachments = await q(
       `SELECT id, submission_id, file_name, file_size, mime_type, created_at
-         FROM cp_submission_attachments WHERE submission_id IN (${subIds.map(() => '?').join(',')})`,
+         FROM cp_submission_attachments WHERE submission_id IN (${ph})`,
       subIds
     );
+    // CPPM-63: what was said to and by the person about their requests — the answers
+    // sent to them, their replies, and the follow-ups sent. Staff drafts are not theirs.
+    answers = await q(
+      `SELECT submission_id, body, sent_at FROM cp_submission_answers
+        WHERE submission_id IN (${ph}) AND status = 'sent'`, subIds);
+    messages = await q(
+      `SELECT submission_id, IF(direction = 'in', 'from_you', 'from_team') AS direction, body,
+              ae_screen_answer, ae_screen_detail, IF(direction = 'in', created_at, sent_at) AS at
+         FROM cp_submission_messages
+        WHERE submission_id IN (${ph}) AND (direction = 'in' OR status = 'sent') ORDER BY id`, subIds);
   }
 
   const [consent, savedItems, follows, notifications, feedback, mslBookings, ssoIdentities] = await Promise.all([
@@ -93,6 +106,8 @@ async function buildExport(userId, clientId) {
     profile: profile || null,
     submissions,
     submission_attachments: attachments,
+    submission_answers: answers,
+    submission_messages: messages,
     consent_records: consent,
     saved_items: savedItems,
     follows,

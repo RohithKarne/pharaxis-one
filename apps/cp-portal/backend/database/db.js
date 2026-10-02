@@ -990,6 +990,35 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // CPPM-63: replies to an answer, and staff follow-ups. Definition matches
+  // migrations/0027_add_submission_messages.sql exactly.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_submission_messages (
+      id               INT          NOT NULL AUTO_INCREMENT,
+      submission_id    INT          NOT NULL,
+      client_id        INT          NOT NULL,
+      direction        VARCHAR(3)   NOT NULL,
+      body             MEDIUMTEXT   NOT NULL,
+      status           VARCHAR(20)  NOT NULL,
+      ae_screen_answer VARCHAR(3)   NULL,
+      ae_screen_detail TEXT         NULL,
+      drafted_by       INT          NULL,
+      approved_by      INT          NULL,
+      approved_at      DATETIME     NULL,
+      sent_at          DATETIME     NULL,
+      send_error       TEXT         NULL,
+      created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      draft_for        INT          NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_message_one_draft (draft_for),
+      KEY idx_message_submission (submission_id, id),
+      KEY idx_message_client (client_id, direction, status),
+      CONSTRAINT chk_message_direction CHECK (direction IN ('in', 'out')),
+      CONSTRAINT fk_message_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── CHAT RECORDS (CPPM-17) ─────────────────────────────────────
   // Every chat box conversation and turn, per client, for staff to read.
   await run(`

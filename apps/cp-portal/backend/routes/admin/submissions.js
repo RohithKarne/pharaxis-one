@@ -9,7 +9,7 @@ const fs      = require('fs');
 const path    = require('path');
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, auditWithin } = require('../../utils/audit');
 const { recordStatusEvent } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { queueEmail } = require('../../utils/emailOutbox');
@@ -30,11 +30,19 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
              s.submitter_type, s.status, s.external_ref, s.submitted_at,
              s.sync_attempts, s.form_data,
              u.first_name, u.last_name, u.email AS user_email,
-             t.status AS ae_task_status,
+             -- CPPM-63: an enquiry can now hold more than one safety task (one per
+             -- reply that reported harm); an open one wins, otherwise the latest.
+             (SELECT t.status FROM cp_ae_review_tasks t WHERE t.submission_id = s.id
+               ORDER BY t.status = 'open' DESC, t.id DESC LIMIT 1) AS ae_task_status,
+             -- CPPM-63: replies that arrived after the last thing staff sent.
+             (SELECT COUNT(*) FROM cp_submission_messages m
+               WHERE m.submission_id = s.id AND m.direction = 'in'
+                 AND m.created_at > IFNULL((SELECT MAX(x.sent_at) FROM cp_submission_messages x
+                                             WHERE x.submission_id = s.id AND x.direction = 'out' AND x.status = 'sent'), '1970-01-01')
+             ) AS replies_waiting,
              s.owner_id, s.owner_since, o.name AS owner_name
       FROM cp_submissions s
       LEFT JOIN cp_portal_users u ON s.user_id = u.id
-      LEFT JOIN cp_ae_review_tasks t ON t.submission_id = s.id
       LEFT JOIN cp_admin_users o ON o.id = s.owner_id
       WHERE s.client_id = ?
     `;
@@ -281,6 +289,22 @@ router.post('/:clientId/:submissionId/retry', authenticateAdmin, requireClientAc
 // emailed and shown to the person who asked. A draft never leaves the admin area.
 const ANSWER_APPROVERS = requireRole('superadmin', 'admin', 'reviewer');
 
+// CPPM-63: the email for the first answer and for every follow-up. It promises a
+// reply through the portal only to someone who can sign in to see it; a person who
+// asked without an account is told how to ask again instead.
+function answerEmail({ reference, body, hasAccount, followUp }) {
+  const safe = String(body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  const next = hasAccount
+    ? 'You can also see this answer when you sign in to the portal, under My Submissions. Reply there if you need anything further.'
+    : `If you need anything further, please send a new request through the portal and quote your reference <strong>${reference}</strong>.`;
+  return {
+    subject: `${followUp ? 'Follow-up to' : 'Response to'} your medical information request — ${reference}`,
+    html: `<p>Hello,</p><p>Our medical information team has ${followUp ? 'sent a follow-up on' : 'answered'} your request <strong>${reference}</strong>:</p>`
+      + `<blockquote style="border-left:3px solid #6B3FA0;padding-left:12px;color:#334155">${safe}</blockquote>`
+      + `<p>${next}</p>`,
+  };
+}
+
 // GET /api/admin/submissions/:clientId/:submissionId/answer
 router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
@@ -341,7 +365,7 @@ router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireCl
     if (answer.status === 'sent') return res.status(409).json({ error: 'This answer has already been sent.' });
 
     const [[submission]] = await pool.execute(
-      `SELECT s.id, s.submission_type, s.submitter_email, u.email AS user_email
+      `SELECT s.id, s.submission_type, s.submitter_email, s.user_id, u.email AS user_email
          FROM cp_submissions s LEFT JOIN cp_portal_users u ON u.id = s.user_id
         WHERE s.id = ? AND s.client_id = ?`, [req.params.submissionId, req.params.clientId]);
     if (!submission) return res.status(404).json({ error: 'Submission not found.' });
@@ -356,13 +380,8 @@ router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireCl
     if (claimed.affectedRows === 0) return res.status(409).json({ error: 'This answer has already been sent.' });
 
     const reference = `CP-${String(submission.id).padStart(6, '0')}`;
-    const safe = String(answer.body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     const queued = await queueEmail(req.params.clientId, {
-      to,
-      subject: `Response to your medical information request — ${reference}`,
-      html: `<p>Hello,</p><p>Our medical information team has answered your request <strong>${reference}</strong>:</p>`
-        + `<blockquote style="border-left:3px solid #6B3FA0;padding-left:12px;color:#334155">${safe}</blockquote>`
-        + `<p>You can also see this answer when you sign in to the portal. Please reply through the portal if you need anything further.</p>`,
+      to, ...answerEmail({ reference, body: answer.body, hasAccount: submission.user_id != null, followUp: false }),
     }, { kind: 'inquiry_answer', relatedType: 'submission', relatedId: submission.id });
     // queueEmail records the email before sending and retries it; a null means the
     // record itself could not be written, which the reviewer must know about.
@@ -376,6 +395,126 @@ router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireCl
     res.json({ message: `Answer sent to ${to}.` });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'POST /:clientId/:submissionId/answer/send', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── CPPM-63: the conversation after the first answer ──────────
+// Runs `work(conn)` in one transaction and returns what it returns.
+async function inTransaction(work) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const out = await work(conn);
+    await conn.commit();
+    return out;
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+// The person's replies come in from the portal; staff answer them with a follow-up
+// that is drafted, approved by a named reviewer and sent exactly like the first
+// answer. One draft per enquiry at a time (the database refuses a second).
+
+// GET /api/admin/submissions/:clientId/:submissionId/messages — the whole conversation, oldest first
+router.get('/:clientId/:submissionId/messages', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [messages] = await pool.execute(
+      `SELECT m.id, m.direction, m.body, m.status, m.ae_screen_answer, m.ae_screen_detail,
+              m.created_at, m.approved_at, m.sent_at, m.send_error,
+              d.name AS drafted_by_name, p.name AS approved_by_name
+         FROM cp_submission_messages m
+    LEFT JOIN cp_admin_users d ON d.id = m.drafted_by
+    LEFT JOIN cp_admin_users p ON p.id = m.approved_by
+        WHERE m.submission_id = ? AND m.client_id = ?
+        ORDER BY m.id`,
+      [req.params.submissionId, req.params.clientId]);
+    res.json({ messages });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/:submissionId/messages', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/admin/submissions/:clientId/:submissionId/messages/draft — save the follow-up draft
+router.put('/:clientId/:submissionId/messages/draft', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const body = String(req.body.body || '').trim();
+    if (body.length < 10) return res.status(400).json({ error: 'Write the follow-up before saving it.' });
+    if (body.length > 20000) return res.status(400).json({ error: 'The follow-up is too long.' });
+
+    const [[submission]] = await pool.execute(
+      'SELECT id FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    const [[answer]] = await pool.execute(
+      "SELECT id FROM cp_submission_answers WHERE submission_id = ? AND client_id = ? AND status = 'sent'",
+      [req.params.submissionId, req.params.clientId]);
+    if (!answer) return res.status(409).json({ error: 'Send the first answer before a follow-up.' });
+
+    // Updates the draft if there is one, otherwise starts it; the unique draft key
+    // (draft_for) turns two people saving a first draft together into one draft, not two.
+    // The draft and its audit line are one transaction (CPPM-53).
+    await inTransaction(async (conn) => {
+      await conn.execute(
+        `INSERT INTO cp_submission_messages (submission_id, client_id, direction, body, status, drafted_by, draft_for)
+         VALUES (?, ?, 'out', ?, 'draft', ?, ?)
+         ON DUPLICATE KEY UPDATE body = VALUES(body), drafted_by = VALUES(drafted_by)`,
+        [req.params.submissionId, req.params.clientId, body, req.admin.adminId, submission.id]);
+      await auditWithin(conn, req.admin, req.params.clientId, 'FOLLOWUP_DRAFTED', 'submission', req.params.submissionId, { length: body.length });
+    });
+    res.json({ message: 'Draft saved.' });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'PUT /:clientId/:submissionId/messages/draft', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/:submissionId/messages/draft/send — approve and send the follow-up
+router.post('/:clientId/:submissionId/messages/draft/send', authenticateAdmin, requireClientAccess, ANSWER_APPROVERS, async (req, res) => {
+  try {
+    const [[draft]] = await pool.execute(
+      "SELECT id, body FROM cp_submission_messages WHERE submission_id = ? AND client_id = ? AND direction = 'out' AND status = 'draft'",
+      [req.params.submissionId, req.params.clientId]);
+    if (!draft) return res.status(404).json({ error: 'Write the follow-up first.' });
+
+    const [[submission]] = await pool.execute(
+      `SELECT s.id, s.submitter_email, s.user_id, u.email AS user_email
+         FROM cp_submissions s LEFT JOIN cp_portal_users u ON u.id = s.user_id
+        WHERE s.id = ? AND s.client_id = ?`, [req.params.submissionId, req.params.clientId]);
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    const to = (submission.submitter_email || submission.user_email || '').trim();
+    if (!to) return res.status(400).json({ error: 'There is no email address on this request, so the follow-up cannot be sent.' });
+
+    // Approve first, and only the draft that was read: a second reviewer pressing
+    // send at the same moment, or an edit in between, finds nothing to claim.
+    // The approval and its audit line are one transaction (CPPM-53).
+    const claimedOk = await inTransaction(async (conn) => {
+      const [claimed] = await conn.execute(
+        `UPDATE cp_submission_messages SET status = 'sent', draft_for = NULL, approved_by = ?, approved_at = NOW(), sent_at = NOW(), send_error = NULL
+          WHERE id = ? AND status = 'draft' AND body = ?`, [req.admin.adminId, draft.id, draft.body]);
+      if (claimed.affectedRows === 0) return false;
+      await auditWithin(conn, req.admin, req.params.clientId, 'FOLLOWUP_SENT', 'submission', req.params.submissionId, { message_id: draft.id, to });
+      return true;
+    });
+    if (!claimedOk) return res.status(409).json({ error: 'This follow-up changed or was sent while you were looking at it. Refresh and try again.' });
+
+    const reference = `CP-${String(submission.id).padStart(6, '0')}`;
+    const queued = await queueEmail(req.params.clientId, {
+      to, ...answerEmail({ reference, body: draft.body, hasAccount: submission.user_id != null, followUp: true }),
+    }, { kind: 'inquiry_followup', relatedType: 'submission', relatedId: submission.id });
+    if (!queued) {
+      await pool.execute("UPDATE cp_submission_messages SET send_error = 'The follow-up was approved but the email could not be queued.' WHERE id = ?", [draft.id]);
+      log.error('admin.submissions.followup_email_not_queued', { submission_id: submission.id, message_id: draft.id });
+      await audit(req.admin, req.params.clientId, 'FOLLOWUP_EMAIL_NOT_QUEUED', 'submission', req.params.submissionId, { message_id: draft.id, to });
+      return res.status(502).json({ error: 'The follow-up is approved and visible in the portal, but the email could not be queued. Please try resending from Email Delivery.' });
+    }
+    res.json({ message: `Follow-up sent to ${to}.` });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/:submissionId/messages/draft/send', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

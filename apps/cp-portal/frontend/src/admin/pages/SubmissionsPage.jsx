@@ -29,7 +29,7 @@ const STATUS_LABELS = {
 }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
-function AnswerPanel({ clientId, submissionId, canApprove, canEdit }) {
+function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged }) {
   const [answer, setAnswer] = useState(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -57,6 +57,7 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit }) {
 
   const sent = answer?.status === 'sent'
   return (
+    <>
     <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Medical answer</div>
       {sent ? (
@@ -91,6 +92,104 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit }) {
           </>}
         </>
       )}
+      {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
+      {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
+    </div>
+    {sent && <ConversationPanel clientId={clientId} submissionId={submissionId} canApprove={canApprove} canEdit={canEdit} onChanged={onChanged} />}
+    </>
+  )
+}
+
+// CPPM-63: after the first answer — the person's replies and the follow-ups sent,
+// oldest first, then the follow-up being drafted. Drafted, approved and sent like
+// the first answer.
+function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChanged }) {
+  const [messages, setMessages] = useState([])
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const base = `/api/admin/submissions/${clientId}/${submissionId}/messages`
+
+  async function load() {
+    try {
+      const res = await fetch(base, { headers: adminHeaders() })
+      if (!res.ok) { setErr(`Could not load the conversation (error ${res.status}).`); return }
+      const d = await res.json()
+      setMessages(d.messages || [])
+      setBody((d.messages || []).find(m => m.status === 'draft')?.body || '')
+    } catch { setErr('Network error — please try again.') }
+  }
+  useEffect(() => { load() }, [clientId, submissionId])
+
+  async function call(method, path, okMsg) {
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const res = await fetch(`${base}${path}`, { method, headers: adminHeaders(), ...(method === 'PUT' ? { body: JSON.stringify({ body }) } : {}) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) setErr(d.error || 'That did not work. Refresh and try again.')
+      else { setMsg(d.message || okMsg); if (method === 'POST') onChanged?.() }
+      await load()
+    } catch { setErr('Network error — please try again.') } finally { setBusy(false) }
+  }
+
+  const draft = messages.find(m => m.status === 'draft')
+  const thread = messages.filter(m => m.status !== 'draft')
+  const lastIn = [...thread].reverse().find(m => m.direction === 'in')
+  const lastOut = [...thread].reverse().find(m => m.direction === 'out')
+  const waiting = lastIn && (!lastOut || new Date(lastIn.created_at) > new Date(lastOut.sent_at))
+  if (!thread.length && !canEdit && !draft) return null
+  return (
+    <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>
+        Conversation after the answer{waiting ? <span style={{ marginLeft: 8, color: '#B45309' }}>· Reply waiting for a follow-up</span> : null}
+      </div>
+      {thread.length === 0 && <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>No replies yet.</div>}
+      {thread.map(m => m.direction === 'in' ? (
+        <div key={m.id} style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: '#92400E', marginBottom: 6, fontWeight: 600 }}>
+            Reply from the person · {formatDateTime(m.created_at)}
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>
+          {m.ae_screen_answer === 'Yes' && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
+              ⚠ Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
+            </div>
+          )}
+          {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Said nobody became unwell.</div>}
+        </div>
+      ) : (
+        <div key={m.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+          {m.body}
+          <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
+            Follow-up approved by {m.approved_by_name || 'unknown'} · sent {m.sent_at ? formatDateTime(m.sent_at) : ''}
+            {m.send_error ? ` · ${m.send_error}` : ''}
+          </div>
+        </div>
+      ))}
+      {!canEdit && draft && (
+        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
+          <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Follow-up being drafted by {draft.drafted_by_name || 'unknown'}</div>
+          {draft.body}
+        </div>
+      )}
+      {canEdit && <>
+        <textarea rows={4} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
+          placeholder="Write a follow-up to send to the person who asked."
+          style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontSize: 13, fontFamily: 'inherit' }} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <button disabled={busy || body.trim().length < 10} onClick={() => call('PUT', '/draft', 'Draft saved.')}
+            style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+            Save follow-up draft
+          </button>
+          <button disabled={busy || !draft || !canApprove || draft.body !== body} onClick={() => call('POST', '/draft/send', 'Follow-up sent.')}
+            title={!canApprove ? 'Only a reviewer can approve and send' : draft && draft.body !== body ? 'Save the draft first' : 'Approves the follow-up and emails it to the person who asked'}
+            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
+            Approve &amp; send follow-up
+          </button>
+          {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {draft.drafted_by_name}</span>}
+        </div>
+      </>}
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
       {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
     </div>
@@ -336,6 +435,13 @@ export default function SubmissionsPage() {
                           Shown here as well as in the Safety Queue so it is visible
                           in the list an admin already works from. The type itself is
                           never changed by the flag — that is a clinical decision. */}
+                      {/* CPPM-63: the person replied after the last thing we sent */}
+                      {s.replies_waiting > 0 && (
+                        <span title="The person replied to our answer and is waiting for a follow-up"
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
+                          ↩ REPLY RECEIVED
+                        </span>
+                      )}
                       {s.ae_task_status && (
                         <span
                           title={s.ae_task_status === 'open'
@@ -430,7 +536,7 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} />
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} />
                       </td>
                     </tr>
                   )}

@@ -100,7 +100,10 @@ async function createAeSubmission(conn, clientId, task, { productName, eventDesc
   if (task.submission_id) {
     const [[s]] = await conn.execute(
       'SELECT user_id, submitter_name, submitter_email, submitter_type, submitted_at FROM cp_submissions WHERE id = ?', [task.submission_id]);
-    reporter = { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type, reportedAt: s.submitted_at };
+    // CPPM-63: a task raised by a reply was told to us when the reply arrived, not
+    // when the enquiry did — that is the task's own creation time.
+    reporter = { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type,
+      reportedAt: task.reply_id ? task.created_at : s.submitted_at };
   } else {
     const [[u]] = await conn.execute(
       `SELECT u.id, u.first_name, u.last_name, u.email, c.user_type FROM cp_chat_conversations c
@@ -128,7 +131,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
   try {
     const status = ['open', 'closed'].includes(req.query.status) ? req.query.status : 'open';
     const [rows] = await pool.execute(
-      `SELECT t.id, t.submission_id, t.chat_conversation_id, t.status, t.outcome, t.outcome_reason, t.reported_detail,
+      `SELECT t.id, t.submission_id, t.chat_conversation_id, t.reply_id, t.status, t.outcome, t.outcome_reason, t.reported_detail,
               t.ae_submission_id, t.closed_at, t.created_at,
               IF(t.chat_conversation_id IS NULL, 'form', 'chat') AS source,
               a.name AS closed_by_name,
@@ -332,7 +335,7 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
     }
 
     const [[task]] = await pool.execute(
-      `SELECT t.id, t.status, t.submission_id, t.chat_conversation_id, t.created_at, t.owner_id, o.name AS owner_name
+      `SELECT t.id, t.status, t.submission_id, t.chat_conversation_id, t.reply_id, t.created_at, t.owner_id, o.name AS owner_name
          FROM cp_ae_review_tasks t
     LEFT JOIN cp_admin_users o ON o.id = t.owner_id
         WHERE t.id = ? AND t.client_id = ?`,

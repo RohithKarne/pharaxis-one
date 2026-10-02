@@ -204,6 +204,7 @@ export default function SafetyQueuePage() {
                       {t.source === 'chat'
                         ? <Link to={`/admin/clients/${clientId}/chat-records?conversation=${t.chat_conversation_id}`}>Chat · view conversation</Link>
                         : `Submission #${t.submission_id}`}
+                      {t.reply_id ? <div style={{ fontSize: 12, color: '#6B7280' }}>Raised by a reply to our answer</div> : null}
                     </td>
                     <td>{String(t.submission_type || '').replace(/_/g, ' ')}</td>
                     <td>{t.submitter_name || t.submitter_email || '—'}</td>
