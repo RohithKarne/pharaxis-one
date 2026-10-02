@@ -29,7 +29,7 @@ const STATUS_LABELS = {
 }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
-function AnswerPanel({ clientId, submissionId, canApprove }) {
+function AnswerPanel({ clientId, submissionId, canApprove, canEdit }) {
   const [answer, setAnswer] = useState(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -69,6 +69,10 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
         </div>
       ) : (
         <>
+          {/* CPPM-60: a role that may not change enquiries can read a draft but not write one */}
+          {!canEdit && !answer ? <div style={{ fontSize: 13, color: '#6B7280' }}>No answer drafted yet.</div> : null}
+          {!canEdit && answer ? <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>{answer.body}</div> : null}
+          {canEdit && <>
           <textarea rows={5} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
             placeholder="Write the approved answer that goes back to the person who asked."
             style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontSize: 13, fontFamily: 'inherit' }} />
@@ -84,6 +88,7 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
             </button>
             {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
           </div>
+          </>}
         </>
       )}
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
@@ -95,6 +100,8 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
 export default function SubmissionsPage() {
   const { hasRole } = useAdminAuth()
   const canApprove = hasRole('superadmin', 'admin', 'reviewer')
+  const { canChange } = useAdminAuth()
+  const canEdit    = canChange('submissions') // CPPM-60
   const { clientId }            = useParams()
   const [submissions, setSubmissions] = useState([])
   const [counts, setCounts]     = useState([])
@@ -374,15 +381,15 @@ export default function SubmissionsPage() {
                           label={`enquiry ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
                           onChanged={() => load(true)} onMessage={setMsg} />
                       </span>
-                      <select
+                      {canEdit ? <select
                         value={s.status}
                         onClick={e => e.stopPropagation()}
                         onChange={e => updateStatus(s.id, e.target.value)}
                         style={{ fontSize: 12, padding: '2px 6px', border: '1px solid var(--cp-border)', borderRadius: 4 }}
                       >
                         {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{st}</option>)}
-                      </select>
-                      {s.status === 'failed_sync' && (
+                      </select> : null}
+                      {s.status === 'failed_sync' && canEdit && (
                         <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
                           style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
                           ↻ Retry
@@ -398,7 +405,7 @@ export default function SubmissionsPage() {
                           {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (
                             <div key={k}>
                               <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
-                              <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{String(v) || '—'}</div>
+                              <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
                             </div>
                           ))}
                         </div>
@@ -423,7 +430,7 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} />
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} />
                       </td>
                     </tr>
                   )}
