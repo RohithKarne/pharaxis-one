@@ -47,9 +47,10 @@ router.get('/cases/:id/mi', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     const [rows] = await pool.execute(
-      `SELECT m.*, p.trade_name AS product_name
+      `SELECT m.*, p.trade_name AS product_name, cc.case_number AS converted_to_case_number
        FROM case_mi m
        LEFT JOIN products p ON m.product_id = p.id
+       LEFT JOIN cases cc ON cc.id = m.converted_to_case_id
        WHERE m.case_id = ?
        ORDER BY m.tab_index ASC`,
       [req.params.id]

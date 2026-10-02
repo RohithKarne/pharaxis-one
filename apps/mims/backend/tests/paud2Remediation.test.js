@@ -124,7 +124,13 @@ describe('PAUD-2 item 4 — MI-to-safety conversion preserves the clock start', 
 
     let service;
     jest.isolateModules(() => {
-      jest.doMock('../database/db', () => ({ execute }));
+      // MIPM-92: the conversion now inserts inside a transaction on a pooled connection.
+      const conn = { execute, beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn() };
+      jest.doMock('../database/db', () => ({ execute, getConnection: jest.fn(async () => conn) }));
+      jest.doMock('../services/orgBootstrapService', () => ({
+        resolveDefaultWorkflowStateId: jest.fn(async () => 59),
+        assignCaseNumberWithConnection: jest.fn(async () => 'AE-00001'),
+      }));
       service = require('../services/caseConversionService');
     });
     return { service, execute };
