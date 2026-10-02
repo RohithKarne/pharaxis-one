@@ -116,7 +116,7 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       [client.id, formType === 'other_inquiry' ? 'other_inquiry' : formType]);
     if (!feature) return res.status(403).json({ error: 'This submission type is not enabled.' });
 
-    const { form_data, submitter_email, submitter_type } = req.body;
+    const { form_data } = req.body;
     if (!form_data) return res.status(400).json({ error: 'form_data is required.' });
 
     // API-07: Input length validation — prevent oversized payloads filling the database
@@ -146,7 +146,16 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
 
-    const submitter_name = (req.body.submitter_name || '').trim() || null;
+    // The portal form sends the person's name and email inside form_data, not as
+    // separate fields, so both were stored empty: the Safety Queue and Submissions
+    // list showed "—", and a visitor who was not signed in never received the email
+    // with their reference number. Read them from the form when not sent separately.
+    const formName = [parsedForm.first_name, parsedForm.last_name].filter(v => v && String(v).trim()).join(' ')
+      || parsedForm.reporter_name || parsedForm.full_name || parsedForm.name || '';
+    const formEmail = parsedForm.email || parsedForm.reporter_email || parsedForm.contact_email || '';
+    const submitter_name = (String(req.body.submitter_name || '').trim() || String(formName).trim()).slice(0, 255) || null;
+    const submitter_email = (String(req.body.submitter_email || '').trim() || String(formEmail).trim()).slice(0, 255) || null;
+    const submitter_type = (String(req.body.submitter_type || '').trim() || String(parsedForm.user_type || parsedForm.reporter_type || '').trim()).slice(0, 100) || null;
 
     const [info] = await pool.execute(`
       INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data, ip_address)
