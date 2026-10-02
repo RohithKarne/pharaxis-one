@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import FormPreview from '../components/FormPreview'
 
@@ -108,7 +109,9 @@ export default function FormsPage() {
         <h3>{formType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Fields</h3>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="cp-btn cp-btn-outline" onClick={() => setShowPreview(true)}>👁 Preview</button>
+          <CanChange area="forms">
           <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Field</button>
+          </CanChange>
         </div>
       </div>
 
@@ -180,6 +183,7 @@ export default function FormsPage() {
         </div>
       )}
 
+      <ReadOnlyUnless area="forms" what="the form fields">
       {error && !showAdd && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {loading ? <div className="cp-loading">Loading…</div> : (
@@ -230,6 +234,7 @@ export default function FormsPage() {
           </tbody>
         </table>
       )}
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

@@ -15,9 +15,9 @@ const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
 const { scanFile, downloadRefusal } = require('../../utils/virusScan');
 const { queueEmail } = require('../../utils/emailOutbox');
-const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
-const { systemAudit } = require('../../utils/audit');
-const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
+const { validateAnswer, isFlagged, isScreenedType, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY, AE_SCREEN_FIELDS } = require('../../services/aeScreening');
+const { systemAudit, auditWithin } = require('../../utils/audit');
+const { recordStatusEvent, publicTimeline, REOPENED_NOTE } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
 
@@ -266,7 +266,7 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
     if (rows.length) {
       const ph = rows.map(() => '?').join(',');
       const [events] = await pool.execute(
-        `SELECT e.submission_id, e.status, e.created_at
+        `SELECT e.submission_id, e.status, e.note, e.created_at
            FROM cp_submission_status_events e
            JOIN cp_submissions s ON s.id = e.submission_id
           WHERE e.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
@@ -276,15 +276,148 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
       events.forEach(e => byId.get(e.submission_id)?.push(e));
     }
     // Surface the user-facing case reference (matches the confirmation email/response).
+    // CPPM-63: the conversation after the first answer — the person's own replies
+    // and the follow-ups staff have sent. A draft never leaves the admin area.
+    const convById = new Map(rows.map(r => [r.id, []]));
+    if (rows.length) {
+      const ph = rows.map(() => '?').join(',');
+      const [msgs] = await pool.execute(
+        `SELECT m.submission_id, m.direction, m.body, m.created_at, m.sent_at
+           FROM cp_submission_messages m
+           JOIN cp_submissions s ON s.id = m.submission_id
+          WHERE m.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
+            AND (m.direction = 'in' OR m.status = 'sent')
+          ORDER BY m.id ASC`,
+        [...rows.map(r => r.id), client.id, req.portalUser.userId]
+      );
+      msgs.forEach(m => convById.get(m.submission_id)?.push({
+        from: m.direction === 'in' ? 'you' : 'team', body: m.body, at: m.direction === 'in' ? m.created_at : m.sent_at,
+      }));
+    }
     const submissions = rows.map(r => ({
       ...r,
       reference: `CP-${String(r.id).padStart(6, '0')}`,
       timeline: publicTimeline(byId.get(r.id) || []),
+      conversation: convById.get(r.id) || [],
+      // Screened types ask "did anyone become unwell" on a reply too (PD-2).
+      reply_needs_screening: isScreenedType(r.submission_type),
     }));
-    res.json({ submissions });
+    // The screening question as worded in one place (services/aeScreening.js), for the reply form.
+    res.json({ submissions, reply_screening: AE_SCREEN_FIELDS });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/submit/:clientCode/submissions/:submissionId/reply — CPPM-63
+// The person replies to the answer they received. Only on their own enquiry, only
+// once an answer has been sent, and always with the PD-2 question "did anyone
+// become unwell" on a screened type. A Yes raises a safety review task in the same
+// transaction as the reply, so the reply is never accepted without it: an open task
+// on the enquiry gains the new detail; otherwise a new task is raised for this reply
+// (a closed task is never silently appended to). A reply to a closed enquiry reopens it.
+const MAX_REPLIES_WAITING = 10;
+router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, requirePortalAuth, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const [[client]] = await conn.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+
+    const body = String(req.body.body || '').trim();
+    if (body.length < 2) return res.status(400).json({ error: 'Write your reply before sending it.', field: 'body' });
+    if (body.length > 5000) return res.status(400).json({ error: 'Your reply is too long. Please keep it under 5,000 characters.', field: 'body' });
+
+    // Someone else's enquiry looks exactly like one that does not exist.
+    const [[sub]] = await conn.execute(
+      'SELECT id, submission_type, status FROM cp_submissions WHERE id = ? AND client_id = ? AND user_id = ?',
+      [req.params.submissionId, client.id, req.portalUser.userId]);
+    if (!sub) return res.status(404).json({ error: 'Request not found.' });
+
+    const [[answer]] = await conn.execute(
+      "SELECT id FROM cp_submission_answers WHERE submission_id = ? AND status = 'sent'", [sub.id]);
+    if (!answer) return res.status(409).json({ error: 'You can reply once our team has answered this request.' });
+
+    const screen = { [AE_SCREEN_KEY]: req.body[AE_SCREEN_KEY], [AE_SCREEN_DETAIL_KEY]: req.body[AE_SCREEN_DETAIL_KEY] };
+    const screenError = validateAnswer(sub.submission_type, screen);
+    if (screenError) return res.status(400).json({ error: screenError, field: AE_SCREEN_KEY });
+    const flagged = isFlagged(sub.submission_type, screen);
+    const screenAnswer = isScreenedType(sub.submission_type) ? String(screen[AE_SCREEN_KEY]).trim() : null;
+    const detail = flagged ? (String(screen[AE_SCREEN_DETAIL_KEY] || '').trim().slice(0, 5000) || null) : null;
+
+    const [[waiting]] = await conn.execute(
+      `SELECT COUNT(*) AS n FROM cp_submission_messages m
+        WHERE m.submission_id = ? AND m.direction = 'in'
+          AND m.created_at > IFNULL((SELECT MAX(x.sent_at) FROM cp_submission_messages x
+                                      WHERE x.submission_id = m.submission_id AND x.direction = 'out' AND x.status = 'sent'), '1970-01-01')`,
+      [sub.id]);
+    if (waiting.n >= MAX_REPLIES_WAITING) {
+      return res.status(429).json({ error: 'We have your earlier messages and our team will answer them. If someone has become unwell, please use the side effect report form.' });
+    }
+
+    await conn.beginTransaction();
+    const [ins] = await conn.execute(
+      `INSERT INTO cp_submission_messages (submission_id, client_id, direction, body, status, ae_screen_answer, ae_screen_detail)
+       VALUES (?, ?, 'in', ?, 'received', ?, ?)`,
+      [sub.id, client.id, body, screenAnswer, detail]);
+    const replyId = ins.insertId;
+
+    let task = null;
+    if (flagged) {
+      const reported = (detail ? `${detail}\n\n` : '') + `Their reply: ${body}`;
+      const [[open]] = await conn.execute(
+        "SELECT id FROM cp_ae_review_tasks WHERE submission_id = ? AND client_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1 FOR UPDATE",
+        [sub.id, client.id]);
+      if (open) {
+        await conn.execute(
+          "UPDATE cp_ae_review_tasks SET reported_detail = CONCAT_WS('\\n---\\n', reported_detail, ?) WHERE id = ?",
+          [reported.slice(0, 5000), open.id]);
+        task = { id: open.id, created: false };
+      } else {
+        const [t] = await conn.execute(
+          'INSERT INTO cp_ae_review_tasks (client_id, submission_id, reply_id, reported_detail) VALUES (?, ?, ?, ?)',
+          [client.id, sub.id, replyId, reported.slice(0, 5000)]);
+        task = { id: t.insertId, created: true };
+      }
+    }
+
+    let reopenedTo = null;
+    if (sub.status === 'closed') {
+      // Back to where it was before it was closed — never to a state that would send it to MIMS again.
+      const [[prev]] = await conn.execute(
+        "SELECT status FROM cp_submission_status_events WHERE submission_id = ? AND status <> 'closed' ORDER BY id DESC LIMIT 1", [sub.id]);
+      reopenedTo = prev?.status || 'submitted';
+      await conn.execute("UPDATE cp_submissions SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'closed'", [reopenedTo, sub.id]);
+    }
+    // The audit lines go in the same transaction (CPPM-53): the reply, its safety
+    // task and the reopening are recorded, or none of them happened. In the order
+    // they happened, so the audit trail reads as the story.
+    const portalActor = { adminId: null, name: 'portal' };
+    await auditWithin(conn, portalActor, client.id, 'REPLY_RECEIVED', 'submission', sub.id, { reply_id: replyId, ae_screen_answer: screenAnswer });
+    if (task) {
+      await auditWithin(conn, portalActor, client.id, task.created ? 'AE_REVIEW_TASK_CREATED' : 'AE_REVIEW_TASK_UPDATED', 'submission', sub.id,
+        { task_id: task.id, reply_id: replyId });
+    }
+    if (reopenedTo) {
+      await auditWithin(conn, portalActor, client.id, 'STATUS_CHANGED', 'submission', sub.id, { status: reopenedTo, reason: 'reply' });
+    }
+    await conn.commit();
+
+    if (reopenedTo) {
+      await recordStatusEvent({ submissionId: sub.id, clientId: client.id, status: reopenedTo, note: REOPENED_NOTE, source: 'portal' });
+    }
+
+    res.status(201).json({
+      message: flagged
+        ? 'Thank you. Your reply has been sent, and our safety team will review what you told us.'
+        : 'Thank you. Your reply has been sent to our team.',
+    });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    log.error('portal.submit.reply_failed', { err, route: 'POST /:clientCode/submissions/:submissionId/reply', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Your reply could not be sent. Please try again.' });
+  } finally {
+    conn.release();
   }
 });
 

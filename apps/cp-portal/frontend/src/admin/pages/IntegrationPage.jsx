@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 // NEW-C: the MIMS intake fields a portal field can map onto, per form type.
@@ -59,7 +60,12 @@ function FieldMappingSection({ clientId, integration }) {
   }
 
   async function removeMapping(id) {
-    await fetch(`/api/admin/integration/${clientId}/mapping/${id}`, { method: 'DELETE', headers: adminHeaders() }).catch(() => {})
+    setMsg('')
+    try {
+      const res = await fetch(`/api/admin/integration/${clientId}/mapping/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      // 404: someone else removed it already, and the reload shows that
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(d.error || `Could not remove mapping (error ${res.status}).`) }
+    } catch { setMsg('Network error — please try again.') }
     loadMappings()
   }
 
@@ -86,13 +92,16 @@ function FieldMappingSection({ clientId, integration }) {
                 <td>{m.target_field}</td>
                 <td>{m.transform || '—'}</td>
                 <td>{m.default_value || '—'}</td>
+                <CanChange area="integration">
                 <td><button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => removeMapping(m.id)}>Remove</button></td>
+                </CanChange>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
+      <CanChange area="integration">
       <form onSubmit={addMapping} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={row.cp_field} onChange={e => setRow(r => ({ ...r, cp_field: e.target.value }))}>
           <option value="">Portal field…</option>
@@ -111,6 +120,7 @@ function FieldMappingSection({ clientId, integration }) {
         <input style={{ width: 130 }} placeholder="default value" value={row.default_value} onChange={e => setRow(r => ({ ...r, default_value: e.target.value }))} />
         <button type="submit" className="cp-btn cp-btn-sm cp-btn-primary" disabled={busy}>{busy ? 'Saving…' : '+ Add Mapping'}</button>
       </form>
+      </CanChange>
       {msg && <div style={{ marginTop: 8, fontSize: 13, color: msg === 'Mapping saved.' ? '#16a34a' : '#dc2626' }}>{msg}</div>}
     </div>
   )
@@ -176,7 +186,9 @@ export default function IntegrationPage() {
       <p className="cp-page-desc">Connect this portal to MIMS or any external case management system. Submissions will auto-sync on receipt.</p>
       <div className="cp-section-header">
         <h2>Configured Integrations</h2>
+        <CanChange area="integration">
         <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Integration</button>
+        </CanChange>
       </div>
 
       {showAdd && (
@@ -246,6 +258,7 @@ export default function IntegrationPage() {
                 <span className={`cp-badge ${i.is_active ? 'badge-active' : 'badge-inactive'}`}>{i.is_active ? 'Active' : 'Inactive'}</span>
               </div>
               <div className="cp-integration-meta">Auth: {i.auth_type} · API key: {i.api_key ? '••••••••' : 'not set'}</div>
+              <CanChange area="integration">
               <div className="cp-integration-actions">
                 <button className="cp-btn cp-btn-sm" onClick={() => testConnection(i.id)} disabled={testing === i.id}>
                   {testing === i.id ? 'Testing…' : '⚡ Test Connection'}
@@ -254,6 +267,7 @@ export default function IntegrationPage() {
                   {i.is_active ? 'Disable' : 'Enable'}
                 </button>
               </div>
+              </CanChange>
               {testResult[i.id] && (
                 <div className={`cp-test-result ${testResult[i.id].success ? 'success' : 'fail'}`}>
                   {testResult[i.id].success ? `✓ Connected (HTTP ${testResult[i.id].status})` : `✗ Failed: ${testResult[i.id].error || `HTTP ${testResult[i.id].status}`}`}

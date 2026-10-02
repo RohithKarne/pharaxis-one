@@ -35,7 +35,8 @@ router.patch('/:clientId/:featureKey', authenticateAdmin, async (req, res) => {
     if (icon !== undefined)          { updates.push('icon = ?');           params.push(icon); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(clientId, featureKey);
-    await pool.execute(`UPDATE cp_features SET ${updates.join(', ')} WHERE client_id = ? AND feature_key = ?`, params);
+    const [result] = await pool.execute(`UPDATE cp_features SET ${updates.join(', ')} WHERE client_id = ? AND feature_key = ?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Feature not found.' });
     await audit(req.admin, clientId, is_enabled !== undefined ? (is_enabled ? 'ENABLE' : 'DISABLE') : 'UPDATE', 'feature', featureKey, { feature_key: featureKey, ...req.body });
     res.json({ message: 'Feature updated.' });
   } catch (err) {

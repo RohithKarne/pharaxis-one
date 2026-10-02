@@ -38,10 +38,13 @@ async function authenticateAdmin(req, res, next) {
   // otherwise stays valid for its full 12h lifetime even after an admin is
   // deactivated — a removed/compromised admin must lose access immediately.
   try {
-    const [[row]] = await pool.execute('SELECT is_active, token_version FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    const [[row]] = await pool.execute('SELECT is_active, token_version, role FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
     if (!row || !row.is_active) return res.status(401).json({ error: 'Your admin account is no longer active.' });
     // CP-26: reject tokens whose version is stale (revoked by a password change).
     if ((row.token_version ?? 0) !== (req.admin.tv ?? 0)) return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    // CPPM-60: the role is the account's role now, not the one in the token. A token
+    // lasts 12 hours, so an admin made a viewer kept an admin's rights until it expired.
+    req.admin.role = row.role;
     next();
   } catch (err) {
     next(err);

@@ -22,28 +22,39 @@ for g in "${EXCLUDES[@]}"; do
   RG_GLOBS+=(--glob "$g")
 done
 
+# rg exits 0 on a match, 1 on no match, and anything else when it could not search
+# (not installed, bad pattern). Only 1 is a clean result; the rest must not read as passing.
+command -v rg >/dev/null 2>&1 || { echo "ripgrep (rg) is not installed, so nothing can be scanned. Install it and run again."; exit 2; }
+
+report() {
+  local status="$1" title="$2"
+  if [[ "$status" -eq 0 ]]; then
+    echo "✗ $title"
+    FAILURES=$((FAILURES + 1))
+  elif [[ "$status" -eq 1 ]]; then
+    echo "✓ $title"
+  else
+    echo "✗ $title could not be checked (rg exit $status)"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 scan() {
   local title="$1"
   local pattern="$2"
+  local status=0
   echo "→ $title"
-  if rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR"; then
-    echo "✗ $title"
-    FAILURES=$((FAILURES + 1))
-  else
-    echo "✓ $title"
-  fi
+  rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR" || status=$?
+  report "$status" "$title"
 }
 
 scan_pcre() {
   local title="$1"
   local pattern="$2"
+  local status=0
   echo "→ $title"
-  if rg -n -P --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR"; then
-    echo "✗ $title"
-    FAILURES=$((FAILURES + 1))
-  else
-    echo "✓ $title"
-  fi
+  rg -n -P --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR" || status=$?
+  report "$status" "$title"
 }
 
 echo "Running MIMS security scan in: $ROOT_DIR"

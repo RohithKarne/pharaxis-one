@@ -66,6 +66,7 @@ router.get('/:alertId', authenticatePortal, async (req, res) => {
     const [[alert]] = await pool.execute(`
       SELECT * FROM cp_safety_alerts
       WHERE id = ? AND client_id = ? AND status IN ('active', 'resolved')
+        AND (publish_at IS NULL OR publish_at <= NOW())
     `, [req.params.alertId, client.id]);
     if (!alert) return res.status(404).json({ error: 'Alert not found.' });
 

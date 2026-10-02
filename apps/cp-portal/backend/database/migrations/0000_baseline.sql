@@ -234,6 +234,8 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   submitted_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   synced_at       DATETIME     NULL,
   updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id        INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since     DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
@@ -510,6 +512,8 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   publish_at        DATETIME     NULL,
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since       DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_docs_client (client_id),
   KEY idx_cp_docs_review_due (client_id, review_due_at),
@@ -556,6 +560,8 @@ CREATE TABLE IF NOT EXISTS cp_news_posts (
   translations_json MEDIUMTEXT   NULL,
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
+  owner_since       DATETIME     NULL,
   PRIMARY KEY (id),
   KEY idx_cp_news_client (client_id),
   KEY idx_cp_news_status (status),
@@ -905,24 +911,29 @@ CREATE TABLE IF NOT EXISTS cp_data_requests (
   KEY idx_dr_user (portal_user_id)
 );
 
--- ── AE REVIEW TASKS (from 0011, as changed by 0015) ────────────
+-- ── AE REVIEW TASKS (from 0011, as changed by 0015, 0025 and 0027) ───
 -- Defined only in migrations, never in db.js. No foreign keys, as in 0011.
 -- CPPM-18 (0015): a task comes from a form submission OR a chat conversation,
 -- exactly one of them; a confirmed side effect links its new AE submission.
+-- CPPM-6 (0025): owner_id is the staff member holding an open task now.
 CREATE TABLE IF NOT EXISTS cp_ae_review_tasks (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
   client_id            INT NOT NULL,
   submission_id        INT NULL,
   chat_conversation_id INT NULL,
+  reply_id             INT NULL,   -- CPPM-63 (0027): the reply to an answer that raised this task
   status               VARCHAR(20) NOT NULL DEFAULT 'open',
   outcome              VARCHAR(30) NULL,
   outcome_reason       TEXT NULL,
   ae_submission_id     INT NULL,
   reported_detail      TEXT NULL,
+  owner_id             INT NULL,
+  owner_since          DATETIME NULL,
   closed_by            INT NULL,
   closed_at            DATETIME NULL,
   created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_ae_task_submission (submission_id),
+  reply_key            INT AS (IFNULL(reply_id, 0)) STORED,
+  UNIQUE KEY uq_ae_task_submission (submission_id, reply_key),
   UNIQUE KEY uq_ae_task_chat (chat_conversation_id),
   KEY idx_ae_task_client_status (client_id, status),
   CONSTRAINT chk_ae_task_one_source CHECK ((submission_id IS NULL) <> (chat_conversation_id IS NULL))
@@ -1004,6 +1015,32 @@ CREATE TABLE IF NOT EXISTS cp_submission_answers (
   UNIQUE KEY uq_answer_submission (submission_id),
   KEY idx_answer_client_status (client_id, status),
   CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── SUBMISSION MESSAGES (from 0027, CPPM-63) ─────────────────────────
+CREATE TABLE IF NOT EXISTS cp_submission_messages (
+  id               INT          NOT NULL AUTO_INCREMENT,
+  submission_id    INT          NOT NULL,
+  client_id        INT          NOT NULL,
+  direction        VARCHAR(3)   NOT NULL,
+  body             MEDIUMTEXT   NOT NULL,
+  status           VARCHAR(20)  NOT NULL,
+  ae_screen_answer VARCHAR(3)   NULL,
+  ae_screen_detail TEXT         NULL,
+  drafted_by       INT          NULL,
+  approved_by      INT          NULL,
+  approved_at      DATETIME     NULL,
+  sent_at          DATETIME     NULL,
+  send_error       TEXT         NULL,
+  created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  draft_for        INT          NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_message_one_draft (draft_for),
+  KEY idx_message_submission (submission_id, id),
+  KEY idx_message_client (client_id, direction, status),
+  CONSTRAINT chk_message_direction CHECK (direction IN ('in', 'out')),
+  CONSTRAINT fk_message_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── SUBMISSION STATUS HISTORY (from 0017, CPPM-4) ────────────────────
@@ -1105,4 +1142,7 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0021_add_attachment_scan_status.sql',       NULL),
   ('0022_widen_audit_details.sql',              NULL),
   ('0023_add_login_attempts.sql',               NULL),
-  ('0024_add_training_records.sql',             NULL);
+  ('0024_add_training_records.sql',             NULL),
+  ('0025_add_ae_task_owner.sql',                NULL),
+  ('0026_add_work_owners.sql',                  NULL),
+  ('0027_add_submission_messages.sql',          NULL);

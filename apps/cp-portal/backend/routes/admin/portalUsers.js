@@ -340,12 +340,14 @@ router.patch('/:clientId/bulk', authenticateAdmin, async (req, res) => {
     const cleanIds = ids.map(Number).filter(Number.isInteger);
     if (!cleanIds.length) return res.status(400).json({ error: 'No valid ids provided.' });
     const placeholders = cleanIds.map(() => '?').join(',');
-    await pool.execute(
+    const [result] = await pool.execute(
       `UPDATE cp_portal_users SET is_active = ? WHERE client_id = ? AND id IN (${placeholders})`,
       [is_active ? 1 : 0, req.params.clientId, ...cleanIds]
     );
-    await audit(req.admin, req.params.clientId, is_active ? 'ENABLE' : 'DISABLE', 'portal_user', null, { count: cleanIds.length });
-    res.json({ message: `${cleanIds.length} user(s) ${is_active ? 'activated' : 'deactivated'}.`, count: cleanIds.length });
+    const count = result.affectedRows;
+    if (count === 0) return res.status(404).json({ error: 'None of those users were found.' });
+    await audit(req.admin, req.params.clientId, is_active ? 'ENABLE' : 'DISABLE', 'portal_user', null, { count });
+    res.json({ message: `${count} user(s) ${is_active ? 'activated' : 'deactivated'}.`, count });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'PATCH /:clientId/bulk', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -375,6 +377,7 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     params.push(req.params.userId, req.params.clientId);
     const ROW = 'SELECT * FROM cp_portal_users WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'User not found.' });
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
     const [[after]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
     // CPPM-43: what changed. A person's name, email and country are personal details:
@@ -391,7 +394,8 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
 
 router.delete('/:clientId/:userId', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute('UPDATE cp_portal_users SET is_active=0 WHERE id=? AND client_id=?', [req.params.userId, req.params.clientId]);
+    const [result] = await pool.execute('UPDATE cp_portal_users SET is_active=0 WHERE id=? AND client_id=?', [req.params.userId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'portal_user', req.params.userId, {});
     res.json({ message: 'User deactivated.' });
   } catch (err) {

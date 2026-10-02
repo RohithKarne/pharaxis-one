@@ -31,6 +31,31 @@ async function audit(admin, clientId, action, entity, entityId, details) {
 }
 
 /**
+ * auditWithin(conn, …) — the audit line as part of the caller's transaction (CPPM-53).
+ *
+ * audit() above never throws, so a change can be saved while its line is lost and
+ * nobody is told. That is tolerable where the record itself says who did what. It is
+ * not where the audit trail is the only history — who held a safety task, and who
+ * handed it to whom. Here the line is written on the caller's connection and a
+ * failure is thrown, so the caller's change is rolled back with it: both, or neither.
+ */
+async function auditWithin(conn, admin, clientId, action, entity, entityId, details) {
+  await conn.execute(
+    `INSERT INTO cp_audit_logs (admin_id, admin_name, client_id, action, entity, entity_id, details)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      admin?.adminId || null,
+      admin?.name    || 'unknown',
+      clientId       || null,
+      action,
+      entity,
+      entityId       || null,
+      JSON.stringify(details || {}),
+    ]
+  );
+}
+
+/**
  * systemAudit — audit an event that has no human admin actor (integration sync,
  * automated close-sync, portal submission). Records an attributable actor name
  * instead of a blank/unknown one, so a Part 11 reviewer can see the source.
@@ -124,4 +149,4 @@ function auditWrites(entity) {
   };
 }
 
-module.exports = { audit, systemAudit, auditWrites, changesBetween };
+module.exports = { audit, auditWithin, systemAudit, auditWrites, changesBetween };

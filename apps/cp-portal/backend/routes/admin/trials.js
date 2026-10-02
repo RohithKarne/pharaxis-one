@@ -75,10 +75,11 @@ router.put('/:clientId/:trialId', authenticateAdmin, requireClientAccess, async 
 // DELETE /api/admin/trials/:clientId/:trialId — delete clinical trial
 router.delete('/:clientId/:trialId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute(
+    const [result] = await pool.execute(
       'DELETE FROM cp_clinical_trials WHERE id = ? AND client_id = ?',
       [req.params.trialId, req.params.clientId]
     );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'clinical_trial', Number(req.params.trialId), {});
     res.json({ message: 'Trial deleted.' });
   } catch (err) {

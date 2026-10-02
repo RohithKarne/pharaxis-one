@@ -37,10 +37,12 @@ const REVIEW_WARNING_DAYS   = 30;
 
 const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
-const { sendEmail } = require('../../utils/mailer');
+const { queueEmail } = require('../../utils/emailOutbox');
 const { autoTranslate } = require('../../utils/translator');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
+const { documentUnavailableReason } = require('../../utils/documentVisibility');
+const { parsePublishAt } = require('../../utils/publishAt');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -140,6 +142,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
     values.push(req.params.catId, req.params.clientId);
     const CAT_ROW = 'SELECT * FROM cp_document_categories WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'Category not found.' });
     await pool.execute(`UPDATE cp_document_categories SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
     // CPPM-43: what changed, from → to — not just which fields the screen sent.
@@ -154,7 +157,8 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
 // DELETE /api/admin/documents/:clientId/categories/:catId
 router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    const [result] = await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Category not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'document_category', Number(req.params.catId), {});
     res.json({ ok: true });
   } catch (err) {
@@ -197,7 +201,16 @@ router.get('/:clientId/review-due', authenticateAdmin, requireClientAccess, asyn
         AND DATE(review_due_at) <= DATE(DATE_ADD(NOW(), INTERVAL ${REVIEW_WARNING_DAYS} DAY))
       ORDER BY review_due_at ASC
     `, [req.params.clientId]);
-    res.json({ reviewDue: rows });
+    // CPPM-71: live (or scheduled) documents nobody has ever approved — they predate
+    // the approval rule and need a reviewer's decision: approve as is, or retire.
+    const [neverApproved] = await pool.execute(`
+      SELECT id, title, status, category, publish_at
+      FROM cp_documents
+      WHERE client_id = ? AND is_active = 1 AND retired_at IS NULL
+        AND approved_at IS NULL AND status IN ('published', 'scheduled')
+      ORDER BY title ASC
+    `, [req.params.clientId]);
+    res.json({ reviewDue: rows, neverApproved });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'GET /:clientId/review-due', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -227,14 +240,19 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
     }
     if (admins.length === 0) return res.status(400).json({ error: 'No admin email addresses found for this client.' });
 
+    // CPPM-73: expires_at arrives as a Date, not text, so .slice() threw and every
+    // press of "Send Email Alert" ended in "Server error". Titles are escaped: they
+    // are typed by staff and go into an HTML email.
+    const day = v => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+    const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const today = new Date().toISOString().slice(0, 10);
     const rows = expiring.map(d => {
-      const isExpired = d.expires_at.slice(0, 10) < today;
+      const isExpired = day(d.expires_at) < today;
       return `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.title}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.expires_at.slice(0, 10)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${esc(d.title)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${day(d.expires_at)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;color:${isExpired ? '#DC2626' : '#D97706'};font-weight:600">${isExpired ? 'EXPIRED' : 'Expiring Soon'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${d.status}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB">${esc(d.status)}</td>
       </tr>`;
     }).join('');
 
@@ -253,17 +271,20 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
       <p style="font-family:sans-serif;color:#6B7280;font-size:12px;margin-top:24px">Please log in to the CP Portal Admin Console to update these documents.</p>
     `;
 
-    let sent = 0;
+    // Through the email outbox (CPPM-36), like every other email: recorded first,
+    // retried, and visible under Email Delivery if it finally fails — not lost
+    // because the mail server was briefly unreachable.
+    let queued = 0;
     for (const admin of admins) {
-      try {
-        await sendEmail(Number(clientId), { to: admin.email, subject: `Document Expiry Alert — ${expiring.length} document(s) require attention`, html });
-        sent++;
-      } catch { /* skip failed individual sends */ }
+      const row = await queueEmail(Number(clientId), {
+        to: admin.email, subject: `Document Expiry Alert — ${expiring.length} document(s) require attention`, html,
+      }, { kind: 'document_expiry_alert', relatedType: 'document', relatedId: null });
+      if (row) queued++;
     }
 
-    await audit(req.admin, clientId, 'EXPIRY_ALERT_SENT', 'document', null, { count: expiring.length, recipients: sent });
-    if (sent === 0) return res.status(502).json({ error: 'Email config not active or send failed. Check Email Settings.' });
-    res.json({ message: `Alert sent to ${sent} admin(s) for ${expiring.length} document(s).` });
+    await audit(req.admin, clientId, 'EXPIRY_ALERT_SENT', 'document', null, { count: expiring.length, recipients: queued });
+    if (queued === 0) return res.status(502).json({ error: 'The alert could not be queued. Please try again.' });
+    res.json({ message: `Alert queued for ${queued} admin(s) about ${expiring.length} document(s). Delivery is shown under Email Delivery.` });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'POST /:clientId/expiry-alerts/send', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -295,7 +316,20 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
           error: `Nothing was published. ${unapproved.length} of ${selected.length} selected document(s) have not been approved: ${unapproved.map(d => d.title).join(', ')}.`,
         });
       }
-      await pool.execute(`UPDATE cp_documents SET status='published', retired_at=NULL, updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // CPPM-55: publish_at is when a document goes live. One that is already
+      // published keeps its date; a future date is kept and hides it until then.
+      // (publish_at is set before status so it still sees the old status.)
+      await pool.execute(
+        `UPDATE cp_documents
+            SET publish_at = IF(status = 'published', publish_at, IF(publish_at > NOW(), publish_at, NOW())),
+                status='published', retired_at=NULL, updated_at=NOW()
+          WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // Readers hear about a document when it goes live, not when it was uploaded.
+      const [live] = await pool.execute(`SELECT * FROM cp_documents WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      const wasPublished = new Set(selected.filter(d => d.status === 'published').map(d => d.id));
+      for (const doc of live) {
+        if (!wasPublished.has(doc.id) && doc.is_active && !documentUnavailableReason(doc)) notifyPortalUsers(req.params.clientId, 'document', doc.title, doc.id);
+      }
     } else if (action === 'archive') {
       // Retiring a certified document keeps a copy of what was certified.
       for (const doc of selected) await recordSupersededVersion(doc, req.admin, 'retired');
@@ -410,7 +444,6 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       const [[doc]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ?', [result.insertId]);
       await audit(req.admin, req.params.clientId, 'UPLOAD', 'document', doc.id, { title: doc.title });
       if (approving) await audit(req.admin, req.params.clientId, 'APPROVE', 'document', doc.id, { title: doc.title, version: doc.version, review_due_at: doc.review_due_at });
-      if (docStatus === 'published') notifyPortalUsers(req.params.clientId, 'document', title, doc.id);
       autoTranslate(req.params.clientId, 'cp_documents', doc.id, { title }).catch(() => {});
       res.json({ document: doc });
     } catch (e) {
@@ -420,19 +453,43 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
   });
 });
 
+// CPPM-71: live or scheduled, still in the library, and approved by nobody.
+function neverApprovedLive(doc) {
+  return !!doc && !doc.approved_at && ['published', 'scheduled'].includes(doc.status)
+    && doc.is_active && !doc.retired_at;
+}
+
 // PUT /api/admin/documents/:clientId/:docId — update metadata (no file re-upload)
 router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const { title, category, doc_type, visible_to, source, is_active, status, expires_at, version, publish_at, review_due_at } = req.body;
+    const publishAt = parsePublishAt(publish_at); // CPPM-58: stored as UTC
+    if (publishAt === undefined) return res.status(400).json({ error: 'The publish time is not a valid date and time.' });
     const fields = [], values = [];
     let current = null;        // the row as it stands before this update
     let lifecycleAction = null; // APPROVE | PUBLISH | RETIRE, audited below
+
+    // CPPM-71: a document that is live (or scheduled) but was never approved predates
+    // the approval rule. A reviewer can approve it as it stands, and it stays live;
+    // the approval is recorded exactly as any other.
+    let approveInPlace = false;
 
     // S4-8: validate status transition + role permission
     if (status !== undefined) {
       [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
       if (!current) return res.status(404).json({ error: 'Document not found.' });
-      if (current.status !== status) {
+      approveInPlace = status === 'approved' && neverApprovedLive(current);
+      if (approveInPlace) {
+        if (!APPROVE_ROLES.includes(req.admin.role)) {
+          return res.status(403).json({ error: "Your role cannot set status to 'approved'." });
+        }
+        lifecycleAction = 'APPROVE';
+        fields.push('approved_by = ?');      values.push(req.admin.adminId || null);
+        fields.push('approved_by_name = ?'); values.push(req.admin.name || null);
+        fields.push('approved_at = NOW()');
+        fields.push(`review_due_at = COALESCE(?, DATE_ADD(NOW(), INTERVAL ${DEFAULT_REVIEW_MONTHS} MONTH))`);
+        values.push(review_due_at || null);
+      } else if (current.status !== status) {
         const allowed = DOC_TRANSITIONS[current.status] || [];
         if (!allowed.includes(status)) {
           return res.status(400).json({ error: `Invalid transition: ${current.status} → ${status}.` });
@@ -466,7 +523,10 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
           fields.push('retired_at = NOW()');
         }
       }
-      fields.push('status = ?'); values.push(status);
+      // An approval in place keeps the document's status (still live, or still scheduled).
+      if (!approveInPlace) { fields.push('status = ?'); values.push(status); }
+      // CPPM-61: a document coming (back) into the review queue arrives with no holder.
+      if (status === 'review' && current.status !== 'review') fields.push('owner_id = NULL', 'owner_since = NULL');
     }
 
     // CPPM-31 (Rohith and Vasu, 23 Sep 2026): an approved document that is edited
@@ -484,8 +544,12 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     // Only a request that grants a fresh approval skips this. The edit box re-sends the
     // current status ('approved', 'published') with every save, and that must not keep
     // an approval that no longer matches what was certified.
-    const approvingNow = status === 'approved' && current?.status !== 'approved';
-    if (current?.approved_at && !approvingNow) {
+    const approvingNow = approveInPlace || (status === 'approved' && current?.status !== 'approved');
+    // CPPM-71: a live document that was never approved follows the same rule — an edit
+    // takes it out of the portal until it is approved — or editing it would be the way
+    // to change live content with nobody's approval.
+    const wasNeverApprovedLive = neverApprovedLive(current);
+    if ((current?.approved_at || wasNeverApprovedLive) && !approvingNow) {
       const changed = Object.entries(CERTIFIED_FIELDS).filter(([key, value]) => {
         if (value === undefined) return false;
         const before = key === 'visible_to' ? (current.visible_to_json || null)
@@ -507,7 +571,8 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
           else values[fields.slice(0, at).join(' ').split('?').length - 1] = 'draft';
           lifecycleAction = null;
         }
-        await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId, { changed });
+        await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId,
+          { changed, ...(wasNeverApprovedLive ? { never_approved: true } : {}) });
       }
     }
 
@@ -519,7 +584,14 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (is_active !== undefined)  { fields.push('is_active = ?');       values.push(is_active ? 1 : 0); }
     if (expires_at !== undefined)  { fields.push('expires_at = ?');      values.push(expires_at || null); }
     if (version !== undefined)     { fields.push('version = ?');         values.push(version || null); }
-    if (publish_at !== undefined)  { fields.push('publish_at = ?');      values.push(publish_at || null); }
+    // CPPM-55: publish_at is when a document goes live. Publishing stamps it: now, unless
+    // a later date is given (or already set and not being changed), which hides the
+    // document until then. Uploading is not going live — approval comes in between.
+    if (status === 'published' && lifecycleAction === 'PUBLISH') {
+      if (publishAt)                     { fields.push('publish_at = IF(? > NOW(), ?, NOW())'); values.push(publishAt, publishAt); }
+      else if (publish_at === undefined) { fields.push('publish_at = IF(publish_at > NOW(), publish_at, NOW())'); }
+      else                               { fields.push('publish_at = NOW()'); }
+    } else if (publish_at !== undefined) { fields.push('publish_at = ?');      values.push(publishAt); }
     // CPPM-31: an approval sets the review date itself, so only take it from the
     // body when this request is not an approval.
     if (review_due_at !== undefined && lifecycleAction !== 'APPROVE' && !requiresReapproval) { fields.push('review_due_at = ?'); values.push(review_due_at || null); }
@@ -541,14 +613,22 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     // and retire are findable in the trail without reading every UPDATE.
     if (lifecycleAction) {
       await audit(req.admin, req.params.clientId, lifecycleAction, 'document', req.params.docId, {
-        title: current.title, version: current.version, from: current.status, to: status,
+        title: current.title, version: current.version, from: current.status, to: approveInPlace ? current.status : status,
+        ...(approveInPlace ? { approved_as_is: true } : {}),
       });
+    }
+    // CPPM-55: readers are told when a document goes live. One published with a
+    // later date is announced by the scheduler when that date arrives.
+    if (lifecycleAction === 'PUBLISH' && after.is_active && !documentUnavailableReason(after)) {
+      notifyPortalUsers(req.params.clientId, 'document', after.title, after.id);
     }
     if (req.body.title) autoTranslate(req.params.clientId, 'cp_documents', req.params.docId, { title: req.body.title }).catch(() => {});
     res.json({
       ok: true,
       requires_reapproval: requiresReapproval,
-      ...(requiresReapproval ? { message: 'Saved. This document was approved, so the change created a new version — it must be approved again before it can be published.' } : {}),
+      ...(requiresReapproval ? { message: wasNeverApprovedLive
+        ? 'Saved. This document was live without ever being approved, so the change took it out of the portal — it must be approved before it can be published again.'
+        : 'Saved. This document was approved, so the change created a new version — it must be approved again before it can be published.' } : {}),
     });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'PUT /:clientId/:docId', path: req.path, request_id: req.requestId || null });
@@ -562,6 +642,7 @@ router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, async
     // CPPM-31: taking a certified document out of the library retires it, and
     // what was certified is kept in the version history first.
     const [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
+    if (!current) return res.status(404).json({ error: 'Document not found.' });
     await recordSupersededVersion(current, req.admin, 'retired');
     await pool.execute("UPDATE cp_documents SET is_active = 0, retired_at = NOW(), updated_at = NOW() WHERE id = ? AND client_id = ?", [req.params.docId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'document', req.params.docId, {});

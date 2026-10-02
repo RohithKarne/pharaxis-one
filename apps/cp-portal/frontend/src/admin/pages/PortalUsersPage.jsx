@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import BulkPortalUserImport from '../components/BulkPortalUserImport'
 
 export default function PortalUsersPage() {
+  const { canChange } = useAdminAuth() // CPPM-60
   const { clientId }    = useParams()
   const [users, setUsers]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -137,9 +139,11 @@ export default function PortalUsersPage() {
           <option value="other">Other</option>
         </select>
         <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
+        <CanChange area="users">
         <button className="cp-btn cp-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowBulkAdd(true)}>
           ⇪ Bulk Add Users
         </button>
+        </CanChange>
       </div>
 
       {showBulkAdd && (
@@ -156,8 +160,12 @@ export default function PortalUsersPage() {
       {selectedIds.length > 0 && (
         <div className="cp-bulk-bar">
           <strong>{selectedIds.length} selected</strong>
+          <CanChange area="users">
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(true)}>Activate</button>
+          </CanChange>
+          <CanChange area="users">
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(false)}>Deactivate</button>
+          </CanChange>
           <button className="cp-btn cp-btn-sm" onClick={() => setSelectedIds([])}>Clear selection</button>
         </div>
       )}
@@ -236,9 +244,13 @@ export default function PortalUsersPage() {
                   <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                   <td>{u.created_at?.slice(0, 10)}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
+                    <CanChange area="users">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
+                    </CanChange>
+                    <CanChange area="users">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
-                    {u.locked_until && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
+                    </CanChange>
+                    {u.locked_until && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
                   </td>
                 </tr>
               ))}

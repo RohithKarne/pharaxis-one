@@ -78,6 +78,10 @@ const submitLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Submission limit reached. Please try again later.' },
   store: makeStore(),
+  // Only sending something counts — a new request or a reply (CPPM-63). Looking at
+  // My Submissions or opening an attachment used to spend the same budget, so a
+  // person who checked their list often could be refused when reporting a side effect.
+  skip: (req) => req.method === 'GET',
 });
 
 const apiLimiter = rateLimit({
@@ -139,6 +143,9 @@ app.use('/uploads', (req, res, next) => {
 }, express.static(path.join(__dirname, 'uploads')));
 
 // ── Admin Console Routes ──────────────────────────────────────
+// CPPM-60: one table says which roles may change what. It sits in front of every
+// admin router, so an area cannot be added without a rule applying to it.
+app.use('/api/admin', require('./middleware/adminWritePolicy').adminWritePolicy);
 app.use('/api/admin/auth',         authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',      require('./routes/admin/clients'));
 app.use('/api/admin/branding',     require('./routes/admin/branding'));
@@ -195,17 +202,42 @@ app.use('/api/portal/training',      require('./routes/portal/training'));   // 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 // CP-14: returns the tick fn (no side effects) so it can be driven either by the
 // in-process interval (dev/single instance) or an external cron (stateless/HA).
+// Runs `work` only on the instance that takes the named MySQL lock, and tells the
+// caller whether it ran. A MySQL lock belongs to the connection that took it, so it
+// is taken and released on one connection held for the whole run. Through the pool
+// the two statements landed on different connections: the release did nothing, the
+// lock stayed with an idle pooled connection, and every later run that drew another
+// connection skipped without a word — scheduled content, email retries, MIMS
+// retries and close-sync included.
+//
+// MySQL locks are shared by every database on the server, so the name carries this
+// environment's database: two environments on one server must not block each other.
+async function withJobLock(name, work) {
+  const key = `${process.env.MYSQL_DATABASE || 'cp'}:${name}`.slice(0, 64);
+  const conn = await pool.getConnection();
+  try {
+    const [[row]] = await conn.query('SELECT GET_LOCK(?, 0) AS acquired', [key]);
+    if (Number(row?.acquired || 0) !== 1) return false; // another instance is running it
+    try {
+      await work();
+    } finally {
+      await conn.query('SELECT RELEASE_LOCK(?)', [key])
+        .catch(err => log.error('job.lock_release_failed', { err, lock: key }));
+    }
+    return true;
+  } finally {
+    conn.release();
+  }
+}
+
 function createContentScheduler() {
   const { notifyPortalUsers } = require('./utils/notify');
+  const { VISIBLE_DOCUMENT_SQL } = require('./utils/documentVisibility');
   const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [SCHEDULER_LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-
+     await withJobLock(SCHEDULER_LOCK_KEY, async () => {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       // News: find and promote scheduled posts
@@ -222,12 +254,54 @@ function createContentScheduler() {
           notifyPortalUsers(p.client_id, 'news', p.title, p.id).catch(() => {});
         }
       }
+      // CPPM-58: a post saved as published with a later date has no status change
+      // to hook; readers are told in the ten minutes after its date (one alert per
+      // reader and item, so being picked up on several ticks is harmless).
+      const [liveNews] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_news_posts
+          WHERE status = 'published' AND publish_at <= ? AND publish_at > (? - INTERVAL 10 MINUTE)`,
+        [now, now]
+      );
+      for (const p of liveNews) {
+        notifyPortalUsers(p.client_id, 'news', p.title, p.id).catch(() => {});
+      }
 
-      // Documents: promote scheduled docs
+      // Documents: promote scheduled docs, and tell readers (CPPM-55) — as news does above.
+      // Two kinds go live here: a scheduled document whose time has come, and one
+      // published ahead with a later date. The second has no status change to hook, so it
+      // is picked up in the ten minutes after its date; the alert is recorded once per
+      // reader and item, so being picked up on several ticks is harmless.
+      const [dueDocs] = await pool.execute(
+        `SELECT id FROM cp_documents WHERE status='scheduled' AND publish_at <= ? AND approved_at IS NOT NULL`, [now]
+      );
+      // CPPM-71: only an approved document goes live by itself. One scheduled before
+      // approval was required waits, flagged on the Documents screen, until approved.
       await pool.execute(
-        `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ?`,
+        `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ? AND approved_at IS NOT NULL`,
         [now]
       );
+      const dueIds = dueDocs.map(d => d.id);
+      const [liveDocs] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_documents
+          WHERE is_active = 1 AND ${VISIBLE_DOCUMENT_SQL}
+            AND (publish_at > (? - INTERVAL 10 MINUTE)${dueIds.length ? ` OR id IN (${dueIds.map(() => '?').join(',')})` : ''})`,
+        [now, ...dueIds]
+      );
+      for (const d of liveDocs) {
+        notifyPortalUsers(d.client_id, 'document', d.title, d.id).catch(() => {});
+      }
+
+      // Safety alerts scheduled for later (CPPM-58): the portal shows one from its
+      // publish time, with no status change to hook, so readers are told in the same
+      // ten-minute pick-up.
+      const [liveAlerts] = await pool.execute(
+        `SELECT id, client_id, title FROM cp_safety_alerts
+          WHERE status = 'active' AND publish_at <= ? AND publish_at > (? - INTERVAL 10 MINUTE)`,
+        [now, now]
+      );
+      for (const a of liveAlerts) {
+        notifyPortalUsers(a.client_id, 'safety', a.title, a.id).catch(() => {});
+      }
 
       // Weekly digest — fire only during the configured window (default Mon 08:00 server time).
       // sendAllDigests() dedups per ISO week, so it sends at most once even though the
@@ -252,11 +326,10 @@ function createContentScheduler() {
       // CPPM-39: scan attachments held because the virus scanner was unreachable.
       const { rescanHeldAttachments } = require('./services/attachmentScan');
       await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
-    } catch { /* silently ignore scheduler errors */ }
-    finally {
-      if (lockAcquired) {
-        await pool.execute('SELECT RELEASE_LOCK(?)', [SCHEDULER_LOCK_KEY]).catch(() => {});
-      }
+     });
+    } catch (err) {
+      // Logged, not swallowed: a tick that fails must be visible.
+      log.error('scheduler.tick_failed', { err });
     }
   }
 
@@ -286,15 +359,10 @@ function createMimsCloseSyncScheduler() {
   const { pollOnce } = require('./services/mimsCloseSync');
   const LOCK_KEY = 'cp-portal-mims-close-sync';
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await pollOnce();
-    } catch { /* silently ignore poller errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+      await withJobLock(LOCK_KEY, pollOnce);
+    } catch (err) {
+      log.error('mims-close-sync.tick_failed', { err });
     }
   }
   return tick;
@@ -315,15 +383,10 @@ function createMimsRetryScheduler() {
   const { retryOnce } = require('./services/mimsRetry');
   const LOCK_KEY = 'cp-portal-mims-retry';
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await retryOnce();
-    } catch { /* silently ignore retry errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+      await withJobLock(LOCK_KEY, retryOnce);
+    } catch (err) {
+      log.error('mims-retry.tick_failed', { err });
     }
   }
   return tick;
