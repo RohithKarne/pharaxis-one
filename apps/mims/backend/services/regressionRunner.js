@@ -9,6 +9,7 @@
  */
 
 const path = require('path');
+const { signIn } = require('../utils/signInClient');
 const fs = require('fs');
 const http = require('http');
 const pool = require('../database/db');
@@ -120,19 +121,17 @@ async function ensureRegressionUserOrgAccess() {
   }
 }
 
+// MIPM-82: the session is cookie-only and 2FA may be required — sign in the way a
+// person does (utils/signInClient.js). The regression account's authenticator secret
+// is REGRESSION_TOTP_SECRET when its organisation requires 2FA.
 async function resolveAuthToken(email, password) {
-  const res = await makeRequest('POST', '/api/auth/login', { email, password }, null);
-  if (res.status !== 200) return null;
-  if (res.body?.token) return res.body.token;
-
-  if (res.body?.challengeToken) {
-    const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
-      challengeToken: res.body.challengeToken,
-    }, null);
-    if (skip.status === 200 && skip.body?.token) return skip.body.token;
-  }
-
-  return null;
+  const post = async (path, body) => {
+    const res = await makeRequest('POST', path, body, null);
+    return { status: res.status, body: res.body, setCookie: res.headers?.['set-cookie'] };
+  };
+  const result = await signIn(post, { email, password, totpSecret: process.env.REGRESSION_TOTP_SECRET });
+  if (!result.token) console.warn(`[Regression] Sign-in stopped at ${result.step} (${result.status}): ${result.error || 'no session'}`);
+  return result.token;
 }
 
 async function getToken() {

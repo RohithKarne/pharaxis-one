@@ -1,4 +1,5 @@
 'use strict';
+const { signIn, fetchPost } = require('../utils/signInClient');
 
 /**
  * smoke-sprint14-g12.js
@@ -56,33 +57,16 @@ async function loginWithCandidates() {
 
   const errors = [];
 
+  // MIPM-82: cookie-only session and required 2FA — sign in as a person does.
+  const post = fetchPost(BASE);
   for (const candidate of candidates) {
-    const login = await req('/api/auth/login', {
-      method: 'POST',
-      body: { email: candidate.email, password: candidate.password },
+    const result = await signIn(post, {
+      email: candidate.email,
+      password: candidate.password,
+      totpSecret: process.env.SMOKE_TOTP_SECRET,
     });
-
-    if (!login.ok) {
-      errors.push({ label: candidate.label, status: login.status, body: login.data });
-      continue;
-    }
-
-    if (login.data?.token) {
-      return { token: login.data.token, auth: candidate.label };
-    }
-
-    if (login.data?.challengeToken) {
-      const skip = await req('/api/auth/2fa/skip-setup', {
-        method: 'POST',
-        body: { challengeToken: login.data.challengeToken },
-      });
-      if (skip.ok && skip.data?.token) {
-        return { token: skip.data.token, auth: `${candidate.label}+2fa-skip` };
-      }
-      errors.push({ label: `${candidate.label}+2fa`, status: skip.status, body: skip.data });
-    } else {
-      errors.push({ label: candidate.label, status: login.status, body: login.data });
-    }
+    if (result.token) return { token: result.token, auth: `${candidate.label}+${result.step}` };
+    errors.push({ label: candidate.label, step: result.step, status: result.status, error: result.error });
   }
 
   throw new Error(`No admin login candidate worked: ${JSON.stringify(errors)}`);
