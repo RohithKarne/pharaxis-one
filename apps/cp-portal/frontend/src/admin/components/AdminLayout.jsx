@@ -130,6 +130,15 @@ export default function AdminLayout({ children }) {
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
   const [badges, setBadges] = useState({ review: 0, safety: 0 })
+  // A page that closes or approves items says so ('cp-admin-counts-changed'), so the
+  // counts refresh straight away rather than on the next page change — the Safety Queue
+  // count used to stay at its old number after a task was closed.
+  const [countsTick, setCountsTick] = useState(0)
+  useEffect(() => {
+    const bump = () => setCountsTick(t => t + 1)
+    window.addEventListener('cp-admin-counts-changed', bump)
+    return () => window.removeEventListener('cp-admin-counts-changed', bump)
+  }, [])
   useEffect(() => {
     if (!clientId) return
     const get = (url) => fetch(url, { headers: adminHeaders() })
@@ -140,7 +149,7 @@ export default function AdminLayout({ children }) {
       get(`/api/admin/review-queue/${clientId}/count`),
       get(`/api/admin/ae-review/${clientId}/count`),
     ]).then(([review, safety]) => setBadges({ review, safety }))
-  }, [clientId, location.pathname])
+  }, [clientId, location.pathname, countsTick])
 
   // Client logo — fetch branding when a client is selected
   const [clientLogo, setClientLogo] = useState(null)

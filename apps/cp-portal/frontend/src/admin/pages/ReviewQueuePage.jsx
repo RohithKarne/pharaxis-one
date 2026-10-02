@@ -51,6 +51,7 @@ export default function ReviewQueuePage() {
       })
       if (!res.ok) { setError(`Failed to update "${item.title}". Please try again.`); return }
       load()
+      window.dispatchEvent(new Event('cp-admin-counts-changed'))
     } catch {
       setError(`Network error updating "${item.title}".`)
     } finally {

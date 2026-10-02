@@ -70,6 +70,7 @@ export default function SafetyQueuePage() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setFormError(d.error || 'Could not close this task.'); return }
       setNotice(d.message || 'Task closed.')
+      window.dispatchEvent(new Event('cp-admin-counts-changed'))
       setOpen(null); load()
     } catch { setFormError('Network error — please try again.') } finally { setBusy(false) }
   }
