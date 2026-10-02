@@ -589,13 +589,15 @@ module.exports = [
           mims_cm_category: 'FAQ',
         }, platformAdmin.token);
         vaultMapId = Number(createVaultMap.body?.id || 0);
-        const pollNow = await makeRequest('GET', `/api/admin/platform/vault/poll-now/${org.id}`, null, platformAdmin.token);
         const deleteVaultMap = vaultMapId
           ? await makeRequest('DELETE', `/api/admin/platform/vault-query-params/${vaultMapId}`, null, platformAdmin.token)
           : { status: 0 };
         const deleteVault = vaultConfigId
           ? await makeRequest('DELETE', `/api/admin/platform/vault-config/${vaultConfigId}`, null, platformAdmin.token)
           : { status: 0 };
+        // Poll after the test config is gone: the check proves Poll now answers ("not
+        // configured") without calling an outside server (MIPM-97 bounds real calls at 30 s).
+        const pollNow = await makeRequest('GET', `/api/admin/platform/vault/poll-now/${org.id}`, null, platformAdmin.token);
 
         const pass =
           listEmir.status === 200 &&

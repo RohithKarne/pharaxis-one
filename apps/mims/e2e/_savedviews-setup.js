@@ -10,6 +10,7 @@
 'use strict';
 
 const fs = require('fs');
+const { signIn, fetchPost } = require('../backend/utils/signInClient');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const pool = require('../backend/database/db');
@@ -46,26 +47,12 @@ async function main() {
     [userId, org.id]
   );
 
-  // Log in through the real endpoint (token signed with the running backend's secret).
-  let res = await fetch(`${BACKEND}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-  });
-  let data = await res.json();
-
-  if (!data.token && data.challengeToken) {
-    res = await fetch(`${BACKEND}/api/auth/2fa/skip-setup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ challengeToken: data.challengeToken }),
-    });
-    data = await res.json();
+  // Log in through the real endpoint, as a person does (MIPM-82: cookie-only session, 2FA).
+  const signedIn = await signIn(fetchPost(BACKEND), { email: EMAIL, password: PASSWORD, totpSecret: process.env.E2E_TOTP_SECRET });
+  if (!signedIn.token) {
+    throw new Error(`Login failed at ${signedIn.step}: ${signedIn.error || signedIn.status}`);
   }
-
-  if (!data.token) {
-    throw new Error('Login failed: ' + JSON.stringify(data).slice(0, 300));
-  }
+  const data = { token: signedIn.token };
 
   const session = {
     token: data.token,

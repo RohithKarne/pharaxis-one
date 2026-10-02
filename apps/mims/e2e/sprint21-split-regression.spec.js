@@ -11,6 +11,7 @@
  *  6. 401 auto-logout — clearing token triggers redirect to /login
  */
 const { test, expect } = require('@playwright/test')
+const { signIn, fetchPost } = require('../backend/utils/signInClient')
 const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
 const {
   requireSession,
@@ -98,23 +99,16 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
   const failures = []
   for (const candidate of candidates) {
     try {
-      const loginRes = await request.post(`${BACKEND}/api/auth/login`, {
-        data: candidate,
-        timeout: 30000,
-      })
-      const initialData = await loginRes.json()
-      let loginData = initialData
-      let token = loginData?.token
-      const challengeToken = loginData?.challengeToken
-      if (!token && challengeToken) {
-        const skipRes = await request.post(`${BACKEND}/api/auth/2fa/skip-setup`, {
-          data: { challengeToken },
-          timeout: 30000,
-        })
-        loginData = await skipRes.json()
-        token = loginData?.token
+      // MIPM-82: the session is cookie-only and 2FA may be required — sign in as a person does.
+      const result = await signIn(fetchPost(BACKEND), { ...candidate, totpSecret: process.env.E2E_TOTP_SECRET })
+      const loginData = {}
+      const token = result.token
+
+      if (!token) {
+        failures.push({ email: candidate.email, reason: `stopped-at-${result.step}`, body: result.error })
+        continue
       }
-      if (!token) { failures.push({ email: candidate.email, reason: 'no-token', body: loginData }); continue }
+
       const session = await buildSession(request, loginData, token, candidate.email, fallbackRole, moduleHints)
       return { session, failures }
     } catch (error) {
