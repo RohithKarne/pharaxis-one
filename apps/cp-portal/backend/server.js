@@ -202,18 +202,42 @@ app.use('/api/portal/training',      require('./routes/portal/training'));   // 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 // CP-14: returns the tick fn (no side effects) so it can be driven either by the
 // in-process interval (dev/single instance) or an external cron (stateless/HA).
+// Runs `work` only on the instance that takes the named MySQL lock, and tells the
+// caller whether it ran. A MySQL lock belongs to the connection that took it, so it
+// is taken and released on one connection held for the whole run. Through the pool
+// the two statements landed on different connections: the release did nothing, the
+// lock stayed with an idle pooled connection, and every later run that drew another
+// connection skipped without a word — scheduled content, email retries, MIMS
+// retries and close-sync included.
+//
+// MySQL locks are shared by every database on the server, so the name carries this
+// environment's database: two environments on one server must not block each other.
+async function withJobLock(name, work) {
+  const key = `${process.env.MYSQL_DATABASE || 'cp'}:${name}`.slice(0, 64);
+  const conn = await pool.getConnection();
+  try {
+    const [[row]] = await conn.query('SELECT GET_LOCK(?, 0) AS acquired', [key]);
+    if (Number(row?.acquired || 0) !== 1) return false; // another instance is running it
+    try {
+      await work();
+    } finally {
+      await conn.query('SELECT RELEASE_LOCK(?)', [key])
+        .catch(err => log.error('job.lock_release_failed', { err, lock: key }));
+    }
+    return true;
+  } finally {
+    conn.release();
+  }
+}
+
 function createContentScheduler() {
   const { notifyPortalUsers } = require('./utils/notify');
   const { VISIBLE_DOCUMENT_SQL } = require('./utils/documentVisibility');
   const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [SCHEDULER_LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-
+     await withJobLock(SCHEDULER_LOCK_KEY, async () => {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       // News: find and promote scheduled posts
@@ -300,11 +324,10 @@ function createContentScheduler() {
       // CPPM-39: scan attachments held because the virus scanner was unreachable.
       const { rescanHeldAttachments } = require('./services/attachmentScan');
       await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
-    } catch { /* silently ignore scheduler errors */ }
-    finally {
-      if (lockAcquired) {
-        await pool.execute('SELECT RELEASE_LOCK(?)', [SCHEDULER_LOCK_KEY]).catch(() => {});
-      }
+     });
+    } catch (err) {
+      // Logged, not swallowed: a tick that fails must be visible.
+      log.error('scheduler.tick_failed', { err });
     }
   }
 
@@ -334,15 +357,10 @@ function createMimsCloseSyncScheduler() {
   const { pollOnce } = require('./services/mimsCloseSync');
   const LOCK_KEY = 'cp-portal-mims-close-sync';
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await pollOnce();
-    } catch { /* silently ignore poller errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+      await withJobLock(LOCK_KEY, pollOnce);
+    } catch (err) {
+      log.error('mims-close-sync.tick_failed', { err });
     }
   }
   return tick;
@@ -363,15 +381,10 @@ function createMimsRetryScheduler() {
   const { retryOnce } = require('./services/mimsRetry');
   const LOCK_KEY = 'cp-portal-mims-retry';
   async function tick() {
-    let lockAcquired = false;
     try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await retryOnce();
-    } catch { /* silently ignore retry errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+      await withJobLock(LOCK_KEY, retryOnce);
+    } catch (err) {
+      log.error('mims-retry.tick_failed', { err });
     }
   }
   return tick;
