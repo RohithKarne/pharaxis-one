@@ -11,6 +11,7 @@ const pool = require('../../database/db');
 const { getCaseProductName } = require('../../services/caseProductName');
 const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
+const { seesAllContentStatuses, liveContentSql, liveOnlyForReaders } = require('../../services/contentVisibility');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
@@ -192,6 +193,7 @@ router.get('/templates', authenticate, async (req, res) => {
       query += ' AND t.type = ?';
       params.push(type);
     }
+    if (!(await seesAllContentStatuses(req.user))) query += liveContentSql('t'); // MIPM-89
     if (status) {
       query += ' AND t.status = ?';
       params.push(status);
@@ -284,7 +286,7 @@ router.get('/templates/case-search', authenticate, async (req, res) => {
 });
 
 // GET /api/cm/templates/:id — get template
-router.get('/templates/:id', authenticate, async (req, res) => {
+router.get('/templates/:id', authenticate, liveOnlyForReaders('cm_templates'), async (req, res) => {
   try {
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
@@ -393,7 +395,7 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
 // Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}},
 //   {{contact_name}}, {{contact_email}}, {{product_name}}, {{agent_name}},
 //   {{org_name}}, {{date}}. {{patient_email}} is kept but always blank.
-router.post('/templates/:id/render', authenticate, async (req, res) => {
+router.post('/templates/:id/render', authenticate, liveOnlyForReaders('cm_templates'), async (req, res) => {
   try {
     const { case_id } = req.body;
     const template = await getScopedTemplate(req, req.params.id);
@@ -404,7 +406,9 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
       if (!scopedCase) return res.status(404).json({ error: 'Case not found.' });
     }
     const evidenceOrgId = Number(req.user.orgId || scopedCase?.org_id || 0) || null;
-    if (evidenceOrgId) {
+    // A content worker's "Preview with Case Data" on a Draft is not response use; the
+    // response gate applies to everyone else (who can only reach live templates).
+    if (evidenceOrgId && !(await seesAllContentStatuses(req.user))) {
       const evidenceGate = await enforceEvidenceGate({
         orgId: evidenceOrgId,
         contentType: 'template',
