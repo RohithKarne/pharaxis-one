@@ -1695,9 +1695,11 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     // clock) unless the same request reopens it via a status transition.
     if (currentCase.status_id) {
       const [[curState]] = await pool.execute(
-        'SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [currentCase.status_id]
+        'SELECT name, is_closed FROM workflow_states WHERE id = ? LIMIT 1', [currentCase.status_id]
       );
-      const isClosed = curState && /closed|complete|cancel/i.test(curState.name || '');
+      // Bridge row 4: the state's own "closes the case" marker (migration 140), set by
+      // an admin and kept on rename — not a guess from the state's name.
+      const isClosed = !!curState && Number(curState.is_closed) === 1;
       const reopening = hasOwn(body, 'status_id') && body.status_id !== '' && body.status_id !== null
         && Number(parseInt(body.status_id, 10)) !== Number(currentCase.status_id || 0);
       if (isClosed && !reopening) {
@@ -1753,12 +1755,13 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         }
 
         // Division change-control: close-password and reopen-reason rules.
-        // "Closed" is detected by workflow state name (matches caseGovernanceService).
-        const [[oldState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [currentCase.status_id]);
-        const [[newState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [nextStatusId]);
-        const oldName = oldState?.name || '', newName = newState?.name || '';
-        const isClose = newName === 'Closed' && oldName !== 'Closed';
-        const isReopen = oldName === 'Closed' && newName !== 'Closed';
+        // "Closed" is the state's "closes the case" marker (migration 140), so a state an
+        // admin named "Resolved" carries the same e-signature and reopen-reason rules.
+        const [[oldState]] = await pool.execute('SELECT is_closed FROM workflow_states WHERE id = ?', [currentCase.status_id]);
+        const [[newState]] = await pool.execute('SELECT is_closed FROM workflow_states WHERE id = ?', [nextStatusId]);
+        const wasClosed = Number(oldState?.is_closed) === 1, nowClosed = Number(newState?.is_closed) === 1;
+        const isClose = nowClosed && !wasClosed;
+        const isReopen = wasClosed && !nowClosed;
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
           return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }

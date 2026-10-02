@@ -188,6 +188,7 @@ const schemas = {
     name:      str().required(),
     org_id:    id().optional(),
     is_active: bool().optional(),
+    is_closed: bool().optional(),
   }),
 
   createWorkflowRule: Joi.object({

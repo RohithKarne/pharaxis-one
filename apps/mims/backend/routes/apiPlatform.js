@@ -112,9 +112,57 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
 
 // Fetch a single case's current status — used by the CP portal close-sync poller.
 // Org-scoped by the API key so a client can only read its own cases.
+// Bridge row 4: what changed among THIS connection's cases since a point in time —
+// one call instead of one per case. `closed` is the state's fixed marker, not a
+// guess from its name, so a renamed state and a reopened case both come through.
+// Paged by (updated_at, id); times are UTC 'YYYY-MM-DD HH:MM:SS'. Registered before
+// '/api/v1/cases/:id' so 'changes' is not read as a case id.
+router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+  const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(req.query.since) ? req.query.since : null;
+  if (req.query.since && !since) return res.status(400).json({ error: "since must be 'YYYY-MM-DD HH:MM:SS' (UTC)." });
+  const afterId = Math.max(parseInt(req.query.after_id, 10) || 0, 0);
+  const [rows] = await pool.execute(
+    `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
+            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+       FROM cases c
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0
+        -- A change stamped in the future (a writer on the wrong clock) is not handed out
+        -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
+        -- every real change after it is skipped, with no error anywhere.
+        AND c.updated_at <= NOW() + INTERVAL 1 MINUTE
+        ${since ? 'AND (c.updated_at > ? OR (c.updated_at = ? AND c.id > ?))' : ''}
+      ORDER BY c.updated_at ASC, c.id ASC
+      LIMIT ${limit + 1}`,
+    since ? [req.apiClient.org_id, req.apiClient.id, since, since, afterId] : [req.apiClient.org_id, req.apiClient.id]
+  );
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+  res.json({
+    changes: page.map(r => ({ id: r.id, case_number: r.case_number, status: r.status, closed: !!Number(r.closed), updated_at: r.updated_at })),
+    has_more: rows.length > limit,
+    next: last ? { since: last.updated_at, after_id: last.id } : null,
+  });
+});
+
+// Bridge row 4: a connection claims the cases it created before MIMS recorded which
+// connection created each case. The portal stores the MIMS id of every case it made,
+// so it sends that list once; only cases in this organisation with no recorded
+// creator are claimed, and updated_at is left alone.
+router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 1000) : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids must be a list of case ids (at most 1000).' });
+  const [r] = await pool.execute(
+    `UPDATE cases SET source_api_client_id = ?, updated_at = updated_at
+      WHERE org_id = ? AND source_api_client_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+    [req.apiClient.id, req.apiClient.org_id, ...ids]);
+  res.json({ claimed: r.affectedRows, sent: ids.length });
+});
+
 router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   const [[row]] = await pool.execute(
-    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, c.priority, c.created_at, c.updated_at
+    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, COALESCE(ws.is_closed, 0) = 1 AS closed, c.priority, c.created_at, c.updated_at
        FROM cases c
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
       WHERE c.id = ? AND c.org_id = ? AND c.is_deleted = 0
@@ -288,9 +336,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id]
       );
     } catch (err) {
       // Race: another request created the same reference between our check and insert.

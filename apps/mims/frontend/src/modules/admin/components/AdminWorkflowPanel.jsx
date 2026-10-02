@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
+import { isPlatformAdmin } from '../../../shared/utils/adminScope'
 
 function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, flash }) {
   const activeStates = (states || []).filter(s => s.is_active)
@@ -346,10 +348,29 @@ export default function AdminWorkflowPanel({ H, flash }) {
   const [depCheckModal, setDepCheckModal] = useState(null)
   const [depCheckProceedFn, setDepCheckProceedFn] = useState(null)
 
+  const { user } = useAuth()
+
   const loadWorkflowStates = useCallback(async () => {
     try { const d = await httpFetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()); setWorkflowStates(d.states || []) }
     catch { setWorkflowStates([]) }
   }, [H])
+
+  // Bridge row 4: mark whether a case in this state is finished.
+  async function toggleStateClosed(w) {
+    const res = await httpFetch(`/api/admin/workflow-states/${w.id}`, {
+      method: 'PUT', headers: H,
+      body: JSON.stringify({ name: w.name, is_active: !!w.is_active, is_closed: !w.is_closed }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      flash(res.status === 404 && w.org_id == null
+        ? `"${w.name}" is a platform default state — only a platform admin can change it.`
+        : (d.error || 'Could not change the state.'), 'error')
+      return
+    }
+    flash(`"${w.name}" ${w.is_closed ? 'no longer closes' : 'now closes'} the case.`)
+    loadWorkflowStates()
+  }
 
   const loadWfRules = useCallback(async () => {
     setWfRulesLoading(true)
@@ -436,13 +457,21 @@ export default function AdminWorkflowPanel({ H, flash }) {
           <div className="card-header"><h3>Workflow States ({workflowStates.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <table className="admin-table">
-              <thead><tr><th>State Name</th><th>Status</th><th>Impact</th></tr></thead>
+              <thead><tr><th>State Name</th><th>Status</th><th title="A case in this state is finished. Connected portals close the person's request when their case reaches it.">Closes the case</th><th>Impact</th></tr></thead>
               <tbody>
-                {workflowStates.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No states configured.</td></tr>}
+                {workflowStates.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No states configured.</td></tr>}
                 {workflowStates.map(w => (
                   <tr key={w.id}>
                     <td>{w.name}</td>
                     <td><StatusPill active={w.is_active} /></td>
+                    <td>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        <input type="checkbox" checked={!!w.is_closed} onChange={() => toggleStateClosed(w)}
+                          disabled={w.org_id == null && !isPlatformAdmin(user)}
+                          title={w.org_id == null && !isPlatformAdmin(user) ? 'A platform default state — only a platform admin can change it.' : undefined} />
+                        {w.is_closed ? 'Yes' : 'No'}
+                      </label>
+                    </td>
                     <td>
                       <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }} disabled={impactLoading} onClick={() => fetchImpact('workflow_rule', w.id, `State: ${w.name}`)}>
                         {impactLoading ? '…' : '⚠ Preview Impact'}
