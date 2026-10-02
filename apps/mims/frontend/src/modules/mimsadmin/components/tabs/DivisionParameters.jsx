@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { guardedFetch } from '../../utils/guardedFetch'
+import { useAuth } from '../../../../shared/context/AuthContext'
+import { isPlatformAdmin } from '../../../../shared/utils/adminScope'
 
 const API = '/api/admin/division-parameters'
 
@@ -53,6 +55,9 @@ export default function DivisionParameters({ H }) {
   const [msg, setMsg] = useState(null)
   const [activeOrgId, setActiveOrgId] = useState(null)   // null = list view
   const [creating, setCreating] = useState(false)
+  // MIPM-106: creating a division is platform-admin only on the server; don't offer it to an org admin.
+  const { user: me } = useAuth()
+  const canCreate = isPlatformAdmin(me)
 
   function flash(text, type = 'info') { setMsg({ text, type }); setTimeout(() => setMsg(null), 4000) }
 
@@ -80,7 +85,7 @@ export default function DivisionParameters({ H }) {
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Division Parameters</h2>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>+ Create Division</button>
+        {canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}>+ Create Division</button>}
       </div>
 
       {msg && <div style={{ marginBottom: 12, fontSize: 13, color: msg.type === 'error' ? 'var(--danger,#c0392b)' : 'var(--success,#1e7e34)' }}>{msg.text}</div>}

@@ -8,13 +8,13 @@ Read this before writing code in this repository.
 
 ---
 
-## The team, as of 2026-09-29
+## The team, as of 2026-10-01
 
-Five people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — leads the product and is the team's point of contact; also market and competitor research, and keeps the documents current) and **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
+Four people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — leads the product and is the team's point of contact; also market and competitor research, keeps the documents current, and **from 2026-10-01 owns compliance, validation and GxP**). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
 
-**Saad is the team's point of contact.** When Rohith names a person, only that person answers his question; when he names nobody, Saad takes it first — answers what is product, brings in Varun, Kiranmai or Vasu for what is theirs — and tracks it to closure. On a build or fix, Varun and Kiranmai talk it through in chat either way.
+**Saad is the team's point of contact.** When Rohith names a person, only that person answers his question; when he names nobody, Saad takes it first — answers what is product or compliance, brings in Varun or Kiranmai for what is theirs — and tracks it to closure. On a build or fix, Varun and Kiranmai talk it through in chat either way.
 
-Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
+Removed 2026-10-01: Vasu Ranabothu — his compliance work is Saad's. Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
 
 ---
 
@@ -40,6 +40,8 @@ Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 
 
 **IV. Surgical changes.** Your diff should be as small as the task allows. Do not touch what you were not asked to touch. Match the existing style. Do not reformat — a formatter pass buries the three lines that matter inside three hundred that do not. **The test:** can you justify every changed line by the task? If a line is there because "while I was in there," revert it.
 
+> **Changed 2026-10-01 (SOP §39.10 point 6).** A small diff is still the rule for each commit. But a defect, a miss or a new feature found while working is no longer left for later: **fix or build it in the same session, as its own ticket and its own commit, without waiting for Rohith's approval.** Pushing still needs his word.
+
 **V. Verification.** **Changed 2026-09-20: we no longer write automated tests.** Kiranmai stopped writing test code and nobody took it on, so SOP §29 is retired and the failing-test-first rule with it. What replaces it is not "less proof" but a different proof: **open the real screen, do the thing a user would do, including one path that should fail, and say what you saw.** → SOP §26
 
 > Two consequences, said out loud because they are easy to forget. A regression is now caught only by a person noticing it. And the person who writes a change is usually the person who verifies it — so **what you did not check matters more than ever, and goes in every report and every pull request.**
@@ -56,7 +58,7 @@ Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 
 
 **VIII. Dependencies.** Every dependency is permanent code you do not control. Before adding one, ask whether the project or the standard library already does it — `crypto.randomUUID()` over a `uuid` package. When you do add one, say why, so the choice is visible rather than smuggled into the manifest.
 
-> **Pharaxis addition (Vasu, compliance):** in a regulated app — MIMS, CP Portal — a new dependency needs a named reason in the commit message. This is a supply-chain control, not a style note.
+> **Pharaxis addition (compliance — Vasu's rule, owned by Saad from 2026-10-01):** in a regulated app — MIMS, CP Portal — a new dependency needs a named reason in the commit message. This is a supply-chain control, not a style note.
 
 **IX. Communication.** **Plain English, one or two lines, references at the foot** (SOP §47 — this now governs every reply, document and thread, not only replies to Rohith). Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. On any **recommendation**, add one line naming what would change it — **"Changes if: …"**. That turns an opinion into something someone can test instead of merely agree with. → SOP §28 *Communication Brevity Standard*, §39.5 *What Would Change My Mind*
 
@@ -90,7 +92,7 @@ Claude Code is the only development tool. Write and edit code directly with Edit
 
 **The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
 
-**`@Name` in a message, or a `/varun` `/saad` `/kiranmai` `/vasu` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
+**`@Name` in a message, or a `/varun` `/saad` `/kiranmai` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
 
 **Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 
