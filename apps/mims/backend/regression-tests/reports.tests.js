@@ -8,24 +8,7 @@ try {
   bcrypt = require('bcrypt');
 }
 
-const { getFirstCase, uniqueName } = require('./helpers');
-
-async function loginForToken(makeRequest, email, password) {
-  const login = await makeRequest('POST', '/api/auth/login', { email, password }, null);
-  if (login.status !== 200) {
-    return { status: login.status, token: null, body: login.body };
-  }
-  if (login.body?.token) {
-    return { status: login.status, token: login.body.token, body: login.body };
-  }
-  if (login.body?.challengeToken) {
-    const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
-      challengeToken: login.body.challengeToken,
-    }, null);
-    return { status: skip.status, token: skip.body?.token || null, body: skip.body };
-  }
-  return { status: login.status, token: null, body: login.body };
-}
+const { getFirstCase, uniqueName, loginForToken } = require('./helpers');
 
 async function createTemporaryPlatformAdmin(makeRequest) {
   const email = `${uniqueName('regression-platform-admin').toLowerCase()}@example.com`;
