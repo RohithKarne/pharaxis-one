@@ -404,7 +404,7 @@ router.post('/sites/:id/email-accounts', authenticate, requireRole('admin', 'pla
       [req.params.id, email.trim(), label || null, case_types || 'ALL']
     );
     const [[row]] = await pool.execute('SELECT * FROM site_email_accounts WHERE id = ?', [r.insertId]);
-    await audit(req.user.id, req.user.name, 'CREATE', 'site_email_account', r.insertId, { siteId: req.params.id, email });
+    await audit(req.user.userId, req.user.name || req.user.email, 'CREATE', 'site_email_account', r.insertId, { siteId: req.params.id, email });
     res.status(201).json({ emailAccount: row });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -414,7 +414,7 @@ router.delete('/sites/:id/email-accounts/:accountId', authenticate, requireRole(
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     await pool.execute('DELETE FROM site_email_accounts WHERE id = ? AND site_id = ?', [req.params.accountId, req.params.id]);
-    await audit(req.user.id, req.user.name, 'DELETE', 'site_email_account', Number(req.params.accountId), {});
+    await audit(req.user.userId, req.user.name || req.user.email, 'DELETE', 'site_email_account', Number(req.params.accountId), {});
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -441,7 +441,7 @@ router.put('/sites/:id/response-template', authenticate, requireRole('admin', 'p
       ON DUPLICATE KEY UPDATE subject = VALUES(subject), body_html = VALUES(body_html), updated_at = NOW()
     `, [req.params.id, subject || '', body_html || '']);
     const [[row]] = await pool.execute('SELECT * FROM site_response_templates WHERE site_id = ?', [req.params.id]);
-    await audit(req.user.id, req.user.name, 'SAVE', 'site_response_template', row.id, { siteId: req.params.id });
+    await audit(req.user.userId, req.user.name || req.user.email, 'SAVE', 'site_response_template', row.id, { siteId: req.params.id });
     res.json({ template: row });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -473,7 +473,7 @@ router.put('/sites/:id/data-retention', authenticate, requireRole('admin', 'plat
         updated_at = NOW()
     `, [req.params.id, retention_days || 2555, regulation, auto_delete_enabled ? 1 : 0, notes || null]);
     const [rows] = await pool.execute('SELECT * FROM site_data_retention WHERE site_id = ?', [req.params.id]);
-    await audit(req.user.id, req.user.name, 'SAVE', 'site_data_retention', null, { siteId: req.params.id, regulation });
+    await audit(req.user.userId, req.user.name || req.user.email, 'SAVE', 'site_data_retention', null, { siteId: req.params.id, regulation });
     res.json({ rules: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -572,7 +572,7 @@ router.post('/sites/:id/alerts', authenticate, requireRole('admin', 'platform_ad
       [req.params.id, alert_type, threshold_value || 10, notify_emails || null]
     );
     const [[row]] = await pool.execute('SELECT * FROM site_alerts WHERE id = ?', [r.insertId]);
-    await audit(req.user.id, req.user.name, 'CREATE', 'site_alert', r.insertId, { siteId: req.params.id, alert_type });
+    await audit(req.user.userId, req.user.name || req.user.email, 'CREATE', 'site_alert', r.insertId, { siteId: req.params.id, alert_type });
     res.status(201).json({ alert: row });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -126,7 +126,7 @@ router.post('/case-form-definition', authenticate, requireRole('admin', 'platfor
       conn.release();
     }
 
-    await audit(req.user.id, req.user.name, 'SAVE', 'case_form_definition', null, { case_type, org_id, sectionCount: sections.length });
+    await audit(req.user.userId, req.user.name || req.user.email, 'SAVE', 'case_form_definition', null, { case_type, org_id, sectionCount: sections.length });
     res.json({ ok: true, saved: sections.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
