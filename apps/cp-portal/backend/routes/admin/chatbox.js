@@ -50,6 +50,20 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
       return res.status(400).json({ error: `Invalid model. Supported: ${VALID_MODELS.join(', ')}` });
     }
 
+    // CPPM-75: the model must belong to the provider it will be sent to. Each list was
+    // checked on its own, so "Anthropic" with an OpenAI model was saved and every chat
+    // then failed at the provider. Checked against what the row will hold after the save.
+    if (req.body.ai_provider !== undefined || req.body.model !== undefined) {
+      const [[cur]] = await pool.execute('SELECT ai_provider, model FROM cp_chatbox_config WHERE client_id = ?', [req.params.clientId]);
+      const provider = req.body.ai_provider ?? cur?.ai_provider ?? 'anthropic';
+      const model = req.body.model ?? cur?.model ?? null;
+      const forProvider = provider === 'openai' ? VALID_OPENAI_MODELS : VALID_ANTHROPIC_MODELS;
+      if (model && !forProvider.includes(model)) {
+        const name = provider === 'openai' ? 'an OpenAI' : 'an Anthropic';
+        return res.status(400).json({ error: `${model} is not ${name} model. Choose ${name} model, or change the provider.` });
+      }
+    }
+
     const allowed = ['ai_provider', 'model', 'system_prompt', 'welcome_message', 'max_tokens', 'is_active'];
     const updates = [], params = [];
     for (const key of allowed) {
