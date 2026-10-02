@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
+import { useAdminTenant } from '../utils/AdminTenantContext'
 
 /**
  * EmailCaseImportConfig — admin configuration for Email Case Import (MIMS-40).
@@ -26,7 +27,12 @@ const TARGETS = {
 }
 
 export default function EmailCaseImportConfig() {
+  // MIPM-101: a platform admin works on the organisation picked in the tenant selector;
+  // the server reads org_id only for platform admins (an org admin is pinned to their own).
+  const { tenantId } = useAdminTenant() || {}
+  const withOrg = (url) => (tenantId ? `${url}${url.includes('?') ? '&' : '?'}org_id=${encodeURIComponent(tenantId)}` : url)
   const [config, setConfig] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [mailboxes, setMailboxes] = useState([])
   const [fields, setFields] = useState([])
   const [metrics, setMetrics] = useState(null)
@@ -40,18 +46,20 @@ export default function EmailCaseImportConfig() {
     setTimeout(() => setBanner(null), 4000)
   }
 
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [tenantId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)
     try {
+      setLoadError(null)
       const [cfgRes, mbRes, fRes, mRes] = await Promise.all([
-        guardedFetch(`${API}/config`),
-        guardedFetch(`${API}/mailboxes`),
-        guardedFetch(`${API}/intake-fields`),
-        guardedFetch(`${API}/metrics`),
+        guardedFetch(withOrg(`${API}/config`)),
+        guardedFetch(withOrg(`${API}/mailboxes`)),
+        guardedFetch(withOrg(`${API}/intake-fields`)),
+        guardedFetch(withOrg(`${API}/metrics`)),
       ])
       if (cfgRes.ok) setConfig(await cfgRes.json())
+      else { setConfig(null); setLoadError((await cfgRes.json().catch(() => ({}))).error || null) }
       if (mbRes.ok) setMailboxes(await mbRes.json())
       if (fRes.ok) setFields(await fRes.json())
       if (mRes.ok) setMetrics(await mRes.json())
@@ -65,7 +73,7 @@ export default function EmailCaseImportConfig() {
   async function saveConfig(patch) {
     setSaving(true)
     try {
-      const res = await guardedFetch(`${API}/config`, {
+      const res = await guardedFetch(withOrg(`${API}/config`), {
         method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ ...config, ...patch }),
       })
       const data = await res.json()
@@ -80,7 +88,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function toggleMailbox(mb) {
-    const res = await guardedFetch(`${API}/mailboxes/${mb.id}`, {
+    const res = await guardedFetch(withOrg(`${API}/mailboxes/${mb.id}`), {
       method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ is_case_intake: !mb.is_case_intake }),
     })
     const data = await res.json()
@@ -90,7 +98,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function addField() {
-    const res = await guardedFetch(`${API}/intake-fields`, {
+    const res = await guardedFetch(withOrg(`${API}/intake-fields`), {
       method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ...newField, is_required: newField.is_required ? 1 : 0 }),
     })
     const data = await res.json()
@@ -101,7 +109,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function updateField(f, patch) {
-    const res = await guardedFetch(`${API}/intake-fields/${f.id}`, {
+    const res = await guardedFetch(withOrg(`${API}/intake-fields/${f.id}`), {
       method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ ...f, ...patch }),
     })
     const data = await res.json()
@@ -111,7 +119,7 @@ export default function EmailCaseImportConfig() {
 
   async function deleteField(f) {
     if (!window.confirm(`Remove intake field "${f.label}"?`)) return
-    const res = await guardedFetch(`${API}/intake-fields/${f.id}`, { method: 'DELETE' })
+    const res = await guardedFetch(withOrg(`${API}/intake-fields/${f.id}`), { method: 'DELETE' })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to remove field.', 'error')
     setFields((rows) => rows.filter((r) => r.id !== f.id))
@@ -119,7 +127,7 @@ export default function EmailCaseImportConfig() {
   }
 
   if (loading) return <div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading Email Case Import configuration…</div>
-  if (!config) return <div style={{ padding: 24, color: 'var(--text-muted)' }}>Configuration unavailable.</div>
+  if (!config) return <div style={{ padding: 24, color: 'var(--text-muted)' }}>Configuration unavailable{loadError ? ` — ${loadError}` : '.'}</div>
 
   const fmtDuration = (s) => (s == null ? '—' : s < 90 ? `${s}s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`)
 
