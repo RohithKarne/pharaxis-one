@@ -7,6 +7,9 @@ import Icon from '../../shared/components/Icon'
 const NAV_ITEMS = [
   { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true },
   { to: '/admin/clients',          label: 'Clients',         icon: 'building' },
+  // CPPM-62: records that belong to no client (platform-admin sign-ins, failed
+  // sign-ins for unknown emails). Shown to the platform admin only.
+  { to: '/admin/audit',            label: 'Platform Audit Trail', icon: 'clipboard', exact: true, superadminOnly: true },
 ]
 
 // ── #1 Grouped + collapsible client nav ───────────────────────────────────
@@ -103,6 +106,7 @@ const SEGMENT_TITLES = {
 function deriveTitle(pathname) {
   if (pathname === '/admin' || pathname === '/admin/') return 'Dashboard'
   if (/^\/admin\/clients\/[^/]+\/?$/.test(pathname)) return 'Overview'
+  if (pathname === '/admin/audit' || pathname === '/admin/audit/') return 'Platform Audit Trail' // CPPM-62
   const lastSegment = pathname.split('/').filter(Boolean).pop() || ''
   return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
@@ -212,7 +216,7 @@ export default function AdminLayout({ children }) {
 
         <nav className="cp-sidebar-nav">
           <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.filter(item => !item.superadminOnly || admin?.role === 'superadmin').map(item => (
             <NavLink
               key={item.to} to={item.to} end={item.exact}
               title={item.label}
