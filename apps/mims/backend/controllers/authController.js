@@ -1674,6 +1674,14 @@ const authController = {
       return res.json(result);
     } catch (err) {
       console.error('sendTwoFactorEmailCode error:', err);
+      // A mail-server failure (nodemailer sets err.code, e.g. ETIMEDOUT/ECONNECTION/EAUTH) or a
+      // missing platform mail setup reached the sign-in screen as raw text such as "Timeout".
+      const mailFailed = /^E[A-Z]+$/.test(String(err.code || '')) || /SMTP configuration is incomplete/.test(err.message || '');
+      if (mailFailed) {
+        return res.status(503).json({
+          error: 'We could not send the code — the mail server did not respond. Try again in a minute, or use your authenticator app or a backup code.',
+        });
+      }
       return res.status(400).json({ error: err.message || 'Could not send 2FA email code.' });
     }
   },
