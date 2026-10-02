@@ -58,8 +58,12 @@ export default function TrialsAdminPage() {
 
   async function handleDelete(id) {
     if (!confirm('Delete this clinical trial listing?')) return
-    await fetch(`/api/admin/trials/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
-    setTrials(prev => prev.filter(t => t.id !== id))
+    try {
+      const res = await fetch(`/api/admin/trials/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      // 404: someone else removed it already
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(`❌ ${d.error || `Could not delete (error ${res.status}).`}`); return }
+      setTrials(prev => prev.filter(t => t.id !== id))
+    } catch { setMsg('❌ Network error — please try again.') }
   }
 
   return (

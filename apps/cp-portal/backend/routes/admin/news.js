@@ -230,8 +230,9 @@ router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, asyn
     if (!PUBLISH_ROLES.includes(req.admin.role)) {
       return res.status(403).json({ error: 'Only admins can archive posts.' });
     }
-    await pool.execute("UPDATE cp_news_posts SET status = 'archived', updated_at = NOW() WHERE id = ? AND client_id = ?",
+    const [result] = await pool.execute("UPDATE cp_news_posts SET status = 'archived', updated_at = NOW() WHERE id = ? AND client_id = ?",
       [req.params.postId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Post not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'news', req.params.postId, {});
     res.json({ ok: true });
   } catch (err) {

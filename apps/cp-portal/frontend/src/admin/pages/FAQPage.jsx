@@ -47,7 +47,12 @@ export default function FAQPage() {
 
   async function handleDelete(id) {
     if (!confirm('Delete this FAQ item?')) return
-    await fetch(`/api/admin/faq/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/faq/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      // 404: someone else removed it already, and the reload shows that
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not delete (error ${res.status}).`) }
+    } catch { setError('Network error.') }
     load()
   }
 
@@ -68,6 +73,7 @@ export default function FAQPage() {
         <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add FAQ Item</button>
         </CanChange>
       </div>
+      {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {showForm && (
         <div className="cp-modal-overlay" onClick={() => setShowForm(false)}>

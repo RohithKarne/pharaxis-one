@@ -60,7 +60,12 @@ function FieldMappingSection({ clientId, integration }) {
   }
 
   async function removeMapping(id) {
-    await fetch(`/api/admin/integration/${clientId}/mapping/${id}`, { method: 'DELETE', headers: adminHeaders() }).catch(() => {})
+    setMsg('')
+    try {
+      const res = await fetch(`/api/admin/integration/${clientId}/mapping/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      // 404: someone else removed it already, and the reload shows that
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(d.error || `Could not remove mapping (error ${res.status}).`) }
+    } catch { setMsg('Network error — please try again.') }
     loadMappings()
   }
 

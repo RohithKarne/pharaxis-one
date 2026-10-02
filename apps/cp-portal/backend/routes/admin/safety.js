@@ -204,6 +204,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
 
     const ROW = 'SELECT * FROM cp_safety_alerts WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'Alert not found.' });
     await pool.execute(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
     // CPPM-43: what changed, from → to, with the alert body in full — for a safety
@@ -225,8 +226,9 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
 // PATCH /api/admin/safety/:clientId/:alertId/resolve — mark as resolved
 router.patch('/:clientId/:alertId/resolve', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute("UPDATE cp_safety_alerts SET status = 'resolved', updated_at = NOW() WHERE id = ? AND client_id = ?",
+    const [result] = await pool.execute("UPDATE cp_safety_alerts SET status = 'resolved', updated_at = NOW() WHERE id = ? AND client_id = ?",
       [req.params.alertId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Alert not found.' });
     await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { status: 'resolved' });
     res.json({ ok: true });
   } catch (err) {

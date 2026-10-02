@@ -142,6 +142,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
     values.push(req.params.catId, req.params.clientId);
     const CAT_ROW = 'SELECT * FROM cp_document_categories WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'Category not found.' });
     await pool.execute(`UPDATE cp_document_categories SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
     // CPPM-43: what changed, from → to — not just which fields the screen sent.
@@ -156,7 +157,8 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
 // DELETE /api/admin/documents/:clientId/categories/:catId
 router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    const [result] = await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Category not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'document_category', Number(req.params.catId), {});
     res.json({ ok: true });
   } catch (err) {
@@ -592,6 +594,7 @@ router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, async
     // CPPM-31: taking a certified document out of the library retires it, and
     // what was certified is kept in the version history first.
     const [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
+    if (!current) return res.status(404).json({ error: 'Document not found.' });
     await recordSupersededVersion(current, req.admin, 'retired');
     await pool.execute("UPDATE cp_documents SET is_active = 0, retired_at = NOW(), updated_at = NOW() WHERE id = ? AND client_id = ?", [req.params.docId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'document', req.params.docId, {});
