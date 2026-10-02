@@ -17,7 +17,7 @@ const { getAuthHeaders, invalidateAuth } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
 const log = require('../utils/logger');
-const { raiseAlert, clearAlerts } = require('./adminAlerts');
+const { raiseAlert, clearAlerts, asSentence } = require('./adminAlerts');
 
 const MAX_ATTEMPTS    = Number(process.env.MIMS_REDACTION_MAX_ATTEMPTS || 8);
 const BACKOFF_MINUTES = [1, 5, 15, 60, 240];   // wait after attempts 1..5, then 240
@@ -102,7 +102,7 @@ async function attemptRedaction(id) {
       await raiseAlert(row.client_id, {
         kind: 'erasure_stuck', audience: 'integration',
         title: `An erasure has not reached MIMS case ${row.external_ref}`,
-        body: `The reporter's name and contact details may still be on that MIMS case — ${attempts} tries failed. Last reason: ${reason} Remove them in MIMS by hand, or fix the connection and run the erasure again.`,
+        body: `The reporter's name and contact details may still be on that MIMS case — ${attempts} tries failed. Last reason: ${asSentence(reason)} Remove them in MIMS by hand, or fix the connection and run the erasure again.`,
         linkPath: `/admin/clients/${row.client_id}/data-requests`,
         relatedType: 'submission', relatedId: row.submission_id, dedupeKey: `erasure:${row.submission_id}`,
       });

@@ -220,9 +220,38 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
         WHERE client_id = ? AND status = 'failed_sync'
         ORDER BY updated_at DESC LIMIT 100`, [req.params.clientId]);
     failures.forEach(f => { f.reference = `CP-${String(f.id).padStart(6, '0')}`; });
-    res.json({ counts: byStatus, failures });
+    // Bridge row 3: files whose report reached MIMS but which did not.
+    const [files] = await pool.execute(
+      `SELECT a.id, a.submission_id, a.file_name, a.forward_attempts, a.forward_error, a.last_forward_at, s.external_ref
+         FROM cp_submission_attachments a JOIN cp_submissions s ON s.id = a.submission_id
+        WHERE a.client_id = ? AND a.forward_status = 'failed'
+        ORDER BY a.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
+    files.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
+    res.json({ counts: byStatus, failures, files });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/attachments/:attachmentId/retry — send one
+// file to its MIMS case again (bridge row 3). Not limited by the automatic try cap.
+router.post('/:clientId/attachments/:attachmentId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    if (req.admin.role === 'viewer') return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    const [[att]] = await pool.execute(
+      `SELECT a.id, a.submission_id, s.status, s.external_ref FROM cp_submission_attachments a
+         JOIN cp_submissions s ON s.id = a.submission_id
+        WHERE a.id = ? AND a.client_id = ?`, [req.params.attachmentId, req.params.clientId]);
+    if (!att) return res.status(404).json({ error: 'File not found.' });
+    if (!att.external_ref) return res.status(409).json({ error: 'Its report has not reached MIMS yet — send the report first.' });
+    await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'attachment', att.id, { submission_id: att.submission_id });
+    const { forwardReleasedAttachment } = require('../portal/submit');
+    await forwardReleasedAttachment(att.id);
+    const [[after]] = await pool.execute('SELECT forward_status, forward_error FROM cp_submission_attachments WHERE id = ?', [att.id]);
+    res.json({ status: after.forward_status, error: after.forward_error });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/attachments/:attachmentId/retry', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

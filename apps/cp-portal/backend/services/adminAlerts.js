@@ -118,8 +118,14 @@ async function sweepWaitingSafetyTasks() {
   return rows.length;
 }
 
+// A reason from another system may or may not end with a full stop; make it one sentence.
+function asSentence(text) {
+  const t = String(text || '').trim();
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-module.exports = { raiseAlert, clearAlerts, sweepWaitingSafetyTasks, recipients, splitEmails };
+module.exports = { raiseAlert, clearAlerts, sweepWaitingSafetyTasks, recipients, splitEmails, asSentence };

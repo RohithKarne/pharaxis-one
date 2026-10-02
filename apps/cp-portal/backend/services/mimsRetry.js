@@ -64,6 +64,31 @@ async function retryOnce() {
       .catch(err => log.error('mims.retry.sync_crashed', { err, submission_id: s.id }));
   }
 
+  // Bridge row 3: files whose report is already in MIMS but which have not reached the
+  // case — refused, cut off by a crash part-way through, or never tried. Same backoff
+  // as reports; a never-tried file waits two minutes after its report synced so the
+  // sync's own send is not raced.
+  const [files] = await pool.execute(
+    `SELECT a.id, a.forward_attempts, a.last_forward_at
+       FROM cp_submission_attachments a
+       JOIN cp_submissions s ON s.id = a.submission_id
+      WHERE a.forward_status IN ('pending', 'failed') AND a.scan_status = 'clean'
+        AND a.forward_attempts < ?
+        AND s.status IN ('synced', 'closed') AND s.external_ref IS NOT NULL
+        AND (a.forward_attempts > 0 OR s.synced_at < NOW() - INTERVAL 2 MINUTE)
+      ORDER BY a.id ASC LIMIT ${BATCH}`,
+    [MAX_ATTEMPTS]);
+  const { forwardReleasedAttachment } = require('../routes/portal/submit');
+  for (const f of files) {
+    if (f.forward_attempts > 0) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, f.forward_attempts - 1);
+      if (Date.now() < new Date(f.last_forward_at).getTime() + backoff) continue;
+    }
+    retried++;
+    await forwardReleasedAttachment(f.id)
+      .catch(err => log.error('mims.retry.file_crashed', { err, attachment_id: f.id }));
+  }
+
   // CPPM-11: same sweep drives the erasure redactions that MIMS has not taken yet.
   const { retryDueRedactions } = require('./mimsRedaction');
   await retryDueRedactions().catch(err => log.error('mims.retry.redaction_tick_failed', { err }));

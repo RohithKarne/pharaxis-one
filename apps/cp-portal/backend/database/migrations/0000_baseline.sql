@@ -843,7 +843,7 @@ CREATE TABLE IF NOT EXISTS cp_msl_slots (
   CONSTRAINT fk_slots_msl    FOREIGN KEY (msl_id)    REFERENCES cp_msls(id)    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── SUBMISSION ATTACHMENTS (from 0003; scan columns from 0021, CPPM-39) ──
+-- ── SUBMISSION ATTACHMENTS (from 0003; scan columns from 0021, CPPM-39; delivery from 0031, bridge row 3) ──
 CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   id            INT          NOT NULL AUTO_INCREMENT,
   submission_id INT          NOT NULL,
@@ -856,9 +856,16 @@ CREATE TABLE IF NOT EXISTS cp_submission_attachments (
   scan_status   VARCHAR(20)  NOT NULL DEFAULT 'pending',
   scan_detail   VARCHAR(255) NULL,
   scanned_at    DATETIME     NULL,
+  forward_status     VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  forward_attempts   INT           NOT NULL DEFAULT 0,
+  forward_error      VARCHAR(1000) NULL,
+  forwarded_at       DATETIME      NULL,
+  last_forward_at    DATETIME      NULL,
+  mims_attachment_id INT           NULL,
   PRIMARY KEY (id),
   KEY idx_subatt_submission (submission_id),
   KEY idx_subatt_scan (scan_status),
+  KEY idx_subatt_forward (forward_status),
   CONSTRAINT fk_subatt_sub    FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
   CONSTRAINT fk_subatt_client FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1136,4 +1143,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0022_widen_audit_details.sql',              NULL),
   ('0023_add_login_attempts.sql',               NULL),
   ('0024_add_training_records.sql',             NULL),
-  ('0030_add_admin_alerts.sql',                 NULL);
+  ('0030_add_admin_alerts.sql',                 NULL),
+  ('0031_add_attachment_delivery.sql',          NULL);

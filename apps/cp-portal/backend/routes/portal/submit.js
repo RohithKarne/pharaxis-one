@@ -20,7 +20,7 @@ const { systemAudit } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
-const { raiseAlert, clearAlerts } = require('../../services/adminAlerts');
+const { raiseAlert, clearAlerts, asSentence } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
@@ -408,13 +408,17 @@ async function refusalReason(r) {
 }
 
 // C1: push a submission's stored attachments onto the linked MIMS case. Each file
-// is independent — a failure on one is audited and skipped, never fatal to the sync.
+// is independent — a failure on one is recorded on that file and never fatal to the sync.
 // CPPM-39: only files ClamAV has cleared are forwarded; a held file goes later, on its
 // own, when the background scan releases it (forwardReleasedAttachment below).
+// Bridge row 3: each file keeps its own delivery state. A file that fails is retried by
+// the MIMS retry job (mimsRetry) and raises an alert once the tries run out, instead of
+// being written to the audit trail once and forgotten. MIMS stores a file it already
+// has on that case only once, so a retry can never duplicate it.
 async function forwardAttachments(integration, mimsCaseId, submissionId, headers, onlyAttachmentId = null) {
   const [atts] = await pool.execute(
-    `SELECT id, file_name, file_path, mime_type FROM cp_submission_attachments
-      WHERE submission_id = ? AND scan_status = 'clean'${onlyAttachmentId ? ' AND id = ?' : ''}`,
+    `SELECT id, file_name, file_path, mime_type, forward_attempts FROM cp_submission_attachments
+      WHERE submission_id = ? AND scan_status = 'clean' AND forward_status IN ('pending', 'failed')${onlyAttachmentId ? ' AND id = ?' : ''}`,
     onlyAttachmentId ? [submissionId, onlyAttachmentId] : [submissionId]
   );
   if (!atts.length) return;
@@ -424,18 +428,54 @@ async function forwardAttachments(integration, mimsCaseId, submissionId, headers
   if (headers['X-API-Key']) authHeaders['X-API-Key'] = headers['X-API-Key'];
 
   for (const a of atts) {
+    let reason = null, mimsAttachmentId = null, retryable = true;
     try {
       const abs = path.join(__dirname, '../../', a.file_path.replace(/^\//, ''));
-      if (!fs.existsSync(abs)) continue;
-      const fd = new FormData();
-      fd.append('file', new Blob([fs.readFileSync(abs)], { type: a.mime_type || 'application/octet-stream' }), a.file_name || 'attachment');
-      const url = new URL(`/api/v1/cases/${encodeURIComponent(mimsCaseId)}/attachments`, integration.api_base_url).toString();
-      const r = await safeFetch(url, { method: 'POST', headers: authHeaders, body: fd });
-      systemAudit('MIMS integration', integration.client_id, r.ok ? 'ATTACHMENT_FORWARDED' : 'ATTACHMENT_FAILED',
-        'submission', submissionId, { attachment: a.file_name, mims_case_id: mimsCaseId, status: r.status });
+      if (!fs.existsSync(abs)) {
+        reason = 'The file is missing from the portal\'s own storage, so it cannot be sent.';
+        retryable = false;
+      } else {
+        const fd = new FormData();
+        fd.append('file', new Blob([fs.readFileSync(abs)], { type: a.mime_type || 'application/octet-stream' }), a.file_name || 'attachment');
+        const url = new URL(`/api/v1/cases/${encodeURIComponent(mimsCaseId)}/attachments`, integration.api_base_url).toString();
+        const r = await safeFetch(url, { method: 'POST', headers: authHeaders, body: fd });
+        if (r.ok) mimsAttachmentId = (await r.json().catch(() => ({}))).id || null;
+        else reason = await refusalReason(r);
+      }
     } catch (err) {
-      systemAudit('MIMS integration', integration.client_id, 'ATTACHMENT_FAILED', 'submission', submissionId,
-        { attachment: a.file_name, error: err.message });
+      reason = err.message;
+    }
+
+    if (!reason) {
+      await pool.execute(
+        `UPDATE cp_submission_attachments
+            SET forward_status = 'forwarded', forward_attempts = forward_attempts + 1, forward_error = NULL,
+                forwarded_at = NOW(), last_forward_at = NOW(), mims_attachment_id = ?
+          WHERE id = ?`, [mimsAttachmentId, a.id]);
+      systemAudit('MIMS integration', integration.client_id, 'ATTACHMENT_FORWARDED', 'submission', submissionId,
+        { attachment: a.file_name, mims_case_id: mimsCaseId, mims_attachment_id: mimsAttachmentId });
+      clearAlerts(integration.client_id, `file:${a.id}`, 'system: the file reached MIMS');
+      continue;
+    }
+
+    // A file that is gone cannot be fixed by trying again: use up the tries now so the
+    // alert goes out straight away.
+    const attempts = retryable ? a.forward_attempts + 1 : Math.max(a.forward_attempts + 1, MAX_SYNC_ATTEMPTS);
+    await pool.execute(
+      `UPDATE cp_submission_attachments
+          SET forward_status = 'failed', forward_attempts = ?, forward_error = ?, last_forward_at = NOW()
+        WHERE id = ?`, [attempts, String(reason).slice(0, 1000), a.id]);
+    systemAudit('MIMS integration', integration.client_id, 'ATTACHMENT_FAILED', 'submission', submissionId,
+      { attachment: a.file_name, mims_case_id: mimsCaseId, attempt: attempts, error: reason });
+    if (attempts >= MAX_SYNC_ATTEMPTS) {
+      const ref = `CP-${String(submissionId).padStart(6, '0')}`;
+      await raiseAlert(integration.client_id, {
+        kind: 'file_not_delivered', audience: 'integration',
+        title: `A file sent with ${ref} has not reached MIMS`,
+        body: `"${a.file_name}" is not on MIMS case ${mimsCaseId} after ${attempts} tries. Reason: ${asSentence(reason)} It is on the Sync Health page, where it can be sent again.`,
+        linkPath: `/admin/clients/${integration.client_id}/sync-health`,
+        relatedType: 'submission', relatedId: submissionId, dedupeKey: `file:${a.id}`,
+      });
     }
   }
 }
@@ -561,7 +601,7 @@ async function alertIfStuck(clientId, submissionId, reason, { refused = false } 
     await raiseAlert(clientId, {
       kind: refused ? 'sync_refused' : 'sync_gave_up', audience: 'integration',
       title: refused ? `MIMS refused ${what} ${ref}` : `${what[0].toUpperCase()}${what.slice(1)} ${ref} has not reached MIMS after ${s.sync_attempts} tries`,
-      body: `Reason: ${reason} It is on the Sync Health page, where it can be sent again once the cause is fixed.`,
+      body: `Reason: ${asSentence(reason)} It is on the Sync Health page, where it can be sent again once the cause is fixed.`,
       linkPath: `/admin/clients/${clientId}/sync-health`,
       relatedType: 'submission', relatedId: submissionId, dedupeKey: `sync:${submissionId}`,
     });
@@ -609,7 +649,7 @@ async function forwardReleasedAttachment(attachmentId) {
   const [[row]] = await pool.execute(
     `SELECT a.submission_id, s.client_id, s.external_ref
        FROM cp_submission_attachments a JOIN cp_submissions s ON s.id = a.submission_id
-      WHERE a.id = ? AND a.scan_status = 'clean' AND s.status = 'synced' AND s.external_ref IS NOT NULL`,
+      WHERE a.id = ? AND a.scan_status = 'clean' AND s.status IN ('synced', 'closed') AND s.external_ref IS NOT NULL`,
     [attachmentId]);
   if (!row) return;
   const [[integration]] = await pool.execute(

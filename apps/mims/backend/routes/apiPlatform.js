@@ -450,6 +450,16 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
+    // The sending portal retries a file it could not confirm (a timeout, a crash after
+    // MIMS stored it). The same file on the same case is kept once: its fingerprint
+    // matches, so the existing attachment is returned instead of a second copy.
+    const checksum = attSha256(req.file.buffer);
+    const [[same]] = await pool.execute(
+      `SELECT id FROM attachments WHERE org_id = ? AND entity_type = 'case' AND entity_id = ? AND checksum_sha256 = ? LIMIT 1`,
+      [req.apiClient.org_id, c.id, checksum]
+    );
+    if (same) return res.status(200).json({ id: same.id, idempotent: true });
+
     const ext = (String(req.file.originalname || '').match(/\.[a-z0-9]+$/i) || [''])[0];
     const key = storage.generateKey(ext);
     const stored = await storage.put({ orgId: req.apiClient.org_id, key, body: req.file.buffer, contentType: req.file.mimetype });
@@ -460,7 +470,7 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
           original_name, mime_type, size_bytes, checksum_sha256, uploaded_by, ocr_status)
        VALUES (?, 'case', ?, ?, ?, ?, ?, ?, ?, NULL, 'skipped')`,
       [req.apiClient.org_id, c.id, stored.provider, stored.key,
-       String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, attSha256(req.file.buffer)]
+       String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, checksum]
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
