@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { getCaseProductName } = require('../../services/caseProductName');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
@@ -209,7 +209,7 @@ router.get('/templates', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/templates — create template
-router.post('/templates', authenticate, async (req, res) => {
+router.post('/templates', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -273,7 +273,7 @@ router.get('/templates/:id', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/templates/:id — update template
-router.put('/templates/:id', authenticate, async (req, res) => {
+router.put('/templates/:id', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await getScopedTemplate(req, id);
@@ -320,7 +320,7 @@ router.post('/templates/:id/archive', authenticate, (req, res) => transitionTemp
 router.post('/templates/:id/revert',  authenticate, (req, res) => transitionTemplate(req, res, 'revert'));
 
 // POST /api/cm/templates/:id/checkin — snapshot current body as a new version
-router.post('/templates/:id/checkin', authenticate, async (req, res) => {
+router.post('/templates/:id/checkin', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { notes } = req.body;
     const tmpl = await getScopedTemplate(req, req.params.id);

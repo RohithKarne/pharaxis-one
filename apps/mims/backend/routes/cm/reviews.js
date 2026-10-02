@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 
@@ -136,7 +136,7 @@ router.get('/reviews/all', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/reviews/:id/reviewer-status — update my reviewer status
-router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
+router.put('/reviews/:id/reviewer-status', authenticate, requireCapability('content.review'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reason } = req.body;
@@ -168,7 +168,7 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/reviews/:id/close — close review (doc → Approved, or Draft if any reviewer rejected)
-router.post('/reviews/:id/close', authenticate, async (req, res) => {
+router.post('/reviews/:id/close', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const review = await getScopedReview(req, id);
@@ -258,7 +258,7 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/reviews/:id/end — end/cancel review (doc stays Pending)
-router.post('/reviews/:id/end', authenticate, async (req, res) => {
+router.post('/reviews/:id/end', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -310,7 +310,7 @@ router.post('/reviews/:id/end', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/reviews/:id/transfer — transfer review ownership
-router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
+router.put('/reviews/:id/transfer', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { id } = req.params;
     const { new_owner_id } = req.body;
@@ -360,7 +360,7 @@ router.get('/reviews/:reviewId/config', authenticate, async (req, res) => {
 });
 
 // PATCH /api/cm/reviews/:reviewId/config
-router.patch('/reviews/:reviewId/config', authenticate, async (req, res) => {
+router.patch('/reviews/:reviewId/config', authenticate, requireCapability('content.author'), async (req, res) => {
   try {
     const { review_mode } = req.body;
     if (!['sequential', 'parallel'].includes(review_mode)) {
