@@ -376,6 +376,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
   const [confirmPwd,    setConfirmPwd]    = useState('')
   const [pwdSaving,     setPwdSaving]     = useState(false)
   const [pwdErr,        setPwdErr]        = useState('')
+  const [resetting2fa,  setResetting2fa]  = useState(false)
 
   function set(key, val) {
     setForm(f => ({ ...f, [key]: val }))
@@ -490,6 +491,21 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       showFlash('Password changed successfully.')
     } catch { setPwdErr('Network error.') }
     finally { setPwdSaving(false) }
+  }
+
+  // MIPM-98: a platform admin resets someone's two-step sign-in (a lock, or a lost
+  // phone); the person sets it up again at their next sign-in. Never their own.
+  const canReset2fa = isEdit && isPlatformAdmin(me) && Number(editUser.id) !== Number(me?.id ?? me?.userId)
+  async function handleReset2fa() {
+    if (!window.confirm(`Reset two-step sign-in for ${editUser.name}? They will set it up again at their next sign-in.`)) return
+    setResetting2fa(true)
+    try {
+      const r = await httpFetch(`/api/admin/platform/users/${editUser.id}/reset-2fa`, { method: 'POST', headers: H })
+      const d = await r.json()
+      if (!r.ok) { showFlash(d.error || 'Failed to reset two-step sign-in.', 'error'); return }
+      showFlash('Two-step sign-in reset. They set it up again at their next sign-in.')
+    } catch { showFlash('Network error.', 'error') }
+    finally { setResetting2fa(false) }
   }
 
   const isSSO       = !!editUser?.network_user_id
@@ -741,6 +757,20 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   </div>
                 </div>
               </div>
+
+              {canReset2fa && (
+                <div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 10 }}>Two-Step Sign-In</div>
+                  <div className="ma-usr-expiry-card">
+                    <div className="ma-usr-expiry-label">Clears their codes, backup codes and remembered devices, and unlocks them.</div>
+                    <div className="ma-usr-qa-actions">
+                      <button className="ma-usr-qa-btn danger" onClick={handleReset2fa} disabled={resetting2fa}>
+                        {resetting2fa ? 'Resetting…' : 'Reset Two-Step Sign-In'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Change password inline form */}
               {showPwdForm && !isSSO && (

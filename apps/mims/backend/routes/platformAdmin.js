@@ -736,6 +736,11 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
 router.post('/users/:id/reset-2fa', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
+    // MIPM-98: another platform admin resets it, never the account itself — a reset
+    // means the next sign-in sets two-step sign-in up again from the password alone.
+    if (Number(id) === Number(req.user.userId)) {
+      return res.status(403).json({ error: 'Another platform admin must reset your two-step sign-in.' });
+    }
     await pool.execute('DELETE FROM user_2fa_backup_codes WHERE user_id = ?', [id]);
     await pool.execute('DELETE FROM user_2fa_trusted_devices WHERE user_id = ?', [id]);
     await pool.execute('DELETE FROM user_2fa_challenges WHERE user_id = ?', [id]);

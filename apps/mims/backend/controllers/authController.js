@@ -714,6 +714,39 @@ async function establishRegularSession({ res, req, user, context, trustedDeviceT
   });
 }
 
+// MIPM-98: the platform-admin session. Issued only once two-step sign-in has passed
+// (or a remembered device stands in for it); the password alone used to issue it.
+const PLATFORM_TWO_FACTOR_METHODS = ['email', 'totp'];
+const PLATFORM_REMEMBER_DAYS = 7;
+
+async function establishPlatformSession({ res, req, user, platformContext, authEvent = 'login_success', extra = {} }) {
+  const modules = await getUserModules(user.id);
+  const token = issueToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    platformAdmin: true,
+  });
+  await trackSessionToken(user.id, token);
+  const sessionTimeout = getPlatformAdminSessionTimeout(await getSystemConfig());
+  attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
+  await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent, req });
+  return {
+    message: 'Login successful.',
+    user: toRuntimeUser(user, { platformAdmin: true }),
+    modules,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    orgName: platformContext.orgName,
+    siteName: platformContext.siteName,
+    allOrgs: platformContext.allOrgs,
+    sessionTimeout,
+    ...extra,
+  };
+}
+
 async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
   const payload = await establishRegularSession({ res, req, user, context, trustedDeviceToken, authEvent });
   return res.status(200).json(payload);
@@ -721,7 +754,7 @@ async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToke
 
 async function getUser2faSettings(userId, orgId) {
   const [[row]] = await pool.execute(
-    'SELECT * FROM user_2fa_settings WHERE user_id = ? AND org_id = ?',
+    'SELECT * FROM user_2fa_settings WHERE user_id = ? AND org_id <=> ?',
     [userId, orgId]
   );
   return row || null;
@@ -735,7 +768,7 @@ async function setTwoFactorFailure(userId, orgId) {
   await pool.execute(
     `UPDATE user_2fa_settings
      SET failed_attempts = ?, is_locked = ?, updated_at = NOW()
-     WHERE user_id = ? AND org_id = ?`,
+     WHERE user_id = ? AND org_id <=> ?`,
     [nextAttempts, isLocked ? 1 : 0, userId, orgId]
   );
   return { failedAttempts: nextAttempts, isLocked };
@@ -749,13 +782,19 @@ async function setTwoFactorFailure(userId, orgId) {
 // person signs in again with their password and starts a fresh count.
 const SETUP_GUESS_LIMIT = 3;
 
+// MIPM-98: a platform admin's two-step records belong to the platform (org_id NULL),
+// not to the organisation their session happens to open on.
+function twoFactorOrgOf(pending) {
+  return pending.platform ? null : pending.orgId;
+}
+
 async function countSetupGuesses(pending) {
   await ensure2faChallengeAttemptsColumn();
   const [[row]] = await pool.execute(
     `SELECT COALESCE(SUM(attempts), 0) AS n FROM user_2fa_challenges
-     WHERE user_id = ? AND org_id = ? AND challenge_type IN ('setup_email', 'setup_totp')
+     WHERE user_id = ? AND org_id <=> ? AND challenge_type IN ('setup_email', 'setup_totp')
        AND created_at >= FROM_UNIXTIME(?)`,
-    [pending.userId, pending.orgId, Math.floor(Number(pending.iat || 0))]
+    [pending.userId, twoFactorOrgOf(pending), Math.floor(Number(pending.iat || 0))]
   );
   return Number(row?.n || 0);
 }
@@ -765,17 +804,17 @@ async function recordSetupGuess(pending, method) {
   const type = method === 'totp' ? 'setup_totp' : 'setup_email';
   await pool.execute(
     `UPDATE user_2fa_challenges SET attempts = attempts + 1
-     WHERE user_id = ? AND org_id = ? AND challenge_type = ? AND is_consumed = 0
+     WHERE user_id = ? AND org_id <=> ? AND challenge_type = ? AND is_consumed = 0
        AND created_at >= FROM_UNIXTIME(?)
      ORDER BY id DESC LIMIT 1`,
-    [pending.userId, pending.orgId, type, Math.floor(Number(pending.iat || 0))]
+    [pending.userId, twoFactorOrgOf(pending), type, Math.floor(Number(pending.iat || 0))]
   );
   const used = await countSetupGuesses(pending);
   if (used >= SETUP_GUESS_LIMIT) {
     await pool.execute(
       `UPDATE user_2fa_challenges SET is_consumed = 1
-       WHERE user_id = ? AND org_id = ? AND challenge_type IN ('setup_email', 'setup_totp') AND is_consumed = 0`,
-      [pending.userId, pending.orgId]
+       WHERE user_id = ? AND org_id <=> ? AND challenge_type IN ('setup_email', 'setup_totp') AND is_consumed = 0`,
+      [pending.userId, twoFactorOrgOf(pending)]
     );
   }
   return used;
@@ -787,7 +826,7 @@ async function clearTwoFactorFailures(userId, orgId) {
   await pool.execute(
     `UPDATE user_2fa_settings
      SET failed_attempts = 0, is_locked = 0, last_verified_at = NOW(), updated_at = NOW()
-     WHERE user_id = ? AND org_id = ?`,
+     WHERE user_id = ? AND org_id <=> ?`,
     [userId, orgId]
   );
 }
@@ -796,7 +835,7 @@ async function isTrustedDevice(userId, orgId, rawToken) {
   if (!rawToken) return false;
   const [[row]] = await pool.execute(
     `SELECT id FROM user_2fa_trusted_devices
-     WHERE user_id = ? AND org_id = ? AND device_token_hash = ? AND expires_at > NOW()`,
+     WHERE user_id = ? AND org_id <=> ? AND device_token_hash = ? AND expires_at > NOW()`,
     [userId, orgId, hashValue(rawToken)]
   );
   if (row) {
@@ -818,7 +857,7 @@ async function createTrustedDevice(userId, orgId, rememberDays, userAgent) {
 
 async function consumeBackupCode(userId, orgId, code) {
   const [rows] = await pool.execute(
-    'SELECT id, code_hash FROM user_2fa_backup_codes WHERE user_id = ? AND org_id = ? AND is_used = 0',
+    'SELECT id, code_hash FROM user_2fa_backup_codes WHERE user_id = ? AND org_id <=> ? AND is_used = 0',
     [userId, orgId]
   );
   const codeHash = hashValue(code);
@@ -833,7 +872,7 @@ async function consumeBackupCode(userId, orgId, code) {
 
 async function replaceBackupCodes(userId, orgId) {
   const backupCodes = generateBackupCodes();
-  await pool.execute('DELETE FROM user_2fa_backup_codes WHERE user_id = ? AND org_id = ?', [userId, orgId]);
+  await pool.execute('DELETE FROM user_2fa_backup_codes WHERE user_id = ? AND org_id <=> ?', [userId, orgId]);
   for (const code of backupCodes) {
     await pool.execute(
       'INSERT INTO user_2fa_backup_codes (user_id, org_id, code_hash) VALUES (?, ?, ?)',
@@ -857,7 +896,7 @@ async function createEmailChallenge(user, orgId, challengeType) {
 async function verifyEmailChallenge(userId, orgId, challengeType, code) {
   const [[row]] = await pool.execute(
     `SELECT * FROM user_2fa_challenges
-     WHERE user_id = ? AND org_id = ? AND challenge_type = ? AND is_consumed = 0 AND expires_at > NOW()
+     WHERE user_id = ? AND org_id <=> ? AND challenge_type = ? AND is_consumed = 0 AND expires_at > NOW()
      ORDER BY id DESC LIMIT 1`,
     [userId, orgId, challengeType]
   );
@@ -977,7 +1016,7 @@ async function beginTotpEnrollment(userId, orgId) {
 async function getLatestTotpEnrollmentSecret(userId, orgId) {
   const [[row]] = await pool.execute(
     `SELECT totp_secret FROM user_2fa_challenges
-     WHERE user_id = ? AND org_id = ? AND challenge_type = 'setup_totp' AND is_consumed = 0 AND expires_at > NOW()
+     WHERE user_id = ? AND org_id <=> ? AND challenge_type = 'setup_totp' AND is_consumed = 0 AND expires_at > NOW()
      ORDER BY id DESC LIMIT 1`,
     [userId, orgId]
   );
@@ -988,22 +1027,26 @@ async function consumeTotpEnrollmentSecret(userId, orgId, secret) {
   await pool.execute(
     `UPDATE user_2fa_challenges
      SET is_consumed = 1
-     WHERE user_id = ? AND org_id = ? AND challenge_type = 'setup_totp' AND totp_secret = ? AND is_consumed = 0`,
+     WHERE user_id = ? AND org_id <=> ? AND challenge_type = 'setup_totp' AND totp_secret = ? AND is_consumed = 0`,
     [userId, orgId, secret]
   );
 }
 
 async function ensureUser2faRow(userId, orgId, preferredMethod, totpSecret = null) {
+  // MIPM-98: update first, insert only when there is no row. A platform admin's row has
+  // org_id NULL, and NULLs never collide in the unique key, so ON DUPLICATE KEY would
+  // add a second row instead of updating the first.
+  const [upd] = await pool.execute(
+    `UPDATE user_2fa_settings
+        SET is_enabled = 1, preferred_method = ?, totp_secret = COALESCE(?, totp_secret),
+            failed_attempts = 0, is_locked = 0, updated_at = NOW()
+      WHERE user_id = ? AND org_id <=> ?`,
+    [preferredMethod, totpSecret, userId, orgId]
+  );
+  if (upd.affectedRows) return;
   await pool.execute(
     `INSERT INTO user_2fa_settings (user_id, org_id, is_enabled, preferred_method, totp_secret, failed_attempts, is_locked, last_verified_at)
-     VALUES (?, ?, 1, ?, ?, 0, 0, NOW())
-     ON DUPLICATE KEY UPDATE
-       is_enabled = VALUES(is_enabled),
-       preferred_method = VALUES(preferred_method),
-       totp_secret = COALESCE(VALUES(totp_secret), totp_secret),
-       failed_attempts = 0,
-       is_locked = 0,
-       updated_at = NOW()`,
+     VALUES (?, ?, 1, ?, ?, 0, 0, NOW())`,
     [userId, orgId, preferredMethod, totpSecret]
   );
 }
@@ -1524,31 +1567,57 @@ const authController = {
       }
 
       if (privileges.platformAdmin) {
-        const modules = await getUserModules(user.id);
+        // MIPM-98: platform admins use two-step sign-in like everyone else. The session
+        // used to be issued here, on the password alone, for the most powerful account.
         const platformContext = await resolvePlatformAdminContext(user, requestedOrgId);
-        const token = issueToken({
+        const settings = await getUser2faSettings(user.id, null);
+        if (settings?.is_enabled && settings.is_locked) {
+          await logLoginAudit({
+            userId: user.id,
+            userName: user.email,
+            role: 'platform_admin',
+            status: 'failed',
+            failReason: '2FA locked. Another platform admin must reset it.',
+            authEvent: '2fa_locked',
+            metadata: { platform: true },
+          });
+          return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Ask another platform admin to reset it.' });
+        }
+        if (settings?.is_enabled && await isTrustedDevice(user.id, null, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
+          return res.status(200).json(await establishPlatformSession({ res, req, user, platformContext, authEvent: '2fa_trusted_device_bypass' }));
+        }
+        const challengeToken = issueTwoFactorToken({
           userId: user.id,
           email: user.email,
           role: user.role,
-          orgId: platformContext.orgId,
-          siteId: platformContext.siteId,
-          platformAdmin: true,
-        });
-        await trackSessionToken(user.id, token);
-        const config = await getSystemConfig();
-        const sessionTimeout = getPlatformAdminSessionTimeout(config);
-        attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
-        return res.status(200).json({
-          message: 'Login successful.',
-          user: toRuntimeUser(user, privileges),
-          modules,
+          platform: true,
           orgId: platformContext.orgId,
           siteId: platformContext.siteId,
           orgName: platformContext.orgName,
           siteName: platformContext.siteName,
           allOrgs: platformContext.allOrgs,
-          sessionTimeout,
+          twoFactorMethods: PLATFORM_TWO_FACTOR_METHODS,
+          rememberDays: PLATFORM_REMEMBER_DAYS,
+          mode: settings?.is_enabled ? 'verify' : 'setup_required',
+        });
+        await logLoginAudit({
+          userId: user.id,
+          userName: user.email,
+          role: 'platform_admin',
+          status: 'pending',
+          authEvent: settings?.is_enabled ? '2fa_challenge_started' : '2fa_enrollment_offered',
+          metadata: { platform: true, methods: PLATFORM_TWO_FACTOR_METHODS },
+          req,
+        });
+        return res.status(200).json({
+          twoFactorRequired: !!settings?.is_enabled,
+          twoFactorSetupAvailable: !settings?.is_enabled,
+          twoFactorSetupRequired: !settings?.is_enabled,
+          challengeToken,
+          availableMethods: PLATFORM_TWO_FACTOR_METHODS,
+          maskedEmail: maskEmail(user.email),
+          rememberDays: PLATFORM_REMEMBER_DAYS,
+          preferredMethod: settings?.preferred_method || null,
         });
       }
 
@@ -1714,7 +1783,7 @@ const authController = {
       if (pending.mode !== 'verify' && (await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
         return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
       }
-      const result = await createEmailChallenge(user, pending.orgId, challengeType);
+      const result = await createEmailChallenge(user, twoFactorOrgOf(pending), challengeType);
       await logLoginAudit({
         userId: pending.userId,
         userName: pending.email,
@@ -1746,9 +1815,9 @@ const authController = {
       if ((await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
         return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
       }
-      const secret = await beginTotpEnrollment(pending.userId, pending.orgId);
+      const secret = await beginTotpEnrollment(pending.userId, twoFactorOrgOf(pending));
       const issuer = encodeURIComponent('MIMS');
-      const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
+      const label = encodeURIComponent(`${pending.platform ? 'Platform' : pending.orgName}:${pending.email}`);
       const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
       // MIPM-94: the QR is drawn in the browser from otpauthUrl. It used to be an
       // api.qrserver.com image whose address carried the secret to an outside site.
@@ -1792,7 +1861,7 @@ const authController = {
       const user = await userModel.findById(pending.userId);
       if (!user) return res.status(404).json({ error: 'User not found.' });
 
-      const settings = await getUser2faSettings(pending.userId, pending.orgId);
+      const settings = await getUser2faSettings(pending.userId, twoFactorOrgOf(pending));
       const isSetup = pending.mode !== 'verify';
       if (isSetup && !backupCode && (await countSetupGuesses(pending)) >= SETUP_GUESS_LIMIT) {
         return res.status(423).json({ error: SETUP_LOCKED_MESSAGE, locked: true, restart: true });
@@ -1803,14 +1872,14 @@ const authController = {
       let authEvent = '2fa_verified';
 
       if (backupCode) {
-        verified = await consumeBackupCode(pending.userId, pending.orgId, backupCode);
+        verified = await consumeBackupCode(pending.userId, twoFactorOrgOf(pending), backupCode);
         authEvent = '2fa_backup_code_used';
       } else if (method === 'email') {
         const challengeType = pending.mode === 'verify' ? 'login_email' : 'setup_email';
-        verified = await verifyEmailChallenge(pending.userId, pending.orgId, challengeType, code);
+        verified = await verifyEmailChallenge(pending.userId, twoFactorOrgOf(pending), challengeType, code);
         if (verified && pending.mode !== 'verify') {
-          await ensureUser2faRow(pending.userId, pending.orgId, 'email', null);
-          generatedBackupCodes = await replaceBackupCodes(pending.userId, pending.orgId);
+          await ensureUser2faRow(pending.userId, twoFactorOrgOf(pending), 'email', null);
+          generatedBackupCodes = await replaceBackupCodes(pending.userId, twoFactorOrgOf(pending));
           setupCompleted = true;
           authEvent = '2fa_setup_completed';
         }
@@ -1818,12 +1887,12 @@ const authController = {
         if (pending.mode === 'verify') {
           verified = !!settings?.totp_secret && verifyTotpToken(settings.totp_secret, String(code || '').trim());
         } else {
-          const secret = await getLatestTotpEnrollmentSecret(pending.userId, pending.orgId);
+          const secret = await getLatestTotpEnrollmentSecret(pending.userId, twoFactorOrgOf(pending));
           verified = !!secret && verifyTotpToken(secret, String(code || '').trim());
           if (verified) {
-            await ensureUser2faRow(pending.userId, pending.orgId, 'totp', secret);
-            await consumeTotpEnrollmentSecret(pending.userId, pending.orgId, secret);
-            generatedBackupCodes = await replaceBackupCodes(pending.userId, pending.orgId);
+            await ensureUser2faRow(pending.userId, twoFactorOrgOf(pending), 'totp', secret);
+            await consumeTotpEnrollmentSecret(pending.userId, twoFactorOrgOf(pending), secret);
+            generatedBackupCodes = await replaceBackupCodes(pending.userId, twoFactorOrgOf(pending));
             setupCompleted = true;
             authEvent = '2fa_setup_completed';
           }
@@ -1848,7 +1917,7 @@ const authController = {
       }
 
       if (!verified) {
-        const failure = await setTwoFactorFailure(pending.userId, pending.orgId);
+        const failure = await setTwoFactorFailure(pending.userId, twoFactorOrgOf(pending));
         await logLoginAudit({
           userId: pending.userId,
           userName: pending.email,
@@ -1864,11 +1933,34 @@ const authController = {
         });
       }
 
-      await clearTwoFactorFailures(pending.userId, pending.orgId);
+      await clearTwoFactorFailures(pending.userId, twoFactorOrgOf(pending));
       const trustedDeviceToken = rememberDevice
-        ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
+        ? await createTrustedDevice(pending.userId, twoFactorOrgOf(pending), pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
       if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
+
+      if (pending.platform) {
+        // MIPM-98: the platform admin's session, now only after two-step sign-in.
+        await logLoginAudit({
+          userId: pending.userId,
+          userName: pending.email,
+          role: 'platform_admin',
+          status: 'success',
+          authEvent,
+          metadata: { platform: true, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice },
+        });
+        const platformContext = {
+          orgId: pending.orgId,
+          siteId: pending.siteId,
+          orgName: pending.orgName,
+          siteName: pending.siteName,
+          allOrgs: pending.allOrgs || [],
+        };
+        return res.status(200).json(await establishPlatformSession({
+          res, req, user, platformContext,
+          extra: { twoFactorSetupCompleted: setupCompleted, backupCodes: generatedBackupCodes },
+        }));
+      }
 
       const context = {
         orgId: pending.orgId,
