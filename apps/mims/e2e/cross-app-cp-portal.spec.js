@@ -20,6 +20,7 @@
  * would recreate exactly the blind spot this test exists to close.
  */
 const { test, expect } = require('@playwright/test')
+const { signIn, fetchPost } = require('../backend/utils/signInClient')
 const { requireSession, requireFixture, expectPageHealthy } = require('./_assertions')
 
 const MIMS_BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000'
@@ -65,12 +66,10 @@ test.describe('CP Portal → MIMS integration', () => {
     }
 
     // 2. A MIMS session, used later to drive the real UI.
-    const loginRes = await request.post(`${MIMS_BACKEND}/api/auth/login`, {
-      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-      timeout: 20000,
-    })
-    const login = await loginRes.json().catch(() => ({}))
-    token = login.token || null
+    // MIPM-82: cookie-only session, 2FA possibly required — sign in as a person does.
+    const signedIn = await signIn(fetchPost(MIMS_BACKEND), { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, totpSecret: process.env.E2E_TOTP_SECRET })
+    const login = {}
+    token = signedIn.token || null
     if (token) {
       session = {
         token,
