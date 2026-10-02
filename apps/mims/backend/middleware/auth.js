@@ -311,8 +311,10 @@ function requireScopedCapability(privilegeKey) {
  */
 function requireOrg(req, res, next) {
   if (hasGlobalAdminScope(req.user)) return next();
-  const headerOrgId = req.headers['x-org-id'] ? parseInt(req.headers['x-org-id'], 10) : null;
-  const activeOrgId = req.user.orgId || (headerOrgId && !Number.isNaN(headerOrgId) ? headerOrgId : null);
+  // MIPM-5: the organisation comes only from the signed-in session, which sign-in and
+  // /auth/switch-org set after checking membership. An x-org-id header used to be taken
+  // at face value when the session had none; nothing sends it, so it is no longer read.
+  const activeOrgId = req.user.orgId || null;
   if (!activeOrgId) {
     return res.status(403).json({
       error: 'No active organisation. Please contact your administrator.',

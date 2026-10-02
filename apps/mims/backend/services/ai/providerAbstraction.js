@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const pool = require('../../database/db');
 const { encryptSecret } = require('../ssoService');
+const { decryptMailboxSecret } = require('../mailboxCrypto');
 
 function deterministicEmbedding(text, dims = 64) {
   const vector = new Array(dims).fill(0);
@@ -22,6 +23,8 @@ function tokenCount(text) {
 
 function localProvider(config = {}) {
   return {
+    // MIPM-27: not a model — a fixed echo. Callers must not present its output as AI.
+    real: false,
     key: config.provider_key || 'on_prem',
     model: config.model_name || 'deterministic-local',
     async chat(messages = [], opts = {}) {
@@ -52,7 +55,11 @@ async function callJson(endpoint, headers, payload) {
 
 function externalProvider(config = {}) {
   const fallback = localProvider(config);
+  // MIPM-27: a real model is called only for these; anything else falls back to the echo.
+  const real = ['openai', 'azure_openai', 'anthropic'].includes(config.provider_key)
+    || (config.provider_key === 'on_prem' && Boolean(config.api_endpoint));
   return {
+    real,
     key: config.provider_key,
     model: config.model_name || 'gpt-4o-mini',
     async chat(messages = [], opts = {}) {
@@ -97,11 +104,16 @@ async function getProvider(orgId) {
       [orgId || 0]
     );
     if (!config) return localProvider({ provider_key: 'on_prem' });
+    // MIPM-27: the key is stored encrypted; it was sent as config.api_key_plain, which
+    // was never set, so every external call went out with an empty key.
+    config.api_key_plain = config.api_key_encrypted ? decryptMailboxSecret(config.api_key_encrypted) : '';
     if (config.allow_phi_external !== 1 && config.provider_key !== 'on_prem') {
       return localProvider({ provider_key: 'on_prem', model_name: 'phi-safe-local-fallback' });
     }
     return externalProvider(config);
-  } catch (_) {
+  } catch (err) {
+    // MIPM-27: say so — otherwise a broken key reads as "no AI model is switched on".
+    console.error(`[MIPM-27] AI provider settings for organisation ${orgId} could not be used; carrying on with no model:`, err.message);
     return localProvider({ provider_key: 'on_prem' });
   }
 }
