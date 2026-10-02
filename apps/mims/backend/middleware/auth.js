@@ -98,16 +98,18 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   }
 
   let sessionFound = false;
+  let accountName = null;
 
   try {
     // MIPM-32: a switched-off account is refused here whether or not its sessions
     // were ended, and with its own reason. Before, only the session row was
     // checked, so a person switched off by an admin stayed in until it expired.
     const [[account]] = await pool.execute(
-      'SELECT is_active, is_disabled FROM users WHERE id = ? LIMIT 1',
+      'SELECT is_active, is_disabled, name FROM users WHERE id = ? LIMIT 1',
       [decoded.userId]
     );
     if (isSwitchedOff(account)) throw createAuthError(ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE);
+    accountName = account?.name || null;
 
     const [[sessionRow]] = await pool.execute(
       'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
@@ -134,6 +136,8 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   const result = {
     userId:               decoded.userId,
     email:                decoded.email,
+    // MIPM-76: the person's name, for audit entries and notifications that name them.
+    name:                 accountName,
     role:                 decoded.role,
     orgId:                decoded.orgId ?? null,
     siteId:               decoded.siteId ?? null,

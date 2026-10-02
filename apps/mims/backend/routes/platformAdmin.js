@@ -12,11 +12,13 @@ const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
 const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
+const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../services/leaverCasesService');
 const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitPlatformAdminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 const { LAST_PLATFORM_ADMIN_ERROR, PLATFORM_ADMIN_CONSOLE_SQL, leavesNoActivePlatformAdmin } = require('../utils/adminScope');
+const { logAudit } = require('../utils/auditLog');
 const {
   bootstrapOrg,
   getOrgReadiness,
@@ -31,12 +33,7 @@ const PLATFORM_ADMIN_EXCLUSION_SQL =
   "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function parseIntSafe(value, fallback) {
@@ -681,38 +678,55 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
     // C-07: COALESCE every column so a partial payload (e.g. only is_active) can no longer
     // null out name/email/role. Org membership is managed via the /users/:id/org-access
     // routes (user_org_access); users.org_id is a legacy mirror kept in sync best-effort.
-    await pool.execute(
-      `UPDATE users SET
-         name      = COALESCE(?, name),
-         email     = COALESCE(?, email),
-         role      = COALESCE(?, role),
-         org_id    = COALESCE(?, org_id),
-         is_active = COALESCE(?, is_active)
-       WHERE id = ?`,
-      [
-        name ?? null, email ?? null, role ?? null, org_id ?? null,
-        is_active === undefined ? null : (is_active ? 1 : 0),
-        req.params.id,
-      ]
-    );
-    // M-16: when a user is deactivated, also deactivate their org-access rows so
-    // they no longer appear as active members. MIPM-35: mark the rows this switched
-    // off, so switching the user back on gives exactly that access back.
-    if (is_active !== undefined && !is_active) {
-      await pool.execute('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id = ? AND is_active = 1', [req.params.id]);
-      await endAllSessions(req.params.id); // MIPM-32: out at once, on every device
-    } else if (is_active) {
-      await pool.execute('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1', [req.params.id]);
+    // MIPM-33: the user update, the access and status bookkeeping and moving a leaver's
+    // open cases to the unassigned queue commit together or not at all.
+    let movedCases = [];
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        `UPDATE users SET
+           name      = COALESCE(?, name),
+           email     = COALESCE(?, email),
+           role      = COALESCE(?, role),
+           org_id    = COALESCE(?, org_id),
+           is_active = COALESCE(?, is_active)
+         WHERE id = ?`,
+        [
+          name ?? null, email ?? null, role ?? null, org_id ?? null,
+          is_active === undefined ? null : (is_active ? 1 : 0),
+          req.params.id,
+        ]
+      );
+      // M-16: when a user is deactivated, also deactivate their org-access rows so
+      // they no longer appear as active members. MIPM-35: mark the rows this switched
+      // off, so switching the user back on gives exactly that access back.
+      if (is_active !== undefined && !is_active) {
+        await conn.execute('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id = ? AND is_active = 1', [req.params.id]);
+      } else if (is_active) {
+        await conn.execute('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1', [req.params.id]);
+      }
+      if (switchingOff) {
+        await conn.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?',
+          [reason || 'Switched off by a platform administrator', req.params.id]);
+        movedCases = await moveOpenCasesToUnassigned(conn, [req.params.id], req.user.userId);
+      } else if (switchingOn) {
+        await conn.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
+      }
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
     }
-    if (switchingOff) {
-      await pool.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?',
-        [reason || 'Switched off by a platform administrator', req.params.id]);
-    } else if (switchingOn) {
-      await pool.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
+    if (is_active !== undefined && !is_active) await endAllSessions(req.params.id); // MIPM-32: out at once, on every device
+    if (movedCases.length) {
+      await notifyCaseAdmins(movedCases).catch((err) => console.error('[MIPM-33] notifying case administrators failed:', err.message));
     }
     await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, {
       name, email, role, org_id, is_active,
-      ...(switchingOff ? { status_change: 'switched_off', reason: reason || 'Switched off by a platform administrator' } : {}),
+      ...(switchingOff ? { status_change: 'switched_off', reason: reason || 'Switched off by a platform administrator', cases_moved_to_unassigned: movedCases.length } : {}),
       ...(switchingOn ? { status_change: 'switched_back_on', reason } : {}),
     });
     res.json({ message: 'Updated.' });
@@ -797,6 +811,8 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
     }
     const [wasOffRows] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = 0', [ids]);
     const wasOff = new Set(wasOffRows.map((r) => r.id));
+    let changedIds = [];
+    let movedCases = [];
     if (action === 'deactivate') {
       // The update below skips console-permission holders, so only the others can drop out.
       const [targets] = await pool.query(`SELECT u.id FROM users u WHERE u.id IN (?) AND NOT ${PLATFORM_ADMIN_CONSOLE_SQL}`, [ids]);
@@ -816,36 +832,53 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
         [ids]
       );
     } else {
-      await pool.query(
-        `UPDATE users
-         SET is_active = ?, updated_at = NOW()
-         WHERE id IN (?) AND id NOT IN (
-           SELECT user_id FROM user_module_permissions
-           WHERE module = 'platform_admin_console' AND can_access = 1
-         )`,
-        [action === 'activate' ? 1 : 0, ids]
-      );
-      // MIPM-32 / MIPM-35: act only on those the update above really changed (it skips
-      // console holders). Switching off marks the org access it ends; switching back
-      // on gives exactly that back.
-      const [changed] = await pool.query('SELECT id FROM users WHERE id IN (?) AND is_active = ?', [ids, action === 'activate' ? 1 : 0]);
-      const changedIds = changed.map((row) => row.id);
-      if (action === 'deactivate' && changedIds.length) {
-        await pool.query('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id IN (?) AND is_active = 1', [changedIds]);
-        for (const id of changedIds) await endAllSessions(id);
-        const nowOffIds = changedIds.filter((id) => !wasOff.has(id));
-        if (nowOffIds.length) {
-          await pool.query('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id IN (?)',
-            [reason || 'Switched off by a platform administrator', nowOffIds]);
+      // MIPM-33: the status change, the access and status bookkeeping and moving leavers'
+      // open cases to the unassigned queue commit together or not at all.
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query(
+          `UPDATE users
+           SET is_active = ?, updated_at = NOW()
+           WHERE id IN (?) AND id NOT IN (
+             SELECT user_id FROM user_module_permissions
+             WHERE module = 'platform_admin_console' AND can_access = 1
+           )`,
+          [action === 'activate' ? 1 : 0, ids]
+        );
+        // MIPM-32 / MIPM-35: act only on those the update above really changed (it skips
+        // console holders). Switching off marks the org access it ends; switching back
+        // on gives exactly that back.
+        const [changed] = await conn.query('SELECT id FROM users WHERE id IN (?) AND is_active = ?', [ids, action === 'activate' ? 1 : 0]);
+        changedIds = changed.map((row) => row.id);
+        if (action === 'deactivate' && changedIds.length) {
+          await conn.query('UPDATE user_org_access SET is_active = 0, ended_with_user = 1 WHERE user_id IN (?) AND is_active = 1', [changedIds]);
+          const nowOffIds = changedIds.filter((id) => !wasOff.has(id));
+          if (nowOffIds.length) {
+            await conn.query('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id IN (?)',
+              [reason || 'Switched off by a platform administrator', nowOffIds]);
+            movedCases = await moveOpenCasesToUnassigned(conn, nowOffIds, req.user.userId);
+          }
         }
+        if (action === 'activate' && changedIds.length) {
+          await conn.query('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id IN (?) AND ended_with_user = 1', [changedIds]);
+          await conn.query('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id IN (?)', [changedIds]);
+        }
+        await conn.commit();
+      } catch (txErr) {
+        await conn.rollback();
+        throw txErr;
+      } finally {
+        conn.release();
       }
-      if (action === 'activate' && changedIds.length) {
-        await pool.query('UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id IN (?) AND ended_with_user = 1', [changedIds]);
-        await pool.query('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id IN (?)', [changedIds]);
+      if (action === 'deactivate') for (const id of changedIds) await endAllSessions(id);
+      if (movedCases.length) {
+        await notifyCaseAdmins(movedCases).catch((err) => console.error('[MIPM-33] notifying case administrators failed:', err.message));
       }
     }
     await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, {
       action, userIds: ids, ...(action === 'force_password_reset' ? {} : { reason: reason || 'Switched off by a platform administrator' }),
+      ...(movedCases.length ? { cases_moved_to_unassigned: movedCases.length } : {}),
     });
     res.json({ message: 'Bulk action completed.' });
   } catch (err) {

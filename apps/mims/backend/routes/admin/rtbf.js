@@ -9,6 +9,7 @@ const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logger } = require('../../services/logger');
 const { caseHeldSql } = require('../../services/dpprScheduler');
+const { logAudit } = require('../../utils/auditLog');
 
 function orgScope(req) {
   return hasGlobalAdminScope(req.user) ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
@@ -35,13 +36,7 @@ async function getScopedRtbf(req, id, { forUpdate = false, conn = null } = {}) {
 }
 
 async function audit(userId, action, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'rtbf_request', ?, ?, ?)`,
-      [userId || null, entityId || null, action, JSON.stringify(details || {})]
-    );
-  } catch (_) {}
+  await logAudit(userId || null, null, action, 'rtbf_request', entityId || null, details || {});
 }
 
 async function previewAffected(orgId, identifier) {

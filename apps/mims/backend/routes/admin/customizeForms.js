@@ -23,16 +23,11 @@ function isOwnOrg(req, orgId) {
   return isPlatformAdmin(req.user) || Number(req.user?.orgId) === orgId;
 }
 const { CATALOG, CATEGORIES_LIST, PLACEHOLDER_SECTION, getCategory } = require('../../catalogs/customizeFormsCatalog');
+const { logAudit } = require('../../utils/auditLog');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 async function audit(userId, action, orgId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'customize_forms', ?, ?, ?)`,
-      [userId, orgId, action, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'customize_forms', orgId, details);
 }
 
 function flattenCatalog(cat) {

@@ -10,14 +10,10 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function hasPlatformAdminScope(req) {
@@ -131,7 +127,7 @@ router.post('/case-number-config', authenticate, requireRole('admin', 'platform_
       [orgId, case_type]
     );
 
-    await audit(req.user.id, req.user.name, 'UPSERT', 'case_number_config', saved.id, { case_type, prefix });
+    await audit(req.user.userId, req.user.name || req.user.email, 'UPSERT', 'case_number_config', saved.id, { case_type, prefix });
     res.json({ config: { ...saved, preview: buildPreview(saved, saved.current_seq + 1) } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -150,7 +146,7 @@ router.delete('/case-number-config/:id', authenticate, requireRole('admin', 'pla
     if (!row) return res.status(404).json({ error: 'Not found.' });
     if (row.is_locked) return res.status(409).json({ error: 'Cannot delete a locked configuration.' });
     await pool.execute('DELETE FROM case_number_config WHERE id = ?', [req.params.id]);
-    await audit(req.user.id, req.user.name, 'DELETE', 'case_number_config', req.params.id, {});
+    await audit(req.user.userId, req.user.name || req.user.email, 'DELETE', 'case_number_config', req.params.id, {});
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { logAudit } = require('../../utils/auditLog');
 
 pool.execute(`
   CREATE TABLE IF NOT EXISTS change_approval_policies (
@@ -16,12 +17,7 @@ pool.execute(`
 `).catch(() => {});
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 // GET /api/admin/change-approvals/policy

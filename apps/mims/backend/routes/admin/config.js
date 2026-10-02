@@ -15,6 +15,7 @@ const crypto = require('crypto');
 // P7/F12: reuse the SAME AES-256-GCM secret encryption the codebase uses for SSO
 // secrets so IMAP/SMTP mailbox passwords are no longer stored in plaintext at rest.
 const { encryptSecret } = require('../../services/ssoService');
+const { logAudit } = require('../../utils/auditLog');
 
 // ssoService only exports encryptSecret; mirror its decrypt (same key derivation and
 // iv.tag.ciphertext format) locally, tolerating not-yet-encrypted (plaintext) rows so
@@ -108,12 +109,7 @@ function encryptMailboxSecret(value) {
 }
 
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function hasPlatformAdminScope(req) {

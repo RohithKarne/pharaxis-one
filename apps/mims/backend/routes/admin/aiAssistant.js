@@ -13,14 +13,12 @@ const { runQualityChecks } = require('../../services/ai/qualityChecker');
 const { vectorSearch } = require('../../services/ai/retriever');
 const { classifyInquiry, classifyRecentInquiries } = require('../../services/ai/inboxClassifierService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user?.userId || null, req.user?.email || 'system', action, entity, entityId || null, details || {});
 }
 
 async function loadCase(req, id) {

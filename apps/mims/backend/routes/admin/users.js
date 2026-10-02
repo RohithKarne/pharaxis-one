@@ -14,6 +14,7 @@ const bcrypt   = require('bcrypt');
 const crypto   = require('crypto');
 const pool     = require('../../database/db');
 const { authenticate, requireRole, endAllSessions } = require('../../middleware/auth');
+const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../../services/leaverCasesService');
 const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
@@ -539,57 +540,74 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       if (dup) return res.status(409).json({ error: 'Email address already in use.' });
     }
 
-    await pool.execute(
-      `UPDATE users SET
-         user_id           = COALESCE(?, user_id),
-         name              = COALESCE(?, name),
-         email             = COALESCE(?, email),
-         initials          = COALESCE(?, initials),
-         role              = COALESCE(?, role),
-         security_group_id = COALESCE(?, security_group_id),
-         network_user_id   = COALESCE(?, network_user_id),
-         department        = COALESCE(?, department),
-         is_active         = COALESCE(?, is_active),
-         is_disabled       = COALESCE(?, is_disabled),
-         is_primary_ref    = COALESCE(?, is_primary_ref),
-         access_admin_site = COALESCE(?, access_admin_site),
-         case_admin        = COALESCE(?, case_admin)
-       WHERE id = ?`,
-      [
-        user_id   ?? null, name     ?? null,
-        email     ? email.trim().toLowerCase() : null,
-        initials  ?? null, role     ?? null,
-        security_group_id ?? null,
-        network_user_id   ?? null,
-        department        ?? null,
-        is_active   != null ? (is_active   ? 1 : 0) : null,
-        is_disabled != null ? (is_disabled ? 1 : 0) : null,
-        is_primary_ref    != null ? (is_primary_ref    ? 1 : 0) : null,
-        access_admin_site != null ? (access_admin_site ? 1 : 0) : null,
-        case_admin        != null ? (case_admin        ? 1 : 0) : null,
-        req.params.id,
-      ]
-    );
-
-    // MIPM-32: switching someone off ends every session they have, at once. Before,
-    // nothing did, and they stayed signed in until the session ran out.
+    // MIPM-33: the user update, the switch-off/back-on bookkeeping and moving a leaver's
+    // open cases to the unassigned queue commit together or not at all.
     const switchedOff = (is_active != null && !is_active) || (is_disabled != null && is_disabled);
-    const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
-
-    // MIPM-35: record why and when on the way off; on the way back, clear it and give
-    // back the organisation access the switch-off ended.
     let statusChange;
-    if (!wasOff && willBeOff) {
-      const offReason = String(req.body.inactive_reason || '').trim().slice(0, 255) || 'Switched off by an administrator';
-      await pool.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?', [offReason, req.params.id]);
-      statusChange = { status_change: 'switched_off', reason: offReason };
-    } else if (wasOff && !willBeOff) {
-      await pool.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
-      await pool.execute(
-        'UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1',
-        [req.params.id]
+    let movedCases = [];
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        `UPDATE users SET
+           user_id           = COALESCE(?, user_id),
+           name              = COALESCE(?, name),
+           email             = COALESCE(?, email),
+           initials          = COALESCE(?, initials),
+           role              = COALESCE(?, role),
+           security_group_id = COALESCE(?, security_group_id),
+           network_user_id   = COALESCE(?, network_user_id),
+           department        = COALESCE(?, department),
+           is_active         = COALESCE(?, is_active),
+           is_disabled       = COALESCE(?, is_disabled),
+           is_primary_ref    = COALESCE(?, is_primary_ref),
+           access_admin_site = COALESCE(?, access_admin_site),
+           case_admin        = COALESCE(?, case_admin)
+         WHERE id = ?`,
+        [
+          user_id   ?? null, name     ?? null,
+          email     ? email.trim().toLowerCase() : null,
+          initials  ?? null, role     ?? null,
+          security_group_id ?? null,
+          network_user_id   ?? null,
+          department        ?? null,
+          is_active   != null ? (is_active   ? 1 : 0) : null,
+          is_disabled != null ? (is_disabled ? 1 : 0) : null,
+          is_primary_ref    != null ? (is_primary_ref    ? 1 : 0) : null,
+          access_admin_site != null ? (access_admin_site ? 1 : 0) : null,
+          case_admin        != null ? (case_admin        ? 1 : 0) : null,
+          req.params.id,
+        ]
       );
-      statusChange = { status_change: 'switched_back_on', reason: reactivationReason };
+
+      // MIPM-35: record why and when on the way off; on the way back, clear it and give
+      // back the organisation access the switch-off ended.
+      if (!wasOff && willBeOff) {
+        const offReason = String(req.body.inactive_reason || '').trim().slice(0, 255) || 'Switched off by an administrator';
+        await conn.execute('UPDATE users SET inactive_reason = ?, inactive_at = NOW() WHERE id = ?', [offReason, req.params.id]);
+        movedCases = await moveOpenCasesToUnassigned(conn, [req.params.id], req.user.userId);
+        statusChange = { status_change: 'switched_off', reason: offReason, cases_moved_to_unassigned: movedCases.length };
+      } else if (wasOff && !willBeOff) {
+        await conn.execute('UPDATE users SET inactive_reason = NULL, inactive_at = NULL WHERE id = ?', [req.params.id]);
+        await conn.execute(
+          'UPDATE user_org_access SET is_active = 1, ended_with_user = 0 WHERE user_id = ? AND ended_with_user = 1',
+          [req.params.id]
+        );
+        statusChange = { status_change: 'switched_back_on', reason: reactivationReason };
+      }
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
+    }
+
+    // MIPM-32: switching someone off ends every session they have, at once.
+    const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
+    // MIPM-33: tell the organisation's case administrators, after the move is committed.
+    if (movedCases.length) {
+      await notifyCaseAdmins(movedCases).catch((err) => console.error('[MIPM-33] notifying case administrators failed:', err.message));
     }
 
     await audit(req.user.userId, 'UPDATE_USER', req.params.id, {

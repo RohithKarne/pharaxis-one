@@ -33,6 +33,7 @@ const { assignCaseNumberWithConnection } = require('./orgBootstrapService');
 const { createNotification, createNotifications } = require('./notificationCenterService');
 const { emitDataSync } = require('./appRealtimeService');
 const { decryptMailboxSecret } = require('./mailboxCrypto');
+const { logAudit } = require('../utils/auditLog');
 
 const SYSTEM_ACTOR = 'Email Case Import';
 
@@ -131,11 +132,7 @@ async function resolveEmailIntakeStateId(conn, orgId) {
 // ── Audit helper ────────────────────────────────────────────────────────────
 
 async function audit(action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-     VALUES (NULL, ?, ?, ?, ?, ?)`,
-    [SYSTEM_ACTOR, action, entity, entityId, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(null, SYSTEM_ACTOR, action, entity, entityId, details || {});
 }
 
 // ── Follow-up / thread handling (MIMS-36, decision #5) ──────────────────────

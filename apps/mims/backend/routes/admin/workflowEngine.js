@@ -7,6 +7,7 @@ const { validateDefinition } = require('../../services/workflow/definitionValida
 const { traceGraph } = require('../../services/workflow/executionEngine');
 const { fireWorkflowEvent } = require('../../services/workflow/eventHookService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
 const guard = [authenticate, requireRole('admin', 'platform_admin')];
@@ -16,10 +17,7 @@ function scope(req, alias = 'wd') {
 }
 
 async function audit(req, action, entity, entityId, details) {
-  await pool.execute(
-    `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.user.userId, req.user.email, action, entity, entityId || null, JSON.stringify(details || {})]
-  ).catch(() => {});
+  await logAudit(req.user.userId, req.user.email, action, entity, entityId || null, details || {});
 }
 
 router.get('/workflow-definitions', ...guard, async (req, res) => {
