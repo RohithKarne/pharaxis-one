@@ -1,6 +1,7 @@
 'use strict';
 
 const { execSync } = require('child_process');
+const { signIn, fetchPost } = require('../utils/signInClient');
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -37,13 +38,10 @@ function printResult(row) {
   console.log(`${state} - ${row.name} (${row.detail})`);
 }
 
-function run() {
+function run(signedIn) {
   const results = [];
-  const email = 'vanaja_admin@reviewco.com';
-  const password = '__SET_SMOKE_TEST_PASSWORD__';
-
-  let challengeToken = null;
-  let token = null;
+  // MIPM-82: signed in before the steps (cookie-only session, 2FA) — see main().
+  const token = signedIn.token;
   let caseId = null;
 
   function runTest(name, fn, options = {}) {
@@ -72,23 +70,13 @@ function run() {
   }
 
   runTest('Admin login', () => {
-    const res = runCurl('POST', '/api/auth/login', { body: { email, password } });
-    const hasChallengeToken = res.body && typeof res.body === 'object' && !!res.body.challengeToken;
-    if (hasChallengeToken) {
-      challengeToken = res.body.challengeToken;
-    }
-    const pass = res.status === 200 && hasChallengeToken;
-    return { pass, detail: `status=${res.status}, challengeToken=${hasChallengeToken}` };
+    const pass = signedIn.step !== 'password' || !!signedIn.token;
+    return { pass, detail: `step=${signedIn.step}, status=${signedIn.status}` };
   });
 
-  runTest('2FA skip-setup', () => {
-    const res = runCurl('POST', '/api/auth/2fa/skip-setup', { body: { challengeToken } });
-    const hasToken = res.body && typeof res.body === 'object' && !!res.body.token;
-    if (hasToken) {
-      token = res.body.token;
-    }
-    const pass = res.status === 200 && hasToken;
-    return { pass, detail: `status=${res.status}, token=${hasToken}` };
+  runTest('2FA', () => {
+    const pass = !!token;
+    return { pass, detail: `step=${signedIn.step}, session=${pass}${signedIn.error ? `, ${signedIn.error}` : ''}` };
   });
 
   runTest('Get workflow states', () => {
@@ -188,4 +176,13 @@ function run() {
   console.log(`\nCASE LIFECYCLE SMOKE: ${passCount}/10 PASS`);
 }
 
-run();
+async function main() {
+  const signedIn = await signIn(fetchPost(BASE_URL), {
+    email: process.env.SMOKE_ADMIN_EMAIL || 'vanaja_admin@reviewco.com',
+    password: process.env.SMOKE_ADMIN_PASSWORD || '__SET_SMOKE_TEST_PASSWORD__',
+    totpSecret: process.env.SMOKE_TOTP_SECRET,
+  });
+  run(signedIn);
+}
+
+main();
