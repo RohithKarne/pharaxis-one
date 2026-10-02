@@ -16,10 +16,10 @@ async function classifyInquiry(inquiryId, userId = null) {
   );
   await pool.execute(
     `INSERT INTO ai_suggestions (case_id, suggestion_type, prompt_hash, suggestion_payload, model, tokens_in, tokens_out, latency_ms)
-     VALUES (0, 'classification', SHA2(?, 256), ?, 'deterministic-local', ?, ?, 0)`,
+     VALUES (0, 'classification', SHA2(?, 256), ?, 'rules-based', ?, ?, 0)`, /* MIPM-27: keyword rules, not a model */
     [JSON.stringify(suggestion), JSON.stringify({ inquiry_id: inquiryId, ...suggestion }), Math.ceil(JSON.stringify(row).length / 4), Math.ceil(JSON.stringify(suggestion).length / 4)]
   ).catch(() => {});
-  await logAudit(userId, 'AI Assistant', 'CLASSIFY', 'inquiry', inquiryId, suggestion);
+  await logAudit(userId, 'Keyword classifier', 'CLASSIFY', 'inquiry', inquiryId, suggestion);
   return suggestion;
 }
 
