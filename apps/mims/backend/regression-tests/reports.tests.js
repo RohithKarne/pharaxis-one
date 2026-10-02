@@ -33,7 +33,8 @@ async function cleanupTemporaryUser(userId) {
 async function getFirstDefinition(makeRequest, token) {
   const res = await makeRequest('GET', '/api/reports/module/definitions', null, token);
   const definitions = Array.isArray(res.body?.definitions) ? res.body.definitions : [];
-  return definitions[0] || null;
+  // Only a built report can be run or scheduled (batch 1, honest reports).
+  return definitions.find((d) => d.is_built) || definitions[0] || null;
 }
 
 async function getFirstDashboard(makeRequest, token) {

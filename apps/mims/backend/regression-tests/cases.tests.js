@@ -386,6 +386,7 @@ module.exports = [
         const contactsBefore = await makeRequest('GET', `/api/cases/${caseId}/contacts`, null, token)
         const createContact = await makeRequest('POST', `/api/cases/${caseId}/contacts`, {
           contact_role: 'reporter',
+          contact_type: 'HCP',
           is_primary: true,
           first_name: 'Regr',
           last_name: 'Contact',
@@ -493,7 +494,8 @@ module.exports = [
         const deleteMi = await makeRequest('DELETE', `/api/cases/mi/${miId}`, null, token)
 
         return {
-          pass: discardResponse.status === 200 && deleteMi.status === 200,
+          // An MI tab that holds a closed (discarded) response is kept for the record: 409.
+          pass: discardResponse.status === 200 && deleteMi.status === 409,
           details: `miBefore=${miBefore.status}, createMi=${createMi.status}, updateMi=${updateMi.status}, responsesBefore=${responsesBefore.status}, createResponse=${createResponse.status}, discardResponse=${discardResponse.status}, deleteMi=${deleteMi.status}`,
         }
       } finally {
@@ -569,12 +571,13 @@ module.exports = [
         }
 
         const statusRes = await makeRequest('PUT', `/api/cases/ae/versions/${versionId}/status`, {
-          status: 'In Review',
+          status: 'in_progress',
         }, token)
 
         const generalBefore = await makeRequest('GET', `/api/cases/ae/versions/${versionId}/general`, null, token)
         const generalUpdate = await makeRequest('PUT', `/api/cases/ae/versions/${versionId}/general`, {
           report_type: 'Initial',
+          ae_status: 'Open',
           date_of_onset: '2026-04-20',
           date_of_report: '2026-04-21',
           reporter_awareness_date: '2026-04-22',
@@ -742,7 +745,7 @@ module.exports = [
         }
 
         const statusRes = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/status`, {
-          status: 'In Review',
+          status: 'in_progress',
         }, token)
 
         const generalBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/general`, null, token)

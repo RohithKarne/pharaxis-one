@@ -562,7 +562,7 @@ module.exports = [
         const listVault = await makeRequest('GET', '/api/admin/platform/vault-config', null, platformAdmin.token);
         const createVault = await makeRequest('POST', '/api/admin/platform/vault-config', {
           org_id: org.id,
-          vault_domain: 'https://vault.invalid.example',
+          vault_domain: 'https://192.0.2.10',
           vault_username: 'regression',
           vault_password: 'regression',
           vault_api_version: 'v24.1',
@@ -572,7 +572,7 @@ module.exports = [
         vaultConfigId = Number(createVault.body?.id || 0);
         const updateVault = vaultConfigId
           ? await makeRequest('PUT', `/api/admin/platform/vault-config/${vaultConfigId}`, {
-            vault_domain: 'https://vault-updated.invalid.example',
+            vault_domain: 'https://192.0.2.11',
             vault_username: 'regression-updated',
             vault_password: 'regression-updated',
             vault_api_version: 'v24.1',
