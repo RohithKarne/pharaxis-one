@@ -154,7 +154,7 @@ router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) =
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 1000) : [];
   if (!ids.length) return res.status(400).json({ error: 'ids must be a list of case ids (at most 1000).' });
   const [r] = await pool.execute(
-    `UPDATE cases SET source_api_client_id = ?, updated_at = updated_at
+    `UPDATE cases SET source_api_client_id = ?, source_reference = COALESCE(source_reference, case_number), updated_at = updated_at
       WHERE org_id = ? AND source_api_client_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
     [req.apiClient.id, req.apiClient.org_id, ...ids]);
   res.json({ claimed: r.affectedRows, sent: ids.length });
@@ -301,11 +301,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     // completes the regulated fields. Values are stored as received (no strict
     // picklist rejection) so a valid submission is never dropped at the boundary.
     const intakeChannel = String(req.body.intake_channel || 'api').slice(0, 50);
-    // T1: stamp the source reference (e.g. CP-0000NN) as the case number so the
-    // case is identifiable and searchable in MIMS by the originating portal
-    // reference. case_number is unique per org — fall back to a suffixed value on
-    // the rare collision rather than failing the intake.
-    const caseNumber = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
+    // T1: the source reference (e.g. CP-0000NN) is kept as given and is the case
+    // number where that number is free, so the case can be found by it in MIMS.
+    const reference = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
     const desc = req.body.description || req.body.subject || null;
     const priority = req.body.priority || 'normal';
     // CPPM-18: when the report first reached the company, per the source portal
@@ -316,36 +314,64 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     // date_received exactly as before — an intake is never rejected for this.
     const awarenessDate = parseAwarenessDate(req.body.awareness_date);
     if (req.body.awareness_date && !awarenessDate) {
-      console.warn(`[api/v1/cases] ignored invalid awareness_date for ${caseNumber || 'unreferenced case'}`);
+      console.warn(`[api/v1/cases] ignored invalid awareness_date for ${reference || 'unreferenced case'}`);
     }
 
-    // R2: idempotency — a repeated push of the same submission (same reference)
-    // must NOT create a duplicate case. If one already exists for this org with
-    // this reference, return it unchanged. Safe under retries.
-    if (caseNumber) {
+    // R2 + bridge row 5: a repeated push of the same report must not create a second
+    // case — and a DIFFERENT sender using the same reference must not be handed this
+    // one. A case is the same report only if this connection sent it with this
+    // reference.
+    if (reference) {
       const [[existing]] = await conn.execute(
-        'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
-        [orgId, caseNumber]
+        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, reference]
       );
       if (existing) {
         await conn.commit();
         return res.status(200).json({ id: existing.id, idempotent: true });
+      }
+      // Created by this connection before MIMS recorded who created a case: same
+      // number, no recorded creator, same intake channel. Claimed, then treated as ours.
+      const [[legacy]] = await conn.execute(
+        `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
+            AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
+        [orgId, reference, intakeChannel]
+      );
+      if (legacy) {
+        await conn.execute(
+          'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
+          [req.apiClient.id, reference, legacy.id]);
+        await conn.commit();
+        return res.status(200).json({ id: legacy.id, idempotent: true });
+      }
+    }
+
+    // The case number is the reference where free in this organisation; where another
+    // source already uses it, the first free of REF-2, REF-3 … (the reference itself is
+    // still kept as given, in source_reference).
+    let caseNumber = reference;
+    if (reference) {
+      for (let n = 2; n <= 50; n++) {
+        const [[taken]] = await conn.execute('SELECT id FROM cases WHERE org_id = ? AND case_number = ? LIMIT 1', [orgId, caseNumber]);
+        if (!taken) break;
+        caseNumber = `${reference.slice(0, 95)}-${n}`;
       }
     }
 
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, reference]
       );
     } catch (err) {
-      // Race: another request created the same reference between our check and insert.
-      if (err.code === 'ER_DUP_ENTRY' && caseNumber) {
+      // Race: the same report pushed twice at once — the second loses on the
+      // (connection, reference) key and gets the first one's case.
+      if (err.code === 'ER_DUP_ENTRY' && reference) {
         const [[dup]] = await conn.execute(
-          'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
-          [orgId, caseNumber]
+          'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+          [req.apiClient.id, reference]
         );
         if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
       }
