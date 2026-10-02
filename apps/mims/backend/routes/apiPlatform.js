@@ -384,31 +384,65 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     }
 
     // R2 + bridge row 5: a repeated push of the same report must not create a second
-    // case — and a DIFFERENT sender using the same reference must not be handed this
-    // one. A case is the same report only if this connection sent it with this
-    // reference.
+    // case — and a DIFFERENT report must never be handed this one. Post-merge review:
+    // the sender's own key decides. A portal set up again on a fresh database (or a
+    // second database on the same connection) numbers from the start again, and its new
+    // CP-000150 was handed another person's case CP-000150 without any error.
+    const sourceKey = typeof req.body.source_key === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(req.body.source_key)
+      ? req.body.source_key : null;
+    let storedReference = reference;
+    let reusedFrom = null;
+    if (sourceKey) {
+      const [[same]] = await conn.execute(
+        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, sourceKey]);
+      if (same) {
+        await conn.commit();
+        return res.status(200).json({ id: same.id, idempotent: true });
+      }
+    }
     if (reference) {
       const [[existing]] = await conn.execute(
-        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        `SELECT id, case_number, source_key, created_at >= NOW() - INTERVAL 2 HOUR AS recent
+           FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1`,
         [req.apiClient.id, reference]
       );
-      if (existing) {
+      // The same report: no key from the sender (as before), or a case from before keys
+      // were recorded that is under two hours old — a genuine retry (the portal's own
+      // retries finish within about 40 minutes). Anything else carrying a key is a
+      // different report that happens to reuse the number.
+      if (existing && (!sourceKey || (!existing.source_key && Number(existing.recent)))) {
+        if (sourceKey && !existing.source_key) {
+          await conn.execute('UPDATE cases SET source_key = ?, updated_at = updated_at WHERE id = ?', [sourceKey, existing.id]);
+        }
         await conn.commit();
         return res.status(200).json({ id: existing.id, idempotent: true });
       }
-      // Created by this connection before MIMS recorded who created a case: same
-      // number, no recorded creator, same intake channel. Claimed, then treated as ours.
-      const [[legacy]] = await conn.execute(
-        `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
-            AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
-        [orgId, reference, intakeChannel]
-      );
-      if (legacy) {
-        await conn.execute(
-          'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
-          [req.apiClient.id, reference, legacy.id]);
-        await conn.commit();
-        return res.status(200).json({ id: legacy.id, idempotent: true });
+      if (existing) {
+        reusedFrom = existing;
+        // The reference stays unique per connection: the new report keeps it with a suffix.
+        for (let n = 2; n <= 50; n++) {
+          storedReference = `${reference.slice(0, 95)}~${n}`;
+          const [[taken]] = await conn.execute(
+            'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? LIMIT 1', [req.apiClient.id, storedReference]);
+          if (!taken) break;
+        }
+      } else if (!sourceKey) {
+        // Created by this connection before MIMS recorded who created a case: same
+        // number, no recorded creator, same intake channel. Claimed, then treated as
+        // ours. Only for a sender without keys — one with keys sent nothing that old.
+        const [[legacy]] = await conn.execute(
+          `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
+              AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
+          [orgId, reference, intakeChannel]
+        );
+        if (legacy) {
+          await conn.execute(
+            'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
+            [req.apiClient.id, reference, legacy.id]);
+          await conn.commit();
+          return res.status(200).json({ id: legacy.id, idempotent: true });
+        }
       }
     }
 
@@ -427,17 +461,19 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, reference]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference, source_key)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, storedReference, sourceKey]
       );
     } catch (err) {
       // Race: the same report pushed twice at once — the second loses on the
-      // (connection, reference) key and gets the first one's case.
-      if (err.code === 'ER_DUP_ENTRY' && reference) {
+      // (connection, key) or (connection, reference) key and gets the first one's case.
+      if (err.code === 'ER_DUP_ENTRY' && (sourceKey || reference)) {
         const [[dup]] = await conn.execute(
-          'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
-          [req.apiClient.id, reference]
+          sourceKey
+            ? 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
+            : 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+          [req.apiClient.id, sourceKey || storedReference]
         );
         if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
       }
@@ -571,13 +607,22 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     const apiActor = `API client: ${req.apiClient.name} (#${req.apiClient.id})`;
     await writeCaseAudit(caseId, 0, apiActor, 'CASE_CREATED_VIA_API', 'source_reference', null,
       `${reference || '(no reference)'} — created from ${req.apiClient.name}`, conn);
+    if (reusedFrom) {
+      await writeCaseAudit(caseId, 0, apiActor, 'SOURCE_REFERENCE_REUSED', 'source_reference', reusedFrom.case_number,
+        `${reference} already belongs to case ${reusedFrom.case_number} from ${req.apiClient.name}; this is a different report, so it has its own case`, conn);
+    }
 
     // Bridge row 6: a report raised from an earlier one (a side effect confirmed from an
     // enquiry) is linked to that case both ways, so either case shows the other.
     if (req.body.related_reference) {
+      // The related report's own key when the sender gives it, so a reused number can
+      // never link the case to someone else's.
+      const relatedKey = typeof req.body.related_source_key === 'string' ? req.body.related_source_key.slice(0, 64) : null;
       const [[related]] = await conn.execute(
-        'SELECT id, case_number FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
-        [req.apiClient.id, String(req.body.related_reference).slice(0, 100)]);
+        relatedKey
+          ? 'SELECT id, case_number FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
+          : 'SELECT id, case_number FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, relatedKey || String(req.body.related_reference).slice(0, 100)]);
       if (related) {
         const note = `Raised from ${req.body.related_reference} on ${req.apiClient.name}`;
         await conn.execute(
@@ -649,7 +694,7 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
       linkUrl: `/cases/${c.id}`,
       metadata: { case_id: c.id, comment_id: cm.insertId },
       eventKey: `follow-up:${cm.insertId}`,
-    }).catch(() => {});
+    }).catch(err => logger.error({ err, case_id: c.id, comment_id: cm.insertId }, 'follow-up notice could not be created'));
   } catch (err) {
     await conn.rollback().catch(() => {});
     if (!res.headersSent) res.status(500).json(intakeFailure(err, req, 'Failed to add the follow-up.'));
