@@ -3336,6 +3336,10 @@ router.post('/cases/:id/mi-responses/:responseId/supersede', authenticate, async
       );
       // C-09: audit joins the same transaction as the supersede writes (moved before commit)
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_SUPERSEDED', 'mi_response', String(original.id), String(ins.insertId), conn);
+      // MIPM-105: the reason the person typed is part of the record, not just asked for.
+      if (reason) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_SUPERSEDE_REASON', 'reason', null, reason.slice(0, 1000), conn);
+      }
       await conn.commit();
       res.status(201).json({ id: ins.insertId, supersedes_response_id: original.id, response_status: 'DRAFT' });
     } catch (e) { await conn.rollback(); throw e; } finally { conn.release(); }
