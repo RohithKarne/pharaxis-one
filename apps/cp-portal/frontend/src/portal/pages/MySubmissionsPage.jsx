@@ -147,8 +147,8 @@ export default function MySubmissionsPage() {
                 {/* One box per request. A request in MIMS is answered there, so what the person
                     adds goes to the MIMS case (bridge row 9). Otherwise, once answered, they reply
                     to the answer (CPPM-63); before that, they add information. */}
-                {s.external_ref && s.can_follow_up ? (
-                  <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} />
+                {s.external_ref ? (
+                  s.can_follow_up ? <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} /> : null
                 ) : s.answer ? (
                   <Conversation submission={s} screening={screening} clientCode={clientCode} portalHeaders={portalHeaders}
                     formatDate={formatDate} onSent={load} />
