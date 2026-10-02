@@ -351,6 +351,8 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
     // carries the date it was originally reported; anything else, the day it was
     // submitted. Either way a sync that is retried days later keeps the true date.
     awareness_date: formData.awareness_date || (submittedAt ? toDateOnly(submittedAt) : null),
+    // Bridge row 6: the earlier report this one was raised from (MIMS links the cases).
+    ...(formData.related_reference ? { related_reference: formData.related_reference } : {}),
     reporter: {
       first_name:    firstName,
       last_name:     lastName,

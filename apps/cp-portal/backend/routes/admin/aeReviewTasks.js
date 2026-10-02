@@ -56,6 +56,8 @@ async function createAeSubmission(conn, clientId, task, { productName, eventDesc
     product_name: productName, event_description: eventDescription, event_date: eventDate,
     source: task.submission_id ? 'safety_review_form' : 'safety_review_chat',
     review_task_id: task.id, confirmed_by: reviewer || null,
+    // Bridge row 6: the enquiry this side effect was found in, so MIMS links the two cases.
+    related_reference: task.submission_id ? `CP-${String(task.submission_id).padStart(6, '0')}` : null,
     // Day zero is when the person told us, not when a reviewer confirmed it.
     awareness_date: toDateOnly(reporter.reportedAt),
   };

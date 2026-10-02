@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const CaseTimelineView = lazy(() => import('./CaseTimelineView'))
@@ -45,6 +46,18 @@ function formatActivity(event) {
 export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = [], users = [], caseId, headers }) {
   const [latest, setLatest] = useState(null)
   const [auditOpen, setAuditOpen] = useState(false)
+  // Bridge row 6: cases linked to this one (e.g. a side effect raised from an enquiry).
+  // MIMS stored links but no screen showed them.
+  const [links, setLinks] = useState([])
+  useEffect(() => {
+    if (!caseId) return
+    let cancelled = false
+    httpFetch(`/api/cases/${caseId}/links`, { headers })
+      .then(r => (r.ok ? r.json() : { links: [] }))
+      .then(d => { if (!cancelled) setLinks(d.links || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [caseId, headers?.Authorization])
 
   useEffect(() => {
     if (!caseId) return
@@ -100,6 +113,21 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
         <span className="cf-strip-item cf-strip-activity">
           <span className="cf-strip-key">Last activity</span>{activity || '—'}
         </span>
+        {links.length > 0 && (
+          <>
+            <span className="cf-strip-sep" aria-hidden="true">·</span>
+            <span className="cf-strip-item">
+              <span className="cf-strip-key">Linked</span>
+              {links.map((l, i) => (
+                <span key={l.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/cases/${l.linked_case_id}`} title={l.notes || l.link_type}>{l.linked_case_number || `#${l.linked_case_id}`}</Link>
+                  {` (${l.link_type.replace('_', ' ')})`}
+                </span>
+              ))}
+            </span>
+          </>
+        )}
         <button type="button" className="cf-strip-audit-link" onClick={() => setAuditOpen(true)}>
           Audit trail ↗
         </button>

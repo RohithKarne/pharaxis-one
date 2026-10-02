@@ -20,7 +20,7 @@ const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
 const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
-const { writeCaseAudit } = require('../services/caseHelpers');
+const { writeCaseAudit, writeAuditLog } = require('../services/caseHelpers');
 const { logger } = require('../services/logger');
 
 const router = express.Router();
@@ -86,6 +86,60 @@ router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'platfo
     const client = await createApiClient({ org_id: orgId, name: req.body.name, scopes: requested, rate_limit_per_min: req.body.rate_limit_per_min || 60, created_by: req.user.userId });
     res.status(201).json(client);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bridge row 6: the organisation's connected systems — what each may do, where its
+// cases land, and how its calls are going (last 24 hours, from api_call_log).
+router.get('/api/admin/api-clients', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
+    if (!orgId) return res.status(400).json({ error: 'Choose an organisation.' });
+    const [clients] = await pool.execute(
+      `SELECT c.id, c.client_id, c.name, c.scopes, c.status, c.rate_limit_per_min, c.default_site_id, c.initial_status_id,
+              c.created_at, c.last_used_at,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h,
+              (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
+              (SELECT CONCAT(l.status_code, ' ', l.method, ' ', l.path) FROM api_call_log l WHERE l.client_id = c.id AND l.status_code >= 400 ORDER BY l.id DESC LIMIT 1) AS last_failure,
+              (SELECT COUNT(*) FROM cases k WHERE k.source_api_client_id = c.id) AS cases_created
+         FROM api_clients c WHERE c.org_id = ? ORDER BY c.status = 'active' DESC, c.name`, [orgId]);
+    const [sites] = await pool.execute('SELECT id, name FROM sites WHERE org_id = ? ORDER BY name', [orgId]);
+    const [states] = await pool.execute(
+      'SELECT id, name, is_closed FROM workflow_states WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1 ORDER BY name', [orgId]);
+    res.json({ clients: clients.map(c => ({ ...c, scopes: Array.isArray(c.scopes) ? c.scopes : JSON.parse(c.scopes || '[]') })), sites, states, allowed_scopes: ALLOWED_API_SCOPES });
+  } catch (err) { res.status(500).json({ error: 'Could not load API connections.' }); }
+});
+
+router.put('/api/admin/api-clients/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT * FROM api_clients WHERE id = ?', [req.params.id]);
+    if (!client || (!hasGlobalAdminScope(req.user) && Number(client.org_id) !== Number(req.user.orgId))) {
+      return res.status(404).json({ error: 'Connection not found.' });
+    }
+    const siteId = req.body.default_site_id ? Number(req.body.default_site_id) : null;
+    const statusId = req.body.initial_status_id ? Number(req.body.initial_status_id) : null;
+    if (siteId) {
+      const [[site]] = await pool.execute('SELECT id FROM sites WHERE id = ? AND org_id = ?', [siteId, client.org_id]);
+      if (!site) return res.status(400).json({ error: 'That site does not belong to this organisation.' });
+    }
+    if (statusId) {
+      const [[st]] = await pool.execute('SELECT id, is_closed FROM workflow_states WHERE id = ? AND (org_id = ? OR org_id IS NULL) AND is_active = 1', [statusId, client.org_id]);
+      if (!st) return res.status(400).json({ error: 'That status is not available to this organisation.' });
+      if (Number(st.is_closed) === 1) return res.status(400).json({ error: 'A new case cannot start in a status that closes the case.' });
+    }
+    const status = ['active', 'revoked'].includes(req.body.status) ? req.body.status : client.status;
+    await pool.execute('UPDATE api_clients SET default_site_id = ?, initial_status_id = ?, status = ? WHERE id = ?',
+      [siteId, statusId, status, client.id]);
+    if (status === 'revoked' && client.status !== 'revoked') {
+      // Switching a connection off ends its current access at once, not when its hour-long token runs out.
+      await pool.execute('UPDATE api_tokens SET revoked = 1 WHERE client_id = ?', [client.id]);
+    }
+    await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'api_client', client.id, {
+      before: { default_site_id: client.default_site_id, initial_status_id: client.initial_status_id, status: client.status },
+      after: { default_site_id: siteId, initial_status_id: statusId, status },
+    });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not save the connection.' }); }
 });
 
 router.get('/api/openapi.yaml', (_req, res) => {
@@ -292,9 +346,17 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    const [[site]] = await conn.execute('SELECT id FROM sites WHERE org_id=? ORDER BY id ASC LIMIT 1', [orgId]);
+    // Bridge row 6: the connection's own site and starting status when set; else the
+    // first site, and the state named "New" (the organisation's, else the platform's).
+    // Before, every case went to the first site and the first state by id — "Email Intake".
+    const [[site]] = await conn.execute(
+      `SELECT id FROM sites WHERE org_id = ? ORDER BY (id = ?) DESC, id ASC LIMIT 1`,
+      [orgId, req.apiClient.default_site_id || 0]);
     if (!site?.id) { await conn.rollback(); return res.status(400).json({ error: 'No site is configured for this organisation.' }); }
-    const [[state]] = await conn.execute('SELECT id FROM workflow_states WHERE org_id=? OR org_id IS NULL ORDER BY org_id IS NULL DESC, id ASC LIMIT 1', [orgId]);
+    const [[state]] = await conn.execute(
+      `SELECT id FROM workflow_states WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1
+        ORDER BY (id = ?) DESC, (LOWER(name) = 'new') DESC, org_id IS NULL ASC, id ASC LIMIT 1`,
+      [orgId, req.apiClient.initial_status_id || 0]);
 
     const caseType = ['MI', 'AE', 'PC'].includes(req.body.case_type) ? req.body.case_type : 'MI';
     // Intake data is captured at the MINIMUM at the source portal; MIMS triage
@@ -498,6 +560,27 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
           `INSERT INTO case_pc_product_info (version_id, product_name, lot_number) VALUES (?, ?, ?)`,
           [pcVer, pcData.product_name || null, pcData.batch_lot_number || null]
         );
+      }
+    }
+
+    // Bridge row 6: the case's own history says where it came from.
+    const apiActor = `API client: ${req.apiClient.name} (#${req.apiClient.id})`;
+    await writeCaseAudit(caseId, 0, apiActor, 'CASE_CREATED_VIA_API', 'source_reference', null,
+      `${reference || '(no reference)'} — created from ${req.apiClient.name}`, conn);
+
+    // Bridge row 6: a report raised from an earlier one (a side effect confirmed from an
+    // enquiry) is linked to that case both ways, so either case shows the other.
+    if (req.body.related_reference) {
+      const [[related]] = await conn.execute(
+        'SELECT id, case_number FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+        [req.apiClient.id, String(req.body.related_reference).slice(0, 100)]);
+      if (related) {
+        const note = `Raised from ${req.body.related_reference} on ${req.apiClient.name}`;
+        await conn.execute(
+          `INSERT IGNORE INTO case_links (case_id, linked_case_id, link_type, created_by, notes) VALUES (?, ?, 'related', NULL, ?), (?, ?, 'related', NULL, ?)`,
+          [caseId, related.id, note, related.id, caseId, note]);
+        await writeCaseAudit(caseId, 0, apiActor, 'CASE_LINKED', 'linked_case_id', null, related.case_number, conn);
+        await writeCaseAudit(related.id, 0, apiActor, 'CASE_LINKED', 'linked_case_id', null, caseNumber, conn);
       }
     }
 
