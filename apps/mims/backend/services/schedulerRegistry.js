@@ -33,6 +33,14 @@ module.exports = [
     configRoute:    '/browse-content',
   },
   {
+    name:           'cm-pre-expiry-reminders',
+    source:         'Content Management',
+    cronExpression: '5 7 * * *',
+    description:    'Sends CM 90/60/30-day pre-expiry reminders (MIPM-65)',
+    type:           'cron',
+    configRoute:    '/browse-content',
+  },
+  {
     name:           'cm-module-lifecycle',
     source:         'Content Management',
     cronExpression: '45 6 * * *',

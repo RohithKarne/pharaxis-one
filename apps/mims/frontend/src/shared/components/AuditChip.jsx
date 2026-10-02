@@ -20,6 +20,9 @@ function timeAgo(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
   const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+  // MIPM-74: a few minutes ahead is clock difference between server and browser;
+  // further ahead is a real fault, so show the date rather than hide it.
+  if (diff < 0)         return diff > -300 ? 'just now' : d.toLocaleString()
   if (diff < 60)        return `${diff}s ago`
   if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`

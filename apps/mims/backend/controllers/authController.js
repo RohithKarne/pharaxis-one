@@ -37,7 +37,7 @@ const {
 } = require('../services/ssoService');
 const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
-const { sessionCacheInvalidate } = require('../middleware/auth');
+const { sessionCacheInvalidate, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE } = require('../middleware/auth');
 const { logger } = require('../services/logger');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
@@ -1240,7 +1240,7 @@ const authController = {
       if (!user) {
         return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'no_account'));
       }
-      if (!user.is_active) {
+      if (isSwitchedOff(user)) { // MIPM-32: "Disabled" counts as switched off too
         return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'inactive_account'));
       }
 
@@ -1404,9 +1404,10 @@ const authController = {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
 
-      if (!user.is_active) {
+      // MIPM-32: a "Disabled" account passed this check and could sign in with its password.
+      if (isSwitchedOff(user)) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
-        return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
+        return res.status(403).json({ error: ACCESS_ENDED_MESSAGE, error_code: ACCESS_ENDED_CODE });
       }
 
       let requestedOrgId = null;

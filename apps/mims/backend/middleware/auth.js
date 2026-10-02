@@ -56,6 +56,24 @@ function refusePendingPasswordReset(session, allowPasswordReset) {
   return session;
 }
 
+// MIPM-32: what a switched-off person is told, on every route in — a live session,
+// a password sign-in or single sign-on. The web app shows it as a full screen.
+const ACCESS_ENDED_MESSAGE = 'Your access has ended. Please contact your administrator.';
+const ACCESS_ENDED_CODE = 'ACCESS_ENDED';
+
+function isSwitchedOff(user) {
+  return Boolean(user) && (!Number(user.is_active) || Boolean(Number(user.is_disabled)));
+}
+
+// Ends every session a person has, on every device, and clears the 60-second
+// session cache for each one. Throws if it cannot, so the caller can say so.
+async function endAllSessions(userId) {
+  const [rows] = await pool.execute('SELECT token FROM sessions WHERE user_id = ?', [userId]);
+  await pool.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  await Promise.all(rows.map((row) => sessionCacheInvalidate(row.token)));
+  return rows.length;
+}
+
 async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   if (!token) throw createAuthError('Access denied. No token provided.', 'AUTH_TOKEN_MISSING');
 
@@ -82,6 +100,15 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   let sessionFound = false;
 
   try {
+    // MIPM-32: a switched-off account is refused here whether or not its sessions
+    // were ended, and with its own reason. Before, only the session row was
+    // checked, so a person switched off by an admin stayed in until it expired.
+    const [[account]] = await pool.execute(
+      'SELECT is_active, is_disabled FROM users WHERE id = ? LIMIT 1',
+      [decoded.userId]
+    );
+    if (isSwitchedOff(account)) throw createAuthError(ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE);
+
     const [[sessionRow]] = await pool.execute(
       'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
       [token]
@@ -138,7 +165,41 @@ function authenticateAllowingPasswordReset(req, res, next) {
   return authenticateRequest(req, res, next, { allowPasswordReset: true });
 }
 
+// MIPM-71: the sign-in cookie's lifetime is the session timeout, and it was set
+// once at sign-in, so a person working the whole time was signed out exactly that
+// long after signing in. Each authenticated request now renews it, so the timeout
+// counts from the last request. Timeouts are read the way sign-in reads them and
+// cached for a minute (a changed timeout applies within a minute).
+const _timeoutCache = new Map();
+async function sessionTimeoutMinutes(user) {
+  const isPlatform = Boolean(user.platformAdmin) || user.role === 'platform_admin';
+  const key = isPlatform ? 'platform' : `org:${user.orgId ?? ''}`;
+  const hit = _timeoutCache.get(key);
+  if (hit && hit.until > Date.now()) return hit.minutes;
+  let minutes = isPlatform ? 60 : 30;
+  try {
+    const [[row]] = isPlatform
+      ? await pool.execute("SELECT config_value AS v FROM system_config WHERE config_key = 'platform_admin_session_timeout_minutes' LIMIT 1")
+      : await pool.execute('SELECT session_timeout_minutes AS v FROM organisations WHERE id = ? LIMIT 1', [user.orgId ?? null]);
+    minutes = Math.max(30, parseInt(row?.v, 10) || minutes);
+  } catch (_) { /* keep the default; the cookie is still renewed */ }
+  _timeoutCache.set(key, { minutes, until: Date.now() + 60_000 });
+  return minutes;
+}
+
+async function renewSessionCookie(res, user) {
+  const minutes = await sessionTimeoutMinutes(user);
+  res.cookie('mims_token', user.token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: minutes * 60 * 1000,
+  });
+}
+
 async function authenticateRequest(req, res, next, options) {
+  const fromCookie = !readBearer(req);
   const token = readBearer(req) || readCookie(req, 'mims_token');
   if (!token) {
     return res.status(401).json({
@@ -159,6 +220,9 @@ async function authenticateRequest(req, res, next, options) {
       should_logout: Boolean(err?.shouldLogout),
     });
   }
+
+  // A forced password-change session keeps its own short cookie (10 minutes).
+  if (fromCookie && !req.user.passwordResetRequired) await renewSessionCookie(res, req.user);
 
   // Time-boxed org access is checked here rather than per route. It was written
   // as standalone middleware and mounted on nothing, so an expired grant let
@@ -310,4 +374,4 @@ function requireModule(moduleKey) {
   };
 }
 
-module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs, readBearer };
+module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };

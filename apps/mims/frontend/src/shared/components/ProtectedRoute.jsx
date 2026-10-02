@@ -30,6 +30,17 @@ export default function ProtectedRoute({ children, loginPath = '/login' }) {
       </div>
     )
   }
-  if (!token) return <Navigate to={loginPath} replace />
+  if (!token) {
+    // MIPM-32: once this browser has been told a person's access ended, refresh,
+    // back and bookmarks show that message again rather than the sign-in form.
+    // Signing in clears it (AuthContext), so the sign-in page stays reachable.
+    let accessEnded = false
+    try { accessEnded = localStorage.getItem('mims_access_ended') === '1' } catch { /* storage blocked */ }
+    if (accessEnded) {
+      window.location.replace(`${import.meta.env.BASE_URL || '/'}access-ended`)
+      return null
+    }
+    return <Navigate to={loginPath} replace />
+  }
   return children
 }
