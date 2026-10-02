@@ -770,6 +770,22 @@ async function syncToIntegration(clientId, submissionId, formType) {
     // Default structured payload — works out-of-the-box for the seeded portal forms.
     payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
 
+    // Post-merge review: this request's own key, so MIMS never hands it another report's
+    // case that happens to have the same number (a portal set up again, or a second
+    // database on the same connection, numbers from the start). Given once, kept.
+    let syncKey = submission.sync_key;
+    if (!syncKey) {
+      await pool.execute('UPDATE cp_submissions SET sync_key = ? WHERE id = ? AND sync_key IS NULL', [require('crypto').randomUUID(), submissionId]);
+      [[{ sync_key: syncKey }]] = await pool.execute('SELECT sync_key FROM cp_submissions WHERE id = ?', [submissionId]);
+    }
+    payload.source_key = syncKey;
+    // The request a confirmed side effect was raised from, by its key as well.
+    const relatedId = Number(String(formData.related_reference || '').replace(/^CP-0*/, ''));
+    if (relatedId) {
+      const [[rel]] = await pool.execute('SELECT sync_key FROM cp_submissions WHERE id = ? AND client_id = ?', [relatedId, clientId]);
+      if (rel?.sync_key) payload.related_source_key = rel.sync_key;
+    }
+
     // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
     // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
     // payload the MIMS API actually reads — a flat assignment would silently no-op.

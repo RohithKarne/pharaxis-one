@@ -241,7 +241,9 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   owner_id        INT          NULL,   -- CPPM-61 (0026): who holds it now
   owner_since     DATETIME     NULL,
   identity_erased_at DATETIME  NULL,
+  sync_key        CHAR(36)     NULL,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_cp_submissions_sync_key (sync_key),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
   KEY idx_cp_submissions_type (submission_type),
@@ -1214,4 +1216,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0033_add_connection_failure_count.sql',     NULL),
   ('0034_add_answer_source.sql',                NULL),
   ('0035_add_submission_followups.sql',         NULL),
-  ('0036_add_submission_identity_erased.sql',   NULL);
+  ('0036_add_submission_identity_erased.sql',   NULL),
+  ('0037_add_submission_sync_key.sql',          NULL);
