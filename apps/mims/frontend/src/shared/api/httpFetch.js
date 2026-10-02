@@ -44,6 +44,10 @@ export async function httpFetch(input, init) {
       should_logout: Boolean(detail?.should_logout),
     }
 
+    // A change-control refusal ("give a reason", "sign with your password") is not a
+    // sign-in problem: the case screen asks for it in its own dialog.
+    if (detail?.code === 'PASSWORD_REQUIRED' || detail?.code === 'REASON_REQUIRED') return response
+
     if (payload.should_logout && response.status === 401 && !_handling && typeof _onSessionExpiry === 'function') {
       _handling = true
       try {

@@ -1769,7 +1769,12 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         if (isClose) {
           const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
           if (needPwd && !(await changeControl.verifyPassword(req.user.userId, body.password))) {
-            return res.status(401).json({ error: 'Password (electronic signature) required to close this case.', code: 'PASSWORD_REQUIRED' });
+            return res.status(401).json({
+              error: body.password
+                ? 'That password was not accepted — electronic signature rejected. Enter your own password to close this case.'
+                : 'Password (electronic signature) required to close this case.',
+              code: 'PASSWORD_REQUIRED',
+            });
           }
         }
         if (isReopen) {
@@ -1910,6 +1915,10 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
       caseRef = updated.case_number || currentCase.case_number || `Case ${req.params.id}`;
       if (statusChanged) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', previousStatusId, updatedStatusId, conn);
+        // The reason the user gave for closing or reopening goes into the case's own history.
+        if (body.reason && String(body.reason).trim()) {
+          await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGE_REASON', 'reason', null, String(body.reason).trim().slice(0, 1000), conn);
+        }
         await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'case_status', req.params.id, {
           case_id: Number(req.params.id),
           from_status_id: previousStatusId,

@@ -16,6 +16,7 @@ import useCoreFields       from '../hooks/useCoreFields'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 import toast from '../../../shared/utils/toast'
+import CaseChangeControlModal from '../components/CaseChangeControlModal'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -35,7 +36,7 @@ export default function CaseFormPage() {
     draftStatus, draftRestored, discardDraft,
     saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged,
     getFieldConfig, getPicklistOptions,
-    headers,
+    headers, changeControlAsk, setChangeControlAsk,
   } = useCaseForm(id, token)
 
   // Sections with their own save (MI, AE, PC) register here, so Save Case also
@@ -315,6 +316,12 @@ export default function CaseFormPage() {
         </CaseFormWizard>
       </Suspense>
       </CaseFormShell>
+
+      <CaseChangeControlModal
+        ask={changeControlAsk}
+        onCancel={() => setChangeControlAsk(null)}
+        onSubmit={values => { setChangeControlAsk(null); saveInfo(false, values) }}
+      />
 
       {/* PARK: AI Assistant panel removed from the case form — the AI suite ships as a
           deterministic-local mock (canned output). Re-surface once a real provider is standard. */}
