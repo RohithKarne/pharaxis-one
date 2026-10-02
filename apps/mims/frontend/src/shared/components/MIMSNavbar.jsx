@@ -47,7 +47,7 @@ function NavSection({ title, collapsed }) {
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess, hasCaseOption, user } = useAuth()
+  const { hasModuleAccess, hasCaseOption, hasCapability, user } = useAuth()
 
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
   const userRole = user?.role
@@ -70,7 +70,10 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
   function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
   const isAdmin = isAdminUser(userRole)
-  const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
+  // MIPM-103 (M-95): also the permission the server checks — a person in no security group is
+  // "unrestricted" in the option matrix, so a reviewer was offered New Case and then refused.
+  const hasCreatePermission = hasCapability ? hasCapability('case.create') : true
+  const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case') && hasCreatePermission
 
   return (
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
@@ -175,7 +178,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
           onClick={() => canCreateCase && navigate('/cases')}
           disabled={!canCreateCase}
           aria-label="Create new case"
-          title={!canCreateCase ? 'Your security group does not allow Add New Case.' : undefined}>
+          title={!canCreateCase ? (hasCreatePermission ? 'Your security group does not allow Add New Case.' : 'Your role does not allow creating cases.') : undefined}>
           {collapsed ? <Icon name="plus" size={16} /> : <><Icon name="plus" size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />New Case</>}
         </button>
       </div>
