@@ -20,7 +20,13 @@ async function createIndependentApprover(makeRequest, authorToken) {
   );
   const userId = Number(ins.insertId || 0);
   if (orgId) {
-    await pool.execute('INSERT INTO user_org_access (user_id, org_id, is_active) VALUES (?, ?, 1)', [userId, orgId]);
+    // role_at_org is what permissions are judged on in this organisation (an admin with it
+    // empty is no admin there), and a site, as the admin screens set for every account.
+    await pool.execute(
+      `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission, is_active)
+       SELECT ?, ?, (SELECT id FROM sites WHERE org_id = ? AND is_active = 1 ORDER BY is_primary DESC, id LIMIT 1), 'admin', 'full', 1`,
+      [userId, orgId, orgId]
+    );
   }
   await pool.execute("INSERT INTO user_module_permissions (user_id, module, can_access) VALUES (?, 'content_mgmt', 1)", [userId]);
   const login = await loginForToken(makeRequest, email, password);
