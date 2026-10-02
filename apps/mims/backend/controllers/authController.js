@@ -1679,7 +1679,7 @@ const authController = {
       const mailFailed = /^E[A-Z]+$/.test(String(err.code || '')) || /SMTP configuration is incomplete/.test(err.message || '');
       if (mailFailed) {
         return res.status(503).json({
-          error: 'We could not send the code — the mail server did not respond. Try again in a minute, or use your authenticator app or a backup code.',
+          error: 'We could not send the code by email right now. Try again in a minute, or use your authenticator app or a backup code.',
         });
       }
       return res.status(400).json({ error: err.message || 'Could not send 2FA email code.' });
