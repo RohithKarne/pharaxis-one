@@ -193,6 +193,28 @@ app.use('/api/portal/personal',      require('./routes/portal/personal'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 app.use('/api/portal/training',      require('./routes/portal/training'));   // CPPM-15
 
+// One background job at a time across instances. MySQL ties a named lock to the
+// connection that took it; the jobs took it on one pooled connection and released it
+// on another, so the release did nothing and every later tick that drew a different
+// connection was skipped without a word (bridge walk, 2 Oct 2026: a file got 2 tries
+// in 7 retry runs). Taken and released on one held connection now, failures logged
+// rather than swallowed, and the name carries the database so two portals sharing a
+// MySQL server do not block each other's jobs.
+async function withJobLock(name, job, fn) {
+  const key = `${name}:${process.env.MYSQL_DATABASE || 'default'}`.slice(0, 64);
+  const conn = await pool.getConnection();
+  try {
+    const [[row]] = await conn.query('SELECT GET_LOCK(?, 0) AS acquired', [key]);
+    if (Number(row?.acquired || 0) !== 1) { log.info('job.skipped_locked', { job }); return false; }
+    try { await fn(); }
+    catch (err) { log.error('job.failed', { job, err }); }
+    finally { await conn.query('SELECT RELEASE_LOCK(?)', [key]).catch(() => {}); }
+    return true;
+  } finally {
+    conn.release();
+  }
+}
+
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 // CP-14: returns the tick fn (no side effects) so it can be driven either by the
 // in-process interval (dev/single instance) or an external cron (stateless/HA).
@@ -201,11 +223,7 @@ function createContentScheduler() {
   const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
   async function tick() {
-    let lockAcquired = false;
-    try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [SCHEDULER_LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
+    await withJobLock(SCHEDULER_LOCK_KEY, 'content-scheduler', async () => {
 
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -256,12 +274,7 @@ function createContentScheduler() {
       // Bridge row 2: tell the safety team about tasks that have waited too long.
       const { sweepWaitingSafetyTasks } = require('./services/adminAlerts');
       await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
-    } catch { /* silently ignore scheduler errors */ }
-    finally {
-      if (lockAcquired) {
-        await pool.execute('SELECT RELEASE_LOCK(?)', [SCHEDULER_LOCK_KEY]).catch(() => {});
-      }
-    }
+    });
   }
 
   return tick;
@@ -290,16 +303,7 @@ function createMimsCloseSyncScheduler() {
   const { pollOnce } = require('./services/mimsCloseSync');
   const LOCK_KEY = 'cp-portal-mims-close-sync';
   async function tick() {
-    let lockAcquired = false;
-    try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await pollOnce();
-    } catch { /* silently ignore poller errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
-    }
+    await withJobLock(LOCK_KEY, 'mims-close-sync', () => pollOnce());
   }
   return tick;
 }
@@ -319,16 +323,7 @@ function createMimsRetryScheduler() {
   const { retryOnce } = require('./services/mimsRetry');
   const LOCK_KEY = 'cp-portal-mims-retry';
   async function tick() {
-    let lockAcquired = false;
-    try {
-      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
-      lockAcquired = Number(lockRow?.acquired || 0) === 1;
-      if (!lockAcquired) return;
-      await retryOnce();
-    } catch { /* silently ignore retry errors */ }
-    finally {
-      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
-    }
+    await withJobLock(LOCK_KEY, 'mims-retry', () => retryOnce());
   }
   return tick;
 }
