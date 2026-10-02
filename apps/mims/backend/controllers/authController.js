@@ -1391,16 +1391,10 @@ const authController = {
         'SELECT locked_until, failed_login_attempts FROM users WHERE email = ?',
         [identity]
       );
-      if (lockCheck.length > 0 && lockCheck[0].locked_until) {
-        const lockedUntil = new Date(lockCheck[0].locked_until);
-        if (lockedUntil > new Date()) {
-          return res.status(423).json({
-            error: 'Account locked',
-            message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
-            locked_until: lockedUntil.toISOString()
-          });
-        }
-      }
+      // MIPM-107: said only once the password is right (below). Answering "locked"
+      // first told a stranger that the email has an account (M-2).
+      const lockedUntil = lockCheck[0]?.locked_until ? new Date(lockCheck[0].locked_until) : null;
+      const isLocked = !!lockedUntil && lockedUntil > new Date();
 
       const user = await userModel.findByEmail(identity);
       // M-2 / M-3: the password is checked first — against a stand-in hash when
@@ -1411,6 +1405,19 @@ const authController = {
       if (!user) {
         await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed', req });
         return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+
+      if (isLocked) {
+        if (!passwordMatch) {
+          // Same answer as any wrong password; the lock is not extended.
+          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password while locked', authEvent: 'password_login_failed', req });
+          return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+        return res.status(423).json({
+          error: 'Account locked',
+          message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
+          locked_until: lockedUntil.toISOString()
+        });
       }
 
       if (!passwordMatch) {
@@ -2422,12 +2429,13 @@ const authController = {
         return res.status(401).json({ error: 'Touch ID login failed.' });
       }
 
-      // Check account lockout (same as password login)
+      await webauthnService.verifyAuthentication(user.id, authenticationResponse);
+
+      // Check account lockout (same as password login). MIPM-107: only after the passkey
+      // is verified, so a stranger cannot tell a locked account from no account.
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         return res.status(401).json({ error: 'Account is temporarily locked. Please try again later.' });
       }
-
-      await webauthnService.verifyAuthentication(user.id, authenticationResponse);
 
       await logLoginAudit({
         userId: user.id,
@@ -2458,8 +2466,10 @@ const authController = {
         }).catch(() => {});
       }
 
-      const status = err.code === 'CHALLENGE_EXPIRED' ? 400 : 401;
-      return res.status(status).json({ error: err.message || 'Touch ID verification failed.' });
+      // MIPM-107: one answer for every failure (the reason is in the audit row above).
+      // "Challenge expired" / "Credential not found" were only ever said for a real
+      // account, so they told a stranger which emails have one.
+      return res.status(401).json({ error: 'Touch ID login failed.' });
     }
   },
 
