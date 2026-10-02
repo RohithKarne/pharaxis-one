@@ -22,6 +22,7 @@ const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { writeCaseAudit, writeAuditLog } = require('../services/caseHelpers');
 const { logger } = require('../services/logger');
+const { notifyIntakeArrival } = require('../services/intakeAlertService');
 
 const router = express.Router();
 
@@ -591,6 +592,8 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
 
     await conn.commit();
     res.status(201).json({ id: caseId, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
+    // Bridge row 7: an unassigned side-effect or complaint case tells the supervisors.
+    notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName: req.apiClient.name });
   } catch (err) {
     await conn.rollback().catch(() => {});
     res.status(500).json(intakeFailure(err, req, 'Failed to create case.'));

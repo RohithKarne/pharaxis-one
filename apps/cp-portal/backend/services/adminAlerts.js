@@ -118,6 +118,60 @@ async function sweepWaitingSafetyTasks() {
   return rows.length;
 }
 
+// Bridge row 7: whether the connection to MIMS worked on this call. "Worked" means MIMS
+// answered — a refusal about the data still proves the line is up. Three failures in a
+// row, or MIMS refusing the portal's own sign-in, raise one "cannot reach MIMS" alert;
+// the next call that works clears it.
+const CONNECTION_FAILURES_BEFORE_ALERT = 3;
+async function recordConnectionResult(integration, worked, reason = null) {
+  try {
+    if (worked) {
+      await pool.execute(
+        `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = 'success', last_sync_error = NULL, consecutive_failures = 0 WHERE id = ?`,
+        [integration.id]);
+      await clearAlerts(integration.client_id, `connection:${integration.id}`, 'system: MIMS answered again');
+      return;
+    }
+    await pool.execute(
+      `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = 'failure', last_sync_error = ?, consecutive_failures = consecutive_failures + 1 WHERE id = ?`,
+      [String(reason || '').slice(0, 1000), integration.id]);
+    const [[row]] = await pool.execute('SELECT consecutive_failures FROM cp_integration_config WHERE id = ?', [integration.id]);
+    const signInRefused = /refused the sign-in/i.test(String(reason || ''));
+    if (signInRefused || row.consecutive_failures >= CONNECTION_FAILURES_BEFORE_ALERT) {
+      await raiseAlert(integration.client_id, {
+        kind: 'connection_down', audience: 'integration',
+        title: signInRefused ? 'MIMS is refusing the portal\'s sign-in' : 'The portal cannot reach MIMS',
+        body: `${asSentence(reason)} ${signInRefused ? 'Check the client ID and secret on the Integration page.' : `${row.consecutive_failures} calls in a row have failed.`} Reports wait and are sent automatically once MIMS answers.`,
+        linkPath: `/admin/clients/${integration.client_id}/integration`,
+        relatedType: 'integration', relatedId: integration.id, dedupeKey: `connection:${integration.id}`,
+      });
+    }
+  } catch (err) {
+    log.error('admin_alerts.connection_result_failed', { err, integration_id: integration.id });
+  }
+}
+
+// Bridge row 7: a file the virus scanner could not check stays held — not sent to MIMS,
+// not downloadable. Held longer than two hours, the client's team is told once per file.
+async function sweepHeldFiles() {
+  const [rows] = await pool.execute(
+    `SELECT a.id, a.client_id, a.submission_id, a.file_name, a.scan_detail
+       FROM cp_submission_attachments a
+      WHERE a.scan_status = 'pending' AND a.created_at < NOW() - INTERVAL 2 HOUR
+      ORDER BY a.id ASC LIMIT 100`);
+  for (const f of rows) {
+    const ref = `CP-${String(f.submission_id).padStart(6, '0')}`;
+    await raiseAlert(f.client_id, {
+      kind: 'file_held', audience: 'integration',
+      title: `A file sent with ${ref} has been held unscanned for over 2 hours`,
+      body: `"${f.file_name}" could not be checked by the virus scanner${f.scan_detail ? ` (${f.scan_detail})` : ''}. Until it is, it is not sent to MIMS and cannot be downloaded. Check that the scanner is running.`,
+      linkPath: `/admin/clients/${f.client_id}/submissions`,
+      relatedType: 'submission', relatedId: f.submission_id, dedupeKey: `held:${f.id}`,
+    });
+  }
+  return rows.length;
+}
+
 // A reason from another system may or may not end with a full stop; make it one sentence.
 function asSentence(text) {
   const t = String(text || '').trim();
@@ -128,4 +182,4 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-module.exports = { raiseAlert, clearAlerts, sweepWaitingSafetyTasks, recipients, splitEmails, asSentence };
+module.exports = { raiseAlert, clearAlerts, sweepWaitingSafetyTasks, sweepHeldFiles, recordConnectionResult, recipients, splitEmails, asSentence };

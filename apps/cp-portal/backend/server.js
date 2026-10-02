@@ -272,8 +272,10 @@ function createContentScheduler() {
       const { rescanHeldAttachments } = require('./services/attachmentScan');
       await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
       // Bridge row 2: tell the safety team about tasks that have waited too long.
-      const { sweepWaitingSafetyTasks } = require('./services/adminAlerts');
+      const { sweepWaitingSafetyTasks, sweepHeldFiles } = require('./services/adminAlerts');
       await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
+      // Bridge row 7: files held unscanned too long.
+      await sweepHeldFiles().catch(err => log.error('admin_alerts.held_sweep_failed', { err }));
     });
   }
 

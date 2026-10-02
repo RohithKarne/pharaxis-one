@@ -20,6 +20,7 @@ const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
 const { recordStatusEvent } = require('../utils/submissionStatus');
 const log = require('../utils/logger');
+const { recordConnectionResult } = require('./adminAlerts');
 
 const PAGE = 200;
 const MAX_PAGES_PER_TICK = 10;
@@ -141,12 +142,14 @@ async function pollOnce() {
   for (const integ of integrations) {
     try {
       const r = await followIntegration(integ);
+      await recordConnectionResult(integ, true);
       closedCount += r.closed;
       if (r.closed || r.reopened) log.info('mims.close_sync.applied', { client_id: integ.client_id, ...r });
     } catch (err) {
       // One client's MIMS being down must not stop the others; the checkpoint has not
       // moved past anything unread, so the next tick picks up where this one stopped.
       log.warn('mims.close_sync.failed', { client_id: integ.client_id, error: err.message });
+      await recordConnectionResult(integ, false, err.message);
     }
   }
   return closedCount;

@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS cp_integration_config (
   changes_since      VARCHAR(19)  NULL,
   changes_after_id   INT          NULL,
   changes_read_at    DATETIME     NULL,
+  consecutive_failures INT          NOT NULL DEFAULT 0,
   created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -1148,4 +1149,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0024_add_training_records.sql',             NULL),
   ('0030_add_admin_alerts.sql',                 NULL),
   ('0031_add_attachment_delivery.sql',          NULL),
-  ('0032_add_mims_change_checkpoint.sql',       NULL);
+  ('0032_add_mims_change_checkpoint.sql',       NULL),
+  ('0033_add_connection_failure_count.sql',     NULL);

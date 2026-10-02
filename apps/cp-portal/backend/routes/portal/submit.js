@@ -20,7 +20,7 @@ const { systemAudit } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
-const { raiseAlert, clearAlerts, asSentence } = require('../../services/adminAlerts');
+const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
@@ -562,6 +562,10 @@ async function syncToIntegration(clientId, submissionId, formType) {
       r = await postCase();
     }
 
+    // Bridge row 7: MIMS answered (a 5xx means MIMS itself is failing, so it counts
+    // against the connection; any other answer proves the line works).
+    await recordConnectionResult(integration, r.status < 500, r.status < 500 ? null : `MIMS answered HTTP ${r.status}.`);
+
     if (r.ok) {
       const data = await r.json().catch(() => ({}));
       const mimsCaseId = data.case_id || data.id || null;
@@ -582,6 +586,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
       await alertIfStuck(clientId, submissionId, reason, { refused: r.status >= 400 && r.status < 500 && ![401, 408, 429].includes(r.status) });
     }
   } catch (err) {
+    await recordConnectionResult(integration, false, err.message);
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
     await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: err.message, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: err.message });
