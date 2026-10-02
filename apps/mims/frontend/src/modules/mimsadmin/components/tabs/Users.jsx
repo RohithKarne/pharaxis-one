@@ -258,7 +258,7 @@ export default function Users() {
                       ? <span className="ma-usr-pill ma-usr-pill-active">Active</span>
                       : <span className="ma-usr-pill ma-usr-pill-inactive">Inactive</span>
                   }
-                  {(!u.is_active || u.is_disabled) && u.inactive_reason && (
+                  {(!u.is_active || !!u.is_disabled) && !!u.inactive_reason && (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                       {u.inactive_reason}{u.inactive_at ? ` · ${fmtDateTime(u.inactive_at)}` : ''}
                     </div>
