@@ -28,6 +28,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const { syncToIntegration, toDateOnly } = require('../portal/submit');
+const { clearAlerts } = require('../../services/adminAlerts');
 
 const OUTCOMES = ['reviewed_not_ae', 'cleared_administrative', 'confirmed_ae'];
 const CLINICAL_ROLES = ['safety_reviewer', 'superadmin'];
@@ -172,6 +173,7 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
         await conn.execute('UPDATE cp_ae_review_tasks SET ae_submission_id = ? WHERE id = ?', [aeSubmissionId, task.id]);
       }
       await conn.commit();
+      clearAlerts(req.params.clientId, [`safety_new:${task.id}`, `safety_wait:${task.id}`], `task closed by ${req.admin.name || req.admin.email}`);
     } catch (txErr) {
       await conn.rollback().catch(() => {});
       throw txErr;

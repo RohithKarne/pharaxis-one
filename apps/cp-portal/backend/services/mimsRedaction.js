@@ -17,6 +17,7 @@ const { getAuthHeaders, invalidateAuth } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
 const log = require('../utils/logger');
+const { raiseAlert, clearAlerts } = require('./adminAlerts');
 
 const MAX_ATTEMPTS    = Number(process.env.MIMS_REDACTION_MAX_ATTEMPTS || 8);
 const BACKOFF_MINUTES = [1, 5, 15, 60, 240];   // wait after attempts 1..5, then 240
@@ -62,7 +63,10 @@ async function callMims(row) {
     headers = await buildHeaders();
     r = await post();
   }
-  if (!r.ok) throw new Error(`MIMS returned HTTP ${r.status}.`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(`MIMS returned HTTP ${r.status}${body?.error ? `: ${body.error}` : '.'}`);
+  }
 }
 
 /** One attempt for a queued row. The outcome is always written back to the row. */
@@ -75,6 +79,7 @@ async function attemptRedaction(id) {
       `UPDATE cp_mims_redactions SET status='done', attempts=attempts+1, completed_at=NOW(), last_error=NULL WHERE id=?`, [id]);
     systemAudit('MIMS integration', row.client_id, 'MIMS_REPORTER_REDACTED', 'submission', row.submission_id,
       { mims_case_id: row.external_ref });
+    clearAlerts(row.client_id, `erasure:${row.submission_id}`, 'system: the erasure reached MIMS');
     return true;
   } catch (err) {
     const attempts = row.attempts + 1;
@@ -91,6 +96,17 @@ async function attemptRedaction(id) {
     systemAudit('MIMS integration', row.client_id,
       finalAttempt ? 'MIMS_REDACTION_GAVE_UP' : 'MIMS_REDACTION_FAILED', 'submission', row.submission_id,
       { mims_case_id: row.external_ref, attempt: attempts, error: reason });
+    if (finalAttempt) {
+      // Bridge row 2: an erasure that cannot reach MIMS leaves a person's name and
+      // contact details in MIMS — a regulatory exposure someone must act on.
+      await raiseAlert(row.client_id, {
+        kind: 'erasure_stuck', audience: 'integration',
+        title: `An erasure has not reached MIMS case ${row.external_ref}`,
+        body: `The reporter's name and contact details may still be on that MIMS case — ${attempts} tries failed. Last reason: ${reason} Remove them in MIMS by hand, or fix the connection and run the erasure again.`,
+        linkPath: `/admin/clients/${row.client_id}/data-requests`,
+        relatedType: 'submission', relatedId: row.submission_id, dedupeKey: `erasure:${row.submission_id}`,
+      });
+    }
     log[finalAttempt ? 'error' : 'warn'](finalAttempt ? 'mims.redaction.gave_up' : 'mims.redaction.retry',
       { submission_id: row.submission_id, mims_case_id: row.external_ref, attempts, error: reason });
     return false;

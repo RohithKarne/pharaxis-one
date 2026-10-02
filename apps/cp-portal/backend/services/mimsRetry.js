@@ -71,4 +71,4 @@ async function retryOnce() {
   return retried;
 }
 
-module.exports = { retryOnce };
+module.exports = { retryOnce, MAX_ATTEMPTS };

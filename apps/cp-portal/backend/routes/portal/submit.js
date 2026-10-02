@@ -20,6 +20,8 @@ const { systemAudit } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
+const { raiseAlert, clearAlerts } = require('../../services/adminAlerts');
+const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -171,11 +173,12 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     // and audited so a missing task is visible rather than silent.
     if (isFlagged(formType, parsedForm)) {
       try {
-        await pool.execute(
+        const [task] = await pool.execute(
           `INSERT INTO cp_ae_review_tasks (client_id, submission_id, reported_detail) VALUES (?, ?, ?)`,
           [client.id, submissionId, String(parsedForm[AE_SCREEN_DETAIL_KEY] || '').slice(0, 5000) || null]
         );
         systemAudit('portal', client.id, 'AE_REVIEW_TASK_CREATED', 'submission', submissionId, { type: formType });
+        raiseSafetyTaskAlert(client.id, task.insertId, 'a portal form');
       } catch (taskErr) {
         console.error(`[PD-2] AE review task NOT created for submission ${submissionId}:`, taskErr.message);
         systemAudit('portal', client.id, 'AE_REVIEW_TASK_FAILED', 'submission', submissionId,
@@ -477,6 +480,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
     await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
+    await alertIfStuck(clientId, submissionId, reason);
     return;
   }
 
@@ -514,6 +518,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
         [mimsCaseId, submissionId]);
       await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
+      clearAlerts(clientId, `sync:${submissionId}`, 'system: the report reached MIMS');
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {
@@ -521,12 +526,51 @@ async function syncToIntegration(clientId, submissionId, formType) {
       await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [reason, submissionId]);
       await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, status: r.status });
+      // 4xx other than sign-in, timeout and rate limit: MIMS looked at the report and
+      // said no. Retrying the same data gets the same answer, so say so now.
+      await alertIfStuck(clientId, submissionId, reason, { refused: r.status >= 400 && r.status < 500 && ![401, 408, 429].includes(r.status) });
     }
   } catch (err) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
     await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: err.message, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: err.message });
+    await alertIfStuck(clientId, submissionId, err.message);
   }
+}
+
+const TYPE_LABEL = { medical_inquiry: 'medical enquiry', adverse_event: 'side-effect report', product_complaint: 'product complaint' };
+
+// Bridge row 2: tell the client's team when a report is not getting through — at once
+// if MIMS refused it outright, otherwise when the automatic retries are used up.
+// One alert per report; it closes itself when the report reaches MIMS.
+async function alertIfStuck(clientId, submissionId, reason, { refused = false } = {}) {
+  try {
+    const [[s]] = await pool.execute('SELECT sync_attempts, submission_type FROM cp_submissions WHERE id = ?', [submissionId]);
+    if (!s || (!refused && s.sync_attempts < MAX_SYNC_ATTEMPTS)) return;
+    const ref = `CP-${String(submissionId).padStart(6, '0')}`;
+    const what = TYPE_LABEL[s.submission_type] || 'report';
+    await raiseAlert(clientId, {
+      kind: refused ? 'sync_refused' : 'sync_gave_up', audience: 'integration',
+      title: refused ? `MIMS refused ${what} ${ref}` : `${what[0].toUpperCase()}${what.slice(1)} ${ref} has not reached MIMS after ${s.sync_attempts} tries`,
+      body: `Reason: ${reason} It is on the Sync Health page, where it can be sent again once the cause is fixed.`,
+      linkPath: `/admin/clients/${clientId}/sync-health`,
+      relatedType: 'submission', relatedId: submissionId, dedupeKey: `sync:${submissionId}`,
+    });
+  } catch (err) {
+    log.error('portal.sync.alert_failed', { err, submission_id: submissionId });
+  }
+}
+
+// Bridge row 2: a new safety task is announced to the safety team straight away.
+// Reference and link only — what the person reported is read in the portal.
+function raiseSafetyTaskAlert(clientId, taskId, source) {
+  return raiseAlert(clientId, {
+    kind: 'safety_task_new', audience: 'safety',
+    title: `New safety task #${taskId} to review`,
+    body: `Someone said they became unwell, through ${source}. Open the Safety Queue to review it.`,
+    linkPath: `/admin/clients/${clientId}/safety-queue`,
+    relatedType: 'ae_review_task', relatedId: taskId, dedupeKey: `safety_new:${taskId}`,
+  });
 }
 
 // GET /api/portal/submit/:clientCode/attachments/:attachmentId — download own submission's attachment
@@ -572,3 +616,4 @@ module.exports = router;
 module.exports.syncToIntegration = syncToIntegration;
 module.exports.forwardReleasedAttachment = forwardReleasedAttachment;
 module.exports.toDateOnly = toDateOnly;
+module.exports.raiseSafetyTaskAlert = raiseSafetyTaskAlert;

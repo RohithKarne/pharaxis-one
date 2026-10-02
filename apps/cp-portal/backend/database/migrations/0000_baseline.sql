@@ -1075,6 +1075,36 @@ CREATE TABLE IF NOT EXISTS cp_login_attempts (
   PRIMARY KEY (login_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── ADMIN ALERTS (from 0030, bridge row 2) ──────────────────────
+CREATE TABLE IF NOT EXISTS cp_admin_alerts (
+  id            INT          NOT NULL AUTO_INCREMENT,
+  client_id     INT          NOT NULL,
+  kind          VARCHAR(50)  NOT NULL,
+  audience      VARCHAR(20)  NOT NULL,
+  title         VARCHAR(255) NOT NULL,
+  body          TEXT         NULL,
+  link_path     VARCHAR(255) NULL,
+  related_type  VARCHAR(50)  NULL,
+  related_id    INT          NULL,
+  dedupe_key    VARCHAR(191) NOT NULL,
+  emailed_to    TEXT         NULL,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at   DATETIME     NULL,
+  resolved_by   VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_admin_alert_dedupe (client_id, dedupe_key),
+  KEY idx_admin_alert_open (client_id, resolved_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cp_alert_settings (
+  client_id            INT      NOT NULL,
+  integration_emails   TEXT     NULL,
+  safety_emails        TEXT     NULL,
+  safety_wait_hours    INT      NOT NULL DEFAULT 4,
+  updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1105,4 +1135,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0021_add_attachment_scan_status.sql',       NULL),
   ('0022_widen_audit_details.sql',              NULL),
   ('0023_add_login_attempts.sql',               NULL),
-  ('0024_add_training_records.sql',             NULL);
+  ('0024_add_training_records.sql',             NULL),
+  ('0030_add_admin_alerts.sql',                 NULL);

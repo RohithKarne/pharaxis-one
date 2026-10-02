@@ -171,6 +171,7 @@ app.use('/api/admin/feedback',     require('./routes/admin/feedback'));
 app.use('/api/admin/faq',          require('./routes/admin/faq'));
 app.use('/api/admin/language',     require('./routes/admin/language'));
 app.use('/api/admin/scanner',      require('./routes/admin/scanner'));
+app.use('/api/admin/alerts',       require('./routes/admin/alerts'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',        require('./routes/portal/config'));
@@ -252,6 +253,9 @@ function createContentScheduler() {
       // CPPM-39: scan attachments held because the virus scanner was unreachable.
       const { rescanHeldAttachments } = require('./services/attachmentScan');
       await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
+      // Bridge row 2: tell the safety team about tasks that have waited too long.
+      const { sweepWaitingSafetyTasks } = require('./services/adminAlerts');
+      await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {
