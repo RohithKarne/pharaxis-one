@@ -111,7 +111,9 @@ async function getProvider(orgId) {
       return localProvider({ provider_key: 'on_prem', model_name: 'phi-safe-local-fallback' });
     }
     return externalProvider(config);
-  } catch (_) {
+  } catch (err) {
+    // MIPM-27: say so — otherwise a broken key reads as "no AI model is switched on".
+    console.error(`[MIPM-27] AI provider settings for organisation ${orgId} could not be used; carrying on with no model:`, err.message);
     return localProvider({ provider_key: 'on_prem' });
   }
 }
