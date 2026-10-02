@@ -1216,13 +1216,17 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
         [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
       );
     } catch (err) {
+      // MIPM-21: a reference that is already taken is refused and the caller told.
+      // It used to be saved under the reference plus a run of digits, silently, off
+      // the numbering pattern. Sending no reference gets a proper number assigned.
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
-        [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId, ownerId]
-        );
-      } else { throw err; }
+        await conn.rollback(); /* release handled by the finally */
+        return res.status(409).json({
+          error: `Case reference "${case_number}" is already in use in this organisation. Use a different reference, or send none to have the next number assigned.`,
+          code: 'CASE_NUMBER_TAKEN',
+        });
+      }
+      throw err;
     }
     const caseId = result.insertId;
     if (ownerId) {
