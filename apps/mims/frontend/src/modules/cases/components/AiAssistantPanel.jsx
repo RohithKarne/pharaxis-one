@@ -1,3 +1,6 @@
+// PARKED (MIPM-28, 2 Oct 2026): not shown anywhere in MIMS — it was taken off the case
+// screen in the 29 Jul 2026 release (the AI pieces because the AI suite gave canned output).
+// Whether to bring it back or delete it is Rohith's decision; until then it stays unmounted.
 import { useState } from 'react'
 import { httpFetch } from '../../../shared/api/httpFetch'
 
