@@ -378,6 +378,11 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       })
       const data = await res.json()
 
+      // MIPM-107: a locked account (told only after the right password) learns when to try again.
+      if (res.status === 423 && data.locked_until) {
+        const at = new Date(data.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        return showAlert(`Your account is locked after too many failed sign-ins. Try again after ${at}.`)
+      }
       if (!res.ok) return showAlert(data.error || 'Login failed.')
 
       if (data.noOrgAccess) {
