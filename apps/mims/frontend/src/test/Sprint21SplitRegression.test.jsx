@@ -17,7 +17,8 @@ beforeEach(() => {
 vi.mock('../shared/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'mock-token',
-    user: { id: 7, name: 'QA User' },
+    // MIPM-88: Content Management's Settings and MI Categories are admin-only.
+    user: { id: 7, name: 'QA User', role: 'admin' },
     // CaseOverviewTab destructures hasCapability from useAuth and calls it while
     // building its section summaries. Without it the tab throws on render, which
     // is what this mock was missing.
