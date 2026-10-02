@@ -131,6 +131,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
     const { search = '', limit = 100, offset = 0 } = req.query;
     const like = `%${search}%`;
     const scope = orgScopeForUsers(req);
+    const memberOrg = hasGlobalAdminScope(req.user) ? null : (req.user.orgId ?? 0);
     const [users] = await pool.execute(
       `SELECT
          u.id, u.user_id, u.name, u.email, u.initials, u.role,
@@ -138,6 +139,14 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          u.access_admin_site, u.case_admin,
          u.network_user_id, u.department,
          u.security_group_id, sg.name AS security_group_name,
+         (
+           -- MIPM-104: the groups that actually grant access are memberships; an org
+           -- admin sees only their own organisation's.
+           SELECT GROUP_CONCAT(msg.name ORDER BY msg.name SEPARATOR ', ')
+             FROM security_group_users sgu
+             JOIN security_groups msg ON msg.id = sgu.group_id AND msg.is_active = 1
+            WHERE sgu.user_id = u.id AND (? IS NULL OR msg.org_id = ?)
+         ) AS member_groups,
          u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at,
          (
            SELECT al.user_id FROM audit_logs al
@@ -156,7 +165,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
-      [...scope.params, like, like, like]
+      [memberOrg, memberOrg, ...scope.params, like, like, like]
     );
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total

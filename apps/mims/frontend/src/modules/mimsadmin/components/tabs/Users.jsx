@@ -55,7 +55,7 @@ export default function Users() {
   // Quick filters
   const [fltRole,    setFltRole]    = useState('')   // '' | 'admin' | 'agent' | 'reviewer' | 'content_manager'
   const [fltStatus,  setFltStatus]  = useState('')   // '' | 'active' | 'inactive' | 'disabled'
-  const [fltGroup,   setFltGroup]   = useState('')   // security_group_id
+  const [fltGroup,   setFltGroup]   = useState('')   // group name
   const currentFilter = useMemo(() => ({ search, fltRole, fltStatus, fltGroup }), [search, fltRole, fltStatus, fltGroup])
   function applySavedView(f) {
     setSearch(f.search || '')
@@ -100,7 +100,8 @@ export default function Users() {
   async function openEdit(user) {
     try {
       const data = await httpFetch(`${API}/users/${user.id}`, { headers: H }).then(r => r.json())
-      setEditUser(data.user)
+      // MIPM-104: the detail has no memberships; carry them over from the list row.
+      setEditUser({ ...data.user, member_groups: user.member_groups })
       setModalOpen(true)
     } catch { showFlash('Failed to load user.', 'error') }
   }
@@ -113,13 +114,17 @@ export default function Users() {
     showFlash(editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.')
   }
 
+  // MIPM-104: a person's groups are their memberships, plus the old single group if one was ever set.
+  const groupNamesOf = u => [...(u.member_groups ? u.member_groups.split(', ') : []), ...(u.security_group_name ? [u.security_group_name] : [])]
+  const groupFilterOptions = [...new Set(users.flatMap(groupNamesOf))].sort()
+
   const filtered = users.filter(u => {
     if (search) {
       const q = search.toLowerCase()
       if (!(u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.user_id?.toLowerCase().includes(q))) return false
     }
     if (fltRole   && u.role !== fltRole) return false
-    if (fltGroup  && String(u.security_group_id || '') !== String(fltGroup)) return false
+    if (fltGroup  && !groupNamesOf(u).includes(fltGroup)) return false
     if (fltStatus) {
       const status = u.is_disabled ? 'disabled' : (u.is_active ? 'active' : 'inactive')
       if (status !== fltStatus) return false
@@ -186,8 +191,8 @@ export default function Users() {
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
           >
             <option value="">All Groups</option>
-            {groups.map(g => (
-              <option key={g.id} value={g.id}>{g.name}</option>
+            {groupFilterOptions.map(name => (
+              <option key={name} value={name}>{name}</option>
             ))}
           </select>
           <SavedViews
@@ -249,7 +254,7 @@ export default function Users() {
                 </td>
                 <td>{u.name}</td>
                 <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{u.email}</td>
-                <td style={{ fontSize: 12 }}>{u.security_group_name || '—'}</td>
+                <td style={{ fontSize: 12 }}>{groupNamesOf(u).join(', ') || '—'}</td>
                 <td style={{ fontSize: 12 }}>{u.department || '—'}</td>
                 <td>
                   {u.is_disabled
@@ -322,6 +327,10 @@ export default function Users() {
 // ─────────────────────────────────────────────────────────────────────────────
 function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash }) {
   const isEdit = !!editUser
+  // MIPM-104: creating derives the role from the group, so both are required then. On edit
+  // they are required only if the person already had one — most existing users have neither.
+  const needsUserId = !isEdit || !!editUser.user_id
+  const needsGroup  = !isEdit || !!editUser.security_group_id
   // Break-glass (2026-09-23): only a platform admin can make another user a platform admin.
   const { user: me } = useAuth()
   const canGrantPlatformAdmin = isEdit && isPlatformAdmin(me)
@@ -387,9 +396,9 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
   // ── Validation ──────────────────────────────────────────────────────────────
   function validate() {
     const e = {}
-    if (!form.user_id.trim())        e.user_id          = 'User ID is required.'
+    if (needsUserId && !form.user_id.trim()) e.user_id  = 'User ID is required.'
     if (!form.name.trim())           e.name             = 'Full Name is required.'
-    if (!form.security_group_id)     e.security_group_id= 'Security Group is required.'
+    if (needsGroup && !form.security_group_id) e.security_group_id = 'Security Group is required.'
     if (!form.email.trim())          e.email            = 'Email Account is required.'
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email address.'
     if (!form.tenant_ids.length)     e.tenant_ids       = 'Select at least one tenant.'
@@ -414,6 +423,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
     try {
       const body = {
         ...form,
+        user_id: form.user_id.trim() || undefined,
         security_group_id: form.security_group_id ? parseInt(form.security_group_id, 10) : null,
         is_active:    form.is_active    ? 1 : 0,
         is_disabled:  form.is_disabled  ? 1 : 0,
@@ -576,7 +586,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
 
               <div className="ma-usr-row">
                 <div className="ma-usr-field">
-                  <label>User ID <span className="req">*</span></label>
+                  <label>User ID {needsUserId && <span className="req">*</span>}</label>
                   <input
                     className={`ma-usr-input${errors.user_id ? ' err' : ''}`}
                     value={form.user_id}
@@ -623,7 +633,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
 
               <div className="ma-usr-row">
                 <div className="ma-usr-field">
-                  <label>Security Group <span className="req">*</span></label>
+                  <label>Security Group {needsGroup && <span className="req">*</span>}</label>
                   <select
                     className={`ma-usr-select${errors.security_group_id ? ' err' : ''}`}
                     value={form.security_group_id}
@@ -635,6 +645,11 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     ))}
                   </select>
                   {errors.security_group_id && <span className="ma-usr-err-msg">{errors.security_group_id}</span>}
+                  {isEdit && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Member of: {editUser.member_groups || 'no groups'}
+                    </div>
+                  )}
                 </div>
                 <div className="ma-usr-field">
                   <label>Department</label>
