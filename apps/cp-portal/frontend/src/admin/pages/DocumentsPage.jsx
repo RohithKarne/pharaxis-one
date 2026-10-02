@@ -335,13 +335,10 @@ export default function DocumentsPage() {
             </span>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="cp-btn cp-btn-sm"
-              style={{ background: '#0284c7', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
-              onClick={() => alert(`Bulk Expiry Governance:\n\nExtended ${expiringDocs.length} expiring document(s) by +90 days.`)}
-            >
-              📅 Extend Expiry (+90 Days)
-            </button>
+            {/* CPPM-72: "Extend Expiry (+90 Days)" was here. It only showed a message saying
+                the documents had been extended and changed nothing. An expiry date is
+                certified content (CPPM-31), so a new one means a new approval: change it
+                per document with Edit. */}
             <button
               className="cp-btn cp-btn-sm"
               style={{ background: '#D97706', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
