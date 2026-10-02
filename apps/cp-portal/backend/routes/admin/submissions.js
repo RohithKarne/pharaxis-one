@@ -220,12 +220,12 @@ router.patch('/:clientId/:submissionId', authenticateAdmin, requireClientAccess,
     );
     // CPPM-4: record it only when a row actually moved — a submission belonging
     // to another client matches nothing here and must not gain a history entry.
-    if (upd.affectedRows > 0) {
-      await recordStatusEvent({
-        submissionId: req.params.submissionId, clientId: req.params.clientId,
-        status, source: 'admin',
-      });
-    }
+    // CPPM-64: nor an audit line.
+    if (upd.affectedRows === 0) return res.status(404).json({ error: 'Submission not found.' });
+    await recordStatusEvent({
+      submissionId: req.params.submissionId, clientId: req.params.clientId,
+      status, source: 'admin',
+    });
     // A1: audit the manual status change with the admin actor.
     await audit(req.admin, req.params.clientId, 'STATUS_CHANGED', 'submission', req.params.submissionId, { status });
     res.json({ message: 'Status updated.' });

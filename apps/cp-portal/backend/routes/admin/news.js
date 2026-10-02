@@ -205,6 +205,7 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
 
     const ROW = 'SELECT * FROM cp_news_posts WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
+    if (!before) return res.status(404).json({ error: 'Post not found.' });
     await pool.execute(`UPDATE cp_news_posts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
     // CPPM-43: what changed, from → to, with the body in full.
