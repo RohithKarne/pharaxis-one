@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import qrcode from 'qrcode-generator'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -89,6 +90,18 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
   function showAlert(msg, type = 'error') {
     setAlert({ show: true, type, msg })
+  }
+
+  // MIPM-94: draw the authenticator QR here, so the secret never leaves MIMS.
+  function totpQrDataUrl(otpauthUrl) {
+    try {
+      const qr = qrcode(0, 'M')
+      qr.addData(otpauthUrl)
+      qr.make()
+      return qr.createDataURL(5, 2)
+    } catch {
+      return null
+    }
   }
 
   function resetTwoFactorState() {
@@ -823,7 +836,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                           )}
                           {totpSetup && (
                             <div style={{ marginBottom: 10 }}>
-                              <img src={totpSetup.qrUrl} alt="2FA QR code" style={{ width: 180, height: 180, border: '1px solid var(--border)', borderRadius: 8, background: '#fff', padding: 8, marginBottom: 10 }} />
+                              <img src={totpQrDataUrl(totpSetup.otpauthUrl)} alt="2FA QR code" style={{ width: 180, height: 180, border: '1px solid var(--border)', borderRadius: 8, background: '#fff', padding: 8, marginBottom: 10 }} />
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
                                 If QR scan does not work, enter this secret manually:
                               </div>
