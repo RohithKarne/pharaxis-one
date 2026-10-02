@@ -23,40 +23,48 @@ for g in "${EXCLUDES[@]}"; do
   RG_GLOBS+=(--glob "$g")
 done
 
+# rg exits 0 on a match, 1 on no match, and anything else when it could not search
+# (not installed, bad pattern). Only 1 is a clean result; the rest must not read as OK.
+command -v rg >/dev/null 2>&1 || { echo "ripgrep (rg) is not installed, so nothing can be scanned. Install it and run again."; exit 2; }
+
+report() {
+  local status="$1" title="$2" level="$3"
+  if [[ "$status" -eq 0 ]]; then
+    echo "$level: $title"
+    if [[ "$level" == "WARN" ]]; then WARNINGS=$((WARNINGS + 1)); else FAILURES=$((FAILURES + 1)); fi
+  elif [[ "$status" -eq 1 ]]; then
+    echo "OK: $title"
+  else
+    echo "FAIL: $title could not be checked (rg exit $status)"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 scan_fail() {
   local title="$1"
   local pattern="$2"
+  local status=0
   echo "-> $title"
-  if rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR"; then
-    echo "FAIL: $title"
-    FAILURES=$((FAILURES + 1))
-  else
-    echo "OK: $title"
-  fi
+  rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR" || status=$?
+  report "$status" "$title" FAIL
 }
 
 scan_fail_pcre() {
   local title="$1"
   local pattern="$2"
+  local status=0
   echo "-> $title"
-  if rg -n -P --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR"; then
-    echo "FAIL: $title"
-    FAILURES=$((FAILURES + 1))
-  else
-    echo "OK: $title"
-  fi
+  rg -n -P --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR" || status=$?
+  report "$status" "$title" FAIL
 }
 
 scan_warn() {
   local title="$1"
   local pattern="$2"
+  local status=0
   echo "-> $title"
-  if rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR"; then
-    echo "WARN: $title"
-    WARNINGS=$((WARNINGS + 1))
-  else
-    echo "OK: $title"
-  fi
+  rg -n -S --hidden "${RG_GLOBS[@]}" -e "$pattern" "$ROOT_DIR" || status=$?
+  report "$status" "$title" WARN
 }
 
 echo "Running CP Portal security scan in: $ROOT_DIR"
