@@ -5,6 +5,7 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const authHeaders = useMemo(
@@ -213,6 +214,10 @@ export default function TemplatesSection({ token }) {
   const [editTemplate, setEditTemplate] = useState(null)
   const [historyTemplate, setHistoryTemplate] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Offer only the lifecycle buttons the server will accept (same permissions it checks).
+  const { hasCapability, user } = useAuth()
+  const canApprove = hasCapability('content.approve')
+  const canPublish = hasCapability('content.publish')
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
@@ -336,10 +341,10 @@ export default function TemplatesSection({ token }) {
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
-                    {t.status === 'Draft' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'approve')}>Approve</button>}
-                    {t.status === 'Approved' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'publish')}>Publish</button>}
-                    {t.status === 'Published' && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
-                    {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
+                    {t.status === 'Draft' && canApprove && Number(t.created_by) !== Number(user?.id) && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'approve')}>Approve</button>}
+                    {t.status === 'Approved' && canPublish && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'publish')}>Publish</button>}
+                    {t.status === 'Published' && canPublish && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
+                    {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && canApprove && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
                   </div>
                 </td>
               </tr>
