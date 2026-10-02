@@ -9,6 +9,7 @@
 const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
 const { MI_CORE_FIELDS } = require('../database/migrations/108_link_mi_core_fields');
 const { SECTION: RETIRED_SECTION, HIDE: RETIRED_FIELDS } = require('../database/migrations/121_ae_events_link_and_hide_coding');
+const { routeForSection } = require('../database/migrations/048_field_scope');
 
 const CATALOGUE_MARKS = [
   ...MI_CORE_FIELDS.map(([section, field, coreKey]) => ({ section, field, coreKey })),
@@ -40,4 +41,23 @@ async function applyCatalogueFieldMarks(conn, orgId) {
   }
 }
 
-module.exports = { applyCatalogueFieldMarks, RETIRED_SECTION };
+// Which case type and tab each field belongs to, by section name, as migration 048 set for
+// the rows that existed then (it reproduces orgs 1 and 26 exactly). Only rows with no tab
+// yet, so a routing an admin chose is kept. Without it every field of a new organisation
+// was "shared, any tab": AE-only fields were drawn on MI and PC cases too.
+async function applySectionRouting(conn, orgId) {
+  const [sections] = await conn.execute(
+    'SELECT DISTINCT section_name FROM field_setup WHERE org_id = ? AND display_tab IS NULL',
+    [orgId]
+  );
+  for (const { section_name: sectionName } of sections) {
+    const { scope, tab } = routeForSection(sectionName);
+    await conn.execute(
+      `UPDATE field_setup SET case_type_scope = ?, display_tab = ?
+        WHERE org_id = ? AND section_name = ? AND display_tab IS NULL`,
+      [scope, tab, orgId, sectionName]
+    );
+  }
+}
+
+module.exports = { applyCatalogueFieldMarks, applySectionRouting, RETIRED_SECTION };

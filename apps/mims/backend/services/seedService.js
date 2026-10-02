@@ -2,7 +2,7 @@
 
 const pool = require('../database/db');
 const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
-const { applyCatalogueFieldMarks } = require('./fieldMarks');
+const { applyCatalogueFieldMarks, applySectionRouting } = require('./fieldMarks');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -372,6 +372,7 @@ async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
   await applyPlatformCoreKeys(conn, orgId);
   await applyCatalogueFieldMarks(conn, orgId); // MIPM-106
+  await applySectionRouting(conn, orgId); // MIPM-106
   await seedPicklists(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
   await seedCustomizeFormsPlaceholders(conn, orgId);
