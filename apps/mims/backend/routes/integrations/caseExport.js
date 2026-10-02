@@ -6,7 +6,7 @@ const pool = require('../../database/db');
 
 const router = express.Router();
 
-router.get('/admin/cases/export', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export_all'), async (req, res) => {
+router.get('/admin/cases/export', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -92,7 +92,7 @@ router.get('/admin/cases/export', authenticate, requireRole('admin', 'platform_a
   }
 });
 
-router.get('/admin/cases/export/e2b', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export_all'), async (req, res) => {
+router.get('/admin/cases/export/e2b', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -171,7 +171,7 @@ router.get('/admin/cases/export/e2b', authenticate, requireRole('admin', 'platfo
   }
 });
 
-router.get('/admin/cases/export/xlsx', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export_all'), async (req, res) => {
+router.get('/admin/cases/export/xlsx', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -249,7 +249,7 @@ router.get('/admin/cases/export/xlsx', authenticate, requireRole('admin', 'platf
   }
 });
 
-router.get('/admin/cases/export/pdf', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export_all'), async (req, res) => {
+router.get('/admin/cases/export/pdf', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.export'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
