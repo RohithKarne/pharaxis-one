@@ -1143,6 +1143,7 @@ module.exports = [
       'PATCH /api/admin/dppr/:id/toggle',
       'GET /api/admin/dppr/execution-log',
       'POST /api/admin/dppr/run-now',
+      'GET /api/admin/dppr/preview',
       'DELETE /api/admin/dppr/:id',
     ],
     run: async ({ makeRequest, token }) => {
@@ -1177,7 +1178,11 @@ module.exports = [
           retention_days: 200,
           is_active: true,
         }, token)
-        const runNow = await makeRequest('POST', '/api/admin/dppr/run-now', {}, token)
+        // MIPM-95: never run the cleanup for real from a regression check — it applies every
+        // active rule of the org. Prove the endpoints without changing data: the read-only
+        // preview answers, and Run Now without a reason is refused (MIPM-79).
+        const preview = await makeRequest('GET', '/api/admin/dppr/preview', null, token)
+        const runNowRefused = await makeRequest('POST', '/api/admin/dppr/run-now', {}, token)
         const executionLog = await makeRequest('GET', '/api/admin/dppr/execution-log', null, token)
         const toggle = await makeRequest('PATCH', `/api/admin/dppr/${ruleId}/toggle`, null, token)
         const del = await makeRequest('DELETE', `/api/admin/dppr/${ruleId}`, null, token)
@@ -1185,11 +1190,12 @@ module.exports = [
         return {
           pass: getOne.status === 200 &&
             update.status === 200 &&
-            runNow.status === 200 &&
+            preview.status === 200 &&
+            runNowRefused.status === 400 &&
             executionLog.status === 200 &&
             toggle.status === 200 &&
             del.status === 200,
-          details: `domains=${domains.status}, listBefore=${listBefore.status}, create=${create.status}, getOne=${getOne.status}, update=${update.status}, runNow=${runNow.status}, executionLog=${executionLog.status}, toggle=${toggle.status}, delete=${del.status}`,
+          details: `domains=${domains.status}, listBefore=${listBefore.status}, create=${create.status}, getOne=${getOne.status}, update=${update.status}, preview=${preview.status}, runNowWithoutReason=${runNowRefused.status}, executionLog=${executionLog.status}, toggle=${toggle.status}, delete=${del.status}`,
         }
       } finally {
         if (ruleId) {
