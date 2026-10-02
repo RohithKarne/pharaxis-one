@@ -254,10 +254,14 @@ async function seedCases(conn, { orgId, siteId, userId, statusIds }) {
 async function main() {
   guardDatabaseName(DB);
 
+  // MIPM-74: write times in UTC, as the app's own connections do (database/db.js).
+  // Without this, a machine on local time stores local wall-clock times, which the
+  // app then reads as UTC — hours in the future.
   const conn = await mysql.createConnection({
     host: HOST, port: PORT, user: USER, password: PASSWORD, database: DB,
-    multipleStatements: false,
+    multipleStatements: false, timezone: '+00:00',
   });
+  await conn.query("SET time_zone = '+00:00'");
 
   try {
     console.log(`[seed-e2e] target database: ${DB}`);

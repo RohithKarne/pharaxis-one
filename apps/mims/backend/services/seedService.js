@@ -347,8 +347,29 @@ async function seedCustomizeFormsPlaceholders(conn, orgId) {
   }
 }
 
+// MIPM-66: a new organisation's fields take the platform field marks (core_key)
+// and hidden defaults from the platform rows, as migration 124 does for existing
+// organisations. Without it the case form drew Priority, Description and the other
+// platform fields twice for every organisation created after migration 102.
+async function applyPlatformCoreKeys(conn, orgId) {
+  await conn.execute(
+    `UPDATE field_setup f
+       JOIN field_setup d
+         ON d.org_id IS NULL
+        AND d.section_name = f.section_name
+        AND LOWER(TRIM(d.field_name)) = LOWER(TRIM(f.field_name))
+        SET f.core_key  = d.core_key,
+            f.is_hidden = GREATEST(COALESCE(f.is_hidden, 0), COALESCE(d.is_hidden, 0))
+      WHERE f.org_id = ?
+        AND (f.core_key IS NULL OR f.core_key = '')
+        AND d.core_key IS NOT NULL AND d.core_key <> ''`,
+    [orgId]
+  );
+}
+
 async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
+  await applyPlatformCoreKeys(conn, orgId);
   await seedPicklists(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
   await seedCustomizeFormsPlaceholders(conn, orgId);

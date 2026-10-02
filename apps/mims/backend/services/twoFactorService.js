@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { decryptMailboxSecret } = require('./mailboxCrypto');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
 
@@ -116,7 +117,7 @@ async function sendEmailOtp({ toEmail, userName, code }) {
   const port = parseInt(config.smtp_port || '0', 10);
   const encryption = config.smtp_encryption || 'SSL/TLS';
   const username = config.smtp_username;
-  const password = config.smtp_password;
+  const password = decryptMailboxSecret(config.smtp_password); // MIPM-68: stored encrypted
   const fromEmail = config.smtp_from_email || username;
   const fromName = config.smtp_from_name || 'MIMS Platform';
 

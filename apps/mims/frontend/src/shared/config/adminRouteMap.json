@@ -21,6 +21,7 @@
   },
   "serviceConfigRoutes": {
     "cm-expiry-alerts": "/browse-content",
+    "cm-pre-expiry-reminders": "/browse-content",
     "cm-module-lifecycle": "/browse-content",
     "cm-content-auto-archive": "/browse-content",
     "cm-review-reminders": "/browse-content",

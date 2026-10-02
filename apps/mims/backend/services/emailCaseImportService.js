@@ -294,7 +294,9 @@ async function sendAcknowledgment({ account, config, orgId, toEmail, variant, mi
   const transporter = mailer.createTransport('operational', {
     host: outbound.smtp_host,
     port: Number(outbound.smtp_port),
-    secure: Number(outbound.smtp_port) === 465,
+    // MIPM-63: the mailbox's own Encryption setting, not a guess from the port.
+    secure: outbound.smtp_encryption === 'SSL/TLS',
+    requireTLS: outbound.smtp_encryption === 'STARTTLS',
     auth: {
       user: outbound.smtp_username,
       pass: decryptMailboxSecret(outbound.smtp_password),

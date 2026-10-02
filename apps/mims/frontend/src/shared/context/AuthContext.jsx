@@ -69,7 +69,8 @@ function isPublicAuthPath() {
     path.endsWith('/mims-admin/login') ||
     path.endsWith('/content/login') ||
     path.endsWith('/reports/login') ||
-    path.includes('/auth/sso-complete')
+    path.includes('/auth/sso-complete') ||
+    path.endsWith('/access-ended')
   )
 }
 
@@ -132,6 +133,8 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   const applyAuthState = useCallback((payload = {}) => {
     const nextUser = payload.user || null
+    // MIPM-32: a successful sign-in on this browser ends the "access has ended" redirect.
+    if (nextUser) { try { localStorage.removeItem('mims_access_ended') } catch { /* storage blocked */ } }
     const nextToken = payload.token || (payload.user ? COOKIE_SESSION : null)
     const nextModules = Array.isArray(payload.modules) ? payload.modules : []
     const nextOrgId = payload.orgId != null && payload.orgId !== '' ? Number(payload.orgId) : null

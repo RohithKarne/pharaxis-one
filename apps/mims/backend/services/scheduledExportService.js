@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { decryptMailboxSecret } = require('./mailboxCrypto');
 const mailer = require('../utils/mailer');
 const { createNotification } = require('./notificationCenterService');
 const { recordReportRun } = require('./reportOpsService');
@@ -181,7 +182,7 @@ async function deliverByEmail(config, csvContent) {
   const host = process.env.SMTP_HOST || systemConfig.smtp_host || '';
   const port = Number(process.env.SMTP_PORT || systemConfig.smtp_port || 0);
   const username = process.env.SMTP_USER || systemConfig.smtp_username || '';
-  const password = process.env.SMTP_PASS || systemConfig.smtp_password || '';
+  const password = process.env.SMTP_PASS || decryptMailboxSecret(systemConfig.smtp_password) || ''; // MIPM-68: stored encrypted
   const encryption = process.env.SMTP_ENCRYPTION || systemConfig.smtp_encryption || 'STARTTLS';
   const fromEmail = process.env.SMTP_FROM_EMAIL || systemConfig.smtp_from_email || username;
   const fromName = moduleConfig.email_from_name || systemConfig.smtp_from_name || 'MIMS Reports';
@@ -195,7 +196,7 @@ async function deliverByEmail(config, csvContent) {
       user: username,
       pass: password,
     },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
   });
 
   if (!config.delivery_target) {
