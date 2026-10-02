@@ -61,7 +61,12 @@ async function pollVaultForOrg(orgId) {
       return { processed: data ? data.length : 0, org_id: orgId };
     } catch (err) {
       const message = err && err.message ? err.message : '';
+      // MIPM-97: outside calls now stop after 30 s; say so plainly rather than a 500.
+      if (err && err.name === 'TimeoutError') {
+        return { processed: 0, org_id: orgId, warning: 'Veeva Vault did not respond within 30 seconds.' };
+      }
       if (
+        message.includes('fetch failed') ||
         message.includes('ENOTFOUND') ||
         message.includes('ECONNREFUSED') ||
         message.includes('failed, reason:') ||
