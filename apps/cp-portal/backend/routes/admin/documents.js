@@ -201,7 +201,16 @@ router.get('/:clientId/review-due', authenticateAdmin, requireClientAccess, asyn
         AND DATE(review_due_at) <= DATE(DATE_ADD(NOW(), INTERVAL ${REVIEW_WARNING_DAYS} DAY))
       ORDER BY review_due_at ASC
     `, [req.params.clientId]);
-    res.json({ reviewDue: rows });
+    // CPPM-71: live (or scheduled) documents nobody has ever approved — they predate
+    // the approval rule and need a reviewer's decision: approve as is, or retire.
+    const [neverApproved] = await pool.execute(`
+      SELECT id, title, status, category, publish_at
+      FROM cp_documents
+      WHERE client_id = ? AND is_active = 1 AND retired_at IS NULL
+        AND approved_at IS NULL AND status IN ('published', 'scheduled')
+      ORDER BY title ASC
+    `, [req.params.clientId]);
+    res.json({ reviewDue: rows, neverApproved });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'GET /:clientId/review-due', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -436,6 +445,12 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
   });
 });
 
+// CPPM-71: live or scheduled, still in the library, and approved by nobody.
+function neverApprovedLive(doc) {
+  return !!doc && !doc.approved_at && ['published', 'scheduled'].includes(doc.status)
+    && doc.is_active && !doc.retired_at;
+}
+
 // PUT /api/admin/documents/:clientId/:docId — update metadata (no file re-upload)
 router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
@@ -446,11 +461,27 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     let current = null;        // the row as it stands before this update
     let lifecycleAction = null; // APPROVE | PUBLISH | RETIRE, audited below
 
+    // CPPM-71: a document that is live (or scheduled) but was never approved predates
+    // the approval rule. A reviewer can approve it as it stands, and it stays live;
+    // the approval is recorded exactly as any other.
+    let approveInPlace = false;
+
     // S4-8: validate status transition + role permission
     if (status !== undefined) {
       [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
       if (!current) return res.status(404).json({ error: 'Document not found.' });
-      if (current.status !== status) {
+      approveInPlace = status === 'approved' && neverApprovedLive(current);
+      if (approveInPlace) {
+        if (!APPROVE_ROLES.includes(req.admin.role)) {
+          return res.status(403).json({ error: "Your role cannot set status to 'approved'." });
+        }
+        lifecycleAction = 'APPROVE';
+        fields.push('approved_by = ?');      values.push(req.admin.adminId || null);
+        fields.push('approved_by_name = ?'); values.push(req.admin.name || null);
+        fields.push('approved_at = NOW()');
+        fields.push(`review_due_at = COALESCE(?, DATE_ADD(NOW(), INTERVAL ${DEFAULT_REVIEW_MONTHS} MONTH))`);
+        values.push(review_due_at || null);
+      } else if (current.status !== status) {
         const allowed = DOC_TRANSITIONS[current.status] || [];
         if (!allowed.includes(status)) {
           return res.status(400).json({ error: `Invalid transition: ${current.status} → ${status}.` });
@@ -484,7 +515,8 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
           fields.push('retired_at = NOW()');
         }
       }
-      fields.push('status = ?'); values.push(status);
+      // An approval in place keeps the document's status (still live, or still scheduled).
+      if (!approveInPlace) { fields.push('status = ?'); values.push(status); }
       // CPPM-61: a document coming (back) into the review queue arrives with no holder.
       if (status === 'review' && current.status !== 'review') fields.push('owner_id = NULL', 'owner_since = NULL');
     }
@@ -504,8 +536,12 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     // Only a request that grants a fresh approval skips this. The edit box re-sends the
     // current status ('approved', 'published') with every save, and that must not keep
     // an approval that no longer matches what was certified.
-    const approvingNow = status === 'approved' && current?.status !== 'approved';
-    if (current?.approved_at && !approvingNow) {
+    const approvingNow = approveInPlace || (status === 'approved' && current?.status !== 'approved');
+    // CPPM-71: a live document that was never approved follows the same rule — an edit
+    // takes it out of the portal until it is approved — or editing it would be the way
+    // to change live content with nobody's approval.
+    const wasNeverApprovedLive = neverApprovedLive(current);
+    if ((current?.approved_at || wasNeverApprovedLive) && !approvingNow) {
       const changed = Object.entries(CERTIFIED_FIELDS).filter(([key, value]) => {
         if (value === undefined) return false;
         const before = key === 'visible_to' ? (current.visible_to_json || null)
@@ -527,7 +563,8 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
           else values[fields.slice(0, at).join(' ').split('?').length - 1] = 'draft';
           lifecycleAction = null;
         }
-        await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId, { changed });
+        await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId,
+          { changed, ...(wasNeverApprovedLive ? { never_approved: true } : {}) });
       }
     }
 
@@ -568,7 +605,8 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     // and retire are findable in the trail without reading every UPDATE.
     if (lifecycleAction) {
       await audit(req.admin, req.params.clientId, lifecycleAction, 'document', req.params.docId, {
-        title: current.title, version: current.version, from: current.status, to: status,
+        title: current.title, version: current.version, from: current.status, to: approveInPlace ? current.status : status,
+        ...(approveInPlace ? { approved_as_is: true } : {}),
       });
     }
     // CPPM-55: readers are told when a document goes live. One published with a
@@ -580,7 +618,9 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     res.json({
       ok: true,
       requires_reapproval: requiresReapproval,
-      ...(requiresReapproval ? { message: 'Saved. This document was approved, so the change created a new version — it must be approved again before it can be published.' } : {}),
+      ...(requiresReapproval ? { message: wasNeverApprovedLive
+        ? 'Saved. This document was live without ever being approved, so the change took it out of the portal — it must be approved before it can be published again.'
+        : 'Saved. This document was approved, so the change created a new version — it must be approved again before it can be published.' } : {}),
     });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'PUT /:clientId/:docId', path: req.path, request_id: req.requestId || null });

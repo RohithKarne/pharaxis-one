@@ -272,10 +272,12 @@ function createContentScheduler() {
       // is picked up in the ten minutes after its date; the alert is recorded once per
       // reader and item, so being picked up on several ticks is harmless.
       const [dueDocs] = await pool.execute(
-        `SELECT id FROM cp_documents WHERE status='scheduled' AND publish_at <= ?`, [now]
+        `SELECT id FROM cp_documents WHERE status='scheduled' AND publish_at <= ? AND approved_at IS NOT NULL`, [now]
       );
+      // CPPM-71: only an approved document goes live by itself. One scheduled before
+      // approval was required waits, flagged on the Documents screen, until approved.
       await pool.execute(
-        `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ?`,
+        `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ? AND approved_at IS NOT NULL`,
         [now]
       );
       const dueIds = dueDocs.map(d => d.id);

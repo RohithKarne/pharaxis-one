@@ -13,7 +13,7 @@
 
 // For queries that select documents. Callers add their own client/feature filters.
 const VISIBLE_DOCUMENT_SQL = `
-        (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
+        (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW() AND approved_at IS NOT NULL))
         AND (expires_at IS NULL OR expires_at > NOW())
         AND (publish_at IS NULL OR publish_at <= NOW())`;
 
@@ -26,7 +26,9 @@ function documentUnavailableReason(doc, now = new Date()) {
   const publishAt = doc.publish_at ? new Date(doc.publish_at) : null;
   const expiresAt = doc.expires_at ? new Date(doc.expires_at) : null;
 
-  const statusAllows = doc.status === 'published' || doc.status === 'scheduled';
+  // CPPM-71: a scheduled document goes live only once approved. A published one that
+  // was never approved predates that rule and stays visible, flagged for review.
+  const statusAllows = doc.status === 'published' || (doc.status === 'scheduled' && !!doc.approved_at);
   if (!statusAllows) return 'unpublished';
   if (publishAt && publishAt > now) return 'unpublished';
   if (expiresAt && expiresAt <= now) return 'expired';
