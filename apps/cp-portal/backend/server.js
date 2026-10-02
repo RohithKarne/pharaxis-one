@@ -78,6 +78,10 @@ const submitLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Submission limit reached. Please try again later.' },
   store: makeStore(),
+  // Only sending something counts — a new request or a reply (CPPM-63). Looking at
+  // My Submissions or opening an attachment used to spend the same budget, so a
+  // person who checked their list often could be refused when reporting a side effect.
+  skip: (req) => req.method === 'GET',
 });
 
 const apiLimiter = rateLimit({
