@@ -2,7 +2,7 @@
 
 const express = require('express');
 const multer = require('multer');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const db = require('../../database/db');
 const { buildReconciliation } = require('../../services/caseImportReconciliationService');
@@ -18,7 +18,7 @@ async function query(sql, params = []) {
   return rows;
 }
 
-router.post('/admin/cases/import/upload', authenticate, upload.single('file'), validateUpload(['csv']), async (req, res) => {
+router.post('/admin/cases/import/upload', authenticate, requireRole('admin', 'platform_admin'), upload.single('file'), validateUpload(['csv']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -100,7 +100,7 @@ router.post('/admin/cases/import/upload', authenticate, upload.single('file'), v
   }
 });
 
-router.get('/admin/cases/import/jobs', authenticate, async (req, res) => {
+router.get('/admin/cases/import/jobs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const jobs = await query(
       `SELECT *
@@ -116,7 +116,7 @@ router.get('/admin/cases/import/jobs', authenticate, async (req, res) => {
   }
 });
 
-router.get('/admin/cases/import/jobs/:id', authenticate, async (req, res) => {
+router.get('/admin/cases/import/jobs/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const jobs = await query(
       'SELECT * FROM case_import_jobs WHERE id = ? AND org_id = ? LIMIT 1',
@@ -132,7 +132,7 @@ router.get('/admin/cases/import/jobs/:id', authenticate, async (req, res) => {
 // PAUD-4 item 4: the count-back. Re-counts `cases` for this job and compares it
 // with what the job recorded, so a migration can be evidenced rather than
 // asserted.
-router.get('/admin/cases/import/jobs/:id/reconciliation', authenticate, async (req, res) => {
+router.get('/admin/cases/import/jobs/:id/reconciliation', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const jobs = await query(
       'SELECT * FROM case_import_jobs WHERE id = ? AND org_id = ? LIMIT 1',
@@ -169,7 +169,7 @@ router.get('/admin/cases/import/jobs/:id/reconciliation', authenticate, async (r
 
 // PAUD-4 item 4: the rejected rows as a downloadable file, so a cutover can show
 // exactly what did not come across and why.
-router.get('/admin/cases/import/jobs/:id/rejects.csv', authenticate, async (req, res) => {
+router.get('/admin/cases/import/jobs/:id/rejects.csv', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const jobs = await query(
       'SELECT * FROM case_import_jobs WHERE id = ? AND org_id = ? LIMIT 1',

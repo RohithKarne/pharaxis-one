@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const {
   getExportConfigs,
   createExportConfig,
@@ -11,7 +11,7 @@ const {
 
 const router = express.Router();
 
-router.get('/admin/exports/scheduled', authenticate, async (req, res) => {
+router.get('/admin/exports/scheduled', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const configs = await getExportConfigs(req.user.orgId);
     return res.json({ configs });
@@ -20,7 +20,7 @@ router.get('/admin/exports/scheduled', authenticate, async (req, res) => {
   }
 });
 
-router.post('/admin/exports/scheduled', authenticate, async (req, res) => {
+router.post('/admin/exports/scheduled', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const id = await createExportConfig(req.user.orgId, req.user.userId, req.body);
     return res.json({ id, message: 'Created' });
@@ -29,7 +29,7 @@ router.post('/admin/exports/scheduled', authenticate, async (req, res) => {
   }
 });
 
-router.put('/admin/exports/scheduled/:id', authenticate, async (req, res) => {
+router.put('/admin/exports/scheduled/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     await updateExportConfig(req.params.id, req.user.orgId, req.body);
     return res.json({ message: 'Updated' });
@@ -39,7 +39,7 @@ router.put('/admin/exports/scheduled/:id', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/admin/exports/scheduled/:id', authenticate, async (req, res) => {
+router.delete('/admin/exports/scheduled/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     await deleteExportConfig(req.params.id, req.user.orgId);
     return res.json({ message: 'Deleted' });
