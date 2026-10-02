@@ -25,7 +25,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const pool = require('./database/db');
-const { authenticate } = require('./middleware/auth');
+const { authenticate, requireModule } = require('./middleware/auth');
 const { hasGlobalAdminScope } = require('./utils/adminScope');
 const {
   inferModule,
@@ -416,6 +416,14 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/qa'));
 
   // Content management
+  // MIPM-88: a content write needs the Content Management grant as well as its
+  // content permission (checked on each route). Reads, and the few writes that are a
+  // reader's own (view counts, bookmarks, alert subscriptions, usage logging, preview),
+  // stay open to everyone who can see the content — agents use them from Browse Content.
+  r.use(`${prefix}/cm`, (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || CM_READER_WRITES.some((rx) => rx.test(req.path))) return next();
+    return authenticate(req, res, () => requireModule('content_mgmt')(req, res, next));
+  });
   r.use(`${prefix}/cm`, require('./routes/cm/picklists'));
   r.use(`${prefix}/cm`, require('./routes/cm/settings'));
   r.use(`${prefix}/cm`, require('./routes/cm/folders'));
@@ -479,6 +487,16 @@ if (process.env.NODE_ENV !== 'production') {
 }
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// MIPM-88: /api/cm writes that belong to a reader, not to content work.
+const CM_READER_WRITES = [
+  /^\/documents\/\d+\/view$/,
+  /^\/faqs\/\d+\/view$/,
+  /^\/folders\/bookmarks(\/\d+)?$/,
+  /^\/documents\/\d+\/alert-subs(\/\d+)?$/,
+  /^\/content-usage$/,
+  /^\/templates\/\d+\/render$/,
+];
 
 // ─── Architecture Fix A2: child process manager ───────────────────────────────
 // emailPoller, scheduler, and emailWorker now run in dedicated child processes.
