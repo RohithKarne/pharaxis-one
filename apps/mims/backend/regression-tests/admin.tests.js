@@ -618,9 +618,14 @@ module.exports = [
       let configId = null
       try {
         const listBefore = await makeRequest('GET', '/api/admin/exports/scheduled', null, token)
+        // A schedule must name a built report (batch 2, MIPM-70).
+        const defs = await makeRequest('GET', '/api/reports/module/definitions', null, token)
+        const builtReport = (Array.isArray(defs.body?.definitions) ? defs.body.definitions : []).find((d) => d.is_built)
         const create = await makeRequest('POST', '/api/admin/exports/scheduled', {
           export_name: uniqueName('Regression Export'),
-          report_key: 'daily-case-summary',
+          target_type: 'report',
+          target_id: builtReport?.id,
+          report_key: builtReport?.report_key || 'daily-case-summary',
           schedule_frequency: 'daily',
           schedule_time_local: '08:00',
           timezone_name: 'Asia/Kolkata',
@@ -669,9 +674,12 @@ module.exports = [
         entity: 'regression_suite',
         entity_id: 1,
       }, token)
+      // Picklists are organisation-scoped (batch 1): preview a value from the caller's own org.
+      const ownPicklists = await makeRequest('GET', '/api/admin/picklists?limit=1', null, token)
+      const ownValueId = Array.isArray(ownPicklists.body?.picklists) ? ownPicklists.body.picklists[0]?.id : null
       const impact = await makeRequest('POST', '/api/admin/impact-preview', {
         change_type: 'taxonomy',
-        entity_id: 1,
+        entity_id: ownValueId,
       }, token)
 
       return {
@@ -1331,7 +1339,8 @@ module.exports = [
         const del = await makeRequest('DELETE', `/api/admin/picklists/${picklistId}`, null, token)
 
         return {
-          pass: Array.isArray(exportJson.body?.picklists) &&
+          // /picklists/export is the CSV download too (the JSON list is GET /picklists).
+          pass: String(exportJson.headers?.['content-type'] || '').includes('text/csv') &&
             String(exportCsv.headers?.['content-type'] || '').includes('text/csv') &&
             update.status === 200 &&
             toggle.status === 200 &&

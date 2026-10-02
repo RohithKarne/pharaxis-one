@@ -64,6 +64,9 @@ module.exports = [
       const apiCatalog = await makeRequest('GET', '/api/admin/regression/api-catalog', null, token);
       const coverage = await makeRequest('GET', '/api/admin/regression/coverage', null, token);
       const getSystemConfig = await makeRequest('GET', '/api/admin/system-config', null, token);
+      // Changing system configuration is platform-admin only (batch 1); an org admin is refused.
+      const me = await makeRequest('GET', '/api/auth/me', null, token);
+      const isPlatformAdmin = String(me.body?.user?.role || '') === 'platform_admin';
       const configKey = `regression_admin_key_${Date.now()}`;
       const postSystemConfig = await makeRequest('POST', '/api/admin/system-config', {
         key: configKey,
@@ -81,7 +84,7 @@ module.exports = [
           apiCatalog.status === 200 &&
           coverage.status === 200 &&
           getSystemConfig.status === 200 &&
-          postSystemConfig.status === 200,
+          postSystemConfig.status === (isPlatformAdmin ? 200 : 403),
         details: `run401=${unauthRun.status}, history=${history.status}, detail=${historyDetail.status}, db=${dbHealth.status}, catalog=${apiCatalog.status}, coverage=${coverage.status}, systemConfig=${getSystemConfig.status}/${postSystemConfig.status}`,
       };
     },
@@ -106,11 +109,19 @@ module.exports = [
       let cloneId = 0;
 
       try {
+        // The admin user form requires a user ID, a security group and at least one tenant (batch 1).
+        const groupsForUser = await makeRequest('GET', '/api/admin/security-groups', null, token);
+        const firstGroup = Array.isArray(groupsForUser.body?.groups) ? groupsForUser.body.groups[0] : null;
+        const meForUser = await makeRequest('GET', '/api/auth/me', null, token);
+        const userEmail = `${uniqueName('admin-managed').toLowerCase()}@example.com`;
         const createUser = await makeRequest('POST', '/api/admin/users', {
           name: 'Regression Admin Managed User',
-          email: `${uniqueName('admin-managed').toLowerCase()}@example.com`,
+          email: userEmail,
+          user_id: userEmail,
           password: ['TempAdminManaged', '123'].join('@'),
           role: 'agent',
+          security_group_id: firstGroup?.id,
+          tenant_ids: [meForUser.body?.orgId || meForUser.body?.user?.orgId].filter(Boolean),
         }, token);
         userId = Number(createUser.body?.user?.id || 0);
 
