@@ -49,4 +49,4 @@ async function up(conn) {
   }
 }
 
-module.exports = { up };
+module.exports = { up, SECTION, HIDE };
