@@ -136,7 +136,9 @@ router.post('/admin/integrations/vault/test-connection', authenticate, requireRo
     await getVaultSession(orgId);
     return res.json({ success: true, message: 'Vault connection successful' });
   } catch (error) {
-    return res.status(400).json({ success: false, message: error.message });
+    // MIPM-97: outside calls stop after 30 s — say so plainly.
+    const message = error && error.name === 'TimeoutError' ? 'Veeva Vault did not respond within 30 seconds.' : error.message;
+    return res.status(400).json({ success: false, message });
   }
 });
 
