@@ -1,0 +1,103 @@
+# Base44 development environment — Pharaxis One (CP Portal)
+# Dev-oriented: source is bind-mounted, servers run with live reload.
+# Preview: CP Portal frontend -> host port 3000 (proxies /api and /uploads to the backend).
+# MIMS is not started here; the failing commit under investigation is CP Portal's.
+name: pharaxis-one-base44
+
+services:
+  mysql:
+    image: mysql:8
+    restart: on-failure
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: base44-dev-root
+      MYSQL_DATABASE: pharaxis_cp_portal_dev
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Virus scanner (CPPM-39). Without it the app still boots, but admin uploads are refused.
+  clamav:
+    image: clamav/clamav
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3310 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  cp-backend:
+    image: node:22-bookworm-slim
+    restart: on-failure
+    working_dir: /app
+    volumes:
+      - ./apps/cp-portal/backend:/app
+    environment:
+      NODE_ENV: development
+      CP_PORT: "4000"
+      # Local dev DB credentials (compose-local, not user secrets)
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpass
+      MYSQL_DATABASE: pharaxis_cp_portal_dev
+      # Required at boot: seeding the superadmin throws without it (db.js).
+      CP_BOOTSTRAP_SUPERADMIN_PASSWORD: base44-local-dev-bootstrap
+      # Dev-only values; the code falls back to insecure dev secrets if unset.
+      CP_ADMIN_JWT_SECRET: base44-dev-admin-jwt-secret-change-me
+      CP_PORTAL_JWT_SECRET: base44-dev-portal-jwt-secret-change-me
+      CP_SECRET_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # Preview origin (vite proxies same-origin /api calls to this backend and
+      # forwards the browser's Origin header, so CORS must accept it).
+      CP_CORS_ORIGINS: "https://3000-${BASE44_PUBLIC_HOST_SUFFIX},http://localhost:5174,http://127.0.0.1:5174"
+      # ClamAV reachable on the compose network
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      # Labelled pre-recorded chatbox replies instead of calling an AI provider
+      CHATBOX_STUB_REPLIES: "1"
+    command: ["sh", "-ec", "npm ci --no-audit --no-fund && exec npx nodemon server.js"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  cp-frontend:
+    image: node:22-bookworm-slim
+    restart: on-failure
+    working_dir: /app
+    volumes:
+      - ./apps/cp-portal/frontend:/app
+    environment:
+      # vite.config.js reads CP_FRONTEND_PORT and proxies /api + /uploads to CP_API_PROXY
+      CP_FRONTEND_PORT: "5174"
+      CP_API_PROXY: http://cp-backend:4000
+      # Allow the sandbox preview host (Vite >= 6.1 appends this to allowedHosts)
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS:
+    command: ["sh", "-ec", "npm ci --no-audit --no-fund && exec npx vite --host 0.0.0.0"]
+    ports:
+      - "3000:5174"
+    depends_on:
+      cp-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5174/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  mysql_data:
