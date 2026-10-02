@@ -21,6 +21,7 @@ const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { writeCaseAudit } = require('../services/caseHelpers');
+const { logger } = require('../services/logger');
 
 const router = express.Router();
 
@@ -197,10 +198,48 @@ function parseAwarenessDate(value) {
   return value;
 }
 
+// Longest value each intake field can hold. The database runs in strict mode, so a
+// longer value used to make the whole case fail — a safety report lost because
+// someone typed a long phone number. It is now shortened to fit, and the full value
+// is written into the case history so nothing the person sent is lost.
+const INTAKE_LIMITS = {
+  priority: 20,
+  'reporter.first_name': 100, 'reporter.last_name': 100, 'reporter.email': 255, 'reporter.phone': 50,
+  'reporter.reporter_type': 50, 'reporter.country': 100, 'reporter.organisation': 255,
+  'patient.initials': 20, 'patient.age_unit': 20, 'patient.gender': 20,
+  'ae_intake.suspect_drug_name': 255, 'ae_intake.batch_lot_number': 100, 'ae_intake.dose': 100,
+  'ae_intake.route_of_admin': 100, 'ae_intake.outcome': 100,
+  'pc_intake.product_name': 255, 'pc_intake.batch_lot_number': 100, 'pc_intake.complaint_category': 100,
+  'mi_intake.mi_category': 255,
+};
+
+function fitIntakeToLimits(body) {
+  const shortened = [];
+  for (const [path, max] of Object.entries(INTAKE_LIMITS)) {
+    const [a, b] = path.split('.');
+    const holder = b ? body[a] : body;
+    const key = b || a;
+    if (!holder || typeof holder !== 'object' || holder[key] == null) continue;
+    const full = String(holder[key]);
+    if (full.length <= max) continue;
+    holder[key] = full.slice(0, max);
+    shortened.push({ path, full, kept: holder[key] });
+  }
+  return shortened;
+}
+
+// A failed intake tells the sending system why, without exposing the database: the
+// full error goes to the MIMS log under the request number the caller is given.
+function intakeFailure(err, req, what) {
+  logger.error({ err, request_id: req.id || null, api_client_id: req.apiClient?.id || null }, what);
+  return { error: `${what} MIMS log reference: ${req.id || 'none'}.`, request_id: req.id || null };
+}
+
 router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
   const orgId = req.apiClient.org_id;
+  const shortened = fitIntakeToLimits(req.body || {});
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -385,11 +424,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       }
     }
 
+    for (const s of shortened) {
+      await writeCaseAudit(caseId, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+        'INTAKE_VALUE_SHORTENED', s.path, s.full, s.kept, conn);
+    }
+
     await conn.commit();
-    res.status(201).json({ id: caseId });
+    res.status(201).json({ id: caseId, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
   } catch (err) {
     await conn.rollback().catch(() => {});
-    res.status(500).json({ error: 'Failed to create case.' });
+    res.status(500).json(intakeFailure(err, req, 'Failed to create case.'));
   } finally {
     conn.release();
   }
@@ -420,7 +464,7 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to store attachment.' });
+    res.status(500).json(intakeFailure(err, req, 'Failed to store attachment.'));
   }
 });
 

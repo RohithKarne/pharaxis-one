@@ -387,6 +387,14 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
   return payload;
 }
 
+// What MIMS said when it refused — its own error text, not just the status number,
+// so an administrator reading Sync Health can tell a bad value from an outage.
+async function refusalReason(r) {
+  const body = await r.json().catch(() => null);
+  const said = body && (body.error_description || body.error || body.message);
+  return (said ? `MIMS refused it (HTTP ${r.status}): ${said}` : `MIMS refused it (HTTP ${r.status}).`).slice(0, 1000);
+}
+
 // C1: push a submission's stored attachments onto the linked MIMS case. Each file
 // is independent — a failure on one is audited and skipped, never fatal to the sync.
 // CPPM-39: only files ClamAV has cleared are forwarded; a held file goes later, on its
@@ -509,9 +517,10 @@ async function syncToIntegration(clientId, submissionId, formType) {
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {
-      await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [`HTTP ${r.status}`, submissionId]);
-      await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: `HTTP ${r.status}`, source: 'mims-sync' });
-      systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: `HTTP ${r.status}` });
+      const reason = await refusalReason(r);
+      await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [reason, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
+      systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, status: r.status });
     }
   } catch (err) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
