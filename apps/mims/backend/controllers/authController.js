@@ -1743,8 +1743,9 @@ const authController = {
       const issuer = encodeURIComponent('MIMS');
       const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
       const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauthUrl)}`;
-      return res.json({ secret, otpauthUrl, qrUrl });
+      // MIPM-94: the QR is drawn in the browser from otpauthUrl. It used to be an
+      // api.qrserver.com image whose address carried the secret to an outside site.
+      return res.json({ secret, otpauthUrl });
     } catch (err) {
       console.error('beginTotpSetup error:', err);
       return res.status(400).json({ error: err.message || 'Could not start TOTP setup.' });
