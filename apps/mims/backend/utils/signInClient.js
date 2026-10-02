@@ -56,7 +56,7 @@ function sessionTokenFromSetCookie(setCookie) {
  *   post(path, body) → Promise<{ status, body, setCookie }>  (the caller's HTTP client)
  * Resolves { token, step, status, error }. token is null on failure; step says where it stopped.
  */
-async function signIn(post, { email, password, totpSecret } = {}) {
+async function signIn(post, { email, password, totpSecret, enrollTotpIfRequired = false } = {}) {
   const login = await post('/api/auth/login', { email, password });
   if (login.status !== 200) return { token: null, step: 'password', status: login.status, error: login.body?.error };
   const direct = sessionTokenFromSetCookie(login.setCookie);
@@ -70,6 +70,16 @@ async function signIn(post, { email, password, totpSecret } = {}) {
     const v = await post('/api/auth/2fa/verify', { challengeToken, method: 'totp', code: totpCode(totpSecret) });
     const token = sessionTokenFromSetCookie(v.setCookie);
     return { token, step: '2fa', status: v.status, error: token ? undefined : v.body?.error };
+  }
+
+  // A throwaway account a test has just created, in an org that requires 2FA: set up an
+  // authenticator exactly as a new person would. Opt-in — real accounts never do this.
+  if (login.body?.twoFactorSetupRequired && enrollTotpIfRequired) {
+    const setup = await post('/api/auth/2fa/setup/totp', { challengeToken });
+    if (setup.status !== 200 || !setup.body?.secret) return { token: null, step: '2fa-setup', status: setup.status, error: setup.body?.error };
+    const v = await post('/api/auth/2fa/verify', { challengeToken, method: 'totp', code: totpCode(setup.body.secret) });
+    const token = sessionTokenFromSetCookie(v.setCookie);
+    return { token, step: '2fa-setup', status: v.status, error: token ? undefined : v.body?.error, totpSecret: setup.body.secret };
   }
 
   // 2FA offered but not required: decline it for this script account.

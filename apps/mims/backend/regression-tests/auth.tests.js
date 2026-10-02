@@ -3,6 +3,8 @@
  * Auth module regression tests
  */
 
+const { signIn } = require('../utils/signInClient');
+
 function getLoginCandidates() {
   const raw = [
     {
@@ -39,30 +41,21 @@ function getLoginCandidates() {
   });
 }
 
+// MIPM-82: sign in as a person does — cookie session, and 2FA with the account's
+// authenticator when its organisation requires it. "Skip setup" is refused by design.
 async function loginWithCandidates(makeRequest) {
   const errors = [];
+  const post = async (path, body) => {
+    const res = await makeRequest('POST', path, body, null);
+    return { status: res.status, body: res.body, setCookie: res.headers?.['set-cookie'] };
+  };
   for (const candidate of getLoginCandidates()) {
-    const res = await makeRequest('POST', '/api/auth/login', {
-      email: candidate.email,
-      password: candidate.password,
-    }, null);
-
-    if (res.status === 200 && res.body?.token) {
-      return { ok: true, token: res.body.token, details: `Status: ${res.status} via ${candidate.label}` };
+    const totpSecret = candidate.label === 'regression-user' ? process.env.REGRESSION_TOTP_SECRET : undefined;
+    const result = await signIn(post, { email: candidate.email, password: candidate.password, totpSecret });
+    if (result.token) {
+      return { ok: true, token: result.token, details: `Session via ${candidate.label} (${result.step})` };
     }
-
-    if (res.status === 200 && res.body?.challengeToken) {
-      const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
-        challengeToken: res.body.challengeToken,
-      }, null);
-      if (skip.status === 200 && skip.body?.token) {
-        return { ok: true, token: skip.body.token, details: `Status: ${skip.status} via ${candidate.label}+2fa-skip` };
-      }
-      errors.push(`${candidate.label}: login=${res.status}, skip=${skip.status}`);
-      continue;
-    }
-
-    errors.push(`${candidate.label}: status=${res.status}`);
+    errors.push(`${candidate.label}: stopped at ${result.step} (${result.status})`);
   }
 
   return {
@@ -80,7 +73,7 @@ module.exports = [
       const login = await loginWithCandidates(makeRequest)
       return { pass: login.ok, details: login.details }
     },
-    covers: ['POST /api/auth/login', 'POST /api/auth/2fa/skip-setup'],
+    covers: ['POST /api/auth/login', 'POST /api/auth/2fa/verify'],
   },
   {
     name: 'Login with invalid credentials returns 401',

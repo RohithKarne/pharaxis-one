@@ -8,6 +8,7 @@ const {
   getFirstSecurityGroup,
   getFirstUser,
   uniqueName,
+  createIndependentApprover,
 } = require('./helpers');
 
 const REGRESSION_PASSWORD = process.env.REGRESSION_PASSWORD || 'Test@1234';
@@ -455,26 +456,42 @@ module.exports = [
     },
   },
   {
-    name: 'PATCH /api/cm/templates/:id/status toggles template status',
+    // Replaced the on/off status toggle, retired with the Draft → Approved → Published
+    // lifecycle: the author is refused, approval and publish are signed (MIPM-77), the
+    // publish rules follow the lifecycle (MIPM-91), and a published template previews.
+    name: 'Template lifecycle: author refused, signed approve and publish, published template renders',
     module: 'Content Management',
-    covers: ['PATCH /api/cm/templates/:id/status'],
+    covers: ['POST /api/cm/templates/:id/approve', 'POST /api/cm/templates/:id/publish', 'POST /api/cm/templates/:id/render'],
     run: async ({ makeRequest, token }) => {
-      const create = await makeRequest('POST', '/api/cm/templates', {
-        type: 'Response',
-        name: uniqueName('Regression Template Status'),
-        subject: 'Status',
-        body_html: '<p>Status</p>',
-        status: 'Active',
-      }, token);
-      const templateId = Number(create.body?.id || create.body?.template?.id || 0);
-      if (create.status !== 201 || !templateId) {
-        return { pass: false, details: `create status: ${create.status}` };
+      let templateId = 0;
+      let approver = null;
+      try {
+        const create = await makeRequest('POST', '/api/cm/templates', {
+          type: 'Response',
+          name: uniqueName('Regression Template Lifecycle'),
+          subject: 'Lifecycle',
+          body_html: '<p>Regression template body long enough for the publish rules.</p>',
+        }, token);
+        templateId = Number(create.body?.id || create.body?.template?.id || 0);
+        if (create.status !== 201 || !templateId) return { pass: false, details: `create status: ${create.status}` };
+        const selfApprove = await makeRequest('POST', `/api/cm/templates/${templateId}/approve`, { password: REGRESSION_PASSWORD, reason: 'author tries' }, token);
+        approver = await createIndependentApprover(makeRequest, token);
+        const unsigned = await makeRequest('POST', `/api/cm/templates/${templateId}/approve`, {}, approver.token);
+        const approve = await makeRequest('POST', `/api/cm/templates/${templateId}/approve`, { password: approver.password, reason: 'Regression approval' }, approver.token);
+        const publish = await makeRequest('POST', `/api/cm/templates/${templateId}/publish`, { password: approver.password, reason: 'Regression publish' }, approver.token);
+        const render = await makeRequest('POST', `/api/cm/templates/${templateId}/render`, {}, token);
+        return {
+          pass: selfApprove.status === 403 && unsigned.status === 400 && approve.status === 200 &&
+            publish.status === 200 && publish.body?.status === 'Published' && render.status === 200,
+          details: `selfApprove=${selfApprove.status}, unsigned=${unsigned.status}, approve=${approve.status}, publish=${publish.status}/${publish.body?.status || 'n/a'}, render=${render.status}`,
+        };
+      } finally {
+        if (approver) await approver.cleanup();
+        if (templateId) {
+          await pool.execute("DELETE FROM cm_version_history WHERE entity_type = 'template' AND entity_id = ?", [templateId]).catch(() => {});
+          await pool.execute('DELETE FROM cm_templates WHERE id = ?', [templateId]).catch(() => {});
+        }
       }
-      const toggle = await makeRequest('PATCH', `/api/cm/templates/${templateId}/status`, {}, token);
-      return {
-        pass: toggle.status === 200 && toggle.body?.status === 'Inactive',
-        details: `Status: ${toggle.status}, next: ${toggle.body?.status || 'n/a'}`,
-      };
     },
   },
   {
@@ -563,6 +580,7 @@ module.exports = [
       let folderId = null;
       let moduleId = null;
       let primaryDocId = null;
+      let docApprover = null;
       let relatedDocId = null;
       let moduleDocId = null;
       let staleDocId = null;
@@ -687,10 +705,16 @@ module.exports = [
           description: 'Regression document review',
         }, token);
         reviewId = Number(initiateReview.body?.review_id || 0);
-        const approve = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/approve`, {
+        // The author may not approve their own document; an independent admin does.
+        const selfApprove = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/approve`, {
           password: REGRESSION_PASSWORD,
-          reason: 'Regression approval',
+          reason: 'Regression approval by the author (must be refused)',
         }, token);
+        docApprover = await createIndependentApprover(makeRequest, token);
+        const approve = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/approve`, {
+          password: docApprover.password,
+          reason: 'Regression approval',
+        }, docApprover.token);
         const publish = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/publish`, {
           password: REGRESSION_PASSWORD,
           reason: 'Regression publish',
@@ -745,6 +769,7 @@ module.exports = [
             checkin.status === 200 &&
             initiateReview.status === 201 &&
             reviewId > 0 &&
+            selfApprove.status === 403 &&
             approve.status === 200 &&
             publish.status === 200 &&
             versions.status === 200 &&
@@ -760,9 +785,10 @@ module.exports = [
             moduleUsage.status === 200 &&
             download.status === 404 &&
             file.status === 404,
-          details: `get=${getOne.status}, update=${update.status}, search=${search.status}, relationCreate=${relationCreate.status}, relationGet=${relationGet.status}, relationDelete=${relationDelete.status}, alertGet=${alertConfigGet.status}, alertPut=${alertConfigPut.status}, subAdd=${subscriber.status}, subDelete=${subscriberDelete.status}, checkout=${checkout.status}, checkin=${checkin.status}, initiateReview=${initiateReview.status}, approve=${approve.status}, publish=${publish.status}, versions=${versions.status}, versionDiff=${versionDiff.status}, activity=${activity.status}, release=${release.status}, archive=${archive.status}, releaseStale=${releaseStale.status}, bulk=${bulk.status}, usagePost=${contentUsagePost.status}, usageGet=${contentUsageGet.status}, moduleUsage=${moduleUsage.status}, download=${download.status}, file=${file.status}`,
+          details: `get=${getOne.status}, update=${update.status}, search=${search.status}, relationCreate=${relationCreate.status}, relationGet=${relationGet.status}, relationDelete=${relationDelete.status}, alertGet=${alertConfigGet.status}, alertPut=${alertConfigPut.status}, subAdd=${subscriber.status}, subDelete=${subscriberDelete.status}, checkout=${checkout.status}, checkin=${checkin.status}, initiateReview=${initiateReview.status}, selfApprove=${selfApprove.status}, approve=${approve.status}, publish=${publish.status}, versions=${versions.status}, versionDiff=${versionDiff.status}, activity=${activity.status}, release=${release.status}, archive=${archive.status}, releaseStale=${releaseStale.status}, bulk=${bulk.status}, usagePost=${contentUsagePost.status}, usageGet=${contentUsageGet.status}, moduleUsage=${moduleUsage.status}, download=${download.status}, file=${file.status}`,
         };
       } finally {
+        if (docApprover) await docApprover.cleanup();
         if (alertSubId) await pool.execute('DELETE FROM cm_document_alert_subs WHERE id = ?', [alertSubId]).catch(() => {});
         if (relationId) await pool.execute('DELETE FROM cm_document_relations WHERE id = ?', [relationId]).catch(() => {});
         if (reviewId) {
@@ -806,6 +832,7 @@ module.exports = [
     run: async ({ makeRequest, token }) => {
       let folderId = null;
       let faqId = null;
+      let faqApprover = null;
       try {
         const folder = await createContentFolder(makeRequest, token, 'Regression FAQ Folder');
         folderId = folder.folderId;
@@ -836,10 +863,15 @@ module.exports = [
         const checkin = await makeRequest('POST', `/api/cm/faqs/${faqId}/checkin`, {
           notes: 'Regression FAQ checkin',
         }, token);
-        const approve = await makeRequest('POST', `/api/cm/faqs/${faqId}/approve`, {
+        const selfApprove = await makeRequest('POST', `/api/cm/faqs/${faqId}/approve`, {
           password: REGRESSION_PASSWORD,
-          reason: 'Regression FAQ approval',
+          reason: 'Regression FAQ approval by the author (must be refused)',
         }, token);
+        faqApprover = await createIndependentApprover(makeRequest, token);
+        const approve = await makeRequest('POST', `/api/cm/faqs/${faqId}/approve`, {
+          password: faqApprover.password,
+          reason: 'Regression FAQ approval',
+        }, faqApprover.token);
         const publish = await makeRequest('POST', `/api/cm/faqs/${faqId}/publish`, {
           password: REGRESSION_PASSWORD,
           reason: 'Regression FAQ publish',
@@ -858,15 +890,17 @@ module.exports = [
             update.status === 200 &&
             checkout.status === 200 &&
             checkin.status === 200 &&
+            selfApprove.status === 403 &&
             approve.status === 200 &&
             publish.status === 200 &&
             view.status === 200 &&
             bulkTags.status === 200 &&
             Number(bulkTags.body?.updated || 0) >= 1 &&
             archive.status === 200,
-          details: `create=${create.status}, get=${getOne.status}, update=${update.status}, checkout=${checkout.status}, checkin=${checkin.status}, approve=${approve.status}, publish=${publish.status}, view=${view.status}, bulkTags=${bulkTags.status}, archive=${archive.status}`,
+          details: `create=${create.status}, get=${getOne.status}, update=${update.status}, checkout=${checkout.status}, checkin=${checkin.status}, selfApprove=${selfApprove.status}, approve=${approve.status}, publish=${publish.status}, view=${view.status}, bulkTags=${bulkTags.status}, archive=${archive.status}`,
         };
       } finally {
+        if (faqApprover) await faqApprover.cleanup();
         if (faqId) {
           await pool.execute('DELETE FROM cm_reviewers WHERE review_id IN (SELECT id FROM cm_reviews WHERE doc_type = ? AND doc_id = ?)', ['faq', faqId]).catch(() => {});
           await pool.execute('DELETE FROM cm_reviews WHERE doc_type = ? AND doc_id = ?', ['faq', faqId]).catch(() => {});
