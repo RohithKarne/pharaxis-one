@@ -20,26 +20,19 @@ export default function AdminIntegrationSection({ contentSection, H }) {
     let cancelled = false
 
     ;(async () => {
+      // MIPM-102: load each integration's config directly. A first probe of a combined
+      // /api/admin/integrations/config (a route that does not exist) logged a 404 and an
+      // exception on every visit before falling back to these.
       try {
-        const res = await httpFetch('/api/admin/integrations/config', { headers: H })
-        if (res.ok) {
-          const d = await res.json()
-          if (!cancelled) setIntegrationConfig(d.config || d.configs || {})
-        } else {
-          throw new Error('fallback')
-        }
-      } catch {
-        try {
-          const entries = await Promise.all(INTEGRATION_TYPES.map(async (type) => {
-            try {
-              const res = await httpFetch(`/api/admin/integrations/${type}/config`, { headers: H })
-              const d = await res.json()
-              return [type, d.config || {}]
-            } catch { return [type, {}] }
-          }))
-          if (!cancelled) setIntegrationConfig(Object.fromEntries(entries))
-        } catch { /* silent */ }
-      }
+        const entries = await Promise.all(INTEGRATION_TYPES.map(async (type) => {
+          try {
+            const res = await httpFetch(`/api/admin/integrations/${type}/config`, { headers: H })
+            const d = await res.json()
+            return [type, d.config || {}]
+          } catch { return [type, {}] }
+        }))
+        if (!cancelled) setIntegrationConfig(Object.fromEntries(entries))
+      } catch { /* silent */ }
 
       try {
         const res = await httpFetch('/api/admin/integrations', { headers: H })

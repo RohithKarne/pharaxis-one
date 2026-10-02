@@ -50,6 +50,12 @@ function DetailSidebar({ doc, token, onClose }) {
   const [fileError, setFileError] = useState('')
   // Reset to details tab when doc changes
   useEffect(() => { setActiveTab('details') }, [doc])
+  // MIPM-102: Escape closes the panel, as the ✕ and a click outside do.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const hasHtml    = !!(doc?.content_html || doc?.assembled_html)
   const hasFile    = !!(doc?.file_path && doc?.file_mime)
@@ -277,6 +283,12 @@ function DetailSidebar({ doc, token, onClose }) {
 
 // ── Module detail sidebar (read-only) ───────────────────────────────────────
 function ModuleSidebar({ mod, onClose }) {
+  // MIPM-102: Escape closes the panel, as the ✕ and a click outside do.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   if (!mod) return null
   return (
     <div className="bc-sidebar-overlay" onClick={onClose}>
