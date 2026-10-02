@@ -828,8 +828,12 @@ router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('c
 // (Saad 2b/2c): shared contact list entries blanked or kept, portal notes scrubbed, and
 // whether there is any reporter identity on the case at all — also when it is only on
 // the intake record, which has no contact card (about a fifth of cases).
-router.get('/cases/:id/erase-reporter/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+// Answers every signed-in user: someone who may not erase gets only { allowed: false },
+// so the screen hides the action by the same rule the server applies (the session's
+// organisation role) — the account role the screen otherwise reads can differ from it.
+router.get('/cases/:id/erase-reporter/preview', authenticate, async (req, res) => {
   try {
+    if (!isAdminUser(req.user) && !hasGlobalAdminScope(req.user)) return res.json({ allowed: false });
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
     const { erasurePreview } = require('../services/reporterErasureService');
@@ -838,7 +842,7 @@ router.get('/cases/:id/erase-reporter/preview', authenticate, requireRole('admin
       `SELECT COUNT(*) AS n FROM case_reporter WHERE case_id = ?
           AND COALESCE(first_name, last_name, email, phone, organisation) IS NOT NULL`, [owned.id]);
     const [[c]] = await pool.execute('SELECT reporter_erased_at FROM cases WHERE id = ?', [owned.id]);
-    res.json({ ...preview, intake_identity: Number(intake.n) > 0, erased_at: c?.reporter_erased_at || null });
+    res.json({ allowed: true, ...preview, intake_identity: Number(intake.n) > 0, erased_at: c?.reporter_erased_at || null });
   } catch (err) {
     logger.error({ err, route: 'GET /api/cases/:id/erase-reporter/preview', case_id: req.params?.id }, 'Erasure preview failed');
     res.status(500).json({ error: 'Could not check what the erasure would change.' });

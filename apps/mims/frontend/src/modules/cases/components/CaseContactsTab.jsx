@@ -3,8 +3,6 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { WiredField, WiredSelect, WiredTextarea } from '../../../shared/components/WiredField'
-import { useAuth } from '../../../shared/context/AuthContext'
-import { isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const CONTACT_SECTION = 'Contact / Requestor'
@@ -82,13 +80,13 @@ export default function CaseContactsTab({
   // again, e.g. to give the reporter a missing email (M-104).
   const [editingId, setEditingId] = useState(null)
   // Bridge row 10: an administrator can erase the reporter's identity on this case.
-  const { user } = useAuth()
   const [erasing, setErasing] = useState(false)
   // What an erasure here would touch, and whether the reporter's details sit only on the
   // intake record (no contact card) — about a fifth of cases, which had no way to erase.
+  // The server says whether this person may erase (allowed), by the same rule it enforces.
   const [erasure, setErasure] = useState(null)
+  const canErase = !!erasure?.allowed
   async function loadErasure() {
-    if (!isAdminUser(user)) return
     try {
       const res = await httpFetch(`${API}/cases/${id}/erase-reporter/preview`, { headers })
       setErasure(res.ok ? await res.json() : null)
@@ -272,7 +270,8 @@ export default function CaseContactsTab({
           </div>
           <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
           <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
-          {c.contact_role === 'reporter' && hasIdentity(c) && isAdminUser(user) && (
+          {/* One action per case: it erases every reporter record on the case. */}
+          {canErase && c.id === contacts.find(x => x.contact_role === 'reporter' && hasIdentity(x))?.id && (
             <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>
           )}
           {c.contact_role === 'reporter' && !hasIdentity(c) && (
@@ -280,7 +279,7 @@ export default function CaseContactsTab({
           )}
         </div>
       ))}
-      {erasure?.intake_identity && !contacts.some(c => c.contact_role === 'reporter' && hasIdentity(c)) && (
+      {canErase && erasure?.intake_identity && !contacts.some(c => c.contact_role === 'reporter' && hasIdentity(c)) && (
         <div className="cf-contact-card">
           <div className="cf-contact-meta"><span>The reporter's details are on the intake record only (no contact card).</span></div>
           <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>
