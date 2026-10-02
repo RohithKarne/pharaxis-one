@@ -84,6 +84,17 @@ export default function CaseContactsTab({
   // Bridge row 10: an administrator can erase the reporter's identity on this case.
   const { user } = useAuth()
   const [erasing, setErasing] = useState(false)
+  // What an erasure here would touch, and whether the reporter's details sit only on the
+  // intake record (no contact card) — about a fifth of cases, which had no way to erase.
+  const [erasure, setErasure] = useState(null)
+  async function loadErasure() {
+    if (!isAdminUser(user)) return
+    try {
+      const res = await httpFetch(`${API}/cases/${id}/erase-reporter/preview`, { headers })
+      setErasure(res.ok ? await res.json() : null)
+    } catch { setErasure(null) }
+  }
+  useEffect(() => { loadErasure() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useDraft(`mims_case_${id}_contact_draft`, addContactForm, setAddContactForm)
   useEffect(() => {
@@ -269,9 +280,18 @@ export default function CaseContactsTab({
           )}
         </div>
       ))}
+      {erasure?.intake_identity && !contacts.some(c => c.contact_role === 'reporter' && hasIdentity(c)) && (
+        <div className="cf-contact-card">
+          <div className="cf-contact-meta"><span>The reporter's details are on the intake record only (no contact card).</span></div>
+          <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>
+        </div>
+      )}
+      {erasure?.erased_at && !erasure?.intake_identity && !contacts.some(c => c.contact_role === 'reporter') && (
+        <div className="cf-empty-msg"><span className="cf-dnumd-badge">Identity erased</span></div>
+      )}
       {erasing && (
-        <ReporterErasureModal caseId={id} headers={headers}
-          onDone={() => { setErasing(false); loadContacts() }} onCancel={() => setErasing(false)} />
+        <ReporterErasureModal caseId={id} headers={headers} preview={erasure}
+          onDone={() => { setErasing(false); loadContacts(); loadErasure() }} onCancel={() => setErasing(false)} />
       )}
 
       {showContactAdd && (
@@ -368,7 +388,7 @@ function hasIdentity(c) {
 
 // Bridge row 10: erasing the reporter cannot be undone, so it takes a reason and the
 // user's password, and says plainly what goes and what stays.
-function ReporterErasureModal({ caseId, headers, onDone, onCancel }) {
+function ReporterErasureModal({ caseId, headers, preview, onDone, onCancel }) {
   const [reason, setReason] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -383,7 +403,9 @@ function ReporterErasureModal({ caseId, headers, onDone, onCancel }) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || 'Could not erase the reporter\'s identity.'); return }
-      toast.success('The reporter\'s identity was erased from this case.')
+      const kept = data.shared_contacts_kept?.length
+        ? ` The shared contact list entry is used by other cases, so it was kept — erase it there if the person asked.` : ''
+      toast.success(`The reporter's identity was erased from this case.${kept}`, kept ? 8000 : 3000)
       onDone()
     } catch {
       setError('Could not erase the reporter\'s identity. Check your connection and try again.')
@@ -403,6 +425,15 @@ function ReporterErasureModal({ caseId, headers, onDone, onCancel }) {
             The case itself, the reporter type and the country stay. If the case came from a portal, the portal removes them from its copy too.
             This cannot be undone.
           </div>
+          {preview && (preview.portal_notes > 0 || preview.shared_contacts_blanked > 0 || preview.shared_contacts_kept?.length > 0) && (
+            <ul style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 0', paddingLeft: 18 }}>
+              {preview.portal_notes > 0 && <li>The reporter's name, email and phone are also removed from {preview.portal_notes} note(s) they sent through the portal. The rest of each note stays.</li>}
+              {preview.shared_contacts_blanked > 0 && <li>The reporter's entry in the shared contact list is used only by this case, so it is blanked too.</li>}
+              {preview.shared_contacts_kept?.map(k => (
+                <li key={k.id}><strong>The reporter's entry in the shared contact list is used by {k.other_cases} other case(s), so it stays.</strong> Erase it there too if the person asked.</li>
+              ))}
+            </ul>
+          )}
         </div>
         <div style={{ padding: 16, display: 'grid', gap: 10 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Reason

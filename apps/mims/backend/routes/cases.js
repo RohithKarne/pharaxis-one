@@ -824,6 +824,27 @@ router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('c
   }
 });
 
+// GET /api/cases/:id/erase-reporter/preview — what an erasure here would also touch
+// (Saad 2b/2c): shared contact list entries blanked or kept, portal notes scrubbed, and
+// whether there is any reporter identity on the case at all — also when it is only on
+// the intake record, which has no contact card (about a fifth of cases).
+router.get('/cases/:id/erase-reporter/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
+    const { erasurePreview } = require('../services/reporterErasureService');
+    const preview = await erasurePreview(pool, owned.id);
+    const [[intake]] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM case_reporter WHERE case_id = ?
+          AND COALESCE(first_name, last_name, email, phone, organisation) IS NOT NULL`, [owned.id]);
+    const [[c]] = await pool.execute('SELECT reporter_erased_at FROM cases WHERE id = ?', [owned.id]);
+    res.json({ ...preview, intake_identity: Number(intake.n) > 0, erased_at: c?.reporter_erased_at || null });
+  } catch (err) {
+    logger.error({ err, route: 'GET /api/cases/:id/erase-reporter/preview', case_id: req.params?.id }, 'Erasure preview failed');
+    res.status(500).json({ error: 'Could not check what the erasure would change.' });
+  }
+});
+
 // POST /api/cases/:id/erase-reporter — bridge row 10: erase the reporter's identity on
 // this case when the person asks MIMS (or the company running it) for erasure. The case
 // is kept; name, email, phone, organisation, address and institution are blanked. Needs
@@ -842,12 +863,13 @@ router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'pla
   try {
     await conn.beginTransaction();
     const { eraseReporterIdentity } = require('../services/reporterErasureService');
-    await eraseReporterIdentity(conn, owned.id, {
+    const done = await eraseReporterIdentity(conn, owned.id, {
       userId: req.user.userId, userName: req.user.email,
       note: `erased in MIMS: ${reason.slice(0, 500)}`, always: true,
     });
     await conn.commit();
-    res.json({ erased: true });
+    res.json({ erased: true, shared_contacts_blanked: done.shared_contacts_blanked,
+      shared_contacts_kept: done.shared_contacts_kept, notes_scrubbed: done.notes_scrubbed });
   } catch (err) {
     await conn.rollback().catch(() => {});
     logger.error({ err, route: 'POST /api/cases/:id/erase-reporter', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to erase the reporter identity');
