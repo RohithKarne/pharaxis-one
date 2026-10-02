@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // resolve ("Failed to parse URL from /api/..."). These are render/navigation
 // tests, so the network is stubbed rather than exercised.
 beforeEach(() => {
-  global.fetch = vi.fn(() => Promise.resolve({
+  globalThis.fetch = vi.fn(() => Promise.resolve({
     ok: true,
     status: 200,
     json: () => Promise.resolve({}),
