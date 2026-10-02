@@ -8,6 +8,42 @@ const pool = require('../database/db');
 const mailer = require('../utils/mailer');
 const { decryptMailboxSecret } = require('./mailboxCrypto');
 
+// The mailbox an expiry email goes out from: the document's own, else the org default.
+async function alertMailbox(docEmailAccountId, orgId) {
+  let emailAccountId = docEmailAccountId;
+  if (!emailAccountId && orgId) {
+    const [[orgEmailSetting]] = await pool.execute(
+      `SELECT setting_value FROM cm_org_settings WHERE org_id = ? AND setting_key = 'default_alert_email_account_id'`,
+      [orgId]
+    );
+    if (orgEmailSetting?.setting_value) {
+      emailAccountId = typeof orgEmailSetting.setting_value === 'string'
+        ? JSON.parse(orgEmailSetting.setting_value)
+        : orgEmailSetting.setting_value;
+    }
+  }
+  if (!emailAccountId) return null;
+  const [[emailAccount]] = await pool.execute(
+    'SELECT * FROM email_accounts WHERE id = ? AND is_active = 1',
+    [emailAccountId]
+  );
+  return emailAccount || null;
+}
+
+function alertTransport(emailAccount) {
+  return mailer.createTransport('alert', {
+    host: emailAccount.smtp_host,
+    port: emailAccount.smtp_port || 587,
+    // MIPM-65: use the mailbox's own Encryption setting, as every other sender
+    // does; guessing from the port hung on an SSL/TLS mailbox not on 465.
+    secure: emailAccount.smtp_encryption === 'SSL/TLS',
+    requireTLS: emailAccount.smtp_encryption === 'STARTTLS',
+    // MIPM-65: the mailbox keeps these as smtp_username / smtp_password (encrypted)
+    // and from_email. The names read here before do not exist, so no alert could sign in.
+    auth: { user: emailAccount.smtp_username, pass: decryptMailboxSecret(emailAccount.smtp_password) },
+  });
+}
+
 async function runCmExpiryAlerts() {
   try {
     // Get all active published/approved documents and FAQs with expiry dates
@@ -90,39 +126,11 @@ async function runCmExpiryAlerts() {
 
       if (subs.length === 0) continue;
 
-      // Get SMTP account — per-doc first, then org default
-      let emailAccountId = doc.alert_email_account_id;
-      if (!emailAccountId && orgId) {
-        const [[orgEmailSetting]] = await pool.execute(
-          `SELECT setting_value FROM cm_org_settings WHERE org_id = ? AND setting_key = 'default_alert_email_account_id'`,
-          [orgId]
-        );
-        if (orgEmailSetting?.setting_value) {
-          emailAccountId = typeof orgEmailSetting.setting_value === 'string'
-            ? JSON.parse(orgEmailSetting.setting_value)
-            : orgEmailSetting.setting_value;
-        }
-      }
-      if (!emailAccountId) continue;
-
-      const [[emailAccount]] = await pool.execute(
-        'SELECT * FROM email_accounts WHERE id = ? AND is_active = 1',
-        [emailAccountId]
-      );
+      const emailAccount = await alertMailbox(doc.alert_email_account_id, orgId);
       if (!emailAccount) continue;
 
       // Send alerts
-      const transporter = mailer.createTransport('alert', {
-        host: emailAccount.smtp_host,
-        port: emailAccount.smtp_port || 587,
-        // MIPM-65: use the mailbox's own Encryption setting, as every other sender
-        // does; guessing from the port hung on an SSL/TLS mailbox not on 465.
-        secure: emailAccount.smtp_encryption === 'SSL/TLS',
-        requireTLS: emailAccount.smtp_encryption === 'STARTTLS',
-        // MIPM-65: the mailbox keeps these as smtp_username / smtp_password (encrypted)
-        // and from_email. The names read here before do not exist, so no alert could sign in.
-        auth: { user: emailAccount.smtp_username, pass: decryptMailboxSecret(emailAccount.smtp_password) },
-      });
+      const transporter = alertTransport(emailAccount);
 
       const uniqueSubs = [...new Map(subs.map(s => [s.email, s])).values()];
       for (const sub of uniqueSubs) {
@@ -152,59 +160,85 @@ async function runCmExpiryAlerts() {
 }
 
 // ── CM-E5: Pre-expiry reminders (30/60/90 days) ──────────────────────────────
+// MIPM-65: run daily by the scheduler (cm-pre-expiry-reminders). The owner gets an
+// in-app notice; the document's expiry_alert_recipients get an email from the
+// document's alert mailbox. Before, nothing called this, and the "emails" were
+// service-log rows marked queued that nothing ever sent. A failure is now logged
+// and fails the job, instead of being swallowed.
 async function runCmPreExpiryReminders() {
   const intervals = [90, 60, 30];
   let totalSent = 0;
-  try {
-    for (const days of intervals) {
-      const [docs] = await pool.execute(
-        `SELECT d.id, d.doc_id, d.name, d.expiry_date, d.expiry_alert_recipients,
-                COALESCE(d.owner_user_id, d.created_by) AS owner_id
-         FROM cm_documents d
-         WHERE d.status = 'Published'
-           AND d.expiry_date IS NOT NULL
-           AND DATEDIFF(d.expiry_date, CURDATE()) = ?`,
-        [days]
-      );
-      for (const doc of docs) {
-        // Notify document owner via in-app notification
-        if (doc.owner_id) {
+  const failures = [];
+  const logFailure = async (doc, what, err) => {
+    failures.push(`${doc.doc_id || doc.id}: ${what}`);
+    console.error(`[CM Pre-Expiry Reminder] ${doc.doc_id || doc.id}: ${what}`, err?.message || '');
+    await pool.execute(
+      `INSERT INTO service_logs (source, service_type, description, details, status)
+       VALUES ('cmExpiryAlert', 'expiry_reminder', ?, ?, 'failed')`,
+      [`Expiry reminder for doc ${doc.doc_id || doc.id} failed: ${what}`, JSON.stringify({ doc_id: doc.id, error: err?.message || null })]
+    ).catch(() => {});
+  };
+  for (const days of intervals) {
+    const [docs] = await pool.execute(
+      `SELECT d.id, d.doc_id, d.name, d.expiry_date, d.expiry_alert_recipients, d.alert_email_account_id,
+              COALESCE(d.owner_user_id, d.created_by) AS owner_id, f.org_id AS folder_org_id
+       FROM cm_documents d
+       JOIN cm_folders f ON f.id = d.folder_id
+       WHERE d.status = 'Published'
+         AND d.expiry_date IS NOT NULL
+         AND DATEDIFF(d.expiry_date, CURDATE()) = ?`,
+      [days]
+    );
+    for (const doc of docs) {
+      const expires = new Date(doc.expiry_date).toDateString();
+      if (doc.owner_id) {
+        try {
           await pool.execute(
             `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
              VALUES (?, 'cm_expiry', ?, ?, '/content', ?)`,
             [
               doc.owner_id,
               `Document Expiring in ${days} Days`,
-              `"${doc.name}" is set to expire on ${doc.expiry_date}. Please review and renew.`,
+              `"${doc.name}" is set to expire on ${expires}. Please review and renew.`,
               JSON.stringify({ doc_id: doc.id, doc_code: doc.doc_id, days_remaining: days }),
             ]
-          ).catch(() => {});
-        }
-        // Queue custom email recipients from expiry_alert_recipients JSON column
-        if (doc.expiry_alert_recipients) {
-          let recipients = [];
-          try {
-            recipients = typeof doc.expiry_alert_recipients === 'string'
-              ? JSON.parse(doc.expiry_alert_recipients)
-              : doc.expiry_alert_recipients;
-          } catch (_) {}
-          for (const email of (Array.isArray(recipients) ? recipients : [])) {
-            await pool.execute(
-              `INSERT INTO service_logs (source, service_type, description, details, status)
-               VALUES ('cmExpiryAlert', 'expiry_reminder', ?, ?, 'queued')`,
-              [
-                `Expiry reminder for doc ${doc.doc_id} to ${email} (${days}d)`,
-                JSON.stringify({ doc_id: doc.id, email, days, expiry_date: doc.expiry_date }),
-              ]
-            ).catch(() => {});
+          );
+        } catch (err) { await logFailure(doc, 'in-app notice not saved', err); }
+      }
+      let recipients = [];
+      try {
+        const raw = doc.expiry_alert_recipients;
+        recipients = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+      } catch (err) { await logFailure(doc, 'recipient list unreadable', err); }
+      recipients = (Array.isArray(recipients) ? recipients : []).filter(Boolean);
+      if (recipients.length) {
+        const emailAccount = await alertMailbox(doc.alert_email_account_id, doc.folder_org_id);
+        if (!emailAccount) {
+          await logFailure(doc, 'no active alert mailbox for this document or its organisation');
+        } else {
+          const transporter = alertTransport(emailAccount);
+          for (const email of recipients) {
+            try {
+              await transporter.sendMail({
+                from: `"MIMS Alerts" <${emailAccount.from_email || emailAccount.smtp_username}>`,
+                to: email,
+                subject: `Reminder — ${doc.name} expires in ${days} days`,
+                html: `
+                  <p>This is an automated reminder from MIMS Content Management.</p>
+                  <p><strong>${doc.name}</strong>${doc.doc_id ? ` (${doc.doc_id})` : ''} expires in <strong>${days} days</strong>, on <strong>${expires}</strong>.</p>
+                  <p>Please review and renew it before then.</p>
+                  <br/>
+                  <p style="color:#888;font-size:12px;">This is an automated message from MIMS. Do not reply.</p>
+                `,
+              });
+            } catch (err) { await logFailure(doc, `email to ${email} not sent`, err); }
           }
         }
-        totalSent++;
       }
+      totalSent++;
     }
-  } catch (err) {
-    console.error('[CM Pre-Expiry Reminder] Error:', err.message);
   }
+  if (failures.length) throw new Error(`Pre-expiry reminders: ${failures.length} failed — ${failures.join('; ')}`);
   return { totalSent };
 }
 
