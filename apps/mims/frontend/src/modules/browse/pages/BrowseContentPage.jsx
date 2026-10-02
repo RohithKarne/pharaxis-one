@@ -354,7 +354,11 @@ function ModuleSidebar({ mod, onClose }) {
 }
 
 export default function BrowseContentPage() {
-  const { token } = useAuth()
+  const { token, hasCapability } = useAuth()
+  // MIPM-89: people who do not work on content are only ever sent live (Published)
+  // content by the server, so they are not offered a filter for other statuses.
+  const seesAllStatuses = ['content.author', 'content.review', 'content.approve', 'content.publish', 'content.faq.manage', 'content.module.manage'].some(k => hasCapability(k))
+  const statusOptions = seesAllStatuses ? STATUSES : ['All Statuses', 'Published']
   const headers   = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -513,7 +517,7 @@ export default function BrowseContentPage() {
               value={status}
               onChange={e => { setStatus(e.target.value); setPage(1) }}
             >
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
+              {statusOptions.map(s => <option key={s}>{s}</option>)}
             </select>
             <select
               className="bc-filter-select"
@@ -549,7 +553,7 @@ export default function BrowseContentPage() {
               value={modStatus}
               onChange={e => setModStatus(e.target.value)}
             >
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
+              {statusOptions.map(s => <option key={s}>{s}</option>)}
             </select>
             {hasModFilter && (
               <button className="bc-clear-btn" onClick={clearModFilters}>✕ Clear</button>

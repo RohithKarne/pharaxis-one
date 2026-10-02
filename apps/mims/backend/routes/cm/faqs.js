@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireCapability } = require('../../middleware/auth');
+const { seesAllContentStatuses, liveContentSql, liveOnlyForReaders } = require('../../services/contentVisibility');
 const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -90,6 +91,7 @@ router.get('/faqs', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
 
+    if (!(await seesAllContentStatuses(req.user))) query += liveContentSql('f'); // MIPM-89
     if (status) {
       query += ' AND f.status = ?';
       params.push(status);
@@ -162,7 +164,7 @@ router.post('/faqs', authenticate, requireCapability('content.faq.manage'), asyn
 });
 
 // GET /api/cm/faqs/:id — get faq
-router.get('/faqs/:id', authenticate, async (req, res) => {
+router.get('/faqs/:id', authenticate, liveOnlyForReaders('cm_faqs'), async (req, res) => {
   try {
     const [[faq]] = await pool.execute(
       hasPlatformAdminScope(req)
