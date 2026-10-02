@@ -2,6 +2,8 @@ import { useState, useEffect, Fragment } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',
@@ -27,7 +29,7 @@ const STATUS_LABELS = {
 }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
-function AnswerPanel({ clientId, submissionId, canApprove }) {
+function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged }) {
   const [answer, setAnswer] = useState(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -55,6 +57,7 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
 
   const sent = answer?.status === 'sent'
   return (
+    <>
     <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Medical answer</div>
       {sent ? (
@@ -67,6 +70,10 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
         </div>
       ) : (
         <>
+          {/* CPPM-60: a role that may not change enquiries can read a draft but not write one */}
+          {!canEdit && !answer ? <div style={{ fontSize: 13, color: '#6B7280' }}>No answer drafted yet.</div> : null}
+          {!canEdit && answer ? <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>{answer.body}</div> : null}
+          {canEdit && <>
           <textarea rows={5} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
             placeholder="Write the approved answer that goes back to the person who asked."
             style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontSize: 13, fontFamily: 'inherit' }} />
@@ -82,8 +89,107 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
             </button>
             {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
           </div>
+          </>}
         </>
       )}
+      {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
+      {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
+    </div>
+    {sent && <ConversationPanel clientId={clientId} submissionId={submissionId} canApprove={canApprove} canEdit={canEdit} onChanged={onChanged} />}
+    </>
+  )
+}
+
+// CPPM-63: after the first answer — the person's replies and the follow-ups sent,
+// oldest first, then the follow-up being drafted. Drafted, approved and sent like
+// the first answer.
+function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChanged }) {
+  const [messages, setMessages] = useState([])
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const base = `/api/admin/submissions/${clientId}/${submissionId}/messages`
+
+  async function load() {
+    try {
+      const res = await fetch(base, { headers: adminHeaders() })
+      if (!res.ok) { setErr(`Could not load the conversation (error ${res.status}).`); return }
+      const d = await res.json()
+      setMessages(d.messages || [])
+      setBody((d.messages || []).find(m => m.status === 'draft')?.body || '')
+    } catch { setErr('Network error — please try again.') }
+  }
+  useEffect(() => { load() }, [clientId, submissionId])
+
+  async function call(method, path, okMsg) {
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const res = await fetch(`${base}${path}`, { method, headers: adminHeaders(), ...(method === 'PUT' ? { body: JSON.stringify({ body }) } : {}) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) setErr(d.error || 'That did not work. Refresh and try again.')
+      else { setMsg(d.message || okMsg); if (method === 'POST') onChanged?.() }
+      await load()
+    } catch { setErr('Network error — please try again.') } finally { setBusy(false) }
+  }
+
+  const draft = messages.find(m => m.status === 'draft')
+  const thread = messages.filter(m => m.status !== 'draft')
+  const lastIn = [...thread].reverse().find(m => m.direction === 'in')
+  const lastOut = [...thread].reverse().find(m => m.direction === 'out')
+  const waiting = lastIn && (!lastOut || new Date(lastIn.created_at) > new Date(lastOut.sent_at))
+  if (!thread.length && !canEdit && !draft) return null
+  return (
+    <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>
+        Conversation after the answer{waiting ? <span style={{ marginLeft: 8, color: '#B45309' }}>· Reply waiting for a follow-up</span> : null}
+      </div>
+      {thread.length === 0 && <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>No replies yet.</div>}
+      {thread.map(m => m.direction === 'in' ? (
+        <div key={m.id} style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: '#92400E', marginBottom: 6, fontWeight: 600 }}>
+            Reply from the person · {formatDateTime(m.created_at)}
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>
+          {m.ae_screen_answer === 'Yes' && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
+              ⚠ Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
+            </div>
+          )}
+          {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Said nobody became unwell.</div>}
+        </div>
+      ) : (
+        <div key={m.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+          {m.body}
+          <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
+            Follow-up approved by {m.approved_by_name || 'unknown'} · sent {m.sent_at ? formatDateTime(m.sent_at) : ''}
+            {m.send_error ? ` · ${m.send_error}` : ''}
+          </div>
+        </div>
+      ))}
+      {!canEdit && draft && (
+        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
+          <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Follow-up being drafted by {draft.drafted_by_name || 'unknown'}</div>
+          {draft.body}
+        </div>
+      )}
+      {canEdit && <>
+        <textarea rows={4} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
+          placeholder="Write a follow-up to send to the person who asked."
+          style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontSize: 13, fontFamily: 'inherit' }} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <button disabled={busy || body.trim().length < 10} onClick={() => call('PUT', '/draft', 'Draft saved.')}
+            style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+            Save follow-up draft
+          </button>
+          <button disabled={busy || !draft || !canApprove || draft.body !== body} onClick={() => call('POST', '/draft/send', 'Follow-up sent.')}
+            title={!canApprove ? 'Only a reviewer can approve and send' : draft && draft.body !== body ? 'Save the draft first' : 'Approves the follow-up and emails it to the person who asked'}
+            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
+            Approve &amp; send follow-up
+          </button>
+          {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {draft.drafted_by_name}</span>}
+        </div>
+      </>}
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
       {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
     </div>
@@ -93,6 +199,8 @@ function AnswerPanel({ clientId, submissionId, canApprove }) {
 export default function SubmissionsPage() {
   const { hasRole } = useAdminAuth()
   const canApprove = hasRole('superadmin', 'admin', 'reviewer')
+  const { canChange } = useAdminAuth()
+  const canEdit    = canChange('submissions') // CPPM-60
   const { clientId }            = useParams()
   const [submissions, setSubmissions] = useState([])
   const [counts, setCounts]     = useState([])
@@ -105,11 +213,14 @@ export default function SubmissionsPage() {
   const [msg, setMsg]           = useState(null)  // { type, text }
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
+  const [mineOnly, setMineOnly] = useState(false)   // CPPM-61
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
 
-  async function load() {
-    setLoading(true)
+  // `quiet` reloads the rows without swapping the whole page for "Loading…", which
+  // would close a hand-over box that is still open (CPPM-61).
+  async function load(quiet) {
+    if (!quiet) setLoading(true)
     try {
       const params = new URLSearchParams()
       if (typeFilter)   params.set('type', typeFilter)
@@ -213,6 +324,9 @@ export default function SubmissionsPage() {
 
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
 
+  const mineCount = submissions.filter(s => s.owned_by_me).length
+  const shown = mineOnly ? submissions.filter(s => s.owned_by_me) : submissions
+
   return (
     <AdminLayout title="Submissions">
 
@@ -262,6 +376,12 @@ export default function SubmissionsPage() {
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           />
         </label>
+        {/* CPPM-61: the enquiries this person holds */}
+        {!hasRole('viewer') && (
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+            {mineOnly ? 'Show all' : `Show mine${mineCount ? ` (${mineCount})` : ''}`}
+          </button>
+        )}
         {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
             Clear
@@ -286,8 +406,8 @@ export default function SubmissionsPage() {
         </div>
       )}
 
-      {submissions.length === 0 ? (
-        <div className="cp-empty"><p>No submissions found.</p></div>
+      {shown.length === 0 ? (
+        <div className="cp-empty"><p>{mineOnly && submissions.length ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
       ) : (
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
@@ -300,20 +420,28 @@ export default function SubmissionsPage() {
                 <th>User Type</th>
                 <th>Status</th>
                 <th>Ref</th>
+                <th>Held by</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {submissions.map(s => (
+              {shown.map(s => (
                 <Fragment key={s.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{s.submitted_at ? s.submitted_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{formatDateTime(s.submitted_at)}</td>
                     <td>
                       <span style={{ fontSize: 12, fontWeight: 600 }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</span>
                       {/* PD-2: the submitter reported that someone became unwell.
                           Shown here as well as in the Safety Queue so it is visible
                           in the list an admin already works from. The type itself is
                           never changed by the flag — that is a clinical decision. */}
+                      {/* CPPM-63: the person replied after the last thing we sent */}
+                      {s.replies_waiting > 0 && (
+                        <span title="The person replied to our answer and is waiting for a follow-up"
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
+                          ↩ REPLY RECEIVED
+                        </span>
+                      )}
                       {s.ae_task_status && (
                         <span
                           title={s.ae_task_status === 'open'
@@ -350,16 +478,24 @@ export default function SubmissionsPage() {
                         )
                       ) : null}
                     </td>
+                    <td style={{ fontSize: 12 }}>{s.status === 'closed' && !s.owner_id ? '—' : <OwnerCell item={s} />}</td>
                     <td>
-                      <select
+                      <span style={{ display: 'inline-flex', gap: 6, marginRight: 6, verticalAlign: 'middle' }}>
+                        <OwnerButtons item={s} open={s.status !== 'closed'}
+                          base={`/api/admin/submissions/${clientId}/${s.id}`}
+                          staffUrl={`/api/admin/submissions/${clientId}/staff`}
+                          label={`enquiry ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
+                          onChanged={() => load(true)} onMessage={setMsg} />
+                      </span>
+                      {canEdit ? <select
                         value={s.status}
                         onClick={e => e.stopPropagation()}
                         onChange={e => updateStatus(s.id, e.target.value)}
                         style={{ fontSize: 12, padding: '2px 6px', border: '1px solid var(--cp-border)', borderRadius: 4 }}
                       >
                         {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{st}</option>)}
-                      </select>
-                      {s.status === 'failed_sync' && (
+                      </select> : null}
+                      {s.status === 'failed_sync' && canEdit && (
                         <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
                           style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
                           ↻ Retry
@@ -369,13 +505,13 @@ export default function SubmissionsPage() {
                   </tr>
                   {expanded === s.id && (
                     <tr key={`${s.id}-detail`}>
-                      <td colSpan={8} style={{ background: '#F9FAFB', padding: '12px 16px' }}>
+                      <td colSpan={9} style={{ background: '#F9FAFB', padding: '12px 16px' }}>
                         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Form Data</div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
                           {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (
                             <div key={k}>
                               <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
-                              <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{String(v) || '—'}</div>
+                              <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
                             </div>
                           ))}
                         </div>
@@ -400,7 +536,7 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} />
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} />
                       </td>
                     </tr>
                   )}

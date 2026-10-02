@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import ColorPicker from '../components/ColorPicker'
 import LoadingButton from '../components/LoadingButton'
@@ -111,6 +112,7 @@ export default function BrandingPage() {
 
   return (
     <AdminLayout title="Branding & Theme">
+      <ReadOnlyUnless area="branding" what="the branding">
       <div>
         {/* Identity */}
         <div className="cp-card">
@@ -305,6 +307,7 @@ export default function BrandingPage() {
           <button type="button" className="cp-btn cp-btn-outline" onClick={handleReset} disabled={saving}>Reset to Defaults</button>
         </div>
       </div>
+      </ReadOnlyUnless>
     </AdminLayout>
   )
 }

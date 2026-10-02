@@ -7,7 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, auditWithin } = require('../../utils/audit');
 const { eraseUser } = require('../../services/dataSubject');
 const log = require('../../utils/logger');
 
@@ -48,10 +48,22 @@ router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAcc
     const notes = `Deleted: ${summary.deleted.join(', ') || 'none'} | Retained: ${summary.retained.join(', ') || 'none'} | Anonymized: ${summary.anonymized.join(', ')}`
       + (summary.mims ? ` | ${summary.mims.detail}` : '');
 
-    await pool.execute(
-      `UPDATE cp_data_requests SET status = 'fulfilled', fulfilled_at = NOW(), fulfilled_by = ?, notes = ? WHERE id = ?`,
-      [req.admin?.name || req.admin?.email || 'admin', notes, requestId]);
-    await audit(req.admin, clientId, 'ERASURE_FULFILLED', 'portal_user', reqRow.portal_user_id, summary);
+    // The request's new state and its audit line are one transaction (CPPM-53): an
+    // erasure is never shown as fulfilled without the record that says so.
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        `UPDATE cp_data_requests SET status = 'fulfilled', fulfilled_at = NOW(), fulfilled_by = ?, notes = ? WHERE id = ? AND status = 'pending'`,
+        [req.admin?.name || req.admin?.email || 'admin', notes, requestId]);
+      await auditWithin(conn, req.admin, clientId, 'ERASURE_FULFILLED', 'portal_user', reqRow.portal_user_id, summary);
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback().catch(() => {});
+      throw e;
+    } finally {
+      conn.release();
+    }
 
     res.json({ status: 'fulfilled', summary });
   } catch (err) {

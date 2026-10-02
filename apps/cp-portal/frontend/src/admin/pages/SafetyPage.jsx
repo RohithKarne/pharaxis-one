@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -69,7 +70,7 @@ export default function SafetyPage() {
       effective_date: alert.effective_date ? alert.effective_date.slice(0, 10) : '',
       target_types:  alert.target_types_json ? (Array.isArray(alert.target_types_json) ? alert.target_types_json : JSON.parse(alert.target_types_json)) : [],
       status:        alert.status || 'active',
-      publish_at:    alert.publish_at ? alert.publish_at.slice(0, 16) : '',
+      publish_at:    toLocalInput(alert.publish_at),
     })
     setFileInput(null)
     setError('')
@@ -96,6 +97,8 @@ export default function SafetyPage() {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
         if (k === 'target_types') fd.append(k, JSON.stringify(v))
+        // CPPM-58: send the moment the admin meant; an untouched time on an edit is left out.
+        else if (k === 'publish_at') { if (!editAlert || v !== toLocalInput(editAlert.publish_at)) fd.append(k, fromLocalInput(v)) }
         else fd.append(k, v ?? '')
       })
       if (fileInput) fd.append('attachment', fileInput)

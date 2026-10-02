@@ -13,10 +13,16 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 //
 // CPPM-18: tasks also come from the chat assistant, and a safety reviewer can
 // confirm a real side effect, which creates an AE case and sends it to MIMS.
+//
+// CPPM-6: an open task shows who holds it. Anyone but a viewer can take a free
+// task; the holder (or an admin, covering for someone away) can release it or hand
+// it to a colleague. Holding a task is never needed to close it.
 export default function SafetyQueuePage() {
   const { clientId } = useParams()
   const { hasRole }  = useAdminAuth()
   const canJudge     = hasRole('safety_reviewer', 'superadmin')
+  const canHold      = !hasRole('viewer')
+  const isLead       = hasRole('admin', 'superadmin')
 
   const [tab, setTab]         = useState('open')
   const [tasks, setTasks]     = useState([])
@@ -31,6 +37,11 @@ export default function SafetyQueuePage() {
   const [eventDescription, setEventDescription] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [notice, setNotice] = useState('')
+  const [mineOnly, setMineOnly] = useState(false)
+  const [hand, setHand]         = useState(null)   // task being handed over
+  const [staff, setStaff]       = useState([])
+  const [handTo, setHandTo]     = useState('')
+  const [handError, setHandError] = useState('')
 
   useEffect(() => { load() }, [clientId, tab])
 
@@ -42,6 +53,50 @@ export default function SafetyQueuePage() {
       const d = await res.json()
       setTasks(d.items || [])
     } catch { setError('Network error — please try again.') } finally { setLoading(false) }
+  }
+
+  // CPPM-6: take, release or hand over a task. The sidebar count is told to
+  // refresh, since "yours" has just changed.
+  async function act(task, action, body) {
+    setError(''); setNotice('')
+    try {
+      const res = await fetch(`/api/admin/ae-review/${clientId}/${task.id}/${action}`, {
+        method: 'POST', headers: adminHeaders(), body: JSON.stringify(body || {}),
+      })
+      const d = await res.json().catch(() => ({}))
+      // Reload either way: a refusal usually means someone else got there first,
+      // and the list should show who.
+      load()
+      if (!res.ok) return d.error || 'That did not work. Refresh and try again.'
+      setNotice(d.message || 'Done.')
+      window.dispatchEvent(new Event('cp:badges-changed'))
+      return null
+    } catch { return 'Network error — please try again.' }
+  }
+
+  async function rowAction(task, action) {
+    const problem = await act(task, action)
+    if (problem) setError(problem)
+  }
+
+  async function startHand(task) {
+    setHand(task); setHandTo(''); setHandError(''); setStaff([])
+    try {
+      const res = await fetch(`/api/admin/ae-review/${clientId}/staff`, { headers: adminHeaders() })
+      if (!res.ok) { setHandError(`Could not load the list of people (error ${res.status}).`); return }
+      const d = await res.json()
+      setStaff(d.staff || [])
+    } catch { setHandError('Network error — please try again.') }
+  }
+
+  async function submitHand() {
+    setHandError('')
+    if (!handTo) { setHandError('Choose who to hand this task to.'); return }
+    setBusy(true)
+    const problem = await act(hand, 'hand', { to_admin_id: Number(handTo) })
+    setBusy(false)
+    if (problem) { setHandError(problem); return }
+    setHand(null)
   }
 
   function startClose(task) {
@@ -70,6 +125,7 @@ export default function SafetyQueuePage() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setFormError(d.error || 'Could not close this task.'); return }
       setNotice(d.message || 'Task closed.')
+      window.dispatchEvent(new Event('cp:badges-changed'))
       setOpen(null); load()
     } catch { setFormError('Network error — please try again.') } finally { setBusy(false) }
   }
@@ -81,6 +137,9 @@ export default function SafetyQueuePage() {
     return null
   }
 
+  const mineCount = tasks.filter(t => t.owned_by_me).length
+  const shown = tab === 'open' && mineOnly ? tasks.filter(t => t.owned_by_me) : tasks
+
   return (
     <AdminLayout title="Safety Queue">
       <p className="cp-page-desc">
@@ -88,7 +147,7 @@ export default function SafetyQueuePage() {
         Each one needs a human decision — a task cannot be closed without recording an outcome.
       </p>
 
-      {!canJudge && (
+      {canHold && !canJudge && (
         <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
           You can clear tasks administratively with a reason. Recording a clinical outcome
           (“reviewed — not an adverse event” or “confirmed side effect”) requires the safety reviewer role.
@@ -110,14 +169,23 @@ export default function SafetyQueuePage() {
       {loading ? <div className="cp-loading">Loading…</div> : (
         <>
           <div className="cp-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>{tab === 'open' ? `Awaiting review${tasks.length ? ` · ${tasks.length}` : ''}` : 'Closed'}</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            <h2>{tab === 'open' ? `Awaiting review${tasks.length ? ` · ${tasks.length}` : ''}${mineCount ? ` · ${mineCount} yours` : ''}` : 'Closed'}</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {tab === 'open' && canHold && (
+                <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+                  {mineOnly ? 'Show all' : 'Show mine'}
+                </button>
+              )}
+              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            </div>
           </div>
 
-          {tasks.length === 0 ? (
+          {shown.length === 0 ? (
             <div className="cp-empty">
               <div style={{ fontSize: 40 }}>🩺</div>
-              <p>{tab === 'open' ? 'No submissions are awaiting safety review.' : 'Nothing closed yet.'}</p>
+              <p>{tab !== 'open' ? 'Nothing closed yet.'
+                : mineOnly && tasks.length ? 'You are not holding any tasks.'
+                : 'No submissions are awaiting safety review.'}</p>
             </div>
           ) : (
             <table className="cp-table">
@@ -125,17 +193,18 @@ export default function SafetyQueuePage() {
                 <tr>
                   <th>Source</th><th>Type</th><th>From</th><th>Reported</th>
                   <th>What they told us</th>
-                  {tab === 'closed' ? <th>Outcome</th> : null}
+                  {tab === 'closed' ? <th>Outcome</th> : <th>Held by</th>}
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {tasks.map(t => (
+                {shown.map(t => (
                   <tr key={t.id}>
                     <td>
                       {t.source === 'chat'
                         ? <Link to={`/admin/clients/${clientId}/chat-records?conversation=${t.chat_conversation_id}`}>Chat · view conversation</Link>
                         : `Submission #${t.submission_id}`}
+                      {t.reply_id ? <div style={{ fontSize: 12, color: '#6B7280' }}>Raised by a reply to our answer</div> : null}
                     </td>
                     <td>{String(t.submission_type || '').replace(/_/g, ' ')}</td>
                     <td>{t.submitter_name || t.submitter_email || '—'}</td>
@@ -161,11 +230,33 @@ export default function SafetyQueuePage() {
                           {t.closed_by_name || 'unknown'}{t.closed_at ? ` · ${new Date(t.closed_at).toLocaleDateString()}` : ''}
                         </div>
                       </td>
-                    ) : null}
+                    ) : (
+                      <td>
+                        {t.owner_id ? (
+                          <>
+                            {t.owned_by_me ? <strong>You</strong> : (t.owner_name || 'Unknown')}
+                            <div style={{ fontSize: 12, color: '#6B7280' }}>
+                              since {t.owner_since ? new Date(t.owner_since).toLocaleString() : '—'}
+                            </div>
+                          </>
+                        ) : <span style={{ color: '#6B7280' }}>Nobody yet</span>}
+                      </td>
+                    )}
                     <td>
-                      {tab === 'open'
-                        ? <button className="cp-btn cp-btn-sm" onClick={() => startClose(t)}>Review</button>
-                        : null}
+                      {tab === 'open' ? (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {canHold && !t.owner_id && (
+                            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => rowAction(t, 'take')}>Take</button>
+                          )}
+                          {canHold && t.owner_id && (t.owned_by_me || isLead) ? (
+                            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => rowAction(t, 'release')}>Release</button>
+                          ) : null}
+                          {canHold && (t.owned_by_me || isLead) && (
+                            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => startHand(t)}>Hand to…</button>
+                          )}
+                          {canHold && <button className="cp-btn cp-btn-sm" onClick={() => startClose(t)}>Review</button>}
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -173,6 +264,38 @@ export default function SafetyQueuePage() {
             </table>
           )}
         </>
+      )}
+
+      {hand && (
+        <div className="cp-modal-overlay" onClick={() => !busy && setHand(null)}>
+          <div className="cp-modal" onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <span>Hand over · {hand.source === 'chat' ? 'chat conversation' : `submission #${hand.submission_id}`}</span>
+              <button className="cp-modal-close" disabled={busy} onClick={() => setHand(null)}>×</button>
+            </div>
+            <div className="cp-modal-body">
+              <p style={{ marginTop: 0 }}>
+                {hand.owner_id
+                  ? `${hand.owned_by_me ? 'You hold' : `${hand.owner_name || 'Someone'} holds`} this task now.`
+                  : 'Nobody holds this task yet.'}{' '}
+                Choose who should work on it. The hand-over is recorded in the audit trail.
+              </p>
+              <select value={handTo} onChange={e => setHandTo(e.target.value)} style={{ width: '100%' }}>
+                <option value="">Choose a person…</option>
+                {staff.filter(p => p.id !== hand.owner_id).map(p => (
+                  <option key={p.id} value={p.id}>{p.name} · {String(p.role).replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+              {handError && <div className="cp-error" style={{ marginTop: 8 }}>{handError}</div>}
+            </div>
+            <div className="cp-modal-footer" style={{ justifyContent: 'flex-end' }}>
+              <button className="cp-btn cp-btn-outline" disabled={busy} onClick={() => setHand(null)}>Cancel</button>
+              <button className="cp-btn" disabled={busy || !handTo} onClick={submitHand}>
+                {busy ? 'Handing over…' : 'Hand over'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {open && (

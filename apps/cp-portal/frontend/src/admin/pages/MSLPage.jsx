@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 function formatTherapeuticAreas(val) {
   if (!val) return '—'
@@ -20,6 +21,7 @@ const STATUS_STYLES = {
 
 export default function MSLPage() {
   const { clientId }  = useParams()
+  const { canChange } = useAdminAuth() // CPPM-60
   const [tab, setTab] = useState('directory')
 
   // ── Directory state ──────────────────────────────────────────
@@ -197,7 +199,7 @@ export default function MSLPage() {
     <AdminLayout title="MSL Directory">
       <div className="cp-section-header">
         <h2>Medical Science Liaisons</h2>
-        {tab === 'directory' && <button className="cp-btn cp-btn-primary" onClick={() => { setFormError(''); setShowAdd(true) }}>+ Add MSL</button>}
+        {tab === 'directory' && canChange('msls') && <button className="cp-btn cp-btn-primary" onClick={() => { setFormError(''); setShowAdd(true) }}>+ Add MSL</button>}
       </div>
 
       {/* Tab Bar */}
@@ -285,11 +287,13 @@ export default function MSLPage() {
                 </div>
                 <div className="cp-modal-body">
                   <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>Define bookable time slots. HCPs pick from these when requesting a meeting. (Google/Outlook calendar sync is a later phase.)</p>
+                  <CanChange area="msls">
                   <form onSubmit={addSlot} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
                     <div className="cp-field" style={{ margin: 0 }}><label>Start</label><input type="datetime-local" required value={slotForm.starts_at} onChange={e => setSlotForm(f => ({ ...f, starts_at: e.target.value }))} /></div>
                     <div className="cp-field" style={{ margin: 0 }}><label>End</label><input type="datetime-local" required value={slotForm.ends_at} onChange={e => setSlotForm(f => ({ ...f, ends_at: e.target.value }))} /></div>
                     <button type="submit" className="cp-btn cp-btn-primary cp-btn-sm">+ Add</button>
                   </form>
+                  </CanChange>
                   {slotMsg && <div className="cp-error" style={{ marginBottom: 10 }}>{slotMsg}</div>}
                   {slots.length === 0 ? (
                     <p style={{ fontSize: 13, color: '#9CA3AF' }}>No slots defined yet.</p>
@@ -302,7 +306,7 @@ export default function MSLPage() {
                             <td style={{ fontSize: 12 }}>{s.starts_at?.slice(0, 16).replace('T', ' ')}</td>
                             <td style={{ fontSize: 12 }}>{s.ends_at?.slice(0, 16).replace('T', ' ')}</td>
                             <td><span className={`cp-badge ${s.is_booked ? 'badge-inactive' : 'badge-active'}`}>{s.is_booked ? 'Booked' : 'Open'}</span></td>
-                            <td>{!s.is_booked && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deleteSlot(s.id)}>Delete</button>}</td>
+                            <td>{!s.is_booked && canChange('msls') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deleteSlot(s.id)}>Delete</button>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -329,9 +333,15 @@ export default function MSLPage() {
                     <td>{m.email || '—'}</td>
                     <td><span className={`cp-badge ${m.is_active ? 'badge-active' : 'badge-inactive'}`}>{m.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td style={{ display: 'flex', gap: 6 }}>
+                      <CanChange area="msls">
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(m)}>Edit</button>
+                      </CanChange>
+                      <CanChange area="msls">
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openSlots(m)}>Slots</button>
+                      </CanChange>
+                      <CanChange area="msls">
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(m.id)}>Remove</button>
+                      </CanChange>
                     </td>
                   </tr>
                 ))}
@@ -408,8 +418,12 @@ export default function MSLPage() {
                       </td>
                       <td>{b.created_at ? b.created_at.slice(0, 10) : '—'}</td>
                       <td style={{ display: 'flex', gap: 6 }}>
+                        <CanChange area="msls">
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEditBooking(b)}>Update</button>
+                        </CanChange>
+                        <CanChange area="msls">
                         <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => deleteBooking(b.id)}>Delete</button>
+                        </CanChange>
                       </td>
                     </tr>
                   ))}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
 
 const VISIBLE_TO_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -34,8 +35,23 @@ const DOC_STATUS_LABELS = {
   archived: 'Archived',
 }
 
+// CPPM-55: a published document the portal is not showing is not "Live in portal".
+// It is hidden once its expiry date passes, and until its publish date arrives.
+function docLiveLabel(doc) {
+  if (doc.status === 'published') {
+    if (doc.expires_at && new Date(doc.expires_at) <= new Date()) return 'Expired — not shown in portal'
+    if (doc.publish_at && new Date(doc.publish_at) > new Date()) return 'Published — not live yet'
+  }
+  return docStatusLabel(doc.status)
+}
+
 function docStatusLabel(status) {
   return DOC_STATUS_LABELS[status] || status || 'Draft'
+}
+
+// CPPM-71: live or scheduled, still in the library, approved by nobody (predates the rule)
+function isNeverApprovedLive(doc) {
+  return !!doc && !doc.approved_at && ['published', 'scheduled'].includes(doc.status) && !!doc.is_active && !doc.retired_at
 }
 
 // CPPM-31: a review date that has already passed
@@ -73,6 +89,7 @@ export default function DocumentsPage() {
   const [notice, setNotice] = useState('') // CPPM-31: an edit that took the approval away
   const [expiringDocs, setExpiringDocs] = useState([])
   const [reviewDueDocs, setReviewDueDocs] = useState([])
+  const [neverApprovedDocs, setNeverApprovedDocs] = useState([]) // CPPM-71
   const [alertMsg, setAlertMsg]         = useState(null)
   const [sendingAlert, setSendingAlert] = useState(false)
   const [selectedIds, setSelectedIds]   = useState([])
@@ -129,6 +146,7 @@ export default function DocumentsPage() {
       setCategories(catsData.categories || [])
       setExpiringDocs(expiringData.expiring || [])
       setReviewDueDocs(reviewData.reviewDue || [])
+      setNeverApprovedDocs(reviewData.neverApproved || [])
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -206,7 +224,7 @@ export default function DocumentsPage() {
       fd.append('status', form.status)
       fd.append('version', form.version || '')
       fd.append('expires_at', form.expires_at || '')
-      fd.append('publish_at', form.publish_at || '')
+      fd.append('publish_at', fromLocalInput(form.publish_at))
       fd.append('is_active', form.is_active ? '1' : '0')
       if (fileInput) fd.append('file', fileInput)
 
@@ -236,7 +254,7 @@ export default function DocumentsPage() {
       version: doc.version || '',
       review_due_at: doc.review_due_at ? doc.review_due_at.slice(0, 10) : '',
       expires_at: doc.expires_at ? doc.expires_at.slice(0, 10) : '',
-      publish_at: doc.publish_at ? doc.publish_at.slice(0, 16) : '',
+      publish_at: toLocalInput(doc.publish_at),
     })
     setShowEditModal(true)
   }
@@ -247,7 +265,11 @@ export default function DocumentsPage() {
       const res = await fetch(`/api/admin/documents/${clientId}/${editDoc.id}`, {
         method: 'PUT',
         headers: adminHeaders(),
-        body: JSON.stringify({ ...editForm, publish_at: editForm.publish_at || null }),
+        // CPPM-58: send the moment the admin meant; an untouched time is left out.
+        body: JSON.stringify({
+          ...editForm,
+          publish_at: editForm.publish_at === toLocalInput(editDoc.publish_at) ? undefined : (fromLocalInput(editForm.publish_at) || null),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -273,7 +295,11 @@ export default function DocumentsPage() {
         headers: adminHeaders(),
         body: JSON.stringify({ status: newStatus }),
       })
-      if (!res.ok) { setActionError(`Failed to update "${doc.title}". Please try again.`); return }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setActionError(`"${doc.title}": ${d.error || 'the change was not saved. Please try again.'}`)
+        return
+      }
     } catch {
       setActionError(`Network error updating "${doc.title}".`)
     } finally {
@@ -309,13 +335,10 @@ export default function DocumentsPage() {
             </span>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="cp-btn cp-btn-sm"
-              style={{ background: '#0284c7', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
-              onClick={() => alert(`Bulk Expiry Governance:\n\nExtended ${expiringDocs.length} expiring document(s) by +90 days.`)}
-            >
-              📅 Extend Expiry (+90 Days)
-            </button>
+            {/* CPPM-72: "Extend Expiry (+90 Days)" was here. It only showed a message saying
+                the documents had been extended and changed nothing. An expiry date is
+                certified content (CPPM-31), so a new one means a new approval: change it
+                per document with Edit. */}
             <button
               className="cp-btn cp-btn-sm"
               style={{ background: '#D97706', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
@@ -341,6 +364,21 @@ export default function DocumentsPage() {
             {' '}are due for review within the next 30 days:
             {' '}{reviewDueDocs.slice(0, 3).map(d => d.title).join(', ')}
             {reviewDueDocs.length > 3 ? ` and ${reviewDueDocs.length - 3} more` : ''}.
+          </span>
+        </div>
+      )}
+
+      {/* CPPM-71: live or scheduled documents that nobody has ever approved. They
+          predate the approval rule: live ones stay in the portal until a reviewer
+          approves them as they are or they are retired; a scheduled one waits. */}
+      {neverApprovedDocs.length > 0 && (
+        <div className="cp-inline-alert warning" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
+          <span style={{ fontSize: 13, color: '#991B1B', flex: 1 }}>
+            <strong>{neverApprovedDocs.length} document{neverApprovedDocs.length > 1 ? 's have' : ' has'} never been approved</strong>
+            {' '}— added before approval was required.
+            {' '}Live ones stay in the portal until a reviewer approves them as they are, or they are retired; a scheduled one will not go live until approved:
+            {' '}{neverApprovedDocs.slice(0, 3).map(d => d.title).join(', ')}
+            {neverApprovedDocs.length > 3 ? ` and ${neverApprovedDocs.length - 3} more` : ''}.
           </span>
         </div>
       )}
@@ -507,7 +545,9 @@ export default function DocumentsPage() {
                 <span style={{ fontSize: 11, color: '#6B7280', marginTop: 4, display: 'block' }}>
                   {editDoc.approved_by_name
                     ? `Approved by ${editDoc.approved_by_name}${editDoc.approved_at ? ` on ${editDoc.approved_at.slice(0, 10)}` : ''}.`
-                    : 'Not yet approved — this document cannot be published.'}
+                    : isNeverApprovedLive(editDoc)
+                      ? 'Never approved — it was added before approval was required. Saving a change to its content takes it out of the portal until it is approved.'
+                      : 'Not yet approved — this document cannot be published.'}
                 </span>
               </div>
               {(editForm.status === 'draft' || editForm.status === 'scheduled' || !editForm.status) && (
@@ -612,16 +652,18 @@ export default function DocumentsPage() {
                   </td>
                   <td>
                     <span className="cp-status-badge" style={{
-                      background: d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
-                      color:      d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
-                    }}>{docStatusLabel(d.status)}</span>
+                      background: docLiveLabel(d) !== docStatusLabel(d.status) ? '#FEF3C7' : d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
+                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
+                    }}>{docLiveLabel(d)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
                   {/* CPPM-31: who certified this version, and when it must be looked at again */}
                   <td>
                     {d.approved_by_name
                       ? <>{d.approved_by_name}<span style={{ display: 'block', fontSize: 11, color: '#6B7280' }}>{d.approved_at ? d.approved_at.slice(0, 10) : ''}</span></>
-                      : <span style={{ color: '#9CA3AF' }}>Not approved</span>}
+                      : isNeverApprovedLive(d)
+                        ? <span style={{ color: '#DC2626', fontWeight: 600 }} title="Live or scheduled without anyone's approval — added before approval was required">Never approved</span>
+                        : <span style={{ color: '#9CA3AF' }}>Not approved</span>}
                   </td>
                   <td style={{ color: isOverdue(d.review_due_at) ? '#DC2626' : undefined }}>
                     {d.review_due_at ? d.review_due_at.slice(0, 10) : '—'}
@@ -637,6 +679,13 @@ export default function DocumentsPage() {
                     {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(d)}>Edit</button>}
                     {canWrite && d.status === 'draft' && (
                       <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A' }} onClick={() => quickDocAction(d, 'review')}>Submit for Review</button>
+                    )}
+                    {/* CPPM-71: approve a never-approved live document as it stands (it stays live), or retire it */}
+                    {canApprove && isNeverApprovedLive(d) && (
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve as is</button>
+                    )}
+                    {canPublish && isNeverApprovedLive(d) && (
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }} onClick={() => quickDocAction(d, 'archived')}>Retire</button>
                     )}
                     {canApprove && d.status === 'review' && (
                       <>

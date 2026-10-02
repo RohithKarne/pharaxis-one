@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const EMPTY = { question: '', answer: '', category: '', sort_order: 0, is_published: true }
@@ -46,7 +47,12 @@ export default function FAQPage() {
 
   async function handleDelete(id) {
     if (!confirm('Delete this FAQ item?')) return
-    await fetch(`/api/admin/faq/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/faq/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      // 404: someone else removed it already, and the reload shows that
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not delete (error ${res.status}).`) }
+    } catch { setError('Network error.') }
     load()
   }
 
@@ -63,8 +69,11 @@ export default function FAQPage() {
     <AdminLayout>
       <div className="cp-section-header">
         <h2>FAQ</h2>
+        <CanChange area="faq">
         <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add FAQ Item</button>
+        </CanChange>
       </div>
+      {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {showForm && (
         <div className="cp-modal-overlay" onClick={() => setShowForm(false)}>
@@ -122,8 +131,12 @@ export default function FAQPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                   {!f.is_published && <span style={{ fontSize: 11, background: '#F3F4F6', color: '#9CA3AF', padding: '2px 6px', borderRadius: 10 }}>Draft</span>}
+                  <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(f)}>Edit</button>
+                  </CanChange>
+                  <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => handleDelete(f.id)}>Delete</button>
+                  </CanChange>
                 </div>
               </div>
             ))}

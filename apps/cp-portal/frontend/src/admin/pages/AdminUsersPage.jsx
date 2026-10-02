@@ -7,6 +7,7 @@ const ROLES = [
   { value: 'admin',           label: 'Admin',           desc: 'Full access to this client' },
   { value: 'content_manager', label: 'Content Manager', desc: 'Create & edit content; submit for review' },
   { value: 'reviewer',        label: 'Reviewer',         desc: 'Approve or reject content in review queue' },
+  { value: 'safety_reviewer', label: 'Safety Reviewer',  desc: 'Record clinical outcomes on the Safety Queue; read chat records' },
   { value: 'viewer',          label: 'Viewer',           desc: 'Read-only access' },
 ]
 
@@ -15,6 +16,7 @@ const ROLE_BADGE = {
   admin:           { label: 'Admin',           color: '#1D4ED8', bg: '#DBEAFE' },
   content_manager: { label: 'Content Manager', color: '#D97706', bg: '#FEF3C7' },
   reviewer:        { label: 'Reviewer',        color: '#0891B2', bg: '#CFFAFE' },
+  safety_reviewer: { label: 'Safety Reviewer', color: '#B91C1C', bg: '#FEE2E2' },
   viewer:          { label: 'Viewer',          color: '#6B7280', bg: '#F3F4F6' },
 }
 
@@ -22,7 +24,7 @@ const EMPTY_FORM = { name: '', email: '', password: '', role: 'content_manager' 
 
 export default function AdminUsersPage() {
   const { clientId }        = useParams()
-  const { admin }           = useAdminAuth()
+  const { admin, canChange } = useAdminAuth()
   const [users, setUsers]   = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal]   = useState(null)   // null | 'create' | {user}
@@ -30,13 +32,14 @@ export default function AdminUsersPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
   const [listMsg, setListMsg] = useState(null)  // { type, text } — list-level feedback
+  const [noAccess, setNoAccess] = useState(false) // CPPM-60: only admins may see staff accounts
 
   useEffect(() => { loadUsers() }, [clientId])
 
   function loadUsers() {
     setLoading(true)
     fetch(`/api/admin/admin-users/${clientId}`, { headers: adminHeaders() })
-      .then(r => r.json())
+      .then(r => { setNoAccess(r.status === 403); return r.json() })
       .then(d => { setUsers(d.users || []); setLoading(false) })
       .catch(() => setLoading(false))
   }
@@ -76,6 +79,7 @@ export default function AdminUsersPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
       setModal(null)
+      if (data.released_tasks) setListMsg({ type: 'success', text: data.message })
       loadUsers()
     } catch {
       setError('Network error. Please try again.')
@@ -91,8 +95,10 @@ export default function AdminUsersPage() {
         headers: adminHeaders(),
         body: JSON.stringify({ is_active: user.is_active ? 0 : 1 }),
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Update failed.') }
-      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.` })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Update failed.')
+      // CPPM-6, CPPM-61: work the person was holding goes back to its list; say so.
+      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.${d.released_note || ''}` })
       loadUsers()
     } catch (e) {
       setListMsg({ type: 'error', text: e.message })
@@ -129,9 +135,7 @@ export default function AdminUsersPage() {
     <div className="cp-page">
       <div className="cp-page-header">
         <h1 className="cp-page-title">Admin Users</h1>
-        {admin?.role !== 'viewer' && (
-          <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add Admin User</button>
-        )}
+        {canChange('admin-users') && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add Admin User</button>}
       </div>
 
       {listMsg && (
@@ -153,6 +157,8 @@ export default function AdminUsersPage() {
 
       {loading ? (
         <div className="cp-empty">Loading…</div>
+      ) : noAccess ? (
+        <div className="cp-empty">Only an admin can see and manage staff accounts. Ask an admin if someone needs access or a different role.</div>
       ) : users.length === 0 ? (
         <div className="cp-empty">No admin users yet. Add one to get started.</div>
       ) : (
@@ -186,7 +192,7 @@ export default function AdminUsersPage() {
                   </td>
                   <td>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                   <td style={{ display: 'flex', gap: 8 }}>
-                    {admin?.role !== 'viewer' && (
+                    {canChange('admin-users') && (
                       <>
                         <button className="cp-btn cp-btn-sm" onClick={() => openEdit(u)}>Edit</button>
                         {u.id !== admin?.id && (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 export default function GatePage() {
@@ -96,6 +97,7 @@ export default function GatePage() {
 
   return (
     <AdminLayout title="User Type Gate">
+<ReadOnlyUnless area="gate" what="the user gate settings">
 
       {error && <div className="cp-error">{error}</div>}
 
@@ -226,6 +228,7 @@ export default function GatePage() {
           </div>
         </div>
       )}
+</ReadOnlyUnless>
     </AdminLayout>
   )
 }

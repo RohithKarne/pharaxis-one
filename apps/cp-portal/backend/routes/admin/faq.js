@@ -54,7 +54,8 @@ router.put('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async (r
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.faqId, req.params.clientId);
-    await pool.execute(`UPDATE cp_faq_items SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    const [result] = await pool.execute(`UPDATE cp_faq_items SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'FAQ not found.' });
     await audit(req.admin, req.params.clientId, 'UPDATE', 'faq', req.params.faqId, {});
     const transFields = {};
     if (question !== undefined) transFields.question = question.trim();
@@ -70,7 +71,8 @@ router.put('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async (r
 // DELETE /api/admin/faq/:clientId/:faqId
 router.delete('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM cp_faq_items WHERE id = ? AND client_id = ?', [req.params.faqId, req.params.clientId]);
+    const [result] = await pool.execute('DELETE FROM cp_faq_items WHERE id = ? AND client_id = ?', [req.params.faqId, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'FAQ not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'faq', req.params.faqId, {});
     res.json({ ok: true });
   } catch (err) {

@@ -52,7 +52,8 @@ router.patch('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req, 
     const { updates, params } = buildUpdate(req.body, allowed);
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
-    await pool.execute(`UPDATE cp_therapeutic_areas SET ${updates.join(', ')}, updated_at=NOW() WHERE id = ? AND client_id = ?`, params);
+    const [result] = await pool.execute(`UPDATE cp_therapeutic_areas SET ${updates.join(', ')}, updated_at=NOW() WHERE id = ? AND client_id = ?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Updated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'PATCH /:clientId/therapeutic-areas/:id', path: req.path, request_id: req.requestId || null });
@@ -62,7 +63,8 @@ router.patch('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req, 
 
 router.delete('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute(`UPDATE cp_therapeutic_areas SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    const [result] = await pool.execute(`UPDATE cp_therapeutic_areas SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Deactivated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'DELETE /:clientId/therapeutic-areas/:id', path: req.path, request_id: req.requestId || null });
@@ -104,7 +106,8 @@ router.patch('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
     const { updates, params } = buildUpdate(req.body, allowed);
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
-    await pool.execute(`UPDATE cp_drugs SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    const [result] = await pool.execute(`UPDATE cp_drugs SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Updated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'PATCH /:clientId/drugs/:id', path: req.path, request_id: req.requestId || null });
@@ -114,7 +117,8 @@ router.patch('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
 
 router.delete('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute(`UPDATE cp_drugs SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    const [result] = await pool.execute(`UPDATE cp_drugs SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Deactivated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'DELETE /:clientId/drugs/:id', path: req.path, request_id: req.requestId || null });
@@ -156,7 +160,8 @@ router.patch('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
     const { updates, params } = buildUpdate(req.body, allowed);
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
-    await pool.execute(`UPDATE cp_events SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    const [result] = await pool.execute(`UPDATE cp_events SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Updated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'PATCH /:clientId/events/:id', path: req.path, request_id: req.requestId || null });
@@ -166,7 +171,8 @@ router.patch('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
 
 router.delete('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute(`UPDATE cp_events SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    const [result] = await pool.execute(`UPDATE cp_events SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Deactivated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'DELETE /:clientId/events/:id', path: req.path, request_id: req.requestId || null });
@@ -208,7 +214,8 @@ router.patch('/:clientId/resources/:id', authenticateAdmin, async (req, res) => 
     const { updates, params } = buildUpdate(req.body, allowed);
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
-    await pool.execute(`UPDATE cp_resources SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    const [result] = await pool.execute(`UPDATE cp_resources SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Updated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'PATCH /:clientId/resources/:id', path: req.path, request_id: req.requestId || null });
@@ -218,7 +225,8 @@ router.patch('/:clientId/resources/:id', authenticateAdmin, async (req, res) => 
 
 router.delete('/:clientId/resources/:id', authenticateAdmin, async (req, res) => {
   try {
-    await pool.execute(`UPDATE cp_resources SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    const [result] = await pool.execute(`UPDATE cp_resources SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found.' });
     res.json({ message: 'Deactivated.' });
   } catch (err) {
     log.error('admin.content.error', { err, route: 'DELETE /:clientId/resources/:id', path: req.path, request_id: req.requestId || null });

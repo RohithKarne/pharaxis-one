@@ -96,9 +96,10 @@ function FeatureGuard({ featureKey, children }) {
 }
 
 function PortalAuthGuard({ children }) {
-  const { user, clientCode, loading } = usePortal()
+  const { user, clientCode, loading, authLoading } = usePortal()
   const location = useLocation()
-  if (loading) return <div className="pp-loading">Loading…</div>
+  // CPPM-59: wait for the sign-in check as well as the settings before redirecting.
+  if (loading || authLoading) return <div className="pp-loading">Loading…</div>
   if (!user) return <Navigate to={`/portal/${clientCode}/login`} replace state={{ from: location.pathname }} />
   return children
 }
@@ -190,6 +191,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/documents"  element={<AdminGuard><DocumentsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/compliance"   element={<AdminGuard><CompliancePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/audit"       element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
+        <Route path="/admin/audit" element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/safety-queue" element={<AdminGuard><SafetyQueuePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />

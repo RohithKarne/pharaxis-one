@@ -8,16 +8,17 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const log = require('../../utils/logger');
 
-// GET /api/admin/audit/:clientId?page=1&limit=50&entity=branding&action=UPDATE&from=2026-01-01&to=2026-12-31
-router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
+// One listing for both screens: a client's records, or (CPPM-62) the records that
+// belong to no client — platform-admin sign-ins, failed sign-ins for unknown
+// emails — which no client's screen can show.
+async function listRecords(req, res, scope) {
   try {
-    const { clientId } = req.params;
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
     const limit  = Math.min(100, parseInt(req.query.limit) || 50);
     const offset = (page - 1) * limit;
 
-    const conditions = ['l.client_id = ?'];
-    const params     = [clientId];
+    const conditions = [scope.condition];
+    const params     = [...scope.params];
 
     if (req.query.entity) { conditions.push('l.entity = ?'); params.push(req.query.entity); }
     if (req.query.action) { conditions.push('l.action = ?'); params.push(req.query.action); }
@@ -39,9 +40,20 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     res.json({ records, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
-    log.error('admin.audit.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
+    log.error('admin.audit.error', { err, route: `GET /${scope.name}`, path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
+}
+
+// GET /api/admin/audit/platform — CPPM-62: platform admin only. Declared before
+// /:clientId so "platform" is never read as a client id.
+router.get('/platform', authenticateAdmin, (req, res) => {
+  if (req.admin.role !== 'superadmin') return res.status(403).json({ error: 'Only the platform admin can see the platform audit trail.' });
+  return listRecords(req, res, { name: 'platform', condition: 'l.client_id IS NULL', params: [] });
 });
+
+// GET /api/admin/audit/:clientId?page=1&limit=50&entity=branding&action=UPDATE&from=2026-01-01&to=2026-12-31
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) =>
+  listRecords(req, res, { name: ':clientId', condition: 'l.client_id = ?', params: [req.params.clientId] }));
 
 module.exports = router;

@@ -94,6 +94,7 @@ router.patch('/:clientId/user-types/:typeId', authenticateAdmin, async (req, res
     params.push(typeId, clientId);
     const ROW = 'SELECT * FROM cp_gate_user_types WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [typeId, clientId]);
+    if (!before) return res.status(404).json({ error: 'User type not found.' });
     await pool.execute(`UPDATE cp_gate_user_types SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`, params);
     const [[after]] = await pool.execute(ROW, [typeId, clientId]);
     // CPPM-43: what changed, from → to — not just which fields the screen sent.

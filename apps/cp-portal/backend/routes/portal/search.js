@@ -49,7 +49,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     // Safety & FAQ are always-on portal pages
     {
       const [rows] = await pool.execute(
-        `SELECT id, title, body_html, target_types_json FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
+        `SELECT id, title, body_html, target_types_json FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (publish_at IS NULL OR publish_at <= NOW()) AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
         [cid, like, like]);
       rows.filter(r => canSee(r.target_types_json, userType)).slice(0, 8)
         .forEach(r => results.push({ type: 'safety', label: 'Safety Alert', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `safety` }));
