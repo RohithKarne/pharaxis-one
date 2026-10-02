@@ -1928,7 +1928,11 @@ const authController = {
           metadata: { orgId: pending.orgId, method: method || 'backup' },
         });
         return res.status(failure.isLocked ? 423 : 401).json({
-          error: failure.isLocked ? '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' : 'Invalid verification code.',
+          error: failure.isLocked
+            ? (pending.platform
+              ? '2FA is locked after 3 failed attempts. Ask another platform admin to reset it.'
+              : '2FA is locked after 3 failed attempts. Contact your platform admin for reset.')
+            : 'Invalid verification code.',
           locked: failure.isLocked,
         });
       }
