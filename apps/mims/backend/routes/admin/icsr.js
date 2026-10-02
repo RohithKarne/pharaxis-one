@@ -383,7 +383,8 @@ router.post('/icsr/:id/ack/:level', ...adminOnly, async (req, res) => {
 
 router.post('/pv/periodic-reports/generate', ...adminOnly, async (req, res) => {
   try {
-    const orgId = req.body.org_id || req.user.orgId;
+    // MIPM-5: only a platform admin may name another organisation.
+    const orgId = hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId;
     const result = await generatePeriodicReport({
       orgId,
       productName: req.body.product_name,
@@ -411,7 +412,7 @@ router.get('/pv/periodic-reports', ...adminOnly, async (req, res) => {
 // safety-signal detection is worth recording even when it does nothing.
 router.post('/pv/signals/run', ...adminOnly, async (req, res) => {
   try {
-    const result = await runSignalDetection(req.body.org_id || req.user.orgId);
+    const result = await runSignalDetection(hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId); // MIPM-5
     await audit(req, 'RUN', 'pv_signal_detection', null, {
       created: result.created.length,
       enabled: result.enabled,
