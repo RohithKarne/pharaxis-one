@@ -19,6 +19,7 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -772,6 +773,34 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
   }
 });
 
+// MIPM-174: the people in an organisation who may review content. The review
+// dialog read the admin user list, which a content manager is refused, so the
+// content team could never start a review.
+async function contentReviewers(orgId) {
+  const [rows] = await pool.execute(
+    `SELECT u.id, u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role
+       FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id
+      WHERE uoa.org_id = ? AND uoa.is_active = 1 AND u.is_active = 1
+      ORDER BY u.name`, [orgId]);
+  const out = [];
+  for (const u of rows) {
+    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, 'content.review')) out.push({ id: u.id, name: u.name, email: u.email });
+  }
+  return out;
+}
+
+// GET /api/cm/reviewers — who can be asked to review content in the caller's organisation
+router.get('/reviewers', authenticate, async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
+    if (!orgId) return res.json({ users: [] });
+    res.json({ users: await contentReviewers(orgId) });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/reviewers' }, 'Failed to list content reviewers');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/cm/documents/:id/initiate-review — create cm_review
 router.post('/documents/:id/initiate-review', authenticate, async (req, res) => {
   try {
@@ -785,6 +814,17 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (!['Pending', 'Draft'].includes(doc.status)) {
       return res.status(400).json({ error: 'Document must be in Pending or Draft status to initiate a review.' });
+    }
+
+    // MIPM-174: a review needs at least one reviewer who may review content.
+    // The dialog sent no reviewer at all (wrong field name), so reviews were
+    // created that nobody could act on.
+    if (!Array.isArray(reviewer_ids) || reviewer_ids.length === 0) {
+      return res.status(400).json({ error: 'Choose at least one reviewer.' });
+    }
+    const allowed = new Set((await contentReviewers(doc.folder_org_id || req.user.orgId)).map((u) => Number(u.id)));
+    if (reviewer_ids.some((uid) => !allowed.has(Number(uid)))) {
+      return res.status(400).json({ error: 'Every reviewer must be allowed to review content in this organisation.' });
     }
 
     // WP1: reviewers must belong to the caller's org (platform admin may attach

@@ -23,14 +23,16 @@ export function CheckInModal({ item, onClose, onConfirm, loading }) {
 export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [users, setUsers] = useState([])
+  const [usersLoaded, setUsersLoaded] = useState(false)
   const [form, setForm] = useState({ title: '', planned_end_date: '', non_amendable: false, reviewers: [], description: '' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    httpFetch('/api/admin/users', { headers: authHeaders })
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setUsers(Array.isArray(d) ? d : d.users || []))
-      .catch(() => {})
+    // MIPM-174: the content reviewers list — the admin user list refused content managers.
+    httpFetch('/api/cm/reviewers', { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { users: [] })
+      .then(d => { setUsers(d.users || []); setUsersLoaded(true) })
+      .catch(() => setUsersLoaded(true))
   }, []) // eslint-disable-line
 
   function toggleReviewer(id) {
@@ -47,7 +49,12 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/documents/${doc.id}/initiate-review`, {
-        method: 'POST', headers: authHeaders, body: JSON.stringify(form)
+        // The server reads reviewer_ids and is_non_amendable; sending the form as-is
+        // attached no reviewer and dropped Non-Amendable (MIPM-174).
+        method: 'POST', headers: authHeaders, body: JSON.stringify({
+          title: form.title, planned_end_date: form.planned_end_date, description: form.description,
+          reviewer_ids: form.reviewers, is_non_amendable: form.non_amendable,
+        })
       })
       if (res.ok) { onDone(); onClose() }
       else { const d = await res.json(); toast.error(d.error || 'Failed to initiate review.') }
@@ -76,7 +83,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
         <div className="cm-form-group">
           <label className="cm-form-label">Reviewers <span className="required">*</span></label>
           <div style={{ border: '1px solid var(--border)', borderRadius: 6, maxHeight: 160, overflowY: 'auto', padding: 8 }}>
-            {users.length === 0 ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading users…</p> : users.map(u => (
+            {users.length === 0 ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{usersLoaded ? 'No one in this organisation can review content yet.' : 'Loading users…'}</p> : users.map(u => (
               <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 14 }}>
                 <input type="checkbox" checked={form.reviewers.includes(u.id)} onChange={() => toggleReviewer(u.id)} />
                 {u.name} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>({u.email})</span>
