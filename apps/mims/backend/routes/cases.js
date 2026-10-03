@@ -1193,6 +1193,10 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       // CF-E1: Dynamic fields [{field_id, field_value}]
       dynamic_fields,
       assign_to_me,
+      // MIPM-156: the inbox sends the email's text and sender; both were dropped,
+      // so a case made from an email started blank.
+      description,
+      internal_notes,
     } = req.body;
     const ownerId = assign_to_me === true ? req.user.userId : null;
 
@@ -1273,9 +1277,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id, description, internal_notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId, description || null, internal_notes || null]
       );
     } catch (err) {
       // MIPM-21: a reference that is already taken is refused and the caller told.

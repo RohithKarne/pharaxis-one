@@ -67,6 +67,7 @@ const schemas = {
     // Same trap as updateCase: an "optional" string that cannot be empty.
     subject:           str(500).optional().allow('', null),
     description:       str(5000).optional().allow('', null),
+    internal_notes:    str(5000).optional().allow('', null),
     intake_channel:    str(50).optional().allow('', null),
     date_received:     isoDate().optional().allow('', null),
     awareness_date:     isoDate().optional().allow('', null),
