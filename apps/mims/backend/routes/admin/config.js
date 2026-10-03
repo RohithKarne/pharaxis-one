@@ -16,6 +16,7 @@ const crypto = require('crypto');
 // secrets so IMAP/SMTP mailbox passwords are no longer stored in plaintext at rest.
 const { encryptSecret } = require('../../services/ssoService');
 const { logAudit } = require('../../utils/auditLog');
+const { getUserModules } = require('../../utils/userModules');
 
 // ssoService only exports encryptSecret; mirror its decrypt (same key derivation and
 // iv.tag.ciphertext format) locally, tolerating not-yet-encrypted (plaintext) rows so
@@ -123,13 +124,8 @@ function getScopedOrgId(req, providedOrgId = null) {
 async function requireAdminConsoleAccess(req, res, next) {
   if (hasPlatformAdminScope(req)) return next();
   try {
-    const [rows] = await pool.execute(
-      `SELECT id FROM user_module_permissions
-       WHERE user_id = ? AND module = 'admin_console' AND can_access = 1
-       LIMIT 1`,
-      [req.user.userId]
-    );
-    if (rows.length > 0) return next();
+    // Role defaults count, as at sign-in (MIPM-148, the sibling of MIPM-134).
+    if ((await getUserModules(req.user.userId)).includes('admin_console')) return next();
     return res.status(403).json({ error: 'You do not have permission to view MIMS Admin data.' });
   } catch (err) {
     return res.status(500).json({ error: 'Access check failed.' });
@@ -295,6 +291,13 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
     let countQuery = 'SELECT COUNT(*) AS total FROM audit_logs WHERE 1=1';
     const params = [];
     const whereParts = [];
+    // audit_logs has no organisation column, and every client's rows were returned to
+    // anyone allowed in. A tenant admin now sees the actions of their organisation's
+    // members only; a platform admin sees all (MIPM-148).
+    if (!hasPlatformAdminScope(req)) {
+      if (!req.user.orgId) return res.json({ logs: [], total: 0, page, page_size: pageSize, total_pages: 1 });
+      whereParts.push('user_id IN (SELECT user_id FROM user_org_access WHERE org_id = ?)'); params.push(req.user.orgId);
+    }
     if (from)      { whereParts.push('created_at >= ?'); params.push(from); }
     if (to)        { whereParts.push('created_at <= ?'); params.push(to + ' 23:59:59'); }
     if (user)      { whereParts.push('user_name LIKE ?'); params.push(`%${user}%`); }
@@ -369,6 +372,11 @@ router.get('/login-audit', authenticate, requireAdminConsoleAccess, async (req, 
     let countQuery = 'SELECT COUNT(*) AS total FROM login_audit WHERE 1=1';
     const params = [];
     const whereParts = [];
+    // Same organisation scoping as the admin audit trail (MIPM-148).
+    if (!hasPlatformAdminScope(req)) {
+      if (!req.user.orgId) return res.json({ logs: [], total: 0, page, page_size: pageSize, total_pages: 1 });
+      whereParts.push('user_id IN (SELECT user_id FROM user_org_access WHERE org_id = ?)'); params.push(req.user.orgId);
+    }
     if (from)   { whereParts.push('login_time >= ?'); params.push(from); }
     if (to)     { whereParts.push('login_time <= ?'); params.push(to + ' 23:59:59'); }
     if (user)   { whereParts.push('user_name LIKE ?'); params.push(`%${user}%`); }
