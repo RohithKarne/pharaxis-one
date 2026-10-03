@@ -119,7 +119,7 @@ async function transitionTemplate(req, res, action) {
       });
       if (!evidenceGate.allow) {
         return res.status(422).json({
-          error: 'Evidence Chain Compiler blocked template publish.',
+          error: `This template cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
           run_id: evidenceGate.run_id,
           evidence: evidenceGate.result,
         });
@@ -391,7 +391,7 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
       });
       if (!evidenceGate.allow) {
         return res.status(422).json({
-          error: 'Evidence Chain Compiler blocked template rendering for response use.',
+          error: `This template cannot be used in a response yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
           run_id: evidenceGate.run_id,
           evidence: evidenceGate.result,
         });

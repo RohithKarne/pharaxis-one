@@ -292,7 +292,7 @@ router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
       });
       if (!evidenceGate.allow) {
         return res.status(422).json({
-          error: 'Evidence Chain Compiler blocked publish during FAQ check-in.',
+          error: `This FAQ cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
           run_id: evidenceGate.run_id,
           evidence: evidenceGate.result,
         });
@@ -373,7 +373,7 @@ router.post('/faqs/:id/publish', authenticate, requireCapability('content.publis
     });
     if (!evidenceGate.allow) {
       return res.status(422).json({
-        error: 'Evidence Chain Compiler blocked this FAQ publish request.',
+        error: `This FAQ cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
         run_id: evidenceGate.run_id,
         evidence: evidenceGate.result,
       });

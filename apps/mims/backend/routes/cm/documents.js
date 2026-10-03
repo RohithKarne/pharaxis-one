@@ -955,7 +955,7 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     });
     if (!evidenceGate.allow) {
       return res.status(422).json({
-        error: 'Evidence Chain Compiler blocked this publish request.',
+        error: `This document cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
         run_id: evidenceGate.run_id,
         evidence: evidenceGate.result,
       });
