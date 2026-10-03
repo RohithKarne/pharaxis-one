@@ -76,6 +76,19 @@ export default function PortalLayout({ children }) {
     setBannerDismissed(true)
     try { if (safetySig) localStorage.setItem(`cp_safety_dismissed_${clientCode}`, safetySig) } catch { /* storage disabled */ }
   }
+  // CPPM-114: a signed-in doctor with a high or critical letter not yet confirmed
+  // sees a banner that cannot be dismissed — it leaves when they confirm, and comes
+  // back when a new letter is published.
+  const [ackWaiting, setAckWaiting] = useState(null)
+  useEffect(() => {
+    if (!user || !clientCode) { setAckWaiting(null); return }
+    let live = true
+    const check = () => fetch(`/api/portal/safety/${clientCode}/acknowledgements`, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null).then(d => { if (live) setAckWaiting(d && d.waiting > 0 ? d : null) }).catch(() => {})
+    check()
+    window.addEventListener('cp:safety-ack', check)
+    return () => { live = false; window.removeEventListener('cp:safety-ack', check) }
+  }, [user?.id, clientCode, safetySig])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -186,7 +199,16 @@ export default function PortalLayout({ children }) {
   return (
     <div className="pp-root">
       <a href="#pp-main" className="pp-skip-link">Skip to content</a>
-      {has_active_safety_alert && !bannerDismissed && (
+      {ackWaiting && (
+        <div className="pp-safety-banner" role="alert">
+          <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
+          <span className="pp-safety-banner-copy">
+            {ackWaiting.waiting === 1 ? '1 safety letter needs' : `${ackWaiting.waiting} safety letters need`} your confirmation
+          </span>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">Read and confirm</Link>
+        </div>
+      )}
+      {!ackWaiting && has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
           <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
           <span className="pp-safety-banner-copy">Important Safety Information</span>
