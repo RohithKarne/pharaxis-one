@@ -84,7 +84,7 @@ export default function SystemActivity() {
             onClick={() => load()}
             style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}
           >
-            ⟳ Refresh
+            Refresh
           </button>
 
           <select

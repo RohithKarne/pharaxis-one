@@ -48,12 +48,12 @@ export default function CaseFormWizard({
           <div style={{ display: 'flex', gap: 8 }}>
             {activeStep > 1 && (
               <button type="button" className="btn btn-outline" onClick={prevStep}>
-                ← Back
+                Back
               </button>
             )}
             {activeStep < LAST_STEP ? (
               <button type="button" className="btn btn-primary" onClick={nextStep}>
-                Next Step →
+                Next Step
               </button>
             ) : (
               <button type="button" className="btn btn-primary" onClick={() => onSave(false)} disabled={saving}>
@@ -117,14 +117,14 @@ export default function CaseFormWizard({
           onClick={prevStep}
           disabled={activeStep === 1}
         >
-          ← Previous Step
+          Previous Step
         </button>
         <span style={{ fontSize: 13, color: 'var(--text-muted)', alignSelf: 'center' }}>
           Step {activeStep} of {LAST_STEP}
         </span>
         {activeStep < LAST_STEP ? (
           <button type="button" className="btn btn-primary" onClick={nextStep}>
-            Next Step →
+            Next Step
           </button>
         ) : (
           <button type="button" className="btn btn-primary" onClick={() => onSave(false)} disabled={saving}>

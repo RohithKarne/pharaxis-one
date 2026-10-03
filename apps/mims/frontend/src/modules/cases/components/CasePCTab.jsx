@@ -436,7 +436,7 @@ export default function CasePCTab({
 
       {pcTxDrawer && (
         <div className="cf-tx-drawer">
-          <div className="cf-tx-drawer-title">New PC Routing → Quality Team</div>
+          <div className="cf-tx-drawer-title">New PC Routing to Quality Team</div>
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (Quality Team)</label>
@@ -478,7 +478,7 @@ export default function CasePCTab({
               {/* Stored as standard / high / urgent; the form offers Routine / Expedited / Urgent. */}
               <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine', high: 'Expedited', urgent: 'Urgent' })[tx.priority] || tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: <strong>{String(tx.due_date).slice(0, 10)}</strong></span>}
-              <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+              <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>
             {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}
             <div className="cf-tx-status-actions">

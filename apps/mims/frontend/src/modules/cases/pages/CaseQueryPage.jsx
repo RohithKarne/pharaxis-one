@@ -211,7 +211,7 @@ export default function CaseQueryPage() {
                         className="cf-open-btn"
                       onClick={e => { e.stopPropagation(); navigate(`/cases/${c.id}?section=correspondence`, { state: { from: '/case-query' } }) }}
                     >
-                      Open Correspondence →
+                      Open Correspondence
                     </button>
                   </td>
                 </tr>
@@ -225,9 +225,9 @@ export default function CaseQueryPage() {
               Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} of {total}
             </div>
             <div className="cf-query-page-actions">
-              <button className="cf-open-btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>◀ Prev</button>
+              <button className="cf-open-btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</button>
               <span className="cf-query-page-num">Page {page} / {totalPages}</span>
-              <button className="cf-open-btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next ▶</button>
+              <button className="cf-open-btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</button>
             </div>
           </div>
         )}

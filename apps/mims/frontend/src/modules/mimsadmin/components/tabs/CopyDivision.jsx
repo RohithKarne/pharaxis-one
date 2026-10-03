@@ -79,7 +79,7 @@ export default function CopyDivision() {
       {err    && <div style={{ padding:'12px 16px', background:'#fee2e2', color:'#dc2626', borderRadius:8, marginBottom:14, fontSize:13 }}>{err}</div>}
       {result && (
         <div style={{ padding:'14px 18px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, marginBottom:14 }}>
-          <div style={{ fontWeight:700, color:'#15803d', marginBottom:8 }}>✓ Copy completed</div>
+          <div style={{ fontWeight:700, color:'#15803d', marginBottom:8 }}>Copy completed</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {Object.entries(result).map(([k,n]) => {
               const cat = categories.find(c => c.key === k)
@@ -183,7 +183,7 @@ export default function CopyDivision() {
             onClick={handleExecute}
             disabled={!confirmed || executing}
             style={{ padding:'10px 22px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor: confirmed&&!executing?'pointer':'not-allowed', opacity: confirmed&&!executing?1:.5 }}
-          >{executing ? 'Copying…' : `▶ Execute Copy (${totalRows} rows)`}</button>
+          >{executing ? 'Copying…' : `Execute Copy (${totalRows} rows)`}</button>
         )}
       </div>
     </div>

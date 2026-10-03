@@ -145,7 +145,7 @@ function DivisionWizard({ H, orgId, onBack, flash, msg, creating = false, onCrea
     <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className="btn btn-sm" onClick={onBack}>← Divisions</button>
+          <button className="btn btn-sm" onClick={onBack}>Back to Divisions</button>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{creating ? 'New Division' : (org?.name || 'Division')}</h2>
           {!creating && params && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: params.config_status === 'active' ? '#e6f4ea' : '#fdf1d6', color: params.config_status === 'active' ? '#1e7e34' : '#8a6d1a' }}>{params.config_status}</span>}
         </div>

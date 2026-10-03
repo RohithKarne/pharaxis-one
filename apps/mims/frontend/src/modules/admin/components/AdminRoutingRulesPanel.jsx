@@ -159,7 +159,7 @@ export default function AdminRoutingRulesPanel({ H }) {
               <th style={{ padding: '8px 6px' }}>Pri</th>
               <th style={{ padding: '8px 6px' }}>Name</th>
               <th style={{ padding: '8px 6px' }}>Match</th>
-              <th style={{ padding: '8px 6px' }}>→ Queue</th>
+              <th style={{ padding: '8px 6px' }}>Queue</th>
               <th style={{ padding: '8px 6px' }}>Owner</th>
               <th style={{ padding: '8px 6px' }}>Active</th>
               <th style={{ padding: '8px 6px' }}></th>

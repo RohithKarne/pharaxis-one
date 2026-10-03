@@ -104,7 +104,7 @@ function ClassificationCard({ miTabId, H, onChange }) {
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-        <Chip label={offLabel ? '⚠ OFF-LABEL' : 'On-label'} color={offLabel ? '#b91c1c' : '#1a7a3f'} />
+        <Chip label={offLabel ? 'OFF-LABEL' : 'On-label'} color={offLabel ? '#b91c1c' : '#1a7a3f'} />
         <Chip label={solicited ? 'Solicited' : 'Unsolicited'} color={solicited ? '#c08300' : '#1a4f9c'} />
         {promoStatus !== 'not_required' && (
           <Chip label={`Promo review: ${promoStatus}`}
@@ -291,7 +291,7 @@ function SignerSlot({ title, subtitle, signed, showSignBtn, waitingText, onSign 
       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{subtitle}</div>
       {signed ? (
         <div style={{ marginTop: 6, fontSize: 12 }}>
-          ✓ <strong>{signed.name}</strong>
+          Signed by <strong>{signed.name}</strong>
           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(signed.at).toLocaleString()}</div>
         </div>
       ) : (

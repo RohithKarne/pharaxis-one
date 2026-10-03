@@ -151,7 +151,7 @@ function QAReportsPanel() {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => { setSelectedReport(null); setReportDetail(null) }}>
-            ← Back to Reports
+            Back to Reports
           </button>
           <h3 style={{ margin: 0, fontSize: 16 }}>{selectedReport.report_name}</h3>
           <span style={{ ...STATUS_COLORS[selectedReport.status], padding: '2px 10px', borderRadius: 10, fontSize: 12, fontWeight: 600 }}>
@@ -243,7 +243,7 @@ function QAReportsPanel() {
             </select>
           </div>
           <button className="btn btn-primary" onClick={createReport} disabled={creating} style={{ whiteSpace: 'nowrap' }}>
-            {creating ? 'Queuing…' : '▶ Run Report'}
+            {creating ? 'Queuing…' : 'Run Report'}
           </button>
         </div>
         {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.includes('queued') ? '#065f46' : '#991b1b' }}>{msg}</div>}
@@ -502,7 +502,7 @@ function QAOverridesPanel() {
                 <td style={{ padding: '8px 12px' }}>
                   {o.override_reason
                     ? <span style={{ color: '#374151' }}>{o.override_reason}</span>
-                    : <span style={{ color: '#ef4444', fontWeight: 500 }}>⚠ No reason given</span>}
+                    : <span style={{ color: '#ef4444', fontWeight: 500 }}>No reason given</span>}
                 </td>
                 <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(o.override_at)}</td>
               </tr>
@@ -548,7 +548,7 @@ function QACompliancePanel() {
           Run an automated suite of compliance checks to verify system integrity and configuration.
         </p>
         <button className="btn btn-primary" onClick={runScan} disabled={loading}>
-          {loading ? 'Scanning...' : '▶ Run Compliance Scan'}
+          {loading ? 'Scanning...' : 'Run Compliance Scan'}
         </button>
       </div>
       {msg && <div style={{ color: '#991b1b', marginBottom: 16 }}>{msg}</div>}

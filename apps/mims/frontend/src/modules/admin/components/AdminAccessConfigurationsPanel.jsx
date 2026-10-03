@@ -661,7 +661,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   return (
     <div style={{ padding: 24, maxWidth: 1320 }}>
-      <SectionHeader title="Access Configurations" desc="Unified tenant, site, group, privilege, report, authentication, and audit controls for enterprise MIMS clients." />
+      <SectionHeader title="Access Configurations" desc="Organisation, site, group, privilege, report, sign-in and audit settings." />
       {renderOrgSelector()}
       {renderTabs()}
       {renderActiveTab()}

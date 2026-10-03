@@ -19,7 +19,7 @@ export default function CaseActionsAdmin() {
   const [tab, setTab] = useState('templates')
   return (
     <div style={shell}>
-      <Header title="Case Actions" sub="Templates · Macros · Smart actions configuration" />
+      <Header title="Case Actions" sub="Case templates, macros and case actions" />
       <div style={tabbar}>
         <Tab active={tab==='templates'} onClick={() => setTab('templates')} label="Case Templates" />
         <Tab active={tab==='macros'}    onClick={() => setTab('macros')}    label="Macros" />

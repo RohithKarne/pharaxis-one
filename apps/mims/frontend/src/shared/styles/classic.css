@@ -64,7 +64,7 @@
 /* ─── Form fields ──────────────────────────────────────────── */
 :root .form-control, :root .cm-form-input, :root .cm-form-select, :root .cm-form-textarea,
 :root .form-input, :root .cf-modal-select, :root .cf-cases-search, :root .cf-query-input,
-:root .cf-query-select, :root .cf-query-date {
+:root .cf-query-select {
   border-radius: 0; border: 1px solid #a9b2bd; padding: 4px 6px; font-size: 13px; box-shadow: none; background: #fff;
 }
 :root .form-control:focus, :root .cm-form-input:focus, :root .cm-form-select:focus,
@@ -296,3 +296,53 @@
 :root [style*="font-weight: 800"] { font-weight: bold !important; }
 /* The round "?" help button beside the admin tabs is a small square button */
 :root .mims-admin-topnav [title^="Help for"] { border-radius: 2px !important; width: 22px !important; height: 22px !important; }
+
+/* Case Query toolbar: one row of short controls, date labels beside their boxes. */
+:root .cf-query-toolbar { align-items: center; gap: 6px; padding: 8px 10px; }
+:root .cf-query-select, :root .cf-query-input { min-width: 0; min-height: 0; height: 26px; padding: 2px 6px; }
+:root .cf-query-date { flex-direction: row; align-items: center; gap: 4px; }
+:root .cf-query-date span { font-size: 12px; font-weight: bold; text-transform: none; color: var(--text-primary); }
+
+/* Case form, correspondence and builder fields: 26px controls instead of 40px. */
+:root .cf-query-date input,
+:root .cf-form-field input:not([type=checkbox]):not([type=radio]), :root .cf-form-field select,
+:root .cf-corr-compose-body input:not([type=checkbox]):not([type=radio]), :root .cf-corr-compose-body select,
+:root .cf-builder-card input:not([type=checkbox]):not([type=radio]), :root .cf-builder-card select {
+  min-height: 0; height: 26px; padding: 2px 6px; border-radius: 0; border-color: #a9b2bd; background: #fff;
+}
+:root .cf-form-field textarea, :root .cf-corr-compose-body textarea, :root .cf-builder-card textarea {
+  min-height: 64px; border-radius: 0; border-color: #a9b2bd; background: #fff;
+}
+
+/* Log pages (Transmissions, Response Log, both error logs), the three audit-trail
+   pages and Data Protection: grey title bar, short controls, plain table headers. */
+:root .tx-header, :root .rl-header, :root .rel-header, :root .tel-header, :root .dp-header, :root .cat-top, :root .cmat-top, :root .tat-top {
+  background: var(--panel-head); border: 1px solid var(--border); border-radius: 0; box-shadow: none;
+  padding: 6px 10px; margin-bottom: 8px; align-items: center;
+}
+:root .tx-title, :root .rl-title, :root .rel-title, :root .tel-title, :root .cat-title, :root .cmat-title, :root .tat-title, :root .dp-title { font-size: 15px; font-weight: bold; letter-spacing: 0; color: var(--primary); margin: 0; }
+:root .tx-subtitle, :root .rl-subtitle, :root .rel-subtitle, :root .tel-subtitle, :root .cat-subtitle, :root .cmat-subtitle, :root .tat-subtitle, :root .dp-subtitle { font-size: 12px; color: var(--text-secondary); margin: 2px 0 0; }
+:root .tx-filters, :root .rl-filters, :root .rel-filters, :root .tel-filters {
+  border-radius: 0; box-shadow: none; border: 1px solid var(--border); background: #fff; padding: 6px 10px; gap: 6px;
+}
+:root .tx-search, :root .tx-filter-select, :root .tx-filter-date, :root .tx-filter-input, :root .rl-search, :root .rl-filter-select, :root .rl-filter-date, :root .rl-filter-input, :root .rel-search, :root .rel-filter-select, :root .rel-filter-date, :root .rel-filter-input, :root .tel-search, :root .tel-filter-select, :root .tel-filter-date, :root .tel-filter-input, :root .cat-search, :root .cmat-search, :root .tat-search, :root .cmat-filter-select,
+:root .dp-input, :root .dp-select {
+  min-height: 0; height: 26px; padding: 2px 6px; border: 1px solid #a9b2bd; border-radius: 0; background: #fff; font-size: 12px; box-shadow: none;
+}
+:root .tx-table-wrap, :root .rl-table-wrap, :root .rel-table-wrap, :root .tel-table-wrap, :root .dp-card, :root .cat-left, :root .cat-right, :root .cat-version, :root .cmat-left, :root .cmat-right, :root .cmat-version, :root .tat-left, :root .tat-right, :root .tat-version, :root .tat-tx { border-radius: 0; box-shadow: none; }
+:root .tx-table, :root .rl-table, :root .rel-table, :root .tel-table, :root .dp-table { border-collapse: collapse; font-size: 12px; }
+:root .tx-table th, :root .rl-table th, :root .rel-table th, :root .tel-table th, :root .dp-table th {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: bold; padding: 5px 8px;
+  background: var(--panel-head); color: var(--text-primary); border-right: 1px solid #c3cbd5; border-bottom: 1px solid var(--border);
+}
+:root .tx-table td, :root .rl-table td, :root .rel-table td, :root .tel-table td, :root .dp-table td { padding: 4px 8px; }
+:root .tx-refresh-btn, :root .rl-refresh-btn, :root .rel-refresh-btn, :root .tel-refresh-btn, :root .cat-refresh-btn, :root .cmat-refresh-btn, :root .tat-refresh-btn, :root .tx-page-btn, :root .tx-clear-btn, :root .tx-view-btn, :root .rl-page-btn, :root .rl-clear-btn, :root .rl-view-btn, :root .rel-page-btn, :root .rel-clear-btn, :root .rel-view-btn, :root .tel-page-btn, :root .tel-clear-btn, :root .tel-view-btn, :root .cat-left-pg-btn, :root .cmat-left-pg-btn, :root .tat-left-pg-btn, :root .dp-pg-btn {
+  border-radius: 2px; padding: 2px 10px; font-size: 12px; height: auto; min-height: 0; box-shadow: none;
+  background: #f3f4f6; color: var(--text-primary); border: 1px solid #a9b2bd;
+}
+:root .dp-card-header, :root .cat-left-hdr, :root .cat-right-hdr, :root .cat-version-hdr, :root .cmat-left-hdr, :root .cmat-right-hdr, :root .cmat-version-hdr, :root .tat-left-hdr, :root .tat-right-hdr, :root .tat-version-hdr, :root .tat-tx-hdr {
+  background: var(--panel-head); border-bottom: 1px solid var(--border); border-radius: 0; padding: 6px 10px;
+}
+:root .rl-modal, :root .rel-modal, :root .tel-modal, :root .dp-modal { border-radius: 0; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+:root .rl-modal-header, :root .rel-modal-header, :root .tel-modal-header { background: var(--panel-head); border-bottom: 1px solid var(--border); padding: 6px 10px; }
+:root .tx-date-sep { color: var(--text-primary); font-size: 12px; font-weight: bold; }

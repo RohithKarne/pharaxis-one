@@ -718,7 +718,7 @@ export default function CasesPage() {
                   <td>{c.owner_name || '—'}</td>
                   <td>
                     <button className="cf-open-btn" onClick={e => { e.stopPropagation(); navigate(`/cases/${c.id}`, { state: { from: '/cases' } }) }}>
-                      Open →
+                      Open
                     </button>
                   </td>
                 </tr>
@@ -777,7 +777,7 @@ export default function CasesPage() {
                     </div>
                   </div>
                   <div className="cf-modal-actions">
-                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={goToReporterStep}>Next: Reporter →</button>
+                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={goToReporterStep}>Next: Reporter</button>
                   </div>
                 </div>
               )}
@@ -858,9 +858,9 @@ export default function CasesPage() {
                   {renderDuplicateAssist()}
 
                   <div className="cf-modal-actions" style={{ display: 'flex', gap: 10 }}>
-                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(1)}>← Back</button>
+                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(1)}>Back</button>
                     {newCase.case_type === 'MI'
-                      ? <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={!step2Valid() || creating} onClick={createCase}>{creating ? 'Creating…' : 'Create MI Case →'}</button>
+                      ? <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={!step2Valid() || creating} onClick={createCase}>{creating ? 'Creating…' : 'Create MI Case'}</button>
                       : <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={!step2Valid()} onClick={() => setModalStep(3)}>Next: {newCase.case_type === 'AE' ? 'AE Details' : 'PC Details'} →</button>
                     }
                   </div>
@@ -906,8 +906,8 @@ export default function CasesPage() {
                   </div>
                   {renderDuplicateAssist()}
                   <div className="cf-modal-actions" style={{ display: 'flex', gap: 10 }}>
-                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(2)}>← Back</button>
-                    <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={creating} onClick={createCase}>{creating ? 'Creating…' : 'Create AE Case →'}</button>
+                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(2)}>Back</button>
+                    <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={creating} onClick={createCase}>{creating ? 'Creating…' : 'Create AE Case'}</button>
                   </div>
                 </div>
               )}
@@ -945,8 +945,8 @@ export default function CasesPage() {
                   </div>
                   {renderDuplicateAssist()}
                   <div className="cf-modal-actions" style={{ display: 'flex', gap: 10 }}>
-                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(2)}>← Back</button>
-                    <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={creating} onClick={createCase}>{creating ? 'Creating…' : 'Create PC Case →'}</button>
+                    <button style={{ flex: 1, padding: '10px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }} onClick={() => setModalStep(2)}>Back</button>
+                    <button className="cf-modal-confirm" style={{ flex: 2 }} disabled={creating} onClick={createCase}>{creating ? 'Creating…' : 'Create PC Case'}</button>
                   </div>
                 </div>
               )}

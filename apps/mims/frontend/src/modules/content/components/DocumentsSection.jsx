@@ -408,7 +408,7 @@ export default function DocumentsSection({ token, user }) {
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
           ) : docs.length === 0 ? (
-            <div className="cm-empty"><p>No documents found. Create your first one!</p></div>
+            <div className="cm-empty"><p>No documents found.</p></div>
           ) : (
             <>
               <table className="cm-table">
@@ -520,7 +520,7 @@ export default function DocumentsSection({ token, user }) {
                     <td style={{ fontSize: 12 }}>
                       {expiresAt ? (
                         <span style={{ color: isExpiringSoon ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isExpiringSoon ? 600 : 400 }}>
-                          {isExpiringSoon ? '⚠ ' : ''}auto-releases {expiresAt.toLocaleString()}
+                          {isExpiringSoon ? 'Soon: ' : ''}auto-releases {expiresAt.toLocaleString()}
                         </span>
                       ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
@@ -540,7 +540,7 @@ export default function DocumentsSection({ token, user }) {
 
       {subTab === 'reviews' && (
         reviews.length === 0 ? (
-          <div className="cm-empty"><div className="cm-empty-icon">✓</div><p>No review tasks assigned to you.</p></div>
+          <div className="cm-empty"><p>No review tasks assigned to you.</p></div>
         ) : (
           <table className="cm-table">
             <thead>

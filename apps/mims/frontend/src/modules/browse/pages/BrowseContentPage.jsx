@@ -259,7 +259,7 @@ function DetailSidebar({ doc, token, onClose }) {
                     rel="noreferrer"
                     className="bc-download-link"
                   >
-                    ↗ Open in new tab
+                    Open in new tab
                   </a>
                 ) : (
                   <span className="bc-download-link" style={{ opacity: 0.7 }}>
@@ -662,7 +662,7 @@ export default function BrowseContentPage() {
                     disabled={page === 1}
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                   >
-                    ← Prev
+                    Prev
                   </button>
                   <span className="bc-page-info">Page {page} of {totalPages}</span>
                   <button
@@ -670,7 +670,7 @@ export default function BrowseContentPage() {
                     disabled={page >= totalPages}
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   >
-                    Next →
+                    Next
                   </button>
                 </div>
               )}

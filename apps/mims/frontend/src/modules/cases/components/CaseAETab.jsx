@@ -495,7 +495,7 @@ export default function CaseAETab({
 
       {aeTxDrawer && (
         <div className="cf-tx-drawer">
-          <div className="cf-tx-drawer-title">New AE Transmission → PV Team</div>
+          <div className="cf-tx-drawer-title">New AE Transmission to PV Team</div>
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (PV Team)</label>
@@ -540,7 +540,7 @@ export default function CaseAETab({
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
               <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: {String(tx.due_date).slice(0, 10)}</span>}
-              <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+              <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>
             {tx.narrative && <div className="cf-tx-narrative">{tx.narrative}</div>}
             <div className="cf-tx-status-actions">

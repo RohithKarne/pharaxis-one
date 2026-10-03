@@ -66,7 +66,7 @@ function OverviewTab({ report, running, onRun }) {
         <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No Test Run Yet</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>Click "Run Full Suite" to execute all regression tests and see the health of the app.</p>
         <button onClick={onRun} style={{ padding: '10px 28px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
-          ▶ Run Full Suite
+          Run Full Suite
         </button>
       </div>
     )
@@ -470,7 +470,7 @@ export default function RegressionPage({ embedded = false } = {}) {
             <div>
               <h2 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Regression Testing Suite</h2>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-                Full app health check — APIs, DB schema, feature smoke tests.
+                Checks the APIs, the database schema and the main features.
                 {lastRunAt && <span style={{ marginLeft: 8 }}>Last run: {lastRunAt.toLocaleTimeString()}</span>}
               </p>
             </div>
@@ -481,7 +481,7 @@ export default function RegressionPage({ embedded = false } = {}) {
                 disabled={running}
                 style={{ padding: '10px 24px', background: running ? 'var(--border)' : 'var(--primary)', color: running ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 8, cursor: running ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}
               >
-                {running ? 'Running…' : '▶ Run Full Suite'}
+                {running ? 'Running…' : 'Run Full Suite'}
               </button>
             </div>
           </div>

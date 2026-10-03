@@ -58,7 +58,7 @@ export default function CaseResponsePage() {
     <MIMSLayout showStatStrip={false} surfaceVariant="workspace" compact>
       <div className="cf-form-page">
         <div className="cf-form-header">
-          <button className="cf-back-btn" onClick={() => navigate(`/cases/${id}`)}>← Back to case</button>
+          <button className="cf-back-btn" onClick={() => navigate(`/cases/${id}`)}>Back to case</button>
           <div className="cf-form-header-info">
             <span className="cf-form-case-num">{caseData.case_number || `Case ${id}`}</span>
             <span className="cf-form-type-badge" style={{ background: '#2563eb' }}>MI</span>

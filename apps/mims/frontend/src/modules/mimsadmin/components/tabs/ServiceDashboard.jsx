@@ -77,7 +77,7 @@ export default function ServiceDashboard() {
           disabled={loading}
           style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 12, cursor: loading ? 'default' : 'pointer', color: 'var(--text-primary)', opacity: loading ? 0.6 : 1 }}
         >
-          ⟳ Refresh
+          Refresh
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {services.length} service{services.length !== 1 ? 's' : ''} registered

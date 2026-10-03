@@ -275,7 +275,7 @@ export default function NotificationOverlay({ open, onClose }) {
                     {retryingId === n.id ? 'Retrying…' : 'Retry delivery'}
                   </button>
                 )}
-                {n.link_url && <span className="mims-notif-linkhint">Open →</span>}
+                {n.link_url && <span className="mims-notif-linkhint">Open</span>}
               </div>
             </div>
           ))}

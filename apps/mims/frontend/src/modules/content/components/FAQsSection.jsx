@@ -298,7 +298,7 @@ export default function FAQsSection({ token }) {
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading FAQs…</p>
       ) : faqs.length === 0 ? (
-        <div className="cm-empty"><p>No FAQs found. Create your first one!</p></div>
+        <div className="cm-empty"><p>No FAQs found.</p></div>
       ) : (
         <table className="cm-table">
           <thead>

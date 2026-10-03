@@ -214,7 +214,7 @@ export default function Users() {
               } catch { showFlash('Network error.', 'error') }
             }}
           >Export CSV</button>
-          <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>⇪ Bulk Add</button>
+          <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>Bulk Add</button>
           <button className="ma-usr-btn-add" onClick={openCreate}>+ Add User</button>
         </div>
       </div>
@@ -266,7 +266,7 @@ export default function Users() {
                 </td>
                 <td style={{ fontSize: 12, color: isExpired(u.password_expires_at) ? 'var(--error, #c00)' : 'var(--text-muted)' }}>
                   {fmtDate(u.password_expires_at)}
-                  {isExpired(u.password_expires_at) && ' ⚠'}
+                  {isExpired(u.password_expires_at) && ' (expired)'}
                 </td>
                 <td onClick={e => e.stopPropagation()}>
                   <AuditChip

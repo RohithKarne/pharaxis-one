@@ -57,7 +57,7 @@ export default function PcSignalsWidget({ onOpen }) {
         {loading && <div style={{ padding: 14, color: 'var(--text-muted)', fontSize: 12 }}>Scanning…</div>}
         {!loading && signals.length === 0 && !showTrends && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12, textAlign: 'center' }}>
-            ✓ No active signals.
+            No active signals.
           </div>
         )}
         {!loading && (showTrends ? trends : signals).map((s, i) => (

@@ -124,9 +124,9 @@ export default function ResponseLogPage() {
             <h1 className="rl-title">Response Log</h1>
             {/* No regulatory claim on screen: Part 11 compliance is a validated-system
                 statement, not a page label (M-32, Vasu). */}
-            <span className="rl-subtitle">All MI responses — author, approver and status of each one</span>
+            <span className="rl-subtitle">All MI responses with their author, approver and status.</span>
           </div>
-          <button className="rl-refresh-btn" onClick={fetchLog} disabled={loading}>⟳ Refresh</button>
+          <button className="rl-refresh-btn" onClick={fetchLog} disabled={loading}>Refresh</button>
         </div>
 
         {/* Stats */}
@@ -143,7 +143,7 @@ export default function ResponseLogPage() {
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <input type="date" className="rl-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />
-          <span style={{ color:'#94a3b8' }}>→</span>
+          <span style={{ color:'#475569' }}>to</span>
           <input type="date" className="rl-filter-date" value={toDate} onChange={e => { setToDate(e.target.value); setPage(1) }} title="To date" />
           {hasFilters && <button className="rl-clear-btn" onClick={clearFilters}>✕ Clear</button>}
         </div>
@@ -203,9 +203,9 @@ export default function ResponseLogPage() {
         {/* Pagination */}
         {!loading && totalPages > 1 && (
           <div className="rl-pagination">
-            <button className="rl-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+            <button className="rl-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
             <span className="rl-page-info">Page {page} of {totalPages}</span>
-            <button className="rl-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+            <button className="rl-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
           </div>
         )}
       </div>

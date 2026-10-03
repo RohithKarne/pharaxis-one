@@ -261,7 +261,7 @@ export function ImpactPreviewModal({ panel, onClose }) {
       <div style={{ background: 'var(--surface)', borderRadius: 10, width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.28)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>⚠ Master-Data Impact Preview</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Master-Data Impact Preview</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
@@ -315,7 +315,7 @@ export function ImpactPreviewModal({ panel, onClose }) {
           ))}
           {data.affected_cases === 0 && (data.warnings || []).length === 0 && (
             <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#15803d' }}>
-              ✓ No existing records are affected by this change. Safe to proceed.
+              No existing records are affected by this change. Safe to proceed.
             </div>
           )}
         </div>
@@ -473,7 +473,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
                     </td>
                     <td>
                       <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }} disabled={impactLoading} onClick={() => fetchImpact('workflow_rule', w.id, `State: ${w.name}`)}>
-                        {impactLoading ? '…' : '⚠ Preview Impact'}
+                        {impactLoading ? '…' : 'Preview Impact'}
                       </button>
                     </td>
                   </tr>
@@ -666,7 +666,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
                         <td><StatusPill active={rule.is_active} /></td>
                         <td>
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }} disabled={impactLoading} onClick={() => fetchImpact('workflow_rule', rule.from_state_id, `Rule: ${rule.from_state_name || rule.from_state_id} → ${rule.to_state_name || rule.to_state_id}`)}>
-                            {impactLoading ? '…' : '⚠ Preview Impact'}
+                            {impactLoading ? '…' : 'Preview Impact'}
                           </button>
                         </td>
                         <td>
@@ -693,7 +693,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
       {depCheckModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 8, padding: 28, maxWidth: 480, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-            <h3 style={{ margin: '0 0 8px', color: 'var(--danger)' }}>⚠ Dependencies Found</h3>
+            <h3 style={{ margin: '0 0 8px', color: 'var(--danger)' }}>Dependencies Found</h3>
             <p style={{ marginBottom: 16, fontSize: 14 }}><strong>"{depCheckModal.row?.name}"</strong> is currently in use. Deactivating may affect:</p>
             <ul style={{ margin: '0 0 20px', paddingLeft: 20, fontSize: 13 }}>
               {depCheckModal.deps.map((d, i) => <li key={i}><strong>{d.count}</strong> {d.label || d.type}</li>)}

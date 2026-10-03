@@ -1205,8 +1205,8 @@ export default function InboxPage() {
                   <button className="inbox-sort-btn" onClick={() => setSortAsc(a => !a)}>
                     {sortAsc ? 'Oldest first' : 'Newest first'}
                   </button>
-                  <button className="inbox-sort-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>◀</button>
-                  <button className="inbox-sort-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>▶</button>
+                  <button className="inbox-sort-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+                  <button className="inbox-sort-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
                 </div>
               </div>
 
@@ -1697,7 +1697,7 @@ export default function InboxPage() {
         <div className="compose-overlay" onClick={() => !compose.sending && setCompose(null)}>
           <div className="compose-modal" onClick={e => e.stopPropagation()}>
             <div className="compose-modal-header">
-              <span>{compose.mode === 'reply' ? '↩ Reply' : '↗ Forward'}</span>
+              <span>{compose.mode === 'reply' ? 'Reply' : 'Forward'}</span>
               <button className="compose-close" onClick={() => !compose.sending && setCompose(null)}>✕</button>
             </div>
             <div className="compose-modal-body">
@@ -1746,7 +1746,7 @@ export default function InboxPage() {
             <div className="compose-modal-footer">
               <button className="btn btn-primary" style={{ fontSize: 13 }}
                 onClick={sendCompose} disabled={compose.sending || !compose.to || !compose.subject}>
-                {compose.sending ? 'Sending…' : (compose.mode === 'reply' ? '↩ Send Reply' : '↗ Send Forward')}
+                {compose.sending ? 'Sending…' : (compose.mode === 'reply' ? 'Send Reply' : 'Send Forward')}
               </button>
               <button className="btn btn-outline" style={{ fontSize: 13 }}
                 onClick={() => setCompose(null)} disabled={compose.sending}>

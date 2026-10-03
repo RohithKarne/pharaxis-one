@@ -128,9 +128,9 @@ export default function TransmissionErrorLogPage({ embedded = false } = {}) {
         <div className="tel-header">
           <div>
             <h1 className="tel-title">Transmission Error Log</h1>
-            <span className="tel-subtitle">API, email, and webhook errors on transmissions — each entry has a unique Log ID for traceability</span>
+            <span className="tel-subtitle">API, email and webhook errors on transmissions. Each entry has its own log ID.</span>
           </div>
-          <button className="tel-refresh-btn" onClick={fetchEntries} disabled={loading}>⟳ Refresh</button>
+          <button className="tel-refresh-btn" onClick={fetchEntries} disabled={loading}>Refresh</button>
         </div>
 
         <div className="tel-stats">
@@ -144,7 +144,7 @@ export default function TransmissionErrorLogPage({ embedded = false } = {}) {
           <input className="tel-filter-input" placeholder="Target system…" value={targetSystem} onChange={e => { setTargetSystem(e.target.value); setPage(1) }} />
           <input className="tel-filter-input" placeholder="Error type…" value={errorType} onChange={e => { setErrorType(e.target.value); setPage(1) }} />
           <input type="date" className="tel-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />
-          <span style={{ color:'#94a3b8' }}>→</span>
+          <span style={{ color:'#475569' }}>to</span>
           <input type="date" className="tel-filter-date" value={toDate} onChange={e => { setToDate(e.target.value); setPage(1) }} title="To date" />
           {hasFilters && <button className="tel-clear-btn" onClick={clearFilters}>✕ Clear</button>}
         </div>
@@ -192,9 +192,9 @@ export default function TransmissionErrorLogPage({ embedded = false } = {}) {
 
         {!loading && totalPages > 1 && (
           <div className="tel-pagination">
-            <button className="tel-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+            <button className="tel-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
             <span className="tel-page-info">Page {page} of {totalPages} · {total} records</span>
-            <button className="tel-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+            <button className="tel-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
           </div>
         )}
       </div>
