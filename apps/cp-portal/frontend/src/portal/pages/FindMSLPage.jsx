@@ -122,12 +122,7 @@ END:VCALENDAR`
             <div key={m.id} className="pp-msl-card">
               <div className="pp-msl-avatar">{(m.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
               <div className="pp-msl-info">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                  <div className="pp-msl-name">{m.name}</div>
-                  <span style={{ background: '#DEF7EC', color: '#03543F', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12 }}>
-                    🟢 Available Today
-                  </span>
-                </div>
+                <div className="pp-msl-name">{m.name}</div>
                 {m.title     && <div className="pp-msl-title">{m.title}</div>}
                 {m.specialty && <div className="pp-msl-specialty">🔬 {m.specialty}</div>}
                 {m.region    && <div className="pp-msl-region">📍 {m.region}{m.territory ? ` · ${m.territory}` : ''}</div>}
