@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import AskAboutThis from '../components/AskAboutThis'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function NewsDetailPage() {
@@ -54,6 +55,7 @@ export default function NewsDetailPage() {
       {post.body_html && (
         <div className="pp-article-body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.body_html) }} />
       )}
+      <div style={{ marginTop: 24 }}><AskAboutThis about={post.title} /></div>
     </div>
   )
 }

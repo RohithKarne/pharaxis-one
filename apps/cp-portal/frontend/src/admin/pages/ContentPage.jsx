@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 
@@ -283,6 +284,7 @@ export default function ContentPage() {
                   <div className="cp-content-name">{item.name || item.brand_name || item.title}</div>
                   <div className="cp-content-sub">{item.slug || item.generic_name || item.city || item.resource_type}</div>
                 </div>
+                {tab === 'Events' && <AreaTagSelect clientId={clientId} kind="event" item={item} />}
                 {statusBadge(item)}
                 <CanChange area="content">
                 <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(item)}>Edit</button>

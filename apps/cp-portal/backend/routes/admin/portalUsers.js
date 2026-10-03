@@ -14,6 +14,7 @@ router.use('/:clientId', authenticateAdmin, requireClientAccess);
 const { audit, changesBetween } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const lockout = require('../../utils/loginLockout');
+const { clearAlerts } = require('../../services/adminAlerts');
 
 const VALID_USER_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
@@ -316,10 +317,12 @@ router.post('/:clientId/:userId/unlock', authenticateAdmin, async (req, res) => 
 
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
   try {
-    const { user_type, search } = req.query;
-    let query = 'SELECT id, first_name, last_name, email, user_type, specialty, country, is_active, is_verified, last_login_at, created_at FROM cp_portal_users WHERE client_id = ?';
+    const { user_type, search, access } = req.query;
+    let query = 'SELECT id, first_name, last_name, email, user_type, specialty, country, is_active, is_verified, last_login_at, created_at, access_status, access_requested_at, access_decided_at FROM cp_portal_users WHERE client_id = ?';
     const params = [req.params.clientId];
     if (user_type) { query += ' AND user_type = ?'; params.push(user_type); }
+    // CPPM-113: ?access=requested or ?access=declined lists access requests.
+    if (access === 'requested' || access === 'declined') { query += ' AND access_status = ?'; params.push(access); }
     if (search) { query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)'; const s = `%${search}%`; params.push(s, s, s); }
     query += ' ORDER BY created_at DESC';
     const [rows] = await pool.execute(query, params);
@@ -328,6 +331,52 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     res.json({ users: rows.map(r => ({ ...r, locked_until: locked[r.email] || null })) });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// CPPM-113: approve or decline a doctor's request for access. Approving activates the
+// account and emails the usual set-password invitation; declining keeps it inactive,
+// so the doctor cannot sign in. Only a pending request can be decided, so a second
+// click (or two admins at once) changes nothing.
+// The access-request alert stays open while any request is waiting.
+async function clearIfNoneWaiting(clientId, by) {
+  const [[{ n }]] = await pool.execute(`SELECT COUNT(*) AS n FROM cp_portal_users WHERE client_id = ? AND access_status = 'requested'`, [clientId]);
+  if (Number(n) === 0) await clearAlerts(clientId, 'access_requested', by);
+}
+
+router.post('/:clientId/:userId/approve-access', authenticateAdmin, async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id, code FROM cp_clients WHERE id = ? AND is_active = 1', [req.params.clientId]);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+    const [r] = await pool.execute(
+      `UPDATE cp_portal_users SET is_active = 1, is_verified = 1, access_status = NULL, access_decided_at = UTC_TIMESTAMP()
+        WHERE id = ? AND client_id = ? AND access_status = 'requested'`,
+      [req.params.userId, client.id]);
+    if (!r.affectedRows) return res.status(409).json({ error: 'This request has already been decided, or does not exist.' });
+    const [[u]] = await pool.execute('SELECT id, email, first_name FROM cp_portal_users WHERE id = ?', [req.params.userId]);
+    await issueInvite({ userId: u.id, clientId: client.id, clientCode: client.code, email: u.email, firstName: u.first_name, origin: req.headers.origin, isResend: false });
+    await audit(req.admin, client.id, 'APPROVE_ACCESS', 'portal_user', u.id, { email: u.email });
+    await clearIfNoneWaiting(client.id, `admin: approved by ${req.admin?.email || 'admin'}`);
+    res.json({ message: 'Approved. An invitation to set a password has been emailed.' });
+  } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/approve-access', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/:clientId/:userId/decline-access', authenticateAdmin, async (req, res) => {
+  try {
+    const [r] = await pool.execute(
+      `UPDATE cp_portal_users SET is_active = 0, access_status = 'declined', access_decided_at = UTC_TIMESTAMP()
+        WHERE id = ? AND client_id = ? AND access_status = 'requested'`,
+      [req.params.userId, req.params.clientId]);
+    if (!r.affectedRows) return res.status(409).json({ error: 'This request has already been decided, or does not exist.' });
+    await audit(req.admin, Number(req.params.clientId), 'DECLINE_ACCESS', 'portal_user', Number(req.params.userId), {});
+    await clearIfNoneWaiting(Number(req.params.clientId), `admin: declined by ${req.admin?.email || 'admin'}`);
+    res.json({ message: 'Declined. This person cannot sign in.' });
+  } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/decline-access', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

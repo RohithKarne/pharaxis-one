@@ -168,6 +168,7 @@ app.use('/api/admin/audit',        require('./routes/admin/audit'));
 app.use('/api/admin/data-requests', require('./routes/admin/dataRequests'));
 app.use('/api/admin/ae-review',    require('./routes/admin/aeReviewTasks'));
 app.use('/api/admin/trials',       require('./routes/admin/trials'));
+app.use('/api/admin/area-tags',    require('./routes/admin/areaTags')); // CPPM-122
 app.use('/api/admin/training',     require('./routes/admin/training'));
 app.use('/api/admin/submissions',  require('./routes/admin/submissions'));
 app.use('/api/admin/analytics',    require('./routes/admin/analytics'));

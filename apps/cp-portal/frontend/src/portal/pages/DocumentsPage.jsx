@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import PdfViewerModal from '../components/PdfViewerModal'
+import AskAboutThis from '../components/AskAboutThis'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 
 function formatFileSize(bytes) {
@@ -49,6 +50,17 @@ export default function DocumentsPage() {
   const [aiNotice, setAiNotice] = useState('')
 
   const base = `/portal/${clientCode}`
+  // CPPM-115: a notification links here with ?doc=<id>; open that document.
+  const [docParams, setDocParams] = useSearchParams()
+  const [docNotice, setDocNotice] = useState('')
+  const wantedDoc = docParams.get('doc')
+  useEffect(() => {
+    if (!wantedDoc || !docs.length) return
+    const d = docs.find(x => String(x.id) === String(wantedDoc))
+    if (d) setViewDoc(d)
+    else setDocNotice('That document is no longer available to you.')
+    setDocParams(p => { p.delete('doc'); return p }, { replace: true })
+  }, [wantedDoc, docs])
 
   useEffect(() => {
     if (authLoading) return // CPPM-59: not known yet whether this person is signed in
@@ -215,6 +227,7 @@ export default function DocumentsPage() {
   return (
     <div className="pp-docs-page">
       <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>Document Library</h1>
+      {docNotice && <div className="pp-info-box" role="status" style={{ marginBottom: 16 }}>{docNotice}</div>}
 
       <div className="pp-docs-search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
@@ -331,6 +344,7 @@ export default function DocumentsPage() {
                     >
                       {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                     </button>
+                    <AskAboutThis about={doc.title} />
                   </div>
                 </div>
               ))}
@@ -379,6 +393,7 @@ export default function DocumentsPage() {
                 >
                   {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                 </button>
+                <AskAboutThis about={doc.title} />
               </div>
             </div>
           ))}

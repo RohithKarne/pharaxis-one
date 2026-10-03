@@ -39,6 +39,7 @@ const WRITE_ROLES = {
   'data-requests': ADMIN, 'admin-users': ADMIN, scanner: ADMIN, audit: ADMIN, analytics: ADMIN,
   // Content
   content: CONTENT, faq: CONTENT, msls: CONTENT, trials: CONTENT, training: CONTENT, safety: CONTENT,
+  'area-tags': CONTENT, // CPPM-122
   // Work queues — finer rules live in the routes
   news: STAFF, documents: STAFF, 'ae-review': STAFF, submissions: STAFF,
   'chat-records': STAFF, feedback: STAFF, 'review-queue': STAFF,
@@ -51,7 +52,7 @@ const AREA_NAMES = {
   'data-requests': 'data requests', 'ae-review': 'the Safety Queue', submissions: 'enquiries',
   sso: 'single sign-on settings', gate: 'the user gate', msls: 'the MSL directory', faq: 'the FAQ',
   safety: 'safety alerts', 'chat-records': 'chat records', 'review-queue': 'the review queue',
-  alerts: 'alerts',
+  alerts: 'alerts', 'area-tags': 'area tags',
 };
 
 const READS = new Set(['GET', 'HEAD', 'OPTIONS']);

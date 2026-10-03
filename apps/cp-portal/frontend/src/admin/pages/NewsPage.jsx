@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput, formatDateTime } from '../../shared/utils/datetime'
 
@@ -289,6 +290,7 @@ export default function NewsPage() {
                 )}
                 <th>Title</th>
                 <th>Category</th>
+                <th>Area</th>
                 <th>Status</th>
                 <th>Pinned</th>
                 <th>Targets</th>
@@ -307,6 +309,7 @@ export default function NewsPage() {
                   )}
                   <td>{p.title}</td>
                   <td>{p.category || '—'}</td>
+                  <td><AreaTagSelect clientId={clientId} kind="news" item={p} /></td>
                   <td>
                     <span className="cp-status-badge" style={statusBadgeStyle(p.status)}>
                       {/* CPPM-58: published with a later date is not on the portal yet. */}

@@ -29,7 +29,9 @@ function splitEmails(text) {
 // admins — and, for safety work, anyone holding the safety reviewer role.
 async function recipients(clientId, audience) {
   const [[settings]] = await pool.execute('SELECT * FROM cp_alert_settings WHERE client_id = ?', [clientId]);
-  const named = splitEmails(audience === 'safety' ? settings?.safety_emails : settings?.integration_emails);
+  // CPPM-113: 'admin' alerts (an access request) go to the client's own admins only,
+  // never to the people named for integration problems.
+  const named = audience === 'admin' ? [] : splitEmails(audience === 'safety' ? settings?.safety_emails : settings?.integration_emails);
   if (named.length) return named;
   const roles = audience === 'safety' ? ['admin', ...SAFETY_ROLES] : ['admin'];
   const [rows] = await pool.execute(
@@ -57,8 +59,8 @@ async function raiseAlert(clientId, { kind, audience, title, body = null, linkPa
       queueEmail(clientId, {
         to: address,
         subject: `[Portal alert] ${title}`,
-        text: `${title}\n\n${body || ''}${link ? `\n\nOpen it here (sign-in required): ${link}` : ''}\n\nYou receive this because you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal.`,
-        html: `<p><strong>${escapeHtml(title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${link ? `<p><a href="${link}">Open it in the portal</a> (sign-in required)</p>` : ''}<p style="color:#6b7280;font-size:12px">You receive this because you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal.</p>`,
+        text: `${title}\n\n${body || ''}${link ? `\n\nOpen it here (sign-in required): ${link}` : ''}\n\nYou receive this because ${audience === 'admin' ? 'you administer this portal' : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.`,
+        html: `<p><strong>${escapeHtml(title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${link ? `<p><a href="${link}">Open it in the portal</a> (sign-in required)</p>` : ''}<p style="color:#6b7280;font-size:12px">You receive this because ${audience === 'admin' ? 'you administer this portal' : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.</p>`,
       }, { kind: 'admin_alert', relatedType: 'admin_alert', relatedId: alertId });
     }
     await pool.execute('UPDATE cp_admin_alerts SET emailed_to = ? WHERE id = ?', [to.join(', ') || null, alertId]);

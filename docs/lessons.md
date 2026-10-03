@@ -114,3 +114,10 @@
 **What:** Proposing a 12-month retention for anonymous cookie choices (CPPM-29), Rohith was told a visitor whose record is deleted "is simply asked again." Not so: for anonymous visitors the banner reads only a flag in their own browser, which never expired. Caught before building. Postmortem: `docs/postmortems/2026-09-29-told-the-ceo-a-deleted-visitor-would-be-asked-again.md`.
 **Why:** The effect of a server-side deletion was inferred from how signed-in users work and stated as fact about what every visitor would see. A repeat of L-014 one week later — and this one needed no sign-in to check, only a read of the banner.
 **Rule:** Before telling anyone what a person will see after a data change, read the screen code that decides what they see. If it has not been read or seen, the sentence starts with "I expect".
+
+---
+
+## L-016 — Called a feature broken from the line that reads a value (2026-10-03)
+**What:** Building CPPM-115, engineering told Rohith that no doctor had ever seen a notification, because the bell's server code reads a field the sign-in token does not carry, and filed CPPM-118. The sign-in check copies that field in on every request; nothing was broken. Caught minutes later, before any code changed. Postmortem: `docs/postmortems/2026-10-03-filed-a-defect-the-bell-never-had.md`.
+**Why:** The value was judged missing at the place it is read, and the one step between (the middleware that runs on every request) was skipped. Third case of the L-014 / L-015 pattern.
+**Rule:** Before calling something broken, follow the value back to the place that sets it, middleware included. Until that place is read, the sentence starts with "I expect".

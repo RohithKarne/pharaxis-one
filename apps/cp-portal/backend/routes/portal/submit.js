@@ -19,7 +19,7 @@ const { validateAnswer, isFlagged, isScreenedType, AE_SCREEN_KEY, AE_SCREEN_DETA
 const { systemAudit, auditWithin } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline, REOPENED_NOTE } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
-const { loadFormFields, missingRequired } = require('../../services/formFields');
+const { loadFormFields, missingRequired, invalidAnswers } = require('../../services/formFields');
 const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
@@ -173,6 +173,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
         fields: missing.map(f => f.field_key),
       });
     }
+    const invalid = invalidAnswers(formFields, parsedForm);
+    if (invalid.length) {
+      return res.status(400).json({
+        error: invalid.map(x => x.msg).join(' '),
+        fields: invalid.map(x => x.f.field_key),
+        field_errors: Object.fromEntries(invalid.map(x => [x.f.field_key, x.msg])),
+      });
+    }
 
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
@@ -268,6 +276,22 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
   }
 });
 
+// CPPM-86: the person's own words from a submission. The built-in forms name the
+// free-text answer question, description, event_description or message; a client's
+// own form may use another key, so failing those, the longest typed answer that is
+// not a name, an email or the screening question.
+const REQUEST_TEXT_KEYS = ['question', 'event_description', 'description', 'message', 'inquiry_details', 'complaint_details'];
+const NOT_REQUEST_TEXT = /name|email|phone|contact|^ae_screen/;
+function requestText(formData) {
+  let d = formData;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return null; } }
+  if (!d || typeof d !== 'object') return null;
+  for (const k of REQUEST_TEXT_KEYS) if (typeof d[k] === 'string' && d[k].trim()) return d[k].trim();
+  const typed = Object.entries(d).filter(([k, v]) => typeof v === 'string' && !NOT_REQUEST_TEXT.test(k) && v.trim().length > 20);
+  typed.sort((a, b) => b[1].length - a[1].length);
+  return typed[0]?.[1].trim() || null;
+}
+
 // GET /api/portal/submit/:clientCode/submissions — user's own submissions (auth required)
 router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
   try {
@@ -278,7 +302,7 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
     // unapproved answer must never reach the person who asked.
     const [rows] = await pool.execute(`
       SELECT s.id, s.submission_type, s.status, s.external_ref, s.submitted_at, s.updated_at,
-             a.body AS answer, a.sent_at AS answered_at
+             s.form_data, a.body AS answer, a.sent_at AS answered_at
       FROM cp_submissions s
       LEFT JOIN cp_submission_answers a ON a.submission_id = s.id AND a.status = 'sent'
       WHERE s.client_id = ? AND s.user_id = ? ORDER BY s.submitted_at DESC
@@ -328,8 +352,11 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
         from: m.direction === 'in' ? 'you' : 'team', body: m.body, at: m.direction === 'in' ? m.created_at : m.sent_at,
       }));
     }
-    const submissions = rows.map(r => ({
+    const submissions = rows.map(({ form_data, ...r }) => ({
       ...r,
+      // CPPM-86: what the person actually wrote, not a stock sentence. Only the
+      // free-text request goes back — never the whole form.
+      request_text: requestText(form_data),
       reference: `CP-${String(r.id).padStart(6, '0')}`,
       timeline: publicTimeline(byId.get(r.id) || []),
       followups: r.followups || [],

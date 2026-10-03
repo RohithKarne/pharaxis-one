@@ -4,7 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 export default function LoginPage() {
-  const { clientCode, login, user } = usePortal()
+  const { clientCode, login, user, portalConfig } = usePortal()
   const navigate              = useNavigate()
   const location              = useLocation()
   const base                  = `/portal/${clientCode}`
@@ -22,6 +22,8 @@ export default function LoginPage() {
   const [error, setError]     = useState('')
   // LOW-09: show/hide password toggle
   const [showLoginPassword, setShowLoginPassword]       = useState(false)
+  // CPPM-113: a doctor with no account can ask for one.
+  const [requesting, setRequesting] = useState(false)
 
   // SSO: which OIDC providers this portal offers, and whether local password
   // login is still allowed (a portal may be configured sso_only).
@@ -77,8 +79,12 @@ export default function LoginPage() {
       <div className="pp-auth-card">
         {error && <div className="pp-error-msg" id="pp-login-error" role="alert">{error}</div>}
 
+        {requesting ? (
+          <RequestAccess clientCode={clientCode} userTypes={portalConfig?.gate?.userTypes} onBack={() => setRequesting(false)} />
+        ) : (<>
         <div className="pp-auth-footer" style={{ marginBottom: 16, textAlign: 'left' }}>
-          Access is provisioned by administrator approval only.
+          Accounts are approved by the portal team.{' '}
+          {localAllowed && <button type="button" className="pp-link-btn" onClick={() => { setRequesting(true); setError('') }}>No account? Request access</button>}
         </div>
 
         {/* SSO: single sign-on with the portal's configured identity providers */}
@@ -119,7 +125,71 @@ export default function LoginPage() {
           </div>
         </form>
         )}
+        </>)}
       </div>
     </div>
+  )
+}
+
+// The roles a portal always knows (see the server's DEFAULT_TYPES); a portal with the
+// identity gate on lists its own instead.
+const ROLE_CHOICES = [
+  { type_key: 'hcp',       label: 'Healthcare professional' },
+  { type_key: 'physician', label: 'Physician or specialist' },
+  { type_key: 'patient',   label: 'Patient or caregiver' },
+  { type_key: 'non_hcp',   label: 'Other healthcare-related role' },
+  { type_key: 'other',     label: 'Other' },
+]
+
+function RequestAccess({ clientCode, userTypes, onBack }) {
+  const roles = Array.isArray(userTypes) && userTypes.length ? userTypes : ROLE_CHOICES
+  const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState('')
+  const set = (k, v) => { setF(x => ({ ...x, [k]: v })); setError('') }
+
+  async function send(e) {
+    e.preventDefault(); setBusy(true); setError('')
+    try {
+      const res = await fetch('/api/portal/auth/request-access', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_code: clientCode, ...f }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'Your request could not be sent. Please try again.'); return }
+      setDone(d.message)
+    } catch { setError('Network error. Please check your connection and try again.') } finally { setBusy(false) }
+  }
+
+  if (done) {
+    return (
+      <div role="status">
+        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>Request sent</h2>
+        <p style={{ margin: '0 0 16px' }}>{done}</p>
+        <button type="button" className="pp-btn pp-btn-outline pp-btn-full" onClick={onBack}>Back to sign in</button>
+      </div>
+    )
+  }
+  return (
+    <form onSubmit={send} className="pp-auth-form" aria-labelledby="pp-request-title">
+      <h2 id="pp-request-title" style={{ fontSize: 18, margin: '0 0 4px' }}>Request access</h2>
+      <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--pp-text-muted, #6B7280)' }}>The portal team reviews each request. Once approved, you get an email to set your password.</p>
+      {error && <div className="pp-error-msg" role="alert">{error}</div>}
+      <div className="pp-field"><label htmlFor="ra-first">First name</label><input id="ra-first" required maxLength={255} value={f.first_name} onChange={e => set('first_name', e.target.value)} autoComplete="given-name" /></div>
+      <div className="pp-field"><label htmlFor="ra-last">Last name</label><input id="ra-last" required maxLength={255} value={f.last_name} onChange={e => set('last_name', e.target.value)} autoComplete="family-name" /></div>
+      <div className="pp-field"><label htmlFor="ra-email">Work email</label><input id="ra-email" type="email" required maxLength={254} value={f.email} onChange={e => set('email', e.target.value)} autoComplete="email" /></div>
+      <div className="pp-field"><label htmlFor="ra-role">Your role</label>
+        <select id="ra-role" required value={f.user_type} onChange={e => set('user_type', e.target.value)}>
+          <option value="">-- Select --</option>
+          {roles.map(r => <option key={r.type_key} value={r.type_key}>{r.label}</option>)}
+        </select>
+      </div>
+      <div className="pp-field"><label htmlFor="ra-country">Country</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
+      <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={busy}>{busy ? 'Sending…' : 'Send request'}</button>
+      <div style={{ marginTop: 14, textAlign: 'center' }}>
+        <button type="button" className="pp-link-btn" onClick={onBack}>Back to sign in</button>
+      </div>
+    </form>
   )
 }

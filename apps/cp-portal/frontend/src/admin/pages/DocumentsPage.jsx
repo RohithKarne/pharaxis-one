@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
 
@@ -622,6 +623,7 @@ export default function DocumentsPage() {
                 )}
                 <th>Title</th>
                 <th>Category</th>
+                <th>Area</th>
                 <th>Type</th>
                 <th>Status</th>
                 <th>Version</th>
@@ -645,6 +647,7 @@ export default function DocumentsPage() {
                   )}
                   <td>{d.title}</td>
                   <td>{d.category || '—'}</td>
+                  <td><AreaTagSelect clientId={clientId} kind="document" item={d} /></td>
                   <td>
                     <span className="cp-status-badge cp-status-draft" style={{ textTransform: 'uppercase' }}>
                       {d.doc_type}

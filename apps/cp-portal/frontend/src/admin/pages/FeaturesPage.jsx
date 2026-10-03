@@ -17,6 +17,9 @@ const FEATURE_DESCRIPTIONS = {
   chatbox:              'Chat assistant for medical questions',
   user_auth:            'Portal user login and registration',
   hcp_gate:             'HCP identity confirmation on first visit',
+  // CPPM-109
+  clinical_trials:      'Clinical trials list — shown to doctors only once a trial is published',
+  cme_training:         'CME & training modules — shown to doctors only once a module is published',
 }
 
 export default function FeaturesPage() {

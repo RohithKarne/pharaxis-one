@@ -76,6 +76,19 @@ export default function PortalLayout({ children }) {
     setBannerDismissed(true)
     try { if (safetySig) localStorage.setItem(`cp_safety_dismissed_${clientCode}`, safetySig) } catch { /* storage disabled */ }
   }
+  // CPPM-114: a signed-in doctor with a high or critical letter not yet confirmed
+  // sees a banner that cannot be dismissed — it leaves when they confirm, and comes
+  // back when a new letter is published.
+  const [ackWaiting, setAckWaiting] = useState(null)
+  useEffect(() => {
+    if (!user || !clientCode) { setAckWaiting(null); return }
+    let live = true
+    const check = () => fetch(`/api/portal/safety/${clientCode}/acknowledgements`, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null).then(d => { if (live) setAckWaiting(d && d.waiting > 0 ? d : null) }).catch(() => {})
+    check()
+    window.addEventListener('cp:safety-ack', check)
+    return () => { live = false; window.removeEventListener('cp:safety-ack', check) }
+  }, [user?.id, clientCode, safetySig])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -120,19 +133,41 @@ export default function PortalLayout({ children }) {
     return () => clearInterval(interval)
   }, [])
 
+  // CPPM-115: new notifications appear without a reload — the list is read again every
+  // 3 minutes while the tab is in view, and as soon as the doctor comes back to it.
+  const NOTIF_REFRESH_MS = 3 * 60 * 1000
   useEffect(() => {
     if (!user || !clientCode) return
+    let live = true
     async function loadNotifications() {
+      if (document.visibilityState === 'hidden') return
       try {
         const res = await fetch(`/api/portal/notifications?clientCode=${clientCode}`)
+        if (!res.ok) return
         const d = await res.json()
         const list = d.notifications || []
+        if (!live) return
         setNotifications(list.slice(0, 10))
         setUnreadCount(list.filter(n => !n.is_read).length)
-      } catch { /* silently fail */ }
+      } catch { /* the next refresh tries again */ }
     }
     loadNotifications()
+    const timer = setInterval(loadNotifications, NOTIF_REFRESH_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') loadNotifications() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { live = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
   }, [user, clientCode])
+
+  // CPPM-115: clicking a notification marks that one read — not the others — and
+  // opens the exact item it is about.
+  function openNotification(n, href) {
+    if (!n.is_read && n.id) {
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: 1 } : x))
+      setUnreadCount(c => Math.max(0, c - 1))
+      fetch(`/api/portal/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' } }).catch(() => {})
+    }
+    if (href) { setBellOpen(false); navigate(href) }
+  }
 
   async function markAllRead() {
     try {
@@ -159,8 +194,9 @@ export default function PortalLayout({ children }) {
   const resourceItems = [
     isFeatureEnabled('resources')        && { label: t('nav.resources'),  path: 'resources' },
     isFeatureEnabled('document_library') && { label: t('nav.documents'),  path: 'documents' },
-    { label: 'Clinical Trials', path: 'trials' },
-    { label: 'CME & Training',  path: 'training' },
+    // CPPM-109: on only when switched on and something is published.
+    isFeatureEnabled('clinical_trials')  && { label: 'Clinical Trials', path: 'trials' },
+    isFeatureEnabled('cme_training')     && { label: 'CME & Training',  path: 'training' },
   ].filter(Boolean)
 
   const flatNavItems = [
@@ -185,7 +221,16 @@ export default function PortalLayout({ children }) {
   return (
     <div className="pp-root">
       <a href="#pp-main" className="pp-skip-link">Skip to content</a>
-      {has_active_safety_alert && !bannerDismissed && (
+      {ackWaiting && (
+        <div className="pp-safety-banner" role="alert">
+          <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
+          <span className="pp-safety-banner-copy">
+            {ackWaiting.waiting === 1 ? '1 safety letter needs' : `${ackWaiting.waiting} safety letters need`} your confirmation
+          </span>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">Read and confirm</Link>
+        </div>
+      )}
+      {!ackWaiting && has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
           <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
           <span className="pp-safety-banner-copy">Important Safety Information</span>
@@ -268,15 +313,17 @@ export default function PortalLayout({ children }) {
                       <div role="list">
                         {notifications.map((n, i) => {
                           const href = n.type === 'news' ? `${base}/news/${n.item_id}`
-                                     : n.type === 'document' ? `${base}/documents`
-                                     : n.type === 'safety' ? `${base}/safety`
+                                     : n.type === 'document' ? `${base}/documents?doc=${n.item_id}`
+                                     : n.type === 'safety' ? `${base}/safety#alert-${n.item_id}`
                                      : null
                           return (
                             <div
                               key={n.id || i}
                               role="listitem"
                               className={`pp-notif-item${!n.is_read ? ' unread' : ''}${href ? ' pp-notif-item-clickable' : ''}`}
-                              onClick={() => { if (href) { setBellOpen(false); navigate(href) } }}
+                              onClick={() => openNotification(n, href)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotification(n, href) } }}
+                              tabIndex={0}
                               style={{ cursor: href ? 'pointer' : 'default' }}
                             >
                               <span style={{ color: '#2563EB', lineHeight: 1 }}>
@@ -369,10 +416,22 @@ export default function PortalLayout({ children }) {
 
 const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
 
+// CPPM-89: "Skip for now" is remembered for 30 days on this browser, per person,
+// instead of only until the next page load.
+const SKIP_DAYS = 30
+function skipKey(clientCode, userId) { return `cp_specialty_skip_${clientCode}_${userId}` }
+function skippedRecently(clientCode, userId) {
+  try { return Date.now() - Number(localStorage.getItem(skipKey(clientCode, userId)) || 0) < SKIP_DAYS * 864e5 } catch { return false }
+}
+
 function SpecialtyPrompt({ clientCode }) {
-  const { portalHeaders } = usePortal()
-  const [dismissed, setDismissed] = useState(false)
+  const { portalHeaders, user } = usePortal()
+  const [dismissed, setDismissed] = useState(() => skippedRecently(clientCode, user?.id))
   const [saving, setSaving] = useState(false)
+  function skip() {
+    try { localStorage.setItem(skipKey(clientCode, user?.id), String(Date.now())) } catch { /* private window: skip for this page only */ }
+    setDismissed(true)
+  }
   if (dismissed) return null
   async function pick(specialty) {
     setSaving(true)
@@ -390,7 +449,7 @@ function SpecialtyPrompt({ clientCode }) {
     }
   }
   return (
-    <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">
+    <div className="pp-pdf-overlay" onClick={skip} role="dialog" aria-modal="true" aria-label="Choose your specialty">
       <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
         <h2>Your area of practice</h2>
         <p>Choose your specialty. It is saved to your profile.</p>
@@ -399,7 +458,7 @@ function SpecialtyPrompt({ clientCode }) {
             <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
           ))}
         </div>
-        <button type="button" className="pp-specialty-skip" onClick={() => setDismissed(true)}>Skip for now</button>
+        <button type="button" className="pp-specialty-skip" onClick={skip}>Skip for now</button>
       </div>
     </div>
   )

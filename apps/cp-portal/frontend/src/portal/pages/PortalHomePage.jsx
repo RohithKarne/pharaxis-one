@@ -41,9 +41,9 @@ export default function PortalHomePage() {
     else if (e.key === 'Escape')    { setShowSuggest(false) }
   }
 
-  // S4-9: fetch "For You" content — news + documents matched to user's type
-  const [forYouNews, setForYouNews]   = useState([])
-  const [forYouDocs, setForYouDocs]   = useState([])
+  // CPPM-116: "For you" — news, documents and events for this doctor's specialty
+  // and what they follow, chosen by the server (S4-9 showed everyone the same three).
+  const [forYou, setForYou] = useState(null)
   const [followedTopics, setFollowedTopics] = useState([])
   useEffect(() => {
     if (!clientCode || !user) return
@@ -51,13 +51,9 @@ export default function PortalHomePage() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.follows) setFollowedTopics(d.follows.filter(f => f.item_type === 'therapeutic_area')) })
       .catch(() => {})
-    fetch(`/api/portal/news?clientCode=${clientCode}&limit=3`, { headers: portalHeaders() })
+    fetch(`/api/portal/personal/for-you?clientCode=${clientCode}`, { headers: portalHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.posts) setForYouNews(d.posts.slice(0, 3)) })
-      .catch(() => {})
-    fetch(`/api/portal/documents?clientCode=${clientCode}`, { headers: portalHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.documents) setForYouDocs(d.documents.slice(0, 3)) })
+      .then(d => setForYou(d))
       .catch(() => {})
   }, [clientCode, user])
 
@@ -238,10 +234,11 @@ export default function PortalHomePage() {
             </div>
             <div className="pp-search-suggestions pp-hero-shortcuts" aria-label="Shortcuts">
               <span>Go to:</span>
-              <Link to={`${base}/documents`}>Prescribing information</Link>
-              <Link to={`${base}/submit`}>Report a side effect</Link>
-              <Link to={`${base}/find-msl`}>Find an MSL</Link>
-              <Link to={`${base}/drug-info`}>Product catalogue</Link>
+              {/* CPPM-93: only the pages this client has switched on. */}
+              {isFeatureEnabled('document_library') && <Link to={`${base}/documents`}>Prescribing information</Link>}
+              {isFeatureEnabled('adverse_event') && <Link to={`${base}/submit?type=adverse_event`}>Report a side effect</Link>}
+              {isFeatureEnabled('find_msl') && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
+              {isFeatureEnabled('drug_info') && <Link to={`${base}/drug-info`}>Product catalogue</Link>}
             </div>
           </div>
           <aside className="pp-hero-panel" aria-label="Portal shortcuts">
@@ -296,7 +293,7 @@ export default function PortalHomePage() {
       {user && (
         <section style={{ background: '#F8F9FF', borderBottom: '1px solid #E5E7EB', padding: '20px 0' }}>
           <div className="pp-container">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: forYouNews.length || forYouDocs.length ? 20 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: forYou ? 20 : 0 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1A1A2E' }}>
                   Signed in as {user.first_name}
@@ -321,24 +318,33 @@ export default function PortalHomePage() {
               </div>
             )}
 
-            {(forYouNews.length > 0 || forYouDocs.length > 0) && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {forYouNews.map(post => (
-                  <Link key={`n-${post.id}`} to={`${base}/news/${post.id}`}
-                    style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>News</div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{post.title}</div>
-                    {post.category && <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4 }}>{post.category}</div>}
-                  </Link>
-                ))}
-                {forYouDocs.map(doc => (
-                  <Link key={`d-${doc.id}`} to={`${base}/documents`}
-                    style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Document</div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{doc.title}</div>
-                    {doc.doc_type && <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4, textTransform: 'uppercase' }}>{doc.doc_type}</div>}
-                  </Link>
-                ))}
+            {forYou && (
+              <div>
+                <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#1A1A2E' }}>For you</h3>
+                <p style={{ margin: '0 0 10px', fontSize: 13, color: '#4B5563' }}>
+                  {forYou.basis === 'latest'
+                    ? 'The latest from this portal. Choose your specialty or follow an area to see what matches you.'
+                    : `Matched to ${forYou.words.join(', ')}.`}
+                </p>
+                {forYou.items.length === 0 ? (
+                  <div className="pp-update-empty">Nothing new for {forYou.words.join(', ')} yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                    {forYou.items.map(it => {
+                      const kind = { news: ['News', '#2563EB', `${base}/news/${it.id}`], document: ['Document', '#7C3AED', `${base}/documents?doc=${it.id}`], event: ['Event', '#047857', `${base}/events/${it.id}`] }[it.type]
+                      return (
+                        <Link key={`${it.type}-${it.id}`} to={kind[2]}
+                          style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 'var(--pp-radius, 2px)', padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: kind[1], textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{kind[0]}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{it.title}</div>
+                          <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4 }}>
+                            {it.type === 'event' ? formatLongDate(it.at) : it.because ? `Matches ${it.because}` : formatLongDate(it.at)}
+                          </div>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -376,7 +382,7 @@ export default function PortalHomePage() {
                 </div>
                 <div className="pp-update-list">
                   {upcomingEvents.length > 0 ? upcomingEvents.map(ev => (
-                    <Link key={ev.id} to={`${base}/events`} className="pp-update-row pp-event-row">
+                    <Link key={ev.id} to={`${base}/events/${ev.id}`} className="pp-update-row pp-event-row">
                       <span className="pp-date-chip">{formatEventDate(ev.event_date || ev.start_date)}</span>
                       <span>
                         <b>{ev.title}</b>

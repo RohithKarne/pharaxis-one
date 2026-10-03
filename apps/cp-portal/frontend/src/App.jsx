@@ -45,6 +45,7 @@ const PortalLoginPage          = lazy(() => import('./portal/pages/LoginPage'))
 const SubmitPage               = lazy(() => import('./portal/pages/SubmitPage'))
 const TherapeuticAreasPage     = lazy(() => import('./portal/pages/TherapeuticAreasPage'))
 const EventsPage               = lazy(() => import('./portal/pages/EventsPage'))
+const EventDetailPage          = lazy(() => import('./portal/pages/EventDetailPage'))
 const ResourcesPage            = lazy(() => import('./portal/pages/ResourcesPage'))
 const DrugInfoPage             = lazy(() => import('./portal/pages/DrugInfoPage'))
 const FindMSLPage              = lazy(() => import('./portal/pages/FindMSLPage'))
@@ -136,9 +137,12 @@ function PortalRoutes() {
           <Route path="reset-password"    element={<ResetPasswordPage />} />
           <Route path="verify-email"     element={<VerifyEmailPage />} />
           <Route path="sso-complete"      element={<SsoCompletePage />} />
-          <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
+          {/* CPPM-106: any request form opens this page — SubmitPage itself shows only
+              the forms that are switched on, and says so when none are. */}
+          <Route path="submit"            element={<SubmitPage />} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
           <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
+          <Route path="events/:eventId"   element={<FeatureGuard featureKey="events"><EventDetailPage /></FeatureGuard>} />
           <Route path="resources"         element={<FeatureGuard featureKey="resources"><ResourcesPage /></FeatureGuard>} />
           <Route path="drug-info"         element={<FeatureGuard featureKey="drug_info"><DrugInfoPage /></FeatureGuard>} />
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
@@ -154,9 +158,9 @@ function PortalRoutes() {
           <Route path="profile"          element={<PortalAuthGuard><ProfilePage /></PortalAuthGuard>} />
           <Route path="faq"             element={<FAQPortalPage />} />
           <Route path="search"          element={<SearchResultsPage />} />
-          <Route path="trials"          element={<ClinicalTrialsPage />} />
-          <Route path="training"        element={<TrainingPage />} />
-          <Route path="training/:moduleId" element={<PortalAuthGuard><TrainingModulePage /></PortalAuthGuard>} />
+          <Route path="trials"          element={<FeatureGuard featureKey="clinical_trials"><ClinicalTrialsPage /></FeatureGuard>} />
+          <Route path="training"        element={<FeatureGuard featureKey="cme_training"><TrainingPage /></FeatureGuard>} />
+          <Route path="training/:moduleId" element={<FeatureGuard featureKey="cme_training"><PortalAuthGuard><TrainingModulePage /></PortalAuthGuard></FeatureGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
         </Suspense>
@@ -167,11 +171,24 @@ function PortalRoutes() {
   )
 }
 
+// CPPM-92: the admin sign-in check runs only for admin pages. It used to wrap the
+// whole app, so every public portal page asked the server whether the visitor was
+// signed in to the admin console.
 export default function App() {
   return (
-    <AdminAuthProvider>
-      {/* Pages load on demand, so a portal visitor never downloads the admin console. */}
-      <Suspense fallback={<div className="cp-loading">Loading…</div>}>
+    // Pages load on demand, so a portal visitor never downloads the admin console.
+    <Suspense fallback={<div className="cp-loading">Loading…</div>}>
+    <Routes>
+      {/* Public Portal — multi-tenant by clientCode */}
+      <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />
+      <Route path="*" element={<AdminAuthProvider><AdminRoutes /></AdminAuthProvider>} />
+    </Routes>
+    </Suspense>
+  )
+}
+
+function AdminRoutes() {
+  return (
       <Routes>
         {/* Admin Console */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -208,14 +225,9 @@ export default function App() {
         <Route path="/admin/clients/:clientId/trials"        element={<AdminGuard><TrialsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/training"      element={<AdminGuard><TrainingAdminPage /></AdminGuard>} />
 
-        {/* Public Portal — multi-tenant by clientCode */}
-        <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />
-
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
-      </Suspense>
-    </AdminAuthProvider>
   )
 }

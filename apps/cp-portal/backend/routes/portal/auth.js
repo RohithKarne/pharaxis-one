@@ -15,6 +15,7 @@ const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
 const { systemAudit } = require('../../utils/audit');
 const lockout = require('../../utils/loginLockout');
+const { raiseAlert } = require('../../services/adminAlerts');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 
@@ -51,6 +52,68 @@ router.post('/register', async (req, res) => {
     });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'POST /register', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/auth/request-access — CPPM-113. A doctor with no account asks for
+// one: name, email, role and country. Nothing can sign in until the client's admin
+// approves it, which sends the same set-password invitation an admin-created account
+// gets. The answer is the same whether or not the email is new, so this cannot be
+// used to find out who has an account.
+router.post('/request-access', async (req, res) => {
+  try {
+    const { client_code, first_name, last_name, email, user_type, country } = req.body || {};
+    const f = String(first_name || '').trim(), l = String(last_name || '').trim();
+    const e = String(email || '').trim().toLowerCase(), c = String(country || '').trim();
+    if (!client_code || !f || !l || !e || !c || !user_type) {
+      return res.status(400).json({ error: 'Please fill in your first name, last name, email, role and country.' });
+    }
+    if (e.length > 254 || f.length > 255 || l.length > 255 || c.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+
+    const [[client]] = await pool.execute('SELECT id, code, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // A single-sign-on-only portal has no passwords to set, so an approval could not be used.
+    if (sso.normalizeLoginMode(client.login_mode) === 'sso_only') {
+      return res.status(403).json({ error: 'This portal uses single sign-on. Ask your organisation for access.' });
+    }
+    const validTypes = await getValidTypes(client.id);
+    if (!validTypes.includes(user_type)) return res.status(400).json({ error: 'Please choose your role from the list.' });
+
+    const unusablePassword = `!request:${crypto.randomBytes(24).toString('hex')}`;
+    try {
+      const [info] = await pool.execute(
+        `INSERT INTO cp_portal_users
+           (client_id, first_name, last_name, email, password, user_type, country,
+            is_active, is_verified, user_type_confirmed, email_verified, token_version,
+            access_status, access_requested_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP())`,
+        [client.id, f, l, e, unusablePassword, user_type, c]
+      );
+      await systemAudit('portal access request', client.id, 'ACCESS_REQUESTED', 'portal_user', info.insertId, { user_type });
+      // Tell the client's admins. One open alert per portal, however many requests
+      // arrive, so a burst of requests cannot become a burst of emails. It carries no
+      // personal detail; names and emails are read in the admin console.
+      raiseAlert(client.id, {
+        kind: 'access_requested', audience: 'admin',
+        title: 'Doctors have asked for portal access',
+        body: 'Open Portal Users and choose Requested to approve or decline them.',
+        linkPath: `/admin/clients/${client.id}/users?access=requested`,
+        dedupeKey: 'access_requested',
+      });
+    } catch (err) {
+      // uq_portal_users is UNIQUE(client_id, email): an account or an earlier request.
+      if (err && err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({
+          error: 'We already have a request or an account for this email address. If you have an account, sign in or use "Forgot password". If you asked before, your request is with the portal team.',
+        });
+      }
+      throw err;
+    }
+    res.status(201).json({ message: 'Thank you. Your request has been sent to the portal team. You will get an email to set your password once it is approved.' });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /request-access', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

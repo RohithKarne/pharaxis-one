@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
+import { useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
-import { formatLongDate } from '../../shared/utils/datetime'
+import AskAboutThis from '../components/AskAboutThis'
+import { formatLongDate, formatDateTime } from '../../shared/utils/datetime'
 
-const SEVERITIES = ['critical', 'warning', 'informational']
+// CPPM-119: every severity the admin console can set, plus 'warning' from older alerts.
+const SEVERITIES = ['critical', 'high', 'medium', 'warning', 'informational']
 
 export default function SafetyPage() {
-  const { clientCode, portalHeaders, language } = usePortal()
+  const { clientCode, portalHeaders, language, user } = usePortal()
+  const [ackBusy, setAckBusy]         = useState(null)
+  const [ackError, setAckError]       = useState('')
   const [alerts, setAlerts]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState('')
@@ -22,7 +27,7 @@ export default function SafetyPage() {
       try {
         const langParam = language && language !== 'en' ? `&lang=${language}` : ''
         const res = await fetch(`/api/portal/safety?clientCode=${clientCode}${langParam}`, {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
         })
         const d = await res.json()
         setAlerts(d.alerts || [])
@@ -36,7 +41,27 @@ export default function SafetyPage() {
       setLoading(false)
     }
     if (clientCode) load()
-  }, [clientCode, language])
+  }, [clientCode, language, user?.id])
+
+  // CPPM-114: "I have read this" on an active high or critical letter.
+  async function acknowledge(alert) {
+    setAckBusy(alert.id); setAckError('')
+    try {
+      const res = await fetch(`/api/portal/safety/${clientCode}/alerts/${alert.id}/acknowledge`, { method: 'POST', headers: portalHeaders(), credentials: 'same-origin' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setAckError(d.error || 'Your confirmation could not be saved. Please try again.'); return }
+      setAlerts(list => list.map(a => a.id === alert.id ? { ...a, acknowledged_at: d.acknowledged_at } : a))
+      window.dispatchEvent(new Event('cp:safety-ack')) // the banner counts again
+    } catch { setAckError('Network error — please try again.') } finally { setAckBusy(null) }
+  }
+
+  // CPPM-115: a notification links here with #alert-<id>; bring that letter into view.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash.startsWith('#alert-') || !alerts.length) return
+    const el = document.getElementById(hash.slice(1))
+    if (el) { el.scrollIntoView({ block: 'start' }); el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }) }
+  }, [hash, alerts])
 
   const active   = alerts.filter(a => a.status === 'active')
   const resolved = alerts.filter(a => a.status === 'resolved')
@@ -54,7 +79,7 @@ export default function SafetyPage() {
 
   function AlertCard({ alert, isResolved }) {
     return (
-      <div className={`pp-alert-card severity-${alert.severity}${isResolved ? ' resolved' : ''}`}>
+      <div id={`alert-${alert.id}`} className={`pp-alert-card severity-${alert.severity}${isResolved ? ' resolved' : ''}`}>
         <div className="pp-alert-header">
           <SeverityBadge severity={alert.severity} />
           {isResolved && <span className="pp-severity-badge resolved">Resolved</span>}
@@ -79,8 +104,24 @@ export default function SafetyPage() {
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(alert.body_html) }}
           />
         )}
+        {alert.needs_ack && (
+          <div className="pp-alert-ack" style={{ marginTop: 12, padding: '10px 12px', borderRadius: 'var(--pp-radius, 2px)', border: '1px solid var(--pp-border, #E5E7EB)', background: alert.acknowledged_at ? '#F0FDF4' : '#FFFBEB' }}>
+            {alert.acknowledged_at ? (
+              <span role="status">You confirmed you read this on {formatDateTime(alert.acknowledged_at)}.</span>
+            ) : (
+              <>
+                <span style={{ marginRight: 12 }}>Please confirm you have read this safety letter.</span>
+                <button type="button" className="pp-btn pp-btn-primary pp-btn-sm" disabled={ackBusy === alert.id} onClick={() => acknowledge(alert)}>
+                  {ackBusy === alert.id ? 'Saving…' : 'I have read this'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        <div className="pp-alert-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <AskAboutThis product={alert.product_name} about={alert.title} />
         {alert.attachment_name && (
-          <div className="pp-alert-actions">
+          <>
             <a
               href={`/api/portal/safety/${alert.id}/attachment?clientCode=${clientCode}`}
               className="pp-btn pp-btn-outline pp-btn-sm"
@@ -90,8 +131,9 @@ export default function SafetyPage() {
             >
               <Icon name="file" size={15} /> Download PDF
             </a>
-          </div>
+          </>
         )}
+        </div>
       </div>
     )
   }
@@ -102,6 +144,7 @@ export default function SafetyPage() {
   return (
     <div className="pp-safety-page">
       <h1 className="pp-safety-section-title">Safety Alerts</h1>
+      {ackError && <div className="pp-error-msg" role="alert">{ackError}</div>}
 
       {availableSeverities.length > 1 && (
         <div className="pp-sev-filter" role="group" aria-label="Filter by severity">

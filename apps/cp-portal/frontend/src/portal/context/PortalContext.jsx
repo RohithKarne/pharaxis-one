@@ -123,6 +123,14 @@ export function PortalProvider({ children }) {
     if (userData.user_type_confirmed) setShowGate(false)
   }
 
+  // CPPM-84: a half-typed report must not outlive the person who typed it. Drafts
+  // live in sessionStorage now; older ones may still sit in localStorage.
+  function clearDrafts() {
+    for (const store of [sessionStorage, localStorage]) {
+      Object.keys(store).filter(k => k.startsWith('cp_draft_')).forEach(k => store.removeItem(k))
+    }
+  }
+
   function logout() {
     localStorage.removeItem('cp_portal_token')
     localStorage.removeItem('cp_portal_user')
@@ -143,6 +151,7 @@ export function PortalProvider({ children }) {
   function signOut() {
     localStorage.setItem(PENDING_SIGNOUT, '1')
     endServerSession()
+    clearDrafts()
     logout()
   }
 
