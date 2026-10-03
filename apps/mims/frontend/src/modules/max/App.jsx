@@ -61,23 +61,21 @@ function LegacyAdminConsoleRedirect({ to }) {
 function AuthIssueBanner({ issue, onDismiss, onAction }) {
   if (!issue) return null
   const tones = {
-    warning: { border: '#facc15', background: '#fef3c7', color: '#854d0e', accent: '#ca8a04' },
-    info: { border: '#93c5fd', background: '#eff6ff', color: '#1d4ed8', accent: '#2563eb' },
-    danger: { border: '#fca5a5', background: '#fef2f2', color: '#b91c1c', accent: '#dc2626' },
+    warning: { border: '#facc15', background: '#fef3c7', color: '#854d0e' },
+    info: { border: '#93c5fd', background: '#eff6ff', color: '#1d4ed8' },
+    danger: { border: '#fca5a5', background: '#fef2f2', color: '#b91c1c' },
   }
   const palette = tones[issue.tone] || tones.warning
   return (
-    <div style={{ margin: '0 16px 12px', border: `1px solid ${palette.border}`, background: palette.background, color: palette.color, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, boxShadow: '0 8px 18px rgba(15, 23, 42, 0.06)' }}>
-      <div style={{ width: 28, height: 28, borderRadius: 999, background: palette.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>!</div>
+    <div style={{ border: `1px solid ${palette.border}`, background: palette.background, color: palette.color, padding: '6px 10px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, marginBottom: 4 }}>{issue.title || 'Access warning'}</div>
         <div style={{ fontSize: 13, lineHeight: 1.45 }}>{issue.message}</div>
-        {issue.url && <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85 }}>Request: {issue.url}</div>}
         {issue.actionLabel && onAction && (
           <button
             type="button"
             onClick={onAction}
-            style={{ marginTop: 10, border: `1px solid ${palette.border}`, background: '#fff', color: palette.color, borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            style={{ marginTop: 6, border: `1px solid ${palette.border}`, background: '#fff', color: palette.color, borderRadius: 2, padding: '2px 10px', fontSize: 12, cursor: 'pointer' }}
           >
             {issue.actionLabel}
           </button>
