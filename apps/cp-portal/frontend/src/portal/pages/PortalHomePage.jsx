@@ -382,7 +382,7 @@ export default function PortalHomePage() {
                 </div>
                 <div className="pp-update-list">
                   {upcomingEvents.length > 0 ? upcomingEvents.map(ev => (
-                    <Link key={ev.id} to={`${base}/events`} className="pp-update-row pp-event-row">
+                    <Link key={ev.id} to={`${base}/events/${ev.id}`} className="pp-update-row pp-event-row">
                       <span className="pp-date-chip">{formatEventDate(ev.event_date || ev.start_date)}</span>
                       <span>
                         <b>{ev.title}</b>

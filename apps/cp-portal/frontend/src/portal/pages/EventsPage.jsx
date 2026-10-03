@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import { safeWebUrl } from '../utils/safeUrl'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatLongDate } from '../../shared/utils/datetime'
@@ -68,18 +70,21 @@ export default function EventsPage() {
               </div>
               <div className="pp-event-body">
                 <div className="pp-event-type-tag">{ev.event_type || 'Event'}</div>
-                <h3 className="pp-event-title">{ev.title}</h3>
+                <h3 className="pp-event-title"><Link to={`/portal/${clientCode}/events/${ev.id}`}>{ev.title}</Link></h3>
                 {ev.description && <p className="pp-event-desc">{ev.description}</p>}
                 <div className="pp-event-meta">
                   {(ev.city || ev.country) && <span>{[ev.venue, ev.city, ev.country].filter(Boolean).join(', ')}</span>}
                   {ev.start_date && <span>{formatDate(ev.start_date)}</span>}
                   {ev.event_type === 'webinar' && <span className="pp-virtual-tag">Virtual</span>}
                 </div>
-                {ev.registration_url && (
-                  <a href={ev.registration_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-sm pp-btn-primary">
-                    Register
-                  </a>
-                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <Link to={`/portal/${clientCode}/events/${ev.id}`} className="pp-btn pp-btn-sm pp-btn-outline">Details</Link>
+                  {!isPast && safeWebUrl(ev.registration_url) && (
+                    <a href={safeWebUrl(ev.registration_url)} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-sm pp-btn-primary">
+                      Register
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
             )

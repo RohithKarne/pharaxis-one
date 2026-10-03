@@ -45,6 +45,7 @@ const PortalLoginPage          = lazy(() => import('./portal/pages/LoginPage'))
 const SubmitPage               = lazy(() => import('./portal/pages/SubmitPage'))
 const TherapeuticAreasPage     = lazy(() => import('./portal/pages/TherapeuticAreasPage'))
 const EventsPage               = lazy(() => import('./portal/pages/EventsPage'))
+const EventDetailPage          = lazy(() => import('./portal/pages/EventDetailPage'))
 const ResourcesPage            = lazy(() => import('./portal/pages/ResourcesPage'))
 const DrugInfoPage             = lazy(() => import('./portal/pages/DrugInfoPage'))
 const FindMSLPage              = lazy(() => import('./portal/pages/FindMSLPage'))
@@ -141,6 +142,7 @@ function PortalRoutes() {
           <Route path="submit"            element={<SubmitPage />} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
           <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
+          <Route path="events/:eventId"   element={<FeatureGuard featureKey="events"><EventDetailPage /></FeatureGuard>} />
           <Route path="resources"         element={<FeatureGuard featureKey="resources"><ResourcesPage /></FeatureGuard>} />
           <Route path="drug-info"         element={<FeatureGuard featureKey="drug_info"><DrugInfoPage /></FeatureGuard>} />
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />

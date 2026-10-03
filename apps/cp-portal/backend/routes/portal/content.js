@@ -89,6 +89,25 @@ router.get('/:clientCode/events', async (req, res) => {
   }
 });
 
+// GET /api/portal/content/:clientCode/events/:eventId — CPPM-117: one published event,
+// for its own page. Same rule as the list: active and published, this client only.
+router.get('/:clientCode/events/:eventId', async (req, res) => {
+  try {
+    const client = await getClient(req.params.clientCode);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    const [[ev]] = await pool.execute(
+      `SELECT id, title, description, event_type, venue, city, country, start_date, end_date, registration_url, image_url
+         FROM cp_events WHERE id = ? AND client_id = ? AND is_active = 1 AND status = 'published'`,
+      [req.params.eventId, client.id]
+    );
+    if (!ev) return res.status(404).json({ error: 'This event is not available.' });
+    res.json({ event: ev });
+  } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/events/:eventId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/portal/content/:clientCode/msls
 router.get('/:clientCode/msls', authenticatePortal, async (req, res) => {
   try {
