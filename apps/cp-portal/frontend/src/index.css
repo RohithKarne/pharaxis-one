@@ -2259,6 +2259,9 @@ body { background: var(--cp-bg); }
 .pp-field input, .pp-field textarea, .pp-field select { padding: 9px 12px; border: 1px solid var(--pp-border); border-radius: var(--pp-radius); font-size: 14px; font-family: inherit; background: var(--pp-bg); color: var(--pp-text); }
 .pp-field input:focus, .pp-field textarea:focus, .pp-field select:focus { outline: none; border-color: var(--pp-primary); box-shadow: 0 0 0 3px rgba(107,63,160,0.12); }
 .pp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pp-input-wrapper { position: relative; display: flex; }
+.pp-input-wrapper input { flex: 1; min-width: 0; padding-right: 64px; }
+.pp-password-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; padding: 4px 6px; font: inherit; font-size: 12px; color: var(--pp-link); text-decoration: underline; cursor: pointer; }
 .pp-checkbox-label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 14px; }
 .pp-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--pp-primary); cursor: pointer; }
 
