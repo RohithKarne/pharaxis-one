@@ -24,11 +24,12 @@ async function resolveClient(req) {
 
 // GET /api/portal/personal/for-you?clientCode= — CPPM-116: news, documents and
 // upcoming events for this doctor's specialty and the areas and products they follow.
-// Nothing is tagged by area in the database, so an item matches when one of those
-// words appears in its title or category (news, documents) or its title, type or
-// description (events). Each list keeps its own page's rules: switched on, published,
-// and meant for this doctor's role. With no specialty and nothing followed, the
-// latest items are shown instead; with words but no match, the list is empty.
+// An item an admin tagged with one of those areas comes first (CPPM-122). An untagged
+// item matches when one of those words appears in its title or category (news,
+// documents) or its title, type or description (events). Each list keeps its own
+// page's rules: switched on, published, and meant for this doctor's role. With no
+// specialty and nothing followed, the latest items are shown instead; with words but
+// no match, the list is empty.
 const FOR_YOU_MAX = 6;
 const NOT_A_TOPIC = new Set(['other']);
 router.get('/for-you', authenticatePortal, requirePortalAuth, async (req, res) => {
@@ -52,27 +53,31 @@ router.get('/for-you', authenticatePortal, requirePortalAuth, async (req, res) =
     const items = [];
     if (on('news_announcements')) {
       const [rows] = await pool.execute(`
-        SELECT id, title, category, target_types_json, publish_at AS at FROM cp_news_posts
-         WHERE client_id = ? AND status = 'published' AND publish_at <= UTC_TIMESTAMP()
-         ORDER BY publish_at DESC LIMIT 200`, [client.id]);
+        SELECT n.id, n.title, n.category, n.target_types_json, n.publish_at AS at, ta.name AS area FROM cp_news_posts n
+          LEFT JOIN cp_therapeutic_areas ta ON ta.id = n.therapeutic_area_id AND ta.client_id = n.client_id
+         WHERE n.client_id = ? AND n.status = 'published' AND n.publish_at <= UTC_TIMESTAMP()
+         ORDER BY n.publish_at DESC LIMIT 200`, [client.id]);
       rows.filter(r => canSee(r.target_types_json, userType))
-        .forEach(r => items.push({ type: 'news', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.category || ''}` }));
+        .forEach(r => items.push({ type: 'news', id: r.id, title: r.title, at: r.at, area: r.area, text: `${r.title} ${r.category || ''}` }));
     }
     if (on('document_library')) {
       const [rows] = await pool.execute(`
-        SELECT id, title, category, visible_to_json, created_at AS at FROM cp_documents
+        SELECT id, title, category, visible_to_json, created_at AS at,
+               (SELECT ta.name FROM cp_therapeutic_areas ta WHERE ta.id = cp_documents.therapeutic_area_id AND ta.client_id = cp_documents.client_id) AS area
+          FROM cp_documents
          WHERE client_id = ? AND is_active = 1 AND ${VISIBLE_DOCUMENT_SQL}
          ORDER BY created_at DESC LIMIT 200`, [client.id]);
       rows.filter(r => canSee(r.visible_to_json, userType))
-        .forEach(r => items.push({ type: 'document', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.category || ''}` }));
+        .forEach(r => items.push({ type: 'document', id: r.id, title: r.title, at: r.at, area: r.area, text: `${r.title} ${r.category || ''}` }));
     }
     if (on('events')) {
       const [rows] = await pool.execute(`
-        SELECT id, title, event_type, description, start_date AS at FROM cp_events
-         WHERE client_id = ? AND is_active = 1 AND status = 'published'
-           AND COALESCE(end_date, start_date) >= UTC_TIMESTAMP()
-         ORDER BY start_date ASC LIMIT 200`, [client.id]);
-      rows.forEach(r => items.push({ type: 'event', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.event_type || ''} ${r.description || ''}` }));
+        SELECT e.id, e.title, e.event_type, e.description, e.start_date AS at, ta.name AS area FROM cp_events e
+          LEFT JOIN cp_therapeutic_areas ta ON ta.id = e.therapeutic_area_id AND ta.client_id = e.client_id
+         WHERE e.client_id = ? AND e.is_active = 1 AND e.status = 'published'
+           AND COALESCE(e.end_date, e.start_date) >= UTC_TIMESTAMP()
+         ORDER BY e.start_date ASC LIMIT 200`, [client.id]);
+      rows.forEach(r => items.push({ type: 'event', id: r.id, title: r.title, at: r.at, area: r.area, text: `${r.title} ${r.event_type || ''} ${r.description || ''}` }));
     }
 
     const lower = words.map(w => w.toLowerCase());
@@ -80,16 +85,25 @@ router.get('/for-you', authenticatePortal, requirePortalAuth, async (req, res) =
     if (!words.length) {
       picked = items.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, FOR_YOU_MAX);
     } else {
+      // CPPM-122: an item tagged with one of the doctor's areas comes first; an
+      // untagged item can still match by words. An item tagged with another area
+      // is that area's, so its words are not searched.
       picked = items
-        .map(it => ({ ...it, because: words[lower.findIndex(w => it.text.toLowerCase().includes(w))] }))
+        .map(it => {
+          if (it.area) {
+            const i = lower.indexOf(String(it.area).toLowerCase())
+            return { ...it, because: i >= 0 ? words[i] : null, tagged: true }
+          }
+          return { ...it, because: words[lower.findIndex(w => it.text.toLowerCase().includes(w))], tagged: false }
+        })
         .filter(it => it.because)
-        .sort((a, b) => new Date(b.at) - new Date(a.at))
+        .sort((a, b) => (b.tagged - a.tagged) || (new Date(b.at) - new Date(a.at)))
         .slice(0, FOR_YOU_MAX);
     }
     res.json({
       basis: words.length ? 'interests' : 'latest',
       words,
-      items: picked.map(({ text, ...it }) => it),
+      items: picked.map(({ text, tagged, area, ...it }) => it),
     });
   } catch (err) {
     log.error('portal.personal.error', { err, route: 'GET /for-you', path: req.path, request_id: req.requestId || null });

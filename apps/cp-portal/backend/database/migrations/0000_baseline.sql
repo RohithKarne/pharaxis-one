@@ -320,7 +320,9 @@ CREATE TABLE IF NOT EXISTS cp_events (
   status           VARCHAR(50)  NOT NULL DEFAULT 'draft',
   created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  therapeutic_area_id INT NULL, -- folded in from 0042 (CPPM-122)
   PRIMARY KEY (id),
+  KEY idx_events_area (therapeutic_area_id),
   CONSTRAINT fk_events_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -526,7 +528,9 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
   owner_since       DATETIME     NULL,
+  therapeutic_area_id INT NULL, -- folded in from 0042 (CPPM-122)
   PRIMARY KEY (id),
+  KEY idx_docs_area (therapeutic_area_id),
   KEY idx_cp_docs_client (client_id),
   KEY idx_cp_docs_review_due (client_id, review_due_at),
   CONSTRAINT fk_docs_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -574,7 +578,9 @@ CREATE TABLE IF NOT EXISTS cp_news_posts (
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
   owner_since       DATETIME     NULL,
+  therapeutic_area_id INT NULL, -- folded in from 0042 (CPPM-122)
   PRIMARY KEY (id),
+  KEY idx_news_area (therapeutic_area_id),
   KEY idx_cp_news_client (client_id),
   KEY idx_cp_news_status (status),
   CONSTRAINT fk_news_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -1244,4 +1250,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0038_classic_branding_defaults.sql',        NULL),
   ('0039_add_trials_training_switches.sql',     NULL),
   ('0040_add_portal_access_requests.sql',       NULL),
-  ('0041_add_safety_acknowledgements.sql',      NULL);
+  ('0041_add_safety_acknowledgements.sql',      NULL),
+  ('0042_add_content_area_tags.sql',            NULL);
