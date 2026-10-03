@@ -15,49 +15,54 @@ const NAV_ITEMS = [
 // CPPM-123: seven main screens. The sidebar lists the screens; each screen's
 // sub-screens show as tabs along the top. Every sub-screen keeps its own address
 // (`path` after /admin/clients/:id/), so old links still land on the right tab.
+//
+// CPPM-124: `area` is the write area in middleware/adminWritePolicy.js. A tab
+// shows only to roles that may change it; with no area (Overview, Analytics,
+// Audit Trail: screens for reading) everyone sees it. Sync Health's one action,
+// retry, is a submissions change, so it follows the submissions area.
 const CLIENT_SECTIONS = [
   { key: 'overview', label: 'Overview', icon: 'clipboard', tabs: [
     { path: '',              label: 'Overview' },
   ] },
   { key: 'inbox', label: 'Inbox', icon: 'inbox', tabs: [
-    { path: 'submissions',   label: 'Submissions' },
-    { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety' },
-    { path: 'review-queue',  label: 'Review Queue', badge: 'review' },
-    { path: 'feedback',      label: 'Feedback' },
-    { path: 'chat-records',  label: 'Chat Conversations' },
-    { path: 'data-requests', label: 'Data Requests' },
+    { path: 'submissions',   label: 'Submissions', area: 'submissions' },
+    { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety', area: 'ae-review' },
+    { path: 'review-queue',  label: 'Review Queue', badge: 'review', area: 'review-queue' },
+    { path: 'feedback',      label: 'Feedback', area: 'feedback' },
+    { path: 'chat-records',  label: 'Chat Conversations', area: 'chat-records' },
+    { path: 'data-requests', label: 'Data Requests', area: 'data-requests' },
   ] },
   { key: 'content', label: 'Content', icon: 'file', tabs: [
-    { path: 'content',       label: 'Library' },
-    { path: 'news',          label: 'News' },
-    { path: 'documents',     label: 'Documents' },
-    { path: 'safety',        label: 'Safety Alerts' },
-    { path: 'trials',        label: 'Clinical Trials' },
-    { path: 'training',      label: 'CME & Training' },
-    { path: 'msls',          label: 'MSL Directory' },
-    { path: 'faq',           label: 'FAQ' },
+    { path: 'content',       label: 'Library', area: 'content' },
+    { path: 'news',          label: 'News', area: 'news' },
+    { path: 'documents',     label: 'Documents', area: 'documents' },
+    { path: 'safety',        label: 'Safety Alerts', area: 'safety' },
+    { path: 'trials',        label: 'Clinical Trials', area: 'trials' },
+    { path: 'training',      label: 'CME & Training', area: 'training' },
+    { path: 'msls',          label: 'MSL Directory', area: 'msls' },
+    { path: 'faq',           label: 'FAQ', area: 'faq' },
   ] },
   { key: 'setup', label: 'Portal setup', icon: 'sliders', tabs: [
-    { path: 'branding',      label: 'Branding' },
-    { path: 'features',      label: 'Features' },
-    { path: 'gate',          label: 'User Gate' },
-    { path: 'forms',         label: 'Forms' },
-    { path: 'email-settings', label: 'Email Settings' },
-    { path: 'chatbox',       label: 'Chatbox AI' },
+    { path: 'branding',      label: 'Branding', area: 'branding' },
+    { path: 'features',      label: 'Features', area: 'features' },
+    { path: 'gate',          label: 'User Gate', area: 'gate' },
+    { path: 'forms',         label: 'Forms', area: 'forms' },
+    { path: 'email-settings', label: 'Email Settings', area: 'email-config' },
+    { path: 'chatbox',       label: 'Chatbox AI', area: 'chatbox' },
   ] },
   { key: 'people', label: 'People', icon: 'users', tabs: [
-    { path: 'users',         label: 'Portal Users' },
-    { path: 'admin-users',   label: 'Admin Users' },
+    { path: 'users',         label: 'Portal Users', area: 'users' },
+    { path: 'admin-users',   label: 'Admin Users', area: 'admin-users' },
   ] },
   { key: 'connections', label: 'Connections', icon: 'link', tabs: [
-    { path: 'integration',   label: 'Integration' },
-    { path: 'sync-health',   label: 'Sync Health' },
-    { path: 'sso',           label: 'Single Sign-On' },
+    { path: 'integration',   label: 'Integration', area: 'integration' },
+    { path: 'sync-health',   label: 'Sync Health', area: 'submissions' },
+    { path: 'sso',           label: 'Single Sign-On', area: 'sso' },
   ] },
   { key: 'reports', label: 'Reports', icon: 'chart', tabs: [
     { path: 'analytics',     label: 'Analytics' },
     { path: 'audit',         label: 'Audit Trail' },
-    { path: 'compliance',    label: 'Compliance' },
+    { path: 'compliance',    label: 'Compliance', area: 'compliance' },
   ] },
 ]
 
@@ -102,7 +107,7 @@ function deriveTitle(pathname) {
 }
 
 export default function AdminLayout({ children }) {
-  const { admin, signOut } = useAdminAuth()
+  const { admin, signOut, hasRole, canChange } = useAdminAuth()
   const navigate  = useNavigate()
   const { clientId } = useParams()
   const location  = useLocation()
@@ -110,6 +115,13 @@ export default function AdminLayout({ children }) {
   // CPPM-123: which main screen and tab the address belongs to.
   const currentPath = clientId ? (location.pathname.split('/')[4] || '') : null
   const currentSection = CLIENT_SECTIONS.find(sec => sec.tabs.some(t => t.path === currentPath))
+  // CPPM-124: a viewer may change nothing but is meant to look at everything.
+  // The tab you are on always shows, even if your role cannot change it.
+  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
+  const sections = CLIENT_SECTIONS
+    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
+    .filter(sec => sec.tabs.length > 0)
+  const shownSection = sections.find(sec => sec.key === currentSection?.key)
   const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
@@ -233,14 +245,14 @@ export default function AdminLayout({ children }) {
           {clientId && (
             <div className="cp-client-nav-groups">
               <div style={{ marginTop: 12 }} />
-              {CLIENT_SECTIONS.map(sec => {
+              {sections.map(sec => {
                 const count = sec.tabs.reduce((n, t) => n + (t.badge ? badges[t.badge] : 0), 0)
                 const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] : 0), 0)
                 return (
                   <NavLink
                     key={sec.key} to={tabUrl(sec.tabs[0])} end
                     title={sec.label}
-                    className={`cp-nav-item${sec === currentSection ? ' active' : ''}`}
+                    className={`cp-nav-item${sec.key === currentSection?.key ? ' active' : ''}`}
                   >
                     <span className="cp-nav-icon"><Icon name={sec.icon} size={17} /></span>
                     <span className="cp-nav-text">{sec.label}</span>
@@ -305,9 +317,9 @@ export default function AdminLayout({ children }) {
               Your role is view-only. You can look at everything here, but changes will not be saved. Ask an admin if you need to make changes.
             </div>
           )}
-          {currentSection && currentSection.tabs.length > 1 && (
-            <nav className="cp-subnav" aria-label={currentSection.label}>
-              {currentSection.tabs.map(t => (
+          {shownSection && shownSection.tabs.length > 1 && (
+            <nav className="cp-subnav" aria-label={shownSection.label}>
+              {shownSection.tabs.map(t => (
                 <NavLink
                   key={t.path} to={tabUrl(t)} end
                   className={`cp-subnav-tab${t.path === currentPath ? ' active' : ''}`}
