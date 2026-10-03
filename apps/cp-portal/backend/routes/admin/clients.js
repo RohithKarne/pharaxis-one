@@ -10,6 +10,7 @@ const { authenticateAdmin } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { getClientBundle, listClients } = require('../../services/clientService');
 const log = require('../../utils/logger');
+const { DEFAULT_AE_FIELDS, optionList } = require('../../services/formFields');
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
@@ -40,17 +41,15 @@ const DEFAULT_FORM_FIELDS = {
     { key: 'question',      label: 'Your Question',    type: 'textarea', required: 1, order: 7 },
     { key: 'consent',       label: 'I consent to being contacted', type: 'checkbox', required: 1, order: 8 },
   ],
-  adverse_event: [
-    { key: 'reporter_name',  label: 'Reporter Name',   type: 'text',     required: 1, order: 1 },
-    { key: 'reporter_email', label: 'Reporter Email',  type: 'email',    required: 1, order: 2 },
-    { key: 'reporter_type',  label: 'Reporter Type',   type: 'select',   required: 1, order: 3, options: ['HCP','Patient','Caregiver','Physician','Other'] },
-    { key: 'product_name',   label: 'Product Name',    type: 'text',     required: 1, order: 4 },
-    { key: 'lot_number',     label: 'Lot Number',      type: 'text',     required: 0, order: 5 },
-    { key: 'event_date',     label: 'Date of Event',   type: 'date',     required: 1, order: 6 },
-    { key: 'description',    label: 'Event Description', type: 'textarea', required: 1, order: 7 },
-    { key: 'patient_age',    label: 'Patient Age',     type: 'text',     required: 0, order: 8 },
-    { key: 'outcome',        label: 'Outcome',         type: 'select',   required: 0, order: 9, options: ['Recovered','Recovering','Not Recovered','Fatal','Unknown'] },
-  ],
+  // CPPM-107: a new client's side effect form is the built-in pharmacovigilance
+  // form — identifiable patient, reporter, suspect product, event and seriousness,
+  // all required. The form seeded here until 3 Oct 2026 asked for no patient
+  // identifier and no seriousness, so a report sent through it was not complete.
+  // Existing clients keep the form they have; their admin can change it.
+  adverse_event: DEFAULT_AE_FIELDS.map(f => ({
+    key: f.field_key, label: f.label, type: f.field_type, required: f.is_required, order: f.display_order,
+    options: f.options ? optionList(f.options) : undefined, placeholder: f.placeholder || null, help_text: f.help_text || null,
+  })),
   product_complaint: [
     { key: 'reporter_name',  label: 'Your Name',        type: 'text',     required: 1, order: 1 },
     { key: 'reporter_email', label: 'Email Address',    type: 'email',    required: 1, order: 2 },
@@ -178,9 +177,9 @@ router.post('/', authenticateAdmin, requireSuperadmin, async (req, res) => {
     for (const [formType, fields] of Object.entries(DEFAULT_FORM_FIELDS)) {
       for (const f of fields) {
         await pool.execute(`
-          INSERT INTO cp_form_config (client_id, form_type, field_key, field_label, field_type, field_options, is_required, display_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [clientId, formType, f.key, f.label, f.type, f.options ? JSON.stringify(f.options) : null, f.required, f.order]);
+          INSERT INTO cp_form_config (client_id, form_type, field_key, field_label, field_type, field_options, placeholder, help_text, is_required, display_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [clientId, formType, f.key, f.label, f.type, f.options ? JSON.stringify(f.options) : null, f.placeholder ?? null, f.help_text ?? null, f.required, f.order]);
       }
     }
 
