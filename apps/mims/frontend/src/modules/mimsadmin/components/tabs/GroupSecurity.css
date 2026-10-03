@@ -31,7 +31,7 @@
 .ma-gs-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ma-gs-field { display: flex; flex-direction: column; gap: 7px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
 .ma-gs-field input, .ma-gs-field select { border: 1px solid var(--border); border-radius: 2px; padding: 9px 11px; min-height: 38px; font-size: 13px; color: var(--text-primary); background: #fff; }
-.ma-gs-field input:focus, .ma-gs-field select:focus, .ma-gs-search:focus { outline: none; border-color: var(--accent); box-shadow: none; }
+.ma-gs-field input:focus, .ma-gs-field select:focus, .ma-gs-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,137,12,.13); }
 .ma-gs-tenant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 .ma-gs-tenant { border: 1px solid var(--border); border-radius: 2px; padding: 10px 12px; display: flex; align-items: center; gap: 9px; cursor: pointer; background: #fff; }
 .ma-gs-tenant.checked { border-color: var(--accent); background: #fff8ec; }

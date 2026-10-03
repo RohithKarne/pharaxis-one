@@ -93,7 +93,7 @@
 }
 .ma-sp-theme-card:hover { transform: translateY(-1px); }
 .ma-sp-theme-card.selected {
-  border-color: var(--accent); box-shadow: none;
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(18,100,163,0.12);
 }
 .ma-sp-theme-swatches { display: flex; gap: 6px; }
 .ma-sp-theme-swatch {

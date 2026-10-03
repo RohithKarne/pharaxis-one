@@ -1037,7 +1037,7 @@ body { background: var(--cp-bg); }
 .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus {
   outline: none;
   border-color: var(--cp-primary);
-  box-shadow: none;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
 }
 .cp-field textarea { resize: vertical; }
 .cp-field-row { display: flex; gap: 12px; margin-bottom: 12px; }
@@ -1313,14 +1313,14 @@ body { background: var(--cp-bg); }
   border: 2.5px solid #fff; border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  box-shadow: none;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,0.45);
 }
 
 /* Hue + preview row */
 .cp-cpk-hue-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .cp-cpk-preview  {
   width: 32px; height: 32px; border-radius: 50%;
-  border: 2.5px solid #fff; box-shadow: none;
+  border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
   flex-shrink: 0;
 }
 
@@ -2257,7 +2257,7 @@ body { background: var(--cp-bg); }
 .pp-field label { font-size: 13px; font-weight: 600; color: var(--pp-text); }
 .pp-required { color: #DC2626; }
 .pp-field input, .pp-field textarea, .pp-field select { padding: 9px 12px; border: 1px solid var(--pp-border); border-radius: var(--pp-radius); font-size: 14px; font-family: inherit; background: var(--pp-bg); color: var(--pp-text); }
-.pp-field input:focus, .pp-field textarea:focus, .pp-field select:focus { outline: none; border-color: var(--pp-primary); box-shadow: none; }
+.pp-field input:focus, .pp-field textarea:focus, .pp-field select:focus { outline: none; border-color: var(--pp-primary); box-shadow: 0 0 0 3px rgba(107,63,160,0.12); }
 .pp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .pp-checkbox-label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 14px; }
 .pp-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--pp-primary); cursor: pointer; }
