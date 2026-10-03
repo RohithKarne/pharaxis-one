@@ -18,6 +18,18 @@ const {
 
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+
+// MIPM-191: a module's status came straight from the request, so an author could
+// save one as Published — no review, no approval — and the response builder
+// offered it to agents at once. Approved needs content.approve and Published
+// needs content.publish; an author saves Draft or Pending.
+async function moduleStatusAllowed(req, status, previous) {
+  if (status === previous) return true;
+  if (status === 'Approved') return userHasActivityPrivilege(req.user, 'content.approve');
+  if (status === 'Published') return userHasActivityPrivilege(req.user, 'content.publish');
+  return true;
+}
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -335,6 +347,10 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
     }
 
     const resolvedStatus = isPastDate(expiry_date) ? 'Archived' : normalizeStatus(status, 'Draft');
+    if (!(await moduleStatusAllowed(req, resolvedStatus, null))) {
+      await conn.rollback();
+      return res.status(403).json({ error: `You do not have permission to save a module as ${resolvedStatus}.` });
+    }
     const filePath = req.file ? req.file.path : null;
     const fileName = req.file ? req.file.originalname : null;
     const fileSize = req.file ? req.file.size : null;
@@ -440,6 +456,10 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
     const nextStatus = isPastDate(expiry_date || existing.expiry_date)
       ? 'Archived'
       : normalizeStatus(status, existing.status || 'Draft');
+    if (!(await moduleStatusAllowed(req, nextStatus, existing.status))) {
+      await conn.rollback();
+      return res.status(403).json({ error: `You do not have permission to save a module as ${nextStatus}.` });
+    }
     const filePath = req.file ? req.file.path : existing.file_path;
     const fileName = req.file ? req.file.originalname : existing.file_name;
     const fileSize = req.file ? req.file.size : existing.file_size;
