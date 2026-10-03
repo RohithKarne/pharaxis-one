@@ -207,6 +207,7 @@ export default function NotificationOverlay({ open, onClose }) {
               <option value="chat_mention">Chat Mention</option>
               <option value="dedup_assist">Duplicate Assist</option>
               <option value="mi_response">MI Response</option>
+              <option value="content_review">Content Review</option>
               <option value="ae_transmission">AE Transmission</option>
               <option value="pc_transmission">PC Transmission</option>
               <option value="transmission_sla">Transmission SLA</option>

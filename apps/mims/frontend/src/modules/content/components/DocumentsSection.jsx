@@ -71,10 +71,10 @@ function getAuthoringSourceLabel(doc) {
   return 'Uploaded'
 }
 
-export default function DocumentsSection({ token, user }) {
+export default function DocumentsSection({ token, user, initialSubTab = 'all' }) {
   const { hasCapability } = useAuth()
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [subTab, setSubTab] = useState('all')
+  const [subTab, setSubTab] = useState(initialSubTab)
   const [checkedInDocs, setCheckedInDocs] = useState([])
   const [checkedOutDocs, setCheckedOutDocs] = useState([])
   const [docs, setDocs] = useState([])

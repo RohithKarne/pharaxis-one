@@ -20,6 +20,7 @@ const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+const { createNotification } = require('../../services/notificationCenterService');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -864,6 +865,17 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
 
       await conn.commit();
       await audit(req.user.userId, req.user.email, 'INITIATE_REVIEW', 'cm_document', Number(id), { review_id: reviewResult.insertId, title });
+      // MIPM-176: reviewers were never told a review was waiting for them.
+      for (const uid of reviewer_ids) {
+        await createNotification(Number(uid), {
+          category: 'content_review',
+          title: `Content review assigned — ${doc.name}`,
+          message: `${req.user.name || req.user.email} asked you to review "${title}" (${doc.doc_id}) by ${String(planned_end_date).slice(0, 10)}.`,
+          linkUrl: '/content?view=reviews',
+          metadata: { review_id: reviewResult.insertId, document_id: Number(id) },
+          eventKey: 'cm-review-assigned',
+        }).catch(() => {});
+      }
       res.status(201).json({ message: 'Review initiated.', review_id: reviewResult.insertId });
     } catch (err) {
       await conn.rollback();
