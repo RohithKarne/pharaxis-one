@@ -107,7 +107,7 @@ export default function Dashboard({ onNavigateTab }) {
     { label: 'Organisations',        value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, tab: 'system', systemItem: 'sys-division-params' },
     { label: 'Users',                value: kpis.users?.total || 0,         note: `${kpis.users?.active || 0} active`,         tab: null },
     { label: 'Failed Logins 24h',    value: kpis.failedLogins24h || 0,      note: 'Security watch',                            tab: null },
-    { label: 'Locked 2FA Users',     value: kpis.lockedUsers || 0,          note: 'Needs review',                              tab: null },
+    { label: 'Locked 2FA Users',     value: kpis.lockedUsers || 0,          note: 'Needs review',                              tab: 'system', systemItem: 'sys-sec-users' },
     { label: 'Unread Notifications', value: kpis.unreadNotifications || 0,  note: 'In-app queue',                              tab: null },
     { label: 'Alert Events 24h',     value: kpis.alertEvents24h || 0,       note: 'Platform alerts',                           tab: null },
     { label: 'Ready Orgs',           value: readiness.readyOrgs || 0,       note: `${readiness.attentionOrgs || 0} need attention`, tab: 'system', systemItem: 'sys-division-params' },

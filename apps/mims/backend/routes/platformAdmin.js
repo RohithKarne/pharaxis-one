@@ -793,6 +793,8 @@ router.post('/users/:id/unlock', authenticate, requireRole('platform_admin'), as
        WHERE user_id = ?`,
       [id]
     );
+    // A password lock-out is cleared too: "Unlock" left it in place (MIPM-144).
+    await pool.execute('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [id]);
     await audit(req.user.userId, req.user.email, 'UNLOCK_USER_SECURITY', 'user', Number(id), {});
     res.json({ message: `${user.name} security lock state cleared.` });
   } catch (err) {
