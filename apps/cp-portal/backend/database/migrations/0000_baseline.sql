@@ -129,10 +129,11 @@ CREATE TABLE IF NOT EXISTS cp_branding (
   button_text         VARCHAR(20)  NOT NULL DEFAULT '#FFFFFF',
   link_color          VARCHAR(20)  NOT NULL DEFAULT '#6B3FA0',
   border_color        VARCHAR(20)  NOT NULL DEFAULT '#E5E7EB',
-  font_family         VARCHAR(100) NOT NULL DEFAULT 'Inter, sans-serif',
-  heading_font        VARCHAR(100) NOT NULL DEFAULT 'Inter, sans-serif',
+  -- font_family, heading_font and border_radius defaults folded in from 0038.
+  font_family         VARCHAR(100) NOT NULL DEFAULT 'Arial, Helvetica, sans-serif',
+  heading_font        VARCHAR(100) NOT NULL DEFAULT 'Arial, Helvetica, sans-serif',
   base_font_size      VARCHAR(10)  NOT NULL DEFAULT '14px',
-  border_radius       VARCHAR(10)  NOT NULL DEFAULT '8px',
+  border_radius       VARCHAR(10)  NOT NULL DEFAULT '2px',
   header_style        VARCHAR(20)  NOT NULL DEFAULT 'solid',
   footer_text_content TEXT         NULL,
   copyright_text      TEXT         NULL,
@@ -1217,4 +1218,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0034_add_answer_source.sql',                NULL),
   ('0035_add_submission_followups.sql',         NULL),
   ('0036_add_submission_identity_erased.sql',   NULL),
-  ('0037_add_submission_sync_key.sql',          NULL);
+  ('0037_add_submission_sync_key.sql',          NULL),
+  ('0038_classic_branding_defaults.sql',        NULL);
