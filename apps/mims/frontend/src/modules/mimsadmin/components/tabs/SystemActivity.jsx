@@ -129,17 +129,14 @@ export default function SystemActivity() {
         </div>
 
         {/* Summary cards */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div className="summary-line">
           {[
             { label: 'Total',   value: summary.total },
             { label: 'Success', value: summary.success },
             { label: 'Failed',  value: summary.failed },
             { label: 'Warning', value: summary.warning },
           ].map(card => (
-            <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', background: 'var(--bg)', minWidth: 120 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{card.label}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{card.value ?? 0}</div>
-            </div>
+            <span key={card.label}>{card.label}: <b>{card.value ?? 0}</b></span>
           ))}
         </div>
       </div>

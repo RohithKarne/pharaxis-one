@@ -83,23 +83,16 @@ function StatsBar({ stats }) {
   if (!stats) return null
   const { bugs, features } = stats
   const cards = [
-    { label: 'Open Bugs',      value: (bugs?.new_count || 0) + (bugs?.investigating_count || 0), color: '#e01e5a' },
-    { label: 'Confirmed',      value: bugs?.confirmed_count || 0,  color: '#e07b1e' },
-    { label: 'Critical Bugs',  value: bugs?.critical_count || 0,   color: '#7c3aed' },
-    { label: 'New Features',   value: features?.new_count || 0,    color: '#3b82f6' },
-    { label: 'Planned',        value: features?.planned_count || 0, color: '#10b981' },
+    { label: 'Open bugs',      value: (bugs?.new_count || 0) + (bugs?.investigating_count || 0) },
+    { label: 'Confirmed',      value: bugs?.confirmed_count || 0 },
+    { label: 'Critical bugs',  value: bugs?.critical_count || 0 },
+    { label: 'New features',   value: features?.new_count || 0 },
+    { label: 'Planned',        value: features?.planned_count || 0 },
   ]
   return (
-    <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+    <div className="summary-line" style={{ marginBottom: 12 }}>
       {cards.map(c => (
-        <div key={c.label} style={{
-          background: 'var(--surface, #fff)', border: '1px solid var(--border, #e2e8f0)',
-          borderRadius: 10, padding: '12px 20px', minWidth: 110, textAlign: 'center',
-          borderTop: `3px solid ${c.color}`,
-        }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: c.color }}>{c.value}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary, #64748b)', marginTop: 2 }}>{c.label}</div>
-        </div>
+        <span key={c.label}>{c.label}: <b>{c.value}</b></span>
       ))}
     </div>
   )
@@ -181,7 +174,7 @@ function BugReportsTab({ token }) {
             <option key={s} value={s}>{s}</option>
           )}
         </select>
-        <button onClick={load} style={{ padding: '7px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}>
+        <button onClick={load} style={{ padding: '7px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}>
           Refresh
         </button>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>{total} report{total !== 1 ? 's' : ''}</span>
@@ -319,7 +312,7 @@ function BugReportsTab({ token }) {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setSelected(null)} style={{ padding: '9px 18px', background: 'none', border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={saveDetail} disabled={saving} style={{ padding: '9px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+                <button onClick={saveDetail} disabled={saving} style={{ padding: '9px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
@@ -413,7 +406,7 @@ function FeatureRequestsTab({ token }) {
             <option key={s} value={s}>{s}</option>
           )}
         </select>
-        <button onClick={load} style={{ padding: '7px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}>Refresh</button>
+        <button onClick={load} style={{ padding: '7px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}>Refresh</button>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>{total} suggestion{total !== 1 ? 's' : ''}</span>
       </div>
 
@@ -443,7 +436,7 @@ function FeatureRequestsTab({ token }) {
                     disabled={voting[row.id]}
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                      background: row.user_voted ? '#3b82f6' : 'var(--surface, #fff)',
+                      background: row.user_voted ? 'var(--primary)' : 'var(--surface, #fff)',
                       color: row.user_voted ? '#fff' : 'var(--text-secondary, #64748b)',
                       border: '1px solid var(--border, #e2e8f0)', borderRadius: 8,
                       padding: '4px 10px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
@@ -541,7 +534,7 @@ function FeatureRequestsTab({ token }) {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setSelected(null)} style={{ padding: '9px 18px', background: 'none', border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={saveDetail} disabled={saving} style={{ padding: '9px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+                <button onClick={saveDetail} disabled={saving} style={{ padding: '9px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>

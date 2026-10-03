@@ -142,36 +142,21 @@ export default function Dashboard({ onNavigateTab }) {
         {loading && <div className="card-body" style={{ color: 'var(--text-muted)' }}>Loading dashboard…</div>}
         {!loading && summaryError && <div className="card-body" style={{ color: '#b91c1c' }}>{summaryError}</div>}
         {!loading && !summaryError && (
-          <div
-            className="card-body"
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}
-          >
-            {cards.map(card => (
-              <div
-                key={card.label}
-                onClick={() => card.tab && onNavigateTab?.(card.tab, card.systemItem ? 'system' : null, card.systemItem || '')}
-                style={{
-                  border: '1px solid var(--border)', borderRadius: 10, padding: 16,
-                  background: 'var(--surface)',
-                  cursor: card.tab ? 'pointer' : 'default',
-                  transition: 'box-shadow 0.15s, border-color 0.15s',
-                }}
-                onMouseEnter={e => {
-                  if (!card.tab) return
-                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.10)'
-                  e.currentTarget.style.borderColor = 'var(--accent)'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = ''
-                  e.currentTarget.style.borderColor = 'var(--border)'
-                }}
-              >
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{card.label}</div>
-                <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1 }}>{card.value}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{card.note}</div>
-              </div>
-            ))}
-          </div>
+          <table className="admin-table mims-queue-table">
+            <tbody>
+              {cards.map(card => (
+                <tr key={card.label}>
+                  <td>
+                    {card.tab
+                      ? <a href="#" onClick={e => { e.preventDefault(); onNavigateTab?.(card.tab, card.systemItem ? 'system' : null, card.systemItem || '') }}>{card.label}</a>
+                      : card.label}
+                  </td>
+                  <td className="num">{card.value}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{card.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
       )}
@@ -204,19 +189,8 @@ export default function Dashboard({ onNavigateTab }) {
             {loading && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
             {!loading && (
               <div style={{ display: 'grid', gap: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ready</div>
-                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.readyOrgs || 0}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Need attention</div>
-                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.attentionOrgs || 0}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Avg score</div>
-                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.averageScore || 0}%</div>
-                  </div>
+                <div>
+                  Ready: <b>{readiness.readyOrgs || 0}</b> · Need attention: <b>{readiness.attentionOrgs || 0}</b> · Average score: <b>{readiness.averageScore || 0}%</b>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   Activation depends on workflow, help, content, numbering, sites, and case data readiness.

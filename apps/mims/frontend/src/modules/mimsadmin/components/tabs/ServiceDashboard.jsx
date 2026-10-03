@@ -90,7 +90,7 @@ export default function ServiceDashboard() {
       </div>
 
       {runtimeHealth && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+        <div className="summary-line" style={{ margin: '10px 20px' }}>
           {[
             { label: 'Runtime Status', value: String(runtimeHealth.status || 'unknown').toUpperCase() },
             { label: 'Active Orgs', value: runtimeHealth.summary?.active_orgs ?? 0 },
@@ -99,10 +99,7 @@ export default function ServiceDashboard() {
             { label: '5xx (24h)', value: runtimeHealth.summary?.server_5xx_24h ?? 0 },
             { label: 'Worker Alerts (24h)', value: runtimeHealth.summary?.worker_alerts_24h ?? 0 },
           ].map(card => (
-            <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{card.label}</div>
-              <div style={{ marginTop: 6, fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{card.value}</div>
-            </div>
+            <span key={card.label}>{card.label}: <b>{card.value}</b></span>
           ))}
         </div>
       )}
