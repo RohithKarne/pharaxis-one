@@ -550,7 +550,8 @@ body { background: var(--cp-bg); }
 }
 .oc-work-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto;
+  /* CPPM-134: no row has an icon, so the name takes the width (was 32px 1fr auto). */
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
 }
