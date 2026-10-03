@@ -10,7 +10,7 @@ import {
   LabelList,
 } from 'recharts'
 
-const COLORS = ['#6B3FA0', '#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+const COLORS = ['#1F4E8C', '#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',
@@ -19,17 +19,8 @@ const TYPE_LABELS = {
   other_inquiry:     'Other Inquiry',
 }
 
-function StatCard({ label, value, accent }) {
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 12, padding: '20px 24px',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flex: 1, minWidth: 130,
-      borderTop: `3px solid ${accent || '#6B3FA0'}`,
-    }}>
-      <div style={{ fontSize: 30, fontWeight: 700, color: '#111827' }}>{value ?? '—'}</div>
-      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, fontWeight: 500 }}>{label}</div>
-    </div>
-  )
+function StatCard({ label, value }) {
+  return <span>{label}: <b>{value ?? '—'}</b></span>
 }
 
 function SectionCard({ title, children, style }) {
@@ -129,13 +120,13 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard label="Portal Users"      value={stats.portal_users}      accent="#6B3FA0" />
-        <StatCard label="Total Submissions" value={stats.total_submissions}  accent="#2563EB" />
-        <StatCard label="Total Downloads"   value={stats.total_downloads}    accent="#10B981" />
-        <StatCard label="Published News"    value={stats.published_news}     accent="#F59E0B" />
-        <StatCard label="Published Docs"    value={stats.published_docs}     accent="#8B5CF6" />
-        <StatCard label="Active Safety"     value={stats.active_safety}      accent="#EF4444" />
+      <div className="summary-line" style={{ marginBottom: 16 }}>
+        <StatCard label="Portal users"      value={stats.portal_users} />
+        <StatCard label="Total submissions" value={stats.total_submissions} />
+        <StatCard label="Total downloads"   value={stats.total_downloads} />
+        <StatCard label="Published news"    value={stats.published_news} />
+        <StatCard label="Published docs"    value={stats.published_docs} />
+        <StatCard label="Active safety alerts" value={stats.active_safety} />
       </div>
 
       {/* Row 1: Trend + Pie */}
@@ -148,16 +139,16 @@ export default function AnalyticsPage() {
               <AreaChart data={trend} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="subGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#6B3FA0" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#6B3FA0" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#1F4E8C" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#1F4E8C" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6B7280' }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="Submissions" stroke="#6B3FA0" strokeWidth={2}
-                  fill="url(#subGrad)" dot={{ r: 4, fill: '#6B3FA0' }} activeDot={{ r: 6 }} />
+                <Area type="monotone" dataKey="Submissions" stroke="#1F4E8C" strokeWidth={2}
+                  fill="url(#subGrad)" dot={{ r: 4, fill: '#1F4E8C' }} activeDot={{ r: 6 }} />
               </AreaChart>
             </ResponsiveContainer>
           )}

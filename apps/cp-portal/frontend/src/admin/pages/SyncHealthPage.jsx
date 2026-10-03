@@ -99,17 +99,11 @@ export default function SyncHealthPage() {
       {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
       {loading ? <div className="cp-loading">Loading…</div> : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <div className="summary-line" style={{ marginBottom: 16 }}>
             {STATUS_TILES.map(t => (
-              <div key={t.key} className="cp-card" style={{ padding: 16, borderLeft: `4px solid ${t.tone}` }}>
-                <div style={{ fontSize: 26, fontWeight: 700 }}>{counts[t.key] || 0}</div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>{t.label}</div>
-              </div>
+              <span key={t.key}>{t.label}: <b>{counts[t.key] || 0}</b></span>
             ))}
-            <div className="cp-card" style={{ padding: 16, borderLeft: '4px solid #0f172a' }}>
-              <div style={{ fontSize: 26, fontWeight: 700 }}>{total}</div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Total Submissions</div>
-            </div>
+            <span>Total submissions: <b>{total}</b></span>
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

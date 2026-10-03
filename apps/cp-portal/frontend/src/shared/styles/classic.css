@@ -165,3 +165,30 @@
 :root [style*="border-radius: 12px"], :root [style*="border-radius: 14px"], :root [style*="border-radius: 16px"],
 :root [style*="border-radius: 20px"], :root [style*="border-radius: 999px"], :root [style*="border-radius: 9999px"] { border-radius: 2px !important; }
 :root [style*="box-shadow"] { box-shadow: none !important; }
+
+/* ─── Summary lines (in place of rows of big-number tiles) ───── */
+:root .summary-line { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; border: 1px solid var(--cp-border); background: #fff; font-size: 12px; color: var(--cp-text-muted, #5b6573); }
+:root .summary-line > span { padding: 4px 12px; border-right: 1px solid var(--cp-border); }
+:root .summary-line b { color: var(--cp-text, #1d2733); font-size: 13px; }
+:root .cp-stats-row { display: flex !important; flex-wrap: wrap; gap: 0 !important; border: 1px solid var(--cp-border); background: #fff; }
+:root .cp-stat-card { display: flex !important; flex-direction: row !important; align-items: baseline; gap: 5px; flex: 0 0 auto !important; min-width: 0 !important;
+  padding: 4px 12px !important; border: 0 !important; border-right: 1px solid var(--cp-border) !important; background: none !important; box-shadow: none !important; text-align: left !important; }
+:root .cp-stat-label { order: 0; font-size: 12px !important; color: var(--cp-text-muted, #5b6573) !important; margin: 0 !important; text-transform: none !important; letter-spacing: 0 !important; }
+:root .cp-stat-label::after { content: ':'; }
+:root .cp-stat-value { order: 1; font-size: 13px !important; font-weight: bold !important; color: var(--cp-text, #1d2733) !important; line-height: 1.5 !important; }
+
+/* Client overview: the health score reads as a plain line, not a coloured ring */
+:root .ck-health-block { display: flex; align-items: baseline; gap: 5px; flex-direction: row-reverse; justify-content: flex-end; }
+:root .ck-health-ring { width: auto !important; height: auto !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; font-size: 13px !important; padding: 0 !important; }
+:root .ck-health-label { font-size: 12px; }
+:root .ck-health-sub { font-size: 12px; color: var(--cp-text-muted, #5b6573); }
+:root .ck-health-sub::after { content: ':'; }
+
+/* Big inline numbers and headings (22–36px) come down to Classic title size */
+:root :is([style*="font-size: 22px"], [style*="font-size: 24px"], [style*="font-size: 26px"], [style*="font-size: 28px"],
+  [style*="font-size: 30px"], [style*="font-size: 32px"], [style*="font-size: 34px"], [style*="font-size: 36px"]) { font-size: 16px !important; line-height: 1.3 !important; letter-spacing: 0 !important; }
+:root [style*="font-weight: 800"] { font-weight: bold !important; }
+
+/* Portal empty states are a line of text, without the large picture above it */
+:root .pp-empty-state > span:has(svg), :root .pp-ta-placeholder > span:has(svg) { display: none; }
+:root .pp-user-avatar { border-radius: 2px; }

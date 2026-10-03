@@ -232,7 +232,7 @@ export default function TrainingAdminPage() {
             </select>
           </div>
           {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
-          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: 'var(--cp-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
             {editingId ? 'Save changes' : 'Create module'}
           </button>
           {editingId && (
@@ -270,9 +270,9 @@ export default function TrainingAdminPage() {
                     <td style={{ padding: 8 }}>{m.pass_count} / {m.attempt_count}</td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
                       <CanChange area="training">
-                      <button onClick={() => startEdit(m)} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                      <button onClick={() => startEdit(m)} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>
                       </CanChange>
-                      <button onClick={() => openQuestions(m)} style={{ ...link, color: '#6B3FA0' }}>Questions</button>
+                      <button onClick={() => openQuestions(m)} style={{ ...link, color: 'var(--cp-primary)' }}>Questions</button>
                       <CanChange area="training">
                       <button onClick={() => handleDelete(m)} style={{ ...link, color: '#DC2626' }}>Delete</button>
                       </CanChange>
@@ -301,7 +301,7 @@ export default function TrainingAdminPage() {
                     {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{i === q.correct_index ? '✓' : '○'} {o}</li>)}
                   </ul>
                   <CanChange area="training">
-                  <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                  <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>
                   </CanChange>
                   <CanChange area="training">
                   <button onClick={() => deleteQuestion(q)} style={{ ...link, color: '#DC2626' }}>Remove</button>
@@ -324,7 +324,7 @@ export default function TrainingAdminPage() {
               </div>
             ))}
             {qForm.options.length < 6 && (
-              <button type="button" onClick={() => setQForm(f => ({ ...f, options: [...f.options, ''] }))} style={{ ...link, color: '#6B3FA0', marginBottom: 10 }}>+ Add an answer</button>
+              <button type="button" onClick={() => setQForm(f => ({ ...f, options: [...f.options, ''] }))} style={{ ...link, color: 'var(--cp-primary)', marginBottom: 10 }}>+ Add an answer</button>
             )}
             {qMsg && <div style={{ fontSize: 13, margin: '6px 0 10px', fontWeight: 600 }}>{qMsg}</div>}
             <div>

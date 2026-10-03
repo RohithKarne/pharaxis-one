@@ -210,9 +210,9 @@ export default function MSLPage() {
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '8px 20px', background: 'none', border: 'none', cursor: 'pointer',
-            borderBottom: tab === t.key ? '2px solid #6B3FA0' : '2px solid transparent',
+            borderBottom: tab === t.key ? '2px solid var(--cp-primary)' : '2px solid transparent',
             marginBottom: -2, fontWeight: tab === t.key ? 700 : 400,
-            color: tab === t.key ? '#6B3FA0' : '#6B7280', fontSize: 14,
+            color: tab === t.key ? 'var(--cp-primary)' : '#6B7280', fontSize: 14,
           }}>
             {t.label}
           </button>

@@ -232,7 +232,6 @@ export default function PortalLayout({ children }) {
             <LocalClock />
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
-                <Icon name="send" size={16} />
                 {t('btn.submit_inquiry')}
               </button>
             )}

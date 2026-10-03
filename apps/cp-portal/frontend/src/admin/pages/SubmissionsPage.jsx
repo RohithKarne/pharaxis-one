@@ -91,7 +91,7 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, s
             </button>
             <button disabled={busy || !answer || !canApprove} onClick={() => call('POST', '/send', 'Answer sent.')}
               title={canApprove ? 'Approves the answer and emails it to the person who asked' : 'Only a reviewer can approve and send'}
-              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
               Approve &amp; send
             </button>
             {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
@@ -192,7 +192,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
           </button>
           <button disabled={busy || !draft || !canApprove || draft.body !== body} onClick={() => call('POST', '/draft/send', 'Follow-up sent.')}
             title={!canApprove ? 'Only a reviewer can approve and send' : draft && draft.body !== body ? 'Save the draft first' : 'Approves the follow-up and emails it to the person who asked'}
-            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
+            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
             Approve &amp; send follow-up
           </button>
           {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {draft.drafted_by_name}</span>}

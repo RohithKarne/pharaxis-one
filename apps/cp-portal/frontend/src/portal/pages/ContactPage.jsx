@@ -115,7 +115,6 @@ export default function ContactPage() {
             : <p className="pp-contact-muted">Prefer writing? Use the form below and we will reply by email.</p>}
         </div>
         <div className="pp-contact-card pp-contact-card-alert">
-          <div className="pp-contact-icon">⚠️</div>
           <h3>Adverse Events</h3>
           <p>To report a suspected adverse event or side effect, please use our secure reporting form.</p>
           <Link to={`${base}/submit?type=adverse_event`} className="pp-contact-action pp-contact-action-alert">Report a side effect →</Link>

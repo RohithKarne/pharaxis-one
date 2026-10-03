@@ -55,7 +55,7 @@ export default function ChatRecordsPage() {
 
         {open ? (
           <div style={card}>
-            <button onClick={() => setOpen(null)} style={{ border: 'none', background: 'none', color: '#6B3FA0', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 12 }}>← Back to all conversations</button>
+            <button onClick={() => setOpen(null)} style={{ border: 'none', background: 'none', color: 'var(--cp-primary)', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 12 }}>← Back to all conversations</button>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{who(open.conversation)} <span style={{ fontWeight: 400, color: '#64748B' }}>· {open.conversation.user_type || 'unknown type'}</span></h3>
             <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
               {open.conversation.email} · started {fmt(open.conversation.started_at)} · {open.conversation.provider || '—'}{open.conversation.model ? ` / ${open.conversation.model}` : ''}
@@ -72,7 +72,7 @@ export default function ChatRecordsPage() {
                 )
               }
               return (
-                <div key={m.id} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: isUser ? '#F1F5F9' : '#F5F0FA', borderLeft: `3px solid ${isUser ? '#94A3B8' : '#6B3FA0'}` }}>
+                <div key={m.id} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: isUser ? '#F1F5F9' : '#F5F0FA', borderLeft: `3px solid ${isUser ? '#94A3B8' : 'var(--cp-primary)'}` }}>
                   <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>
                     <strong>{isUser ? 'Question' : 'Answer'}</strong> · {fmt(m.created_at)}
                     {!isUser && m.outcome && <> · {OUTCOME_LABEL[m.outcome] || m.outcome}</>}
@@ -122,7 +122,7 @@ export default function ChatRecordsPage() {
                       <td style={{ padding: 8 }}>{c.message_count}</td>
                       <td style={{ padding: 8 }}>{fmt(c.last_message_at)}</td>
                       <td style={{ padding: 8 }}>
-                        <button onClick={() => openConversation(c.id)} style={{ color: '#6B3FA0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>View</button>
+                        <button onClick={() => openConversation(c.id)} style={{ color: 'var(--cp-primary)', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>View</button>
                       </td>
                     </tr>
                   ))}
