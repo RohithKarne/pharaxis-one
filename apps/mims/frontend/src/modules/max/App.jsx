@@ -366,7 +366,9 @@ function AppRoutes() {
           } />
           <Route path="/transmissions" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              {/* MIPM-173: the page's data needs the transmissions module (MIPM-150); guarding
+                  on mims_core let a reviewer open an empty page that said "Request blocked". */}
+              <ModuleAccessGuard moduleKey="transmissions">
                 <TransmissionsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
