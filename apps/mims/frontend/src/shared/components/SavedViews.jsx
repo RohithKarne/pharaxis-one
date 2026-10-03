@@ -6,7 +6,8 @@
  *   currentFilter: object  (the filter combo to save)
  *   onApply     : (filter) => void  (called when a view is loaded)
  *
- * Renders a dropdown of the user's saved views + Save Current / Manage actions.
+ * Renders a dropdown of the user's saved views, and views others in the organisation
+ * shared, + Save Current / Manage actions. Only the owner can delete a view.
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -20,7 +21,9 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
   const [showSave, setShowSave] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
+  const [isShared, setIsShared] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -35,13 +38,21 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
   async function save() {
     if (!name.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
-      await httpFetch('/api/admin/user-preferences/views', {
+      const res = await httpFetch('/api/admin/user-preferences/views', {
         method: 'POST', headers: H,
-        body: JSON.stringify({ screen_key: screenKey, view_name: name.trim(), filter_json: currentFilter, is_default: isDefault }),
+        body: JSON.stringify({ screen_key: screenKey, view_name: name.trim(), filter_json: currentFilter, is_default: isDefault, is_shared: isShared }),
       })
-      setShowSave(false); setName(''); setIsDefault(false)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error || 'The view was not saved. Try again.')
+        return
+      }
+      setShowSave(false); setName(''); setIsDefault(false); setIsShared(false)
       load()
+    } catch {
+      setSaveError('The view was not saved: the server could not be reached.')
     } finally { setSaving(false) }
   }
 
@@ -66,7 +77,7 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
         <option value="">Saved Views ({views.length})</option>
         {views.map(v => (
           <option key={v.id} value={v.id}>
-            {v.is_default ? '★ ' : ''}{v.view_name}
+            {v.is_default ? '★ ' : ''}{v.view_name}{v.is_mine === false ? ` (from ${v.owner_name || 'a colleague'})` : (v.is_shared ? ' (shared)' : '')}
           </option>
         ))}
       </select>
@@ -75,12 +86,12 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
         onClick={() => setShowSave(true)}
         title="Save current filter as a view"
       >Save view</button>
-      {views.length > 0 && (
+      {views.some(v => v.is_mine !== false) && (
         <details style={{ position: 'relative' }}>
           <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}>⋮</summary>
           <div style={{ position: 'absolute', right: 0, top: '110%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 8, minWidth: 220, zIndex: 50, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Manage</div>
-            {views.map(v => (
+            {views.filter(v => v.is_mine !== false).map(v => (
               <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 12 }}>
                 <span>{v.view_name}</span>
                 <button style={{ background: 'none', border: 'none', color: '#c00', cursor: 'pointer', fontSize: 11 }} onClick={() => del(v.id)}>Delete</button>
@@ -105,6 +116,11 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
               <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
               Set as my default view for this screen
             </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, marginBottom: 12 }}>
+              <input type="checkbox" checked={isShared} onChange={e => setIsShared(e.target.checked)} />
+              Share with my organisation (only you can change it)
+            </label>
+            {saveError && <div role="alert" style={{ color: 'var(--error, #b91c1c)', fontSize: 12, marginBottom: 10 }}>{saveError}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => setShowSave(false)} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
               <button onClick={save} disabled={saving || !name.trim()} style={{ padding: '7px 14px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: (saving || !name.trim()) ? 0.5 : 1 }}>

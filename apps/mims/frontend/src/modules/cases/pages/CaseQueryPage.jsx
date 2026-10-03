@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import useRememberedFilters from '../../../shared/hooks/useRememberedFilters.js'
 import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -33,7 +34,8 @@ export default function CaseQueryPage() {
   const [error, setError] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [sortDir, setSortDir] = useState('desc')
-  const [filters, setFilters] = useState({
+  // Kept for this user, so the filters are still set on return.
+  const [filters, setFilters] = useRememberedFilters('case-query', {
     search: '',
     has_correspondence: '',
     corr_box: '',
@@ -90,6 +92,7 @@ export default function CaseQueryPage() {
         <div className="cf-query-toolbar">
           <input
             className="cf-cases-search"
+            data-shortcut="search"
             placeholder="Global search: case #, notes, contacts, products…"
             value={filters.search}
             onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}

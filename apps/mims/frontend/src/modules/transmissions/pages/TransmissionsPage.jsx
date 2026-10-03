@@ -11,6 +11,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../transmissions.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import useRememberedFilters from '../../../shared/hooks/useRememberedFilters.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -64,13 +65,13 @@ export default function TransmissionsPage() {
   const [statusCounts, setStatusCounts] = useState({})
   const [systems,    setSystems]    = useState([])
 
-  // filters
-  const [search,     setSearch]     = useState('')
-  const [query,      setQuery]      = useState('')
-  const [system,     setSystem]     = useState('All')
-  const [status,     setStatus]     = useState('All')
-  const [fromDate,   setFromDate]   = useState('')
-  const [toDate,     setToDate]     = useState('')
+  // filters, kept for this user so they are still set on return
+  const [filters, setFilters] = useRememberedFilters('transmissions', { search: '', system: 'All', status: 'All', fromDate: '', toDate: '' })
+  const { search, system, status, fromDate, toDate } = filters
+  const setFilter = name => value => setFilters(prev => ({ ...prev, [name]: value }))
+  const setSearch = setFilter('search'), setSystem = setFilter('system'), setStatus = setFilter('status')
+  const setFromDate = setFilter('fromDate'), setToDate = setFilter('toDate')
+  const [query,      setQuery]      = useState(search.trim())
   const [page,       setPage]       = useState(1)
   const limit = 50
 
