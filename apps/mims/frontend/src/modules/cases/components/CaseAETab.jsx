@@ -559,7 +559,7 @@ export default function CaseAETab({
           <div key={tx.id} className="cf-tx-card">
             <div className="cf-tx-card-top">
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
-              <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+              <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine (30 days)', '15-day-expedited': 'Expedited (15 days)', '7-day-expedited': 'Urgent (7 days)' })[tx.priority] || tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: {String(tx.due_date).slice(0, 10)}</span>}
               <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>
