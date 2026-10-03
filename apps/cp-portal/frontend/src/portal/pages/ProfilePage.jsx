@@ -142,7 +142,7 @@ export default function ProfilePage() {
   return (
     <div className="pp-container pp-page-content" style={{ maxWidth: 640, paddingTop: 40, paddingBottom: 60 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>My Account</h1>
-      <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 28 }}>
+      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
         Update your personal details and manage your password.
       </p>
 
@@ -165,9 +165,9 @@ export default function ProfilePage() {
 
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle} htmlFor="pf-email">Email</label>
-          <input id="pf-email" style={{ ...inputStyle, background: '#F3F4F6', color: '#6B7280', cursor: 'not-allowed' }}
+          <input id="pf-email" style={{ ...inputStyle, background: '#F3F4F6', color: '#4B5563', cursor: 'not-allowed' }}
             value={meta.email} disabled readOnly />
-          <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>
             Email can't be changed here. Contact your administrator if it needs updating.
           </div>
         </div>
@@ -188,14 +188,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 20 }}>Member since {memberSince}</div>
+        <div style={{ fontSize: 12, color: '#5F6B7A', marginBottom: 20 }}>Member since {memberSince}</div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingProfile}>
             {savingProfile ? 'Saving…' : 'Save Changes'}
           </button>
-          {profileMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{profileMsg}</span>}
-          {profileErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{profileErr}</span>}
+          {profileMsg && <span style={{ color: '#166534', fontSize: 13, fontWeight: 500 }}>{profileMsg}</span>}
+          {profileErr && <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{profileErr}</span>}
         </div>
       </form>
 
@@ -213,7 +213,7 @@ export default function ProfilePage() {
             <label style={labelStyle} htmlFor="pf-new">New password</label>
             <input id="pf-new" type="password" autoComplete="new-password" style={inputStyle}
               value={pwd.new_password} onChange={e => setPwd(p => ({ ...p, new_password: e.target.value }))} />
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>At least 8 characters.</div>
+            <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>At least 8 characters.</div>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={labelStyle} htmlFor="pf-confirm">Confirm new password</label>
@@ -226,27 +226,27 @@ export default function ProfilePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingPwd}>
             {savingPwd ? 'Updating…' : 'Update Password'}
           </button>
-          {pwdMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{pwdMsg}</span>}
-          {pwdErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
+          {pwdMsg && <span style={{ color: '#166534', fontSize: 13, fontWeight: 500 }}>{pwdMsg}</span>}
+          {pwdErr && <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
         </div>
       </form>
 
       {/* CP-63 — GDPR data-subject rights: self-service export + deletion request */}
       <div style={cardStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>Privacy &amp; Your Data</h2>
-        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 18 }}>
+        <p style={{ fontSize: 13, color: '#4B5563', marginBottom: 18 }}>
           Under data-protection law you can download a copy of your personal data, or request that your account be deleted.
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" className="pp-btn pp-btn-outline" onClick={handleExport} disabled={exporting}>
             {exporting ? 'Preparing…' : 'Download my data'}
           </button>
-          <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
+          <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#B91C1C' }}
             onClick={() => setShowDelete(true)}>
             Request account deletion
           </button>
         </div>
-        <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: '#5F6B7A', marginTop: 12 }}>
           Deletion is reviewed by our team. Some records (e.g. adverse-event and safety reports) must be retained under
           pharmacovigilance law and will be de-identified rather than deleted.
         </p>

@@ -123,7 +123,7 @@ export default function FormsPage() {
               <button className="cp-modal-close" onClick={() => setShowPreview(false)}>✕</button>
             </div>
             <div className="cp-modal-body">
-              <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>This is how the form appears to portal users. Fields are disabled here.</p>
+              <p style={{ fontSize: 12, color: '#4B5563', marginBottom: 16 }}>This is how the form appears to portal users. Fields are disabled here.</p>
               <FormPreview fields={fields} />
             </div>
           </div>
@@ -197,6 +197,7 @@ export default function FormsPage() {
                 <td>
                   <input
                     className="cp-inline-edit"
+                    aria-label={`Label for ${f.field_key}`}
                     defaultValue={f.field_label}
                     onBlur={e => { if (e.target.value !== f.field_label) saveFieldInline(f.id, 'field_label', e.target.value) }}
                   />
@@ -204,6 +205,7 @@ export default function FormsPage() {
                 <td>
                   <input
                     className="cp-inline-edit cp-inline-edit-muted"
+                    aria-label={`Placeholder for ${f.field_key}`}
                     defaultValue={f.placeholder || ''}
                     placeholder="—"
                     onBlur={e => { if (e.target.value !== (f.placeholder || '')) saveFieldInline(f.id, 'placeholder', e.target.value) }}

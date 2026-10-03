@@ -33,17 +33,17 @@ export default function FAQPortalPage() {
     <div className="pp-page-container" style={{ maxWidth: 760, margin: '0 auto' }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>Frequently Asked Questions</h1>
-        <p style={{ color: '#6B7280', fontSize: 15 }}>Find answers to common questions below.</p>
+        <p style={{ color: '#4B5563', fontSize: 15 }}>Find answers to common questions below.</p>
       </div>
 
       {faqs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#9CA3AF' }}>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#5F6B7A' }}>
           <p>No FAQ items available yet.</p>
         </div>
       ) : (
         Object.entries(grouped).map(([cat, items]) => (
           <div key={cat} style={{ marginBottom: 32 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#4B5563', marginBottom: 12 }}>
               {cat}
             </div>
             <div style={{ border: '1px solid var(--pp-border, #E5E7EB)', borderRadius: 10, overflow: 'hidden' }}>

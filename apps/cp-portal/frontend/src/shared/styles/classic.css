@@ -197,3 +197,7 @@
 :root .ck-check-icon { width: 40px; text-align: left; font-size: 11px; }
 :root .cp-matrix-toggle { width: 40px; height: 22px; font-size: 12px; transition: none; }
 :root .pp-toast { animation: none; }
+
+/* Accessibility (WCAG 2.2 AA): small buttons and row dropdowns are at least 24px tall to tap or click. */
+:root .cp-btn-sm, :root .cp-table td select { min-height: 24px; }
+:root .cp-btn:focus-visible { outline: 2px solid var(--cp-text); outline-offset: 2px; }

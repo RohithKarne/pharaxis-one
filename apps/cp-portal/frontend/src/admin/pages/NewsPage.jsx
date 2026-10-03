@@ -171,11 +171,11 @@ export default function NewsPage() {
   }
 
   function statusBadgeStyle(status) {
-    if (status === 'published') return { background: '#DCFCE7', color: '#16A34A' }
-    if (status === 'draft')     return { background: '#F3F4F6', color: '#6B7280' }
+    if (status === 'published') return { background: '#DCFCE7', color: '#166534' }
+    if (status === 'draft')     return { background: '#F3F4F6', color: '#4B5563' }
     if (status === 'scheduled') return { background: '#DBEAFE', color: '#2563EB' }
-    if (status === 'archived')  return { background: '#F3F4F6', color: '#9CA3AF', opacity: 0.7 }
-    if (status === 'review')    return { background: '#FEF3C7', color: '#D97706' }   // S4-8
+    if (status === 'archived')  return { background: '#F3F4F6', color: '#5F6B7A', opacity: 0.7 }
+    if (status === 'review')    return { background: '#FEF3C7', color: '#92400E' }   // S4-8
     if (status === 'approved')  return { background: '#CCFBF1', color: '#0D9488' }   // S4-8
     return {}
   }
@@ -320,12 +320,12 @@ export default function NewsPage() {
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(p)}>Edit</button>}
                     {canWrite && p.status === 'draft' && (
-                      <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A' }} onClick={() => quickAction(p, 'review')}>Submit for Review</button>
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }} onClick={() => quickAction(p, 'review')}>Submit for Review</button>
                     )}
                     {canApprove && p.status === 'review' && (
                       <>
                         <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickAction(p, 'approved')}>Approve</button>
-                        <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }} onClick={() => quickAction(p, 'draft')}>Reject</button>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }} onClick={() => quickAction(p, 'draft')}>Reject</button>
                       </>
                     )}
                     {canPublish && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleArchive(p)}>Archive</button>}

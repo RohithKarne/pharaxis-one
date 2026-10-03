@@ -25,7 +25,7 @@ export default function ClinicalTrialsPage() {
     <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
       <div className="pp-page-header" style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>Clinical Trials & Real-World Evidence</h1>
-        <p style={{ color: '#6B7280', fontSize: 14 }}>Browse clinical trials: their status, indication, study sites and investigators.</p>
+        <p style={{ color: '#4B5563', fontSize: 14 }}>Browse clinical trials: their status, indication, study sites and investigators.</p>
       </div>
 
       <div className="pp-filter-bar" style={{ marginBottom: 20 }}>

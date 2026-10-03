@@ -57,7 +57,7 @@ export default function SavedItemsPage() {
     return (
       <div className="pp-docs-page">
         <div className="pp-empty-state">
-          <p style={{ marginTop: 12, color: '#6B7280', fontSize: 15 }}>
+          <p style={{ marginTop: 12, color: '#4B5563', fontSize: 15 }}>
             <Link to={`${base}/login`} className="pp-btn pp-btn-outline" style={{ marginLeft: 0 }}>Sign in</Link>
             {' '}to save items for quick access.
           </p>
@@ -130,7 +130,7 @@ export default function SavedItemsPage() {
                     </span>
                   )}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: item.withdrawn ? '#94A3B8' : '#1E293B', marginBottom: 2 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: item.withdrawn ? '#5F6B7A' : '#1E293B', marginBottom: 2 }}>
                   {item.title || item.detail?.title || 'Untitled'}
                 </div>
                 {item.withdrawn && (
@@ -138,7 +138,7 @@ export default function SavedItemsPage() {
                     This document is no longer available.
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: '#94A3B8' }}>
+                <div style={{ fontSize: 12, color: '#5F6B7A' }}>
                   Saved {item.created_at ? formatDateTime(item.created_at) : ''}
                 </div>
               </div>
@@ -160,7 +160,7 @@ export default function SavedItemsPage() {
                 )}
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
-                  style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
+                  style={{ color: '#B91C1C', borderColor: '#FCA5A5' }}
                   onClick={() => handleUnsave(item)}
                   disabled={unsaving === item.id}
                   aria-label={`Remove ${item.title || item.detail?.title || 'item'} from saved items`}

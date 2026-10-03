@@ -120,7 +120,7 @@ export default function BrandingPage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Portal Name</label>
-              <input value={branding.portal_name || ''} onChange={e => set('portal_name', e.target.value)} />
+              <input aria-label="Portal name" value={branding.portal_name || ''} onChange={e => set('portal_name', e.target.value)} />
             </div>
             <div className="cp-field">
               <label>Tagline</label>
@@ -144,7 +144,7 @@ export default function BrandingPage() {
               }}>
                 {logoPreview
                   ? <img src={logoPreview} alt="Logo preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={() => setLogoPreview(null)} />
-                  : <span style={{ fontSize: 11, color: '#9CA3AF' }}>No logo</span>
+                  : <span style={{ fontSize: 11, color: '#5F6B7A' }}>No logo</span>
                 }
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -176,7 +176,7 @@ export default function BrandingPage() {
                     Remove logo
                   </button>
                 )}
-                <span style={{ fontSize: 11, color: '#6B7280' }}>PNG, JPG, SVG, WebP · max 5 MB</span>
+                <span style={{ fontSize: 11, color: '#4B5563' }}>PNG, JPG, SVG, WebP · max 5 MB</span>
               </div>
             </div>
             {logoError && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 4 }}>{logoError}</div>}
@@ -218,7 +218,7 @@ export default function BrandingPage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Body Font</label>
-              <select value={branding.font_family || ''} onChange={e => set('font_family', e.target.value)}>
+              <select aria-label="Body font" value={branding.font_family || ''} onChange={e => set('font_family', e.target.value)}>
                 <option value="">Default (System Font)</option>
                 <option value="Arial, Helvetica, sans-serif">Arial (Default)</option>
                 <option value="Inter, sans-serif">Inter</option>
@@ -234,7 +234,7 @@ export default function BrandingPage() {
             </div>
             <div className="cp-field">
               <label>Heading Font</label>
-              <select value={branding.heading_font || 'Arial, Helvetica, sans-serif'} onChange={e => set('heading_font', e.target.value)}>
+              <select aria-label="Heading font" value={branding.heading_font || 'Arial, Helvetica, sans-serif'} onChange={e => set('heading_font', e.target.value)}>
                 <option value="Arial, Helvetica, sans-serif">Arial (Default)</option>
                 <option value="Inter, sans-serif">Inter</option>
                 <option value="'Roboto', sans-serif">Roboto</option>
@@ -245,7 +245,7 @@ export default function BrandingPage() {
             </div>
             <div className="cp-field">
               <label>Base Font Size</label>
-              <select value={branding.base_font_size || '14px'} onChange={e => set('base_font_size', e.target.value)}>
+              <select aria-label="Base font size" value={branding.base_font_size || '14px'} onChange={e => set('base_font_size', e.target.value)}>
                 <option value="13px">13px (Small)</option>
                 <option value="14px">14px (Default)</option>
                 <option value="15px">15px (Medium)</option>
@@ -254,7 +254,7 @@ export default function BrandingPage() {
             </div>
             <div className="cp-field">
               <label>Border Radius</label>
-              <select value={branding.border_radius || '2px'} onChange={e => set('border_radius', e.target.value)}>
+              <select aria-label="Border radius" value={branding.border_radius || '2px'} onChange={e => set('border_radius', e.target.value)}>
                 <option value="0px">0px (Sharp)</option>
                 <option value="2px">2px (Default)</option>
                 <option value="4px">4px (Subtle)</option>
@@ -267,7 +267,7 @@ export default function BrandingPage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Header Style</label>
-              <select value={branding.header_style || 'solid'} onChange={e => set('header_style', e.target.value)}>
+              <select aria-label="Header style" value={branding.header_style || 'solid'} onChange={e => set('header_style', e.target.value)}>
                 <option value="solid">Solid</option>
                 <option value="transparent">Transparent</option>
                 <option value="gradient">Gradient</option>

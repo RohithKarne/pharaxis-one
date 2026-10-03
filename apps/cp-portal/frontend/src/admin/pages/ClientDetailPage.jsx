@@ -78,15 +78,15 @@ function computeHealthScore(data, submissionStats) {
 
 function healthMeta(score) {
   if (score >= 75) return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
-  if (score >= 40) return { label: 'Needs attention', color: '#D97706', bg: '#FEF3C7', ring: '#F59E0B' }
-  return                  { label: 'Not launch ready', color: '#DC2626', bg: '#FEE2E2', ring: '#EF4444' }
+  if (score >= 40) return { label: 'Needs attention', color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
+  return                  { label: 'Not launch ready', color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
 }
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 const BADGE_STYLES = {
-  success:   { background: '#DCFCE7', color: '#16A34A' },
+  success:   { background: '#DCFCE7', color: '#166534' },
   warning:   { background: '#FEF3C7', color: '#B45309' },
-  danger:    { background: '#FEE2E2', color: '#DC2626' },
+  danger:    { background: '#FEE2E2', color: '#B91C1C' },
   info:      { background: '#DBEAFE', color: '#1D4ED8' },
   attention: { background: '#FEF9C3', color: '#92400E' },
 }
@@ -425,8 +425,8 @@ export default function ClientDetailPage() {
             </div>
             {urgentIssues.length === 0 ? (
               <div className="ck-panel-empty">
-                <span style={{ color: '#16A34A', display: 'inline-flex' }}><Icon name="check" size={18} /></span>
-                <span style={{ color: '#16A34A', fontWeight: 600, fontSize: 12 }}>No issues detected</span>
+                <span style={{ color: '#166534', display: 'inline-flex' }}><Icon name="check" size={18} /></span>
+                <span style={{ color: '#166534', fontWeight: 600, fontSize: 12 }}>No issues detected</span>
               </div>
             ) : (
               <div className="ck-issues-list">
@@ -449,7 +449,7 @@ export default function ClientDetailPage() {
             <div className="ck-panel-title"><span>Recent Activity</span></div>
             <div className="ck-activity-list">
               {recentActivity.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#9CA3AF', padding: '4px 0' }}>No activity yet.</div>
+                <div style={{ fontSize: 12, color: '#5F6B7A', padding: '4px 0' }}>No activity yet.</div>
               ) : recentActivity.map((item, i) => (
                 <div key={i} className="ck-activity-item">
                   <span className="ck-activity-icon"><Icon name={activityIcon(item.entity)} size={14} /></span>
@@ -476,7 +476,7 @@ export default function ClientDetailPage() {
               <span style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: checklistDone === checklist.length ? '#16A34A' : '#D97706',
+                color: checklistDone === checklist.length ? '#166534' : '#92400E',
               }}>
                 {checklistDone}/{checklist.length}
               </span>

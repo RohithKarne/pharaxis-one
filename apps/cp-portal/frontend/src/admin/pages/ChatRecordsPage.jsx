@@ -51,13 +51,13 @@ export default function ChatRecordsPage() {
           <h1>Chat Conversations</h1>
           <p>Every question asked in the chat assistant and the answer given. Opening a conversation is recorded in the audit trail.</p>
         </div>
-        {error && <div style={{ color: '#DC2626', fontWeight: 600, marginBottom: 12 }}>{error}</div>}
+        {error && <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 12 }}>{error}</div>}
 
         {open ? (
           <div style={card}>
             <button onClick={() => setOpen(null)} style={{ border: 'none', background: 'none', color: 'var(--cp-primary)', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 12 }}>Back to all conversations</button>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{who(open.conversation)} <span style={{ fontWeight: 400, color: '#64748B' }}>· {open.conversation.user_type || 'unknown type'}</span></h3>
-            <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{who(open.conversation)} <span style={{ fontWeight: 400, color: '#475569' }}>· {open.conversation.user_type || 'unknown type'}</span></h3>
+            <p style={{ fontSize: 13, color: '#475569', marginBottom: 16 }}>
               {open.conversation.email} · started {fmt(open.conversation.started_at)} · {open.conversation.provider || '—'}{open.conversation.model ? ` / ${open.conversation.model}` : ''}
             </p>
             {open.messages.map(m => {
@@ -73,7 +73,7 @@ export default function ChatRecordsPage() {
               }
               return (
                 <div key={m.id} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: isUser ? '#F1F5F9' : '#F5F0FA', borderLeft: `3px solid ${isUser ? '#94A3B8' : 'var(--cp-primary)'}` }}>
-                  <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>
                     <strong>{isUser ? 'Question' : 'Answer'}</strong> · {fmt(m.created_at)}
                     {!isUser && m.outcome && <> · {OUTCOME_LABEL[m.outcome] || m.outcome}</>}
                     {!isUser && m.latency_ms != null && <> · {(m.latency_ms / 1000).toFixed(1)}s</>}

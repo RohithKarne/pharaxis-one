@@ -106,11 +106,11 @@ export default function MySubmissionsPage() {
                 <div className="pp-submission-header">
                   <div>
                     <div className="pp-submission-ref" style={{ fontWeight: 700, fontSize: '1.1rem' }}>CP-{String(s.id).padStart(6, '0')}</div>
-                    <div className="pp-submission-type" style={{ color: '#64748b' }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</div>
+                    <div className="pp-submission-type" style={{ color: '#475569' }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</div>
                   </div>
                   <span className={`pp-status-badge ${status.cls}`}>{status.label}</span>
                 </div>
-                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#64748b', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#475569', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span>Submitted {formatDate(s.submitted_at)}</span>
                   {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
                 </div>
@@ -147,7 +147,7 @@ export default function MySubmissionsPage() {
                     <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>Information you added</div>
                     {s.followups.map((f, i) => (
                       <div key={i} style={{ padding: '10px 12px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 6 }}>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 4 }}>{formatDate(f.at)}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>{formatDate(f.at)}</div>
                         <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{f.body}</div>
                       </div>
                     ))}
@@ -172,10 +172,10 @@ export default function MySubmissionsPage() {
                   </summary>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>Submission Summary:</div>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#475569' }}>
                       {s.form_data?.inquiry_details || s.form_data?.event_description || s.form_data?.complaint_details || 'Request submitted successfully to Medical Affairs team.'}
                     </p>
-                    <div style={{ marginTop: 8, fontSize: '11px', color: '#94a3b8' }}>
+                    <div style={{ marginTop: 8, fontSize: '11px', color: '#5f6b7a' }}>
                       Last update: {formatDate(s.timeline?.length ? s.timeline[s.timeline.length - 1].at : s.submitted_at)}
                     </div>
                   </div>
@@ -251,7 +251,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
       {needsScreen && (
         <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
           <legend style={{ fontWeight: 600, fontSize: '0.85rem' }}>{ask.label} *</legend>
-          {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 6px' }}>{ask.help_text}</div>}
+          {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#475569', margin: '2px 0 6px' }}>{ask.help_text}</div>}
           {String(ask.options || '').split('\n').map(o => (
             <label key={o} style={{ marginRight: 16, fontSize: '0.85rem' }}>
               <input type="radio" name={`fu-unwell-${s.id}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}
@@ -267,7 +267,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
           )}
         </fieldset>
       )}
-      <div style={{ margin: '8px 0', fontSize: '0.8rem', color: '#64748b' }}>
+      <div style={{ margin: '8px 0', fontSize: '0.8rem', color: '#475569' }}>
         <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" disabled={busy} onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 5))} />
         {' '}Up to 5 files (PDF, JPG, PNG or DOCX, 10 MB each).
       </div>
@@ -343,7 +343,7 @@ function Conversation({ submission: s, screening, clientCode, portalHeaders, for
           {needsScreen && (
             <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
               <legend style={{ fontWeight: 600, fontSize: '0.9rem' }}>{ask.label} *</legend>
-              {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 6px' }}>{ask.help_text}</div>}
+              {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#475569', margin: '2px 0 6px' }}>{ask.help_text}</div>}
               {String(ask.options || '').split('\n').map(o => (
                 <label key={o} style={{ marginRight: 16, fontSize: '0.9rem' }}>
                   <input type="radio" name={`unwell-${s.id}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}

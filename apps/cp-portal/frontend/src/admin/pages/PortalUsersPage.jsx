@@ -130,7 +130,7 @@ export default function PortalUsersPage() {
         <input className="cp-search-input" placeholder="Search name or email…" value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
-        <select value={userType} onChange={e => setUserType(e.target.value)}>
+        <select aria-label="User type" value={userType} onChange={e => setUserType(e.target.value)}>
           <option value="">All Types</option>
           <option value="hcp">HCP</option>
           <option value="patient">Patient</option>
@@ -186,7 +186,7 @@ export default function PortalUsersPage() {
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>User Type</label>
-                  <select value={editForm.user_type} onChange={e => setEditForm(f => ({ ...f, user_type: e.target.value }))}>
+                  <select aria-label="User type" value={editForm.user_type} onChange={e => setEditForm(f => ({ ...f, user_type: e.target.value }))}>
                     <option value="hcp">HCP</option>
                     <option value="patient">Patient</option>
                     <option value="physician">Physician</option>

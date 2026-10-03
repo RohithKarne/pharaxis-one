@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
           </>
         ) : (
           <>
-            <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 18 }}>
+            <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 18 }}>
               Enter your email and we'll send you a link to reset your password.
             </p>
             {error && <div className="pp-error-msg">{error}</div>}

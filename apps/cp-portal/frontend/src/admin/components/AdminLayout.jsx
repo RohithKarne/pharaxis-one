@@ -341,7 +341,7 @@ export default function AdminLayout({ children }) {
             </div>
           )}
           {scanner?.up && location.pathname === '/admin' && listDate && scanner.listAgeDays < 2 && (
-            <div style={{ marginBottom: 12, fontSize: 12, color: '#6B7280' }}>
+            <div style={{ marginBottom: 12, fontSize: 12, color: '#4B5563' }}>
               Virus scanner running · virus list updated {listDate}
             </div>
           )}

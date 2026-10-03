@@ -48,7 +48,7 @@ export default function FeedbackWidget() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ padding: 16 }}>
-              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6B7280' }}>How would you rate your experience?</p>
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#4B5563' }}>How would you rate your experience?</p>
               <div style={{ display: 'flex', gap: 6, marginBottom: 14, justifyContent: 'center' }}>
                 {[1, 2, 3, 4, 5].map(n => (
                   <button
@@ -73,7 +73,7 @@ export default function FeedbackWidget() {
                 maxLength={1000}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #D1D5DB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
               />
-              {status === 'error' && <p style={{ color: '#DC2626', fontSize: 12, margin: '6px 0 0' }}>Something went wrong. Please try again.</p>}
+              {status === 'error' && <p style={{ color: '#B91C1C', fontSize: 12, margin: '6px 0 0' }}>Something went wrong. Please try again.</p>}
               <button
                 type="submit"
                 className="pp-btn pp-btn-primary"

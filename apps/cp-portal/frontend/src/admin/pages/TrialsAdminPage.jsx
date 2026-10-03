@@ -154,7 +154,7 @@ export default function TrialsAdminPage() {
                       <button onClick={() => startEdit(t)} style={{ color: 'var(--cp-primary)', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
                       </CanChange>
                       <CanChange area="trials">
-                      <button onClick={() => handleDelete(t.id)} style={{ color: '#DC2626', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
+                      <button onClick={() => handleDelete(t.id)} style={{ color: '#B91C1C', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
                       </CanChange>
                     </td>
                   </tr>

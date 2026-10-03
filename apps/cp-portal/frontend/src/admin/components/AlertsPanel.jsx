@@ -60,12 +60,12 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
       </div>
       {error && <div className="cp-error" style={{ marginTop: 8 }}>{error}</div>}
 
-      {data && !open.length && <p style={{ color: '#6b7280', margin: '8px 0 0' }}>Nothing needs your attention.</p>}
+      {data && !open.length && <p style={{ color: '#4b5563', margin: '8px 0 0' }}>Nothing needs your attention.</p>}
       {open.map(a => (
         <div key={a.id} style={{ borderLeft: `4px solid ${a.audience === 'safety' ? '#b91c1c' : '#d97706'}`, padding: '8px 12px', margin: '10px 0', background: '#fafafa' }}>
           <div style={{ fontWeight: 600 }}>{a.title}</div>
           {a.body && <div style={{ fontSize: 13, marginTop: 4 }}>{a.body}</div>}
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
             {new Date(a.created_at).toLocaleString()} · {a.audience === 'safety' ? 'Safety' : 'Integration'} ·{' '}
             {a.emailed_to ? `emailed to ${a.emailed_to}` : 'nobody was emailed — set who is told'}
           </div>
@@ -77,7 +77,7 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
       ))}
 
       {data && !editing && (
-        <p style={{ fontSize: 12, color: '#6b7280', margin: '10px 0 0' }}>
+        <p style={{ fontSize: 12, color: '#4b5563', margin: '10px 0 0' }}>
           Integration alerts go to {data.sends_to.integration.join(', ') || 'nobody'}.{' '}
           Safety alerts go to {data.sends_to.safety.join(', ') || 'nobody'}; a safety task waiting more than {data.settings.safety_wait_hours} hour{data.settings.safety_wait_hours === 1 ? '' : 's'} is flagged.
         </p>
