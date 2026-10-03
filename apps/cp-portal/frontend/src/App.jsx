@@ -167,11 +167,24 @@ function PortalRoutes() {
   )
 }
 
+// CPPM-92: the admin sign-in check runs only for admin pages. It used to wrap the
+// whole app, so every public portal page asked the server whether the visitor was
+// signed in to the admin console.
 export default function App() {
   return (
-    <AdminAuthProvider>
-      {/* Pages load on demand, so a portal visitor never downloads the admin console. */}
-      <Suspense fallback={<div className="cp-loading">Loading…</div>}>
+    // Pages load on demand, so a portal visitor never downloads the admin console.
+    <Suspense fallback={<div className="cp-loading">Loading…</div>}>
+    <Routes>
+      {/* Public Portal — multi-tenant by clientCode */}
+      <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />
+      <Route path="*" element={<AdminAuthProvider><AdminRoutes /></AdminAuthProvider>} />
+    </Routes>
+    </Suspense>
+  )
+}
+
+function AdminRoutes() {
+  return (
       <Routes>
         {/* Admin Console */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -208,14 +221,9 @@ export default function App() {
         <Route path="/admin/clients/:clientId/trials"        element={<AdminGuard><TrialsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/training"      element={<AdminGuard><TrainingAdminPage /></AdminGuard>} />
 
-        {/* Public Portal — multi-tenant by clientCode */}
-        <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />
-
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
-      </Suspense>
-    </AdminAuthProvider>
   )
 }
