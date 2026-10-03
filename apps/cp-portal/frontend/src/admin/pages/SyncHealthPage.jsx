@@ -107,7 +107,8 @@ export default function SyncHealthPage() {
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2>Failed Syncs {failures.length > 0 ? `(${failures.length})` : ''}</h2>
+            {/* The list holds the newest 100; say so when there are more. */}
+            <h2>Failed Syncs {failures.length > 0 ? (Number(counts.failed_sync) > failures.length ? `(newest ${failures.length} of ${counts.failed_sync})` : `(${failures.length})`) : ''}</h2>
             <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
           </div>
 

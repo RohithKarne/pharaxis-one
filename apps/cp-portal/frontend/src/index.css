@@ -1139,6 +1139,7 @@ body { background: var(--cp-bg); }
   color: #64748B;
 }
 .cp-table-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.cp-pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--text-muted, #6b7280); }
 
 /* ── Badges ───────────────────────────────────────────────────── */
 

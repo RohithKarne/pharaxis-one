@@ -222,8 +222,12 @@ export default function SubmissionsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [mineOnly, setMineOnly] = useState(false)   // CPPM-61
+  const [page, setPage]         = useState(1)
+  const [matched, setMatched]   = useState(0)
+  const [mineCount, setMineCount] = useState(0)
+  const PAGE_SIZE = 100
 
-  useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
+  useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search, dateFrom, dateTo, mineOnly, page])
 
   // `quiet` reloads the rows without swapping the whole page for "Loading…", which
   // would close a hand-over box that is still open (CPPM-61).
@@ -234,12 +238,19 @@ export default function SubmissionsPage() {
       if (typeFilter)   params.set('type', typeFilter)
       if (statusFilter) params.set('status', statusFilter)
       if (search)       params.set('search', search)
+      if (dateFrom)     params.set('from', dateFrom)
+      if (dateTo)       params.set('to', dateTo)
+      if (mineOnly)     params.set('mine', '1')
+      params.set('page', page)
+      params.set('limit', PAGE_SIZE)
       const res = await fetch(`/api/admin/submissions/${clientId}?${params}`, { headers: adminHeaders() })
       if (!res.ok) throw new Error('Failed to load submissions.')
       const d   = await res.json()
       setSubmissions(d.submissions || [])
       setCounts(d.counts || [])
       setTotal(d.total || 0)
+      setMatched(d.matched || 0)
+      setMineCount(d.mine_count || 0)
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     }
@@ -332,8 +343,9 @@ export default function SubmissionsPage() {
 
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
 
-  const mineCount = submissions.filter(s => s.owned_by_me).length
-  const shown = mineOnly ? submissions.filter(s => s.owned_by_me) : submissions
+  // Filters, dates and "mine" are applied by the server, across every submission.
+  const shown = submissions
+  const pageCount = Math.max(1, Math.ceil(matched / PAGE_SIZE))
 
   return (
     <AdminLayout title="Submissions">
@@ -357,7 +369,7 @@ export default function SubmissionsPage() {
         <select
           className="cp-select"
           value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
+          onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
         >
           <option value="">All Types</option>
           {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -365,33 +377,33 @@ export default function SubmissionsPage() {
         <select
           className="cp-select"
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
         >
           <option value="">All Statuses</option>
           {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
           placeholder="Search name, email, ref…"
           className="cp-search-input"
         />
         <label className="cp-date-filter">From
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
           />
         </label>
         <label className="cp-date-filter">To
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
           />
         </label>
         {/* CPPM-61: the enquiries this person holds */}
         {!hasRole('viewer') && (
-          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setMineOnly(m => !m); setPage(1) }}>
             {mineOnly ? 'Show all' : `Show mine${mineCount ? ` (${mineCount})` : ''}`}
           </button>
         )}
         {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
-          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1) }}>
             Clear
           </button>
         )}
@@ -415,7 +427,7 @@ export default function SubmissionsPage() {
       )}
 
       {shown.length === 0 ? (
-        <div className="cp-empty"><p>{mineOnly && submissions.length ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
+        <div className="cp-empty"><p>{mineOnly ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
       ) : (
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
@@ -573,7 +585,16 @@ export default function SubmissionsPage() {
           </table>
         </div>
       )}
-      <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>Showing {submissions.length} of {total} submissions (max 200)</div>
+      <div className="cp-pager">
+        <span>{matched ? `Showing ${(page - 1) * PAGE_SIZE + 1}–${(page - 1) * PAGE_SIZE + submissions.length} of ${matched}` : 'Showing 0'}{matched !== total ? ` (${total} in all)` : ''}</span>
+        {pageCount > 1 && (
+          <>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+            <span>Page {page} of {pageCount}</span>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>Next</button>
+          </>
+        )}
+      </div>
     </AdminLayout>
   )
 }

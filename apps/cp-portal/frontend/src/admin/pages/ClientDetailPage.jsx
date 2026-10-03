@@ -209,7 +209,7 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/clients/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setData(d))
       .catch(() => {}).finally(() => setLoading(false))
-    fetch(`/api/admin/submissions/${clientId}`, { headers: adminHeaders() })
+    fetch(`/api/admin/submissions/${clientId}?limit=1`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setSubmissionStats({ total: d.total, counts: d.counts || [] }))
       .catch(() => {})
     fetch(`/api/admin/clients/${clientId}/readiness`, { headers: adminHeaders() })
