@@ -100,6 +100,10 @@ CREATE TABLE IF NOT EXISTS cp_portal_users (
   reset_token_expires_at        DATETIME     NULL,
   token_version                 INT          NOT NULL DEFAULT 0,
   created_at                    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- access_status, access_requested_at and access_decided_at folded in from 0040 (CPPM-113).
+  access_status                 VARCHAR(20)  NULL,
+  access_requested_at           DATETIME     NULL,
+  access_decided_at             DATETIME     NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_portal_users (client_id, email),
   CONSTRAINT fk_portal_users_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -1177,6 +1181,24 @@ CREATE TABLE IF NOT EXISTS cp_submission_followups (
   CONSTRAINT fk_followup_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── SAFETY LETTER CONFIRMATIONS (from 0041, CPPM-114) ──────────
+CREATE TABLE IF NOT EXISTS cp_safety_acknowledgements (
+  id               INT      NOT NULL AUTO_INCREMENT,
+  client_id        INT      NOT NULL,
+  alert_id         INT      NOT NULL,
+  portal_user_id   INT      NOT NULL,
+  acknowledged_at  DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_safety_ack (alert_id, portal_user_id),
+  KEY idx_safety_ack_user (portal_user_id),
+  CONSTRAINT fk_safety_ack_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
+  CONSTRAINT fk_safety_ack_alert  FOREIGN KEY (alert_id) REFERENCES cp_safety_alerts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_safety_ack_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 0039 (CPPM-109) only adds two feature rows to clients that already exist; a fresh
+-- database has none, and new clients get both rows when they are created.
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1219,4 +1241,7 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0035_add_submission_followups.sql',         NULL),
   ('0036_add_submission_identity_erased.sql',   NULL),
   ('0037_add_submission_sync_key.sql',          NULL),
-  ('0038_classic_branding_defaults.sql',        NULL);
+  ('0038_classic_branding_defaults.sql',        NULL),
+  ('0039_add_trials_training_switches.sql',     NULL),
+  ('0040_add_portal_access_requests.sql',       NULL),
+  ('0041_add_safety_acknowledgements.sql',      NULL);
