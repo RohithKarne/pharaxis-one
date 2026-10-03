@@ -31,7 +31,7 @@ const MODULE_LOGIN_CONFIG = {
     destination: '/content',
     target: 'content',
     title: 'Content Management Console',
-    message: 'Use this CM login only if your account has admin access to Content Management.',
+    message: 'Use this CM login if your account has access to Content Management.',
   },
   reports: {
     moduleKey: 'reports',
@@ -113,7 +113,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
   function hasTargetAccess(data) {
     if (activeMode === 'app') return hasModuleAccess(data, 'mims_core')
-    return isAdminUser(data) && hasModuleAccess(data, modeConfig.moduleKey)
+    // Content Management is for content managers as well as admins (MIPM-136).
+    return (activeMode === 'content' || isAdminUser(data)) && hasModuleAccess(data, modeConfig.moduleKey)
   }
 
   function hasMimsAppAccess(data) {
@@ -131,7 +132,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
   function findFallbackAdminDestination(data) {
     if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination
-    if (isAdminUser(data) && hasModuleAccess(data, 'content_mgmt')) return MODULE_LOGIN_CONFIG.content.destination
+    if (hasModuleAccess(data, 'content_mgmt')) return MODULE_LOGIN_CONFIG.content.destination
     if (isAdminUser(data) && hasModuleAccess(data, 'reports')) return MODULE_LOGIN_CONFIG.reports.destination
     return ''
   }
