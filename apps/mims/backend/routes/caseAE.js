@@ -94,6 +94,21 @@ async function ensureAeChildAccess(tableName, childId, req, { requireUnlocked = 
   return row;
 }
 
+// A follow-up version starts as a copy of the version it follows (MIPM-170): an
+// E2B follow-up is a complete report, and the new version started empty, so the
+// agent had to type the whole adverse event again. Every tab table is keyed by
+// version_id; the copy takes all its columns but the row's own keys.
+const AE_VERSION_TABLES = ['case_ae_general', 'case_ae_events', 'case_ae_patient_info', 'case_ae_lab_results',
+  'case_ae_lab_notes', 'case_ae_medical_history', 'case_ae_medical_notes', 'case_ae_product_info', 'case_ae_flex_fields'];
+async function copyVersionData(conn, fromId, toId) {
+  for (const table of AE_VERSION_TABLES) {
+    const [cols] = await conn.execute(`SHOW COLUMNS FROM ${table}`);
+    const list = cols.map(c => c.Field).filter(f => !['id', 'version_id', 'created_at', 'updated_at'].includes(f))
+      .map(f => `\`${f}\``).join(', ');
+    await conn.execute(`INSERT INTO ${table} (version_id, ${list}) SELECT ?, ${list} FROM ${table} WHERE version_id = ? ORDER BY id`, [toId, fromId]);
+  }
+}
+
 // ─── VERSION MANAGEMENT ───────────────────────────────────────────────────────
 
 // GET /api/cases/:id/ae/versions — list all versions for a case
@@ -213,6 +228,8 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
         }
       }
     }
+
+    if (latest) await copyVersionData(conn, latest.id, result.insertId);
 
     await conn.commit();
     await auditChanges(req.params.id, req, 'AE_VERSION_CREATED', `AE v${nextNum}`, null, { status: 'open' });
