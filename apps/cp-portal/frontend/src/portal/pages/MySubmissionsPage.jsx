@@ -4,21 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import Icon from '../../shared/components/Icon'
 import { formatDate as formatDayOnly, formatDateTime } from '../../shared/utils/datetime'
-
-// What the person is told. The internal sync states (submitted / pending_sync /
-// synced / failed_sync) describe our copy of the request, not the request, so they
-// all read as "In progress" — a visitor can do nothing with "failed_sync", and
-// showing it invites a support call about our plumbing.
-const STATUS_LABELS = {
-  submitted:    { label: 'In progress', cls: 'pp-status-pending'    },
-  pending_sync: { label: 'In progress', cls: 'pp-status-pending'    },
-  synced:       { label: 'In progress', cls: 'pp-status-pending'    },
-  failed_sync:  { label: 'In progress', cls: 'pp-status-pending'    },
-  pending:      { label: 'Pending',     cls: 'pp-status-pending'    },
-  in_review:    { label: 'In Review',   cls: 'pp-status-in-review'  },
-  completed:    { label: 'Completed',   cls: 'pp-status-completed'  },
-  closed:       { label: 'Closed',      cls: 'pp-status-closed'     },
-}
+import { STATUS_LABELS } from '../utils/submissionStatus'
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',

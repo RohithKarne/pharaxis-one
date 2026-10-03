@@ -4,8 +4,8 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 import { formatDateTime } from '../../shared/utils/datetime'
+import { statusLabel } from '../utils/submissionStatus'
 
-const STATUS_LABELS = { submitted: 'Submitted', pending_sync: 'Pending', synced: 'Synced', failed_sync: 'Failed', closed: 'Closed' }
 
 export default function MyActivityPage() {
   const { clientCode, user, portalHeaders } = usePortal()
@@ -58,9 +58,15 @@ export default function MyActivityPage() {
         <div style={{ marginBottom: 26 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Submissions by status</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {stats.submissions.by_status.map(s => (
-              <span key={s.status} className="pp-sev-chip" style={{ cursor: 'default' }}>
-                {STATUS_LABELS[s.status] || s.status}: <strong>{s.c}</strong>
+            {/* CPPM-91: the same plain words as My Submissions; the four internal
+                states all count as "In progress", so they are added together. */}
+            {Object.entries(stats.submissions.by_status.reduce((acc, s) => {
+              const label = statusLabel(s.status)
+              acc[label] = (acc[label] || 0) + Number(s.c)
+              return acc
+            }, {})).map(([label, c]) => (
+              <span key={label} className="pp-sev-chip" style={{ cursor: 'default' }}>
+                {label}: <strong>{c}</strong>
               </span>
             ))}
           </div>
