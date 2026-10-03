@@ -3003,11 +3003,11 @@ textarea:focus-visible {
 .cp-fail-notice button { background: none; border: 1px solid currentColor; color: inherit; font: inherit; font-weight: 600; padding: 2px 8px; cursor: pointer; }
 
 /* ── Phone (CPPM-99) ──────────────────────────────────────────────────────
-   Links and small controls are at least 32px tall to tap, and the page ends with room
-   to spare, so the floating Feedback and chat buttons never sit over the last field,
-   button or line of the footer. */
+   The page ends with room to spare at every width, so the floating Feedback and chat
+   buttons never sit over the last field, button or line of the footer. On a phone, links
+   and small controls are at least 32px tall to tap. */
+.pp-main, .pp-footer { padding-bottom: 80px; }
 @media (max-width: 640px) {
-  .pp-main, .pp-footer { padding-bottom: 80px; }
   .pp-logo, .pp-footer-links a, .pp-footer-link-btn, .pp-search-suggestions a, .pp-search-suggestions button,
   .pp-update-panel-head a, .pp-safety-card a, .pp-link-btn { display: inline-flex; align-items: center; min-height: 32px; }
   .pp-header-search input, .pp-hero-search input { min-height: 32px; }
