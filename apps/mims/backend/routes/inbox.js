@@ -7,7 +7,7 @@ const express = require('express');
 const { decryptMailboxSecret } = require('../services/mailboxCrypto');
 const fs = require('fs');
 const router = express.Router();
-const { authenticate, requireRole, requireCapability } = require('../middleware/auth');
+const { authenticate, requireRole, requireCapability, requireModule } = require('../middleware/auth');
 const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -780,12 +780,16 @@ router.delete('/templates/:tid', authenticate, requireCapability('inbox.configur
 });
 
 // POST /api/inbox/fetch — trigger immediate IMAP ingest for all active inbound accounts
-router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+// MIPM-157: everyone who works the Inbox sees "Fetch mail"; agents were refused.
+// Only their own organisations' mailboxes are fetched — and none when they have no
+// organisation (that used to mean every organisation's).
+router.post('/fetch', authenticate, requireModule('inbox'), async (req, res) => {
   try {
     const { ingestAccount } = require('../services/emailPoller');
     const { logService } = require('../services/serviceLogger');
     const scope = await resolveInboxScope(req);
-    const orgClause = hasPlatformAdminScope(req) || scope.orgIds.length === 0
+    if (!hasPlatformAdminScope(req) && scope.orgIds.length === 0) return res.json({ ingested: 0, failed: 0, failures: [] });
+    const orgClause = hasPlatformAdminScope(req)
       ? ''
       : `AND org_id IN (${scope.orgIds.map(() => '?').join(',')})`;
     const [accounts] = await pool.execute(
