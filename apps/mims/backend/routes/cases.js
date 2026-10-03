@@ -2637,6 +2637,19 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       // Bridge row 8: an answer going out is a change to the case, so a connected
       // portal's change list picks it up and shows the person their answer.
       if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
+      // MIPM-188: what went out is recorded against each enclosed document and
+      // module, so its Usage view shows where it was used. Nothing wrote usage before.
+      if (responseStatus === 'SENT') {
+        const [[sent]] = await conn.execute('SELECT selected_documents, selected_modules FROM case_mi_responses WHERE id = ?', [req.params.responseId]);
+        const ids = (raw) => { try { const v = typeof raw === 'string' ? JSON.parse(raw) : raw; return (Array.isArray(v) ? v : []).map((x) => Number(x?.id ?? x)).filter(Boolean); } catch (_) { return []; } };
+        for (const [type, list] of [['document', ids(sent?.selected_documents)], ['module', ids(sent?.selected_modules)]]) {
+          for (const contentId of list) {
+            await conn.execute(
+              'INSERT INTO cm_content_usage (content_type, content_id, case_id, response_id, used_by) VALUES (?, ?, ?, ?, ?)',
+              [type, contentId, req.params.id, req.params.responseId, req.user.userId]);
+          }
+        }
+      }
       await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
         case_id: Number(req.params.id),
         from_status: existing.response_status,
