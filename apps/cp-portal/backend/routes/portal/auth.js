@@ -74,6 +74,10 @@ router.post('/request-access', async (req, res) => {
 
     const [[client]] = await pool.execute('SELECT id, code, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // A single-sign-on-only portal has no passwords to set, so an approval could not be used.
+    if (sso.normalizeLoginMode(client.login_mode) === 'sso_only') {
+      return res.status(403).json({ error: 'This portal uses single sign-on. Ask your organisation for access.' });
+    }
     const validTypes = await getValidTypes(client.id);
     if (!validTypes.includes(user_type)) return res.status(400).json({ error: 'Please choose your role from the list.' });
 
@@ -88,15 +92,15 @@ router.post('/request-access', async (req, res) => {
         [client.id, f, l, e, unusablePassword, user_type, c]
       );
       await systemAudit('portal access request', client.id, 'ACCESS_REQUESTED', 'portal_user', info.insertId, { user_type });
-      // Tell the client's admins. The alert carries no personal detail beyond the
-      // fact of a request; the name and email are read in the admin console.
+      // Tell the client's admins. One open alert per portal, however many requests
+      // arrive, so a burst of requests cannot become a burst of emails. It carries no
+      // personal detail; names and emails are read in the admin console.
       raiseAlert(client.id, {
         kind: 'access_requested', audience: 'admin',
-        title: 'A doctor has asked for portal access',
-        body: 'Open Portal Users and choose Requested to approve or decline it.',
+        title: 'Doctors have asked for portal access',
+        body: 'Open Portal Users and choose Requested to approve or decline them.',
         linkPath: `/admin/clients/${client.id}/users?access=requested`,
-        relatedType: 'portal_user', relatedId: info.insertId,
-        dedupeKey: `access_requested:${info.insertId}`,
+        dedupeKey: 'access_requested',
       });
     } catch (err) {
       // uq_portal_users is UNIQUE(client_id, email): an account or an earlier request.

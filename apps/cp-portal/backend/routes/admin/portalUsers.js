@@ -339,6 +339,12 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
 // account and emails the usual set-password invitation; declining keeps it inactive,
 // so the doctor cannot sign in. Only a pending request can be decided, so a second
 // click (or two admins at once) changes nothing.
+// The access-request alert stays open while any request is waiting.
+async function clearIfNoneWaiting(clientId, by) {
+  const [[{ n }]] = await pool.execute(`SELECT COUNT(*) AS n FROM cp_portal_users WHERE client_id = ? AND access_status = 'requested'`, [clientId]);
+  if (Number(n) === 0) await clearAlerts(clientId, 'access_requested', by);
+}
+
 router.post('/:clientId/:userId/approve-access', authenticateAdmin, async (req, res) => {
   try {
     const [[client]] = await pool.execute('SELECT id, code FROM cp_clients WHERE id = ? AND is_active = 1', [req.params.clientId]);
@@ -351,7 +357,7 @@ router.post('/:clientId/:userId/approve-access', authenticateAdmin, async (req, 
     const [[u]] = await pool.execute('SELECT id, email, first_name FROM cp_portal_users WHERE id = ?', [req.params.userId]);
     await issueInvite({ userId: u.id, clientId: client.id, clientCode: client.code, email: u.email, firstName: u.first_name, origin: req.headers.origin, isResend: false });
     await audit(req.admin, client.id, 'APPROVE_ACCESS', 'portal_user', u.id, { email: u.email });
-    await clearAlerts(client.id, `access_requested:${u.id}`, `admin: approved by ${req.admin?.email || 'admin'}`);
+    await clearIfNoneWaiting(client.id, `admin: approved by ${req.admin?.email || 'admin'}`);
     res.json({ message: 'Approved. An invitation to set a password has been emailed.' });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/approve-access', path: req.path, request_id: req.requestId || null });
@@ -367,7 +373,7 @@ router.post('/:clientId/:userId/decline-access', authenticateAdmin, async (req, 
       [req.params.userId, req.params.clientId]);
     if (!r.affectedRows) return res.status(409).json({ error: 'This request has already been decided, or does not exist.' });
     await audit(req.admin, Number(req.params.clientId), 'DECLINE_ACCESS', 'portal_user', Number(req.params.userId), {});
-    await clearAlerts(Number(req.params.clientId), `access_requested:${Number(req.params.userId)}`, `admin: declined by ${req.admin?.email || 'admin'}`);
+    await clearIfNoneWaiting(Number(req.params.clientId), `admin: declined by ${req.admin?.email || 'admin'}`);
     res.json({ message: 'Declined. This person cannot sign in.' });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/decline-access', path: req.path, request_id: req.requestId || null });

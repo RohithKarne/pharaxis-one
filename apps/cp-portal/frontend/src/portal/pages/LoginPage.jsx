@@ -84,7 +84,7 @@ export default function LoginPage() {
         ) : (<>
         <div className="pp-auth-footer" style={{ marginBottom: 16, textAlign: 'left' }}>
           Accounts are approved by the portal team.{' '}
-          <button type="button" className="pp-link-btn" onClick={() => { setRequesting(true); setError('') }}>No account? Request access</button>
+          {localAllowed && <button type="button" className="pp-link-btn" onClick={() => { setRequesting(true); setError('') }}>No account? Request access</button>}
         </div>
 
         {/* SSO: single sign-on with the portal's configured identity providers */}
