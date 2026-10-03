@@ -243,7 +243,7 @@ const schemas = {
   createSecurityGroup: Joi.object({
     org_id:      id().optional(),
     name:        str().required(),
-    description: str(500).optional(),
+    description: str(500).optional().allow(null, ''),
     privileges:  Joi.object().optional(),
     is_active:   bool().optional(),
   }),
