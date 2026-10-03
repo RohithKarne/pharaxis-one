@@ -144,28 +144,14 @@ export function findSystemLabel(value) {
   return findInNav(SYSTEM_NAV, value) ?? value
 }
 
+// Only tables with a real screen are listed (MIPM-154, as T10 / M-35 did for System).
+// Abstract Control, Account Masters, Code Converter, Contact Class, Postal Code,
+// Global Product, Product Manufacturer, Representative Type / Alignment, MSL,
+// MSL Territory, Shift (Referral, QA) and Signature only highlighted a row.
 export const TABLES_NAV = [
-  { label: 'General',                  value: 'tbl-general'              },
-  { label: 'Abstract Control',         value: 'tbl-abstract-control'     },
-  { label: 'Account Masters',          value: 'tbl-account-masters'      },
-  { label: 'Code Converter',           value: 'tbl-code-converter'       },
-  { label: 'Contact Masters',          value: 'tbl-contact-masters'      },
-  { label: 'Contact Class',            value: 'tbl-contact-class'        },
-  { label: 'Postal Code',              value: 'tbl-postal-code'          },
-  { label: 'Global Product',           value: 'tbl-global-product'       },
-  { label: 'Product',                  value: 'tbl-product'              },
-  { label: 'Product Manufacturer',     value: 'tbl-product-manufacturer' },
-  { label: 'Representative Type',      value: 'tbl-rep-type'             },
-  { label: 'Representative Alignment', value: 'tbl-rep-alignment'        },
-  { label: 'MSL',                      value: 'tbl-msl'                  },
-  { label: 'MSL Territory',            value: 'tbl-msl-territory'        },
-  {
-    label: 'Shift', value: 'tbl-shift', children: [
-      { label: 'Referral', value: 'tbl-shift-referral' },
-      { label: 'QA',       value: 'tbl-shift-qa'       },
-    ],
-  },
-  { label: 'Signature', value: 'tbl-signature' },
+  { label: 'General',         value: 'tbl-general'         },
+  { label: 'Product',         value: 'tbl-product'         },
+  { label: 'Contact Masters', value: 'tbl-contact-masters' },
 ]
 
 export function findTableLabel(value) {
