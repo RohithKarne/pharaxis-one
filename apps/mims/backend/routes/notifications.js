@@ -80,26 +80,22 @@ router.get('/notifications', authenticate, async (req, res) => {
        LIMIT ${limit} OFFSET ${offset}`,
       params
     );
-    const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) AS total FROM notifications WHERE ${whereSql}`,
-      params
-    );
-    const [[{ unread }]] = await pool.execute(
-      'SELECT COUNT(*) AS unread FROM notifications WHERE user_id = ? AND is_read = 0',
-      [req.user.userId]
-    );
-    const [[{ ack_pending }]] = await pool.execute(
-      `SELECT COUNT(*) AS ack_pending
+    // One pass over this user's rows for all four counts (it was four queries per
+    // poll). `total` honours the feed filters; the other three never did.
+    const [[counts]] = await pool.execute(
+      `SELECT
+         COALESCE(SUM((${whereSql})), 0) AS total,
+         COALESCE(SUM(is_read = 0), 0) AS unread,
+         COALESCE(SUM(requires_acknowledgement = 1 AND acknowledged_at IS NULL), 0) AS ack_pending,
+         COALESCE(SUM(delivery_status = 'failed'), 0) AS failed_delivery
        FROM notifications
-       WHERE user_id = ? AND requires_acknowledgement = 1 AND acknowledged_at IS NULL`,
-      [req.user.userId]
+       WHERE user_id = ?`,
+      [...params, req.user.userId]
     );
-    const [[{ failed_delivery }]] = await pool.execute(
-      `SELECT COUNT(*) AS failed_delivery
-       FROM notifications
-       WHERE user_id = ? AND delivery_status = 'failed'`,
-      [req.user.userId]
-    );
+    const total = Number(counts.total);
+    const unread = Number(counts.unread);
+    const ack_pending = Number(counts.ack_pending);
+    const failed_delivery = Number(counts.failed_delivery);
 
     return res.json({
       notifications: rows.map((row) => ({ ...row, metadata: parseJsonSafe(row.metadata, null) })),
