@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import AskAboutThis from '../components/AskAboutThis'
 import Icon from '../../shared/components/Icon'
 
 const COMPARE_ROWS = [
@@ -119,11 +120,14 @@ export default function DrugInfoPage() {
                     <p>{selected.side_effects}</p>
                   </div>
                 )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {selected.prescribing_info_url && (
                   <a href={selected.prescribing_info_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-primary">
                     View Full Prescribing Information
                   </a>
                 )}
+                <AskAboutThis product={selected.brand_name || selected.generic_name} about={selected.brand_name || selected.generic_name} className="pp-btn pp-btn-outline" />
+                </div>
               </div>
             )}
           </div>

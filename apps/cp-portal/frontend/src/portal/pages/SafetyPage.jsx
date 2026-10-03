@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import AskAboutThis from '../components/AskAboutThis'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 const SEVERITIES = ['critical', 'warning', 'informational']
@@ -79,8 +80,10 @@ export default function SafetyPage() {
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(alert.body_html) }}
           />
         )}
+        <div className="pp-alert-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <AskAboutThis product={alert.product_name} about={alert.title} />
         {alert.attachment_name && (
-          <div className="pp-alert-actions">
+          <>
             <a
               href={`/api/portal/safety/${alert.id}/attachment?clientCode=${clientCode}`}
               className="pp-btn pp-btn-outline pp-btn-sm"
@@ -90,8 +93,9 @@ export default function SafetyPage() {
             >
               <Icon name="file" size={15} /> Download PDF
             </a>
-          </div>
+          </>
         )}
+        </div>
       </div>
     )
   }

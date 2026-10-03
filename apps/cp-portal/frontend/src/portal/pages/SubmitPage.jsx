@@ -88,6 +88,14 @@ export default function SubmitPage() {
         }
         const filled = { ...draft }
         for (const [k, v] of Object.entries(mine)) if (keys.has(k) && v && !filled[k]) filled[k] = v
+        // CPPM-110: "Ask about this" brings the product and the item it was pressed on.
+        if (selectedType === requestedType) {
+          const product = (params.get('product') || '').slice(0, 200)
+          const about = (params.get('about') || '').slice(0, 200)
+          if (product) for (const k of ['product', 'product_name', 'suspect_product']) if (keys.has(k) && !filled[k]) filled[k] = product
+          const textBox = (d.fields || []).find(f => f.field_type === 'textarea' && !f.system_managed)
+          if (about && textBox && !filled[textBox.field_key]) filled[textBox.field_key] = `About "${about}": `
+        }
         setFormValues(filled)
         setFieldErrors({})
       })

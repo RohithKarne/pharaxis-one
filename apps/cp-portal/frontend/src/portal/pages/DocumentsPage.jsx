@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import PdfViewerModal from '../components/PdfViewerModal'
+import AskAboutThis from '../components/AskAboutThis'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 
 function formatFileSize(bytes) {
@@ -331,6 +332,7 @@ export default function DocumentsPage() {
                     >
                       {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                     </button>
+                    <AskAboutThis about={doc.title} />
                   </div>
                 </div>
               ))}
@@ -379,6 +381,7 @@ export default function DocumentsPage() {
                 >
                   {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                 </button>
+                <AskAboutThis about={doc.title} />
               </div>
             </div>
           ))}
