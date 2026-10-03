@@ -501,7 +501,7 @@ function CaseEntryFields({ form, set }) {
       <div style={card}>
         <h3 style={h3}>Response Options</h3>
         <FCheck form={form} set={set} k="resp_allow_letters" label="Allow response letters" />
-        {form.resp_allow_letters && (
+        {!!form.resp_allow_letters && (
           <FSelect form={form} set={set} k="resp_custom_letters_mode" label="Custom letters"
             options={[['auto_on', 'Auto-on'], ['auto_on_off', 'Auto on & off'], ['manual_on_off', 'Manual on & off']]} />
         )}
