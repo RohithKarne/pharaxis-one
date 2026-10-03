@@ -8,6 +8,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { emitPlatformAdminAlert } = require('../../services/alertService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { platformSmtpConfigError } = require('../../utils/mailSecurity');
 
 const router = express.Router();
 const adminTwoFactorAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
@@ -140,6 +141,9 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
       if (mins < 30) return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
     }
+
+    const smtpError = await platformSmtpConfigError(req.body, pool);
+    if (smtpError) return res.status(400).json({ error: smtpError });
 
     const configPairs = {
       smtp_host,

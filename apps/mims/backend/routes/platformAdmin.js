@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
+const { platformSmtpConfigError } = require('../utils/mailSecurity');
 const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
 const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../services/leaverCasesService');
 const { validate, schemas } = require('../middleware/validate');
@@ -402,6 +403,9 @@ router.put('/config', authenticate, requireRole('platform_admin'), async (req, r
         return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
     }
+    const smtpError = await platformSmtpConfigError(req.body, pool);
+    if (smtpError) return res.status(400).json({ error: smtpError });
+
     const configPairs = {
       smtp_host,
       smtp_port: smtp_port !== undefined ? String(smtp_port) : undefined,
