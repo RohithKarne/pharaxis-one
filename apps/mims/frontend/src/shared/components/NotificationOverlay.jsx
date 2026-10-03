@@ -250,7 +250,7 @@ export default function NotificationOverlay({ open, onClose }) {
                 <span>Delivery: {String(n.delivery_status || 'delivered')}</span>
               </div>
               <div className="mims-notif-actions">
-                {n.requires_acknowledgement && !n.acknowledged_at && (
+                {!!n.requires_acknowledgement && !n.acknowledged_at && (
                   <button
                     className="mims-notif-action-btn critical"
                     onClick={e => { e.stopPropagation(); acknowledge(n.id) }}
