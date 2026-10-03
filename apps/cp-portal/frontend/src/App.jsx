@@ -156,9 +156,9 @@ function PortalRoutes() {
           <Route path="profile"          element={<PortalAuthGuard><ProfilePage /></PortalAuthGuard>} />
           <Route path="faq"             element={<FAQPortalPage />} />
           <Route path="search"          element={<SearchResultsPage />} />
-          <Route path="trials"          element={<ClinicalTrialsPage />} />
-          <Route path="training"        element={<TrainingPage />} />
-          <Route path="training/:moduleId" element={<PortalAuthGuard><TrainingModulePage /></PortalAuthGuard>} />
+          <Route path="trials"          element={<FeatureGuard featureKey="clinical_trials"><ClinicalTrialsPage /></FeatureGuard>} />
+          <Route path="training"        element={<FeatureGuard featureKey="cme_training"><TrainingPage /></FeatureGuard>} />
+          <Route path="training/:moduleId" element={<FeatureGuard featureKey="cme_training"><PortalAuthGuard><TrainingModulePage /></PortalAuthGuard></FeatureGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
         </Suspense>

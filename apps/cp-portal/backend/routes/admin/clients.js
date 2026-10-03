@@ -28,6 +28,9 @@ const DEFAULT_FEATURES = [
   { key: 'homepage_quicklinks', label: 'Homepage Quick Links',          order: 0 },
   { key: 'news_announcements', label: 'News & Announcements',           order: 13 },
   { key: 'document_library',   label: 'Document Library',               order: 14 },
+  // CPPM-109: switchable like every other page; also hidden while nothing is published.
+  { key: 'clinical_trials',    label: 'Clinical Trials',                order: 15 },
+  { key: 'cme_training',       label: 'CME & Training',                 order: 16 },
 ];
 
 const DEFAULT_FORM_FIELDS = {

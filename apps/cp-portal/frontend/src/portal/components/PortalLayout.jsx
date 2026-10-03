@@ -159,8 +159,9 @@ export default function PortalLayout({ children }) {
   const resourceItems = [
     isFeatureEnabled('resources')        && { label: t('nav.resources'),  path: 'resources' },
     isFeatureEnabled('document_library') && { label: t('nav.documents'),  path: 'documents' },
-    { label: 'Clinical Trials', path: 'trials' },
-    { label: 'CME & Training',  path: 'training' },
+    // CPPM-109: on only when switched on and something is published.
+    isFeatureEnabled('clinical_trials')  && { label: 'Clinical Trials', path: 'trials' },
+    isFeatureEnabled('cme_training')     && { label: 'CME & Training',  path: 'training' },
   ].filter(Boolean)
 
   const flatNavItems = [
