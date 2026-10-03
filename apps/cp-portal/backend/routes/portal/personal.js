@@ -10,6 +10,8 @@ const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth
 const { buildExport } = require('../../services/dataSubject');
 const { systemAudit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const { canSee } = require('../../utils/audience');
+const { VISIBLE_DOCUMENT_SQL } = require('../../utils/documentVisibility');
 
 const FOLLOW_TYPES = ['therapeutic_area', 'drug'];
 
@@ -19,6 +21,81 @@ async function resolveClient(req) {
   const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [code]);
   return client || null;
 }
+
+// GET /api/portal/personal/for-you?clientCode= — CPPM-116: news, documents and
+// upcoming events for this doctor's specialty and the areas and products they follow.
+// Nothing is tagged by area in the database, so an item matches when one of those
+// words appears in its title or category (news, documents) or its title, type or
+// description (events). Each list keeps its own page's rules: switched on, published,
+// and meant for this doctor's role. With no specialty and nothing followed, the
+// latest items are shown instead; with words but no match, the list is empty.
+const FOR_YOU_MAX = 6;
+const NOT_A_TOPIC = new Set(['other']);
+router.get('/for-you', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const client = await resolveClient(req);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+    const [[me]] = await pool.execute('SELECT specialty, user_type FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const userType = me?.user_type || 'other';
+
+    const [followRows] = await pool.execute(`
+      SELECT COALESCE(ta.name, d.brand_name) AS a, d.generic_name AS b
+        FROM cp_user_follows f
+        LEFT JOIN cp_therapeutic_areas ta ON f.item_type = 'therapeutic_area' AND ta.id = f.item_id AND ta.client_id = f.client_id
+        LEFT JOIN cp_drugs d ON f.item_type = 'drug' AND d.id = f.item_id AND d.client_id = f.client_id
+       WHERE f.portal_user_id = ? AND f.client_id = ?`, [req.portalUser.userId, client.id]);
+    const words = [...new Set([me?.specialty, ...followRows.flatMap(r => [r.a, r.b])]
+      .map(w => String(w || '').trim()).filter(w => w.length > 2 && !NOT_A_TOPIC.has(w.toLowerCase())))];
+
+    const [features] = await pool.execute('SELECT feature_key, is_enabled FROM cp_features WHERE client_id = ?', [client.id]);
+    const on = k => features.some(f => f.feature_key === k && f.is_enabled);
+    const items = [];
+    if (on('news_announcements')) {
+      const [rows] = await pool.execute(`
+        SELECT id, title, category, target_types_json, publish_at AS at FROM cp_news_posts
+         WHERE client_id = ? AND status = 'published' AND publish_at <= UTC_TIMESTAMP()
+         ORDER BY publish_at DESC LIMIT 200`, [client.id]);
+      rows.filter(r => canSee(r.target_types_json, userType))
+        .forEach(r => items.push({ type: 'news', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.category || ''}` }));
+    }
+    if (on('document_library')) {
+      const [rows] = await pool.execute(`
+        SELECT id, title, category, visible_to_json, created_at AS at FROM cp_documents
+         WHERE client_id = ? AND is_active = 1 AND ${VISIBLE_DOCUMENT_SQL}
+         ORDER BY created_at DESC LIMIT 200`, [client.id]);
+      rows.filter(r => canSee(r.visible_to_json, userType))
+        .forEach(r => items.push({ type: 'document', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.category || ''}` }));
+    }
+    if (on('events')) {
+      const [rows] = await pool.execute(`
+        SELECT id, title, event_type, description, start_date AS at FROM cp_events
+         WHERE client_id = ? AND is_active = 1 AND status = 'published'
+           AND COALESCE(end_date, start_date) >= UTC_TIMESTAMP()
+         ORDER BY start_date ASC LIMIT 200`, [client.id]);
+      rows.forEach(r => items.push({ type: 'event', id: r.id, title: r.title, at: r.at, text: `${r.title} ${r.event_type || ''} ${r.description || ''}` }));
+    }
+
+    const lower = words.map(w => w.toLowerCase());
+    let picked;
+    if (!words.length) {
+      picked = items.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, FOR_YOU_MAX);
+    } else {
+      picked = items
+        .map(it => ({ ...it, because: words[lower.findIndex(w => it.text.toLowerCase().includes(w))] }))
+        .filter(it => it.because)
+        .sort((a, b) => new Date(b.at) - new Date(a.at))
+        .slice(0, FOR_YOU_MAX);
+    }
+    res.json({
+      basis: words.length ? 'interests' : 'latest',
+      words,
+      items: picked.map(({ text, ...it }) => it),
+    });
+  } catch (err) {
+    log.error('portal.personal.error', { err, route: 'GET /for-you', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
 
 // GET /api/portal/personal/follows?clientCode= — followed items enriched with detail
 router.get('/follows', authenticatePortal, requirePortalAuth, async (req, res) => {
