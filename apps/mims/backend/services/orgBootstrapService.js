@@ -558,7 +558,7 @@ async function getPlatformReadinessSummary() {
     const attentionOrgs = readiness.length - readyOrgs;
     const averageScore = readiness.length
       ? Math.round(readiness.reduce((sum, item) => sum + Number(item.score || 0), 0) / readiness.length)
-      : 100;
+      : null; // no organisations yet: there is nothing to average (MIPM-133)
     const totalBlockers = readiness.reduce((sum, item) => sum + item.blockers.length, 0);
 
     return {
