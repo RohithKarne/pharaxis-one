@@ -346,3 +346,25 @@
 :root .rl-modal, :root .rel-modal, :root .tel-modal, :root .dp-modal { border-radius: 0; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
 :root .rl-modal-header, :root .rel-modal-header, :root .tel-modal-header { background: var(--panel-head); border-bottom: 1px solid var(--border); padding: 6px 10px; }
 :root .tx-date-sep { color: var(--text-primary); font-size: 12px; font-weight: bold; }
+
+/* MIMS Admin content: actions use the primary blue; orange stays on New Case only. */
+:root .mims-admin-tab-content { --accent: var(--primary); }
+
+/* Users: the toolbar wraps instead of squeezing the page title into one word per line. */
+:root .ma-usr-page { padding: 12px 16px; gap: 10px; }
+:root .ma-usr-toolbar { flex-wrap: wrap; }
+:root .ma-usr-toolbar > div:first-child { flex: 0 0 auto; }
+:root .ma-usr-toolbar > div:last-child { flex-wrap: wrap; }
+
+/* Admin dialogs: grey title bar like every other dialog. */
+:root .ma-usr-modal-header, :root .ma-pt-modal-header { background: var(--panel-head); border-bottom: 1px solid var(--border); padding: 6px 12px; }
+:root .ma-usr-modal-title, :root .ma-pt-modal-title { font-size: 14px; }
+
+/* MIMS Admin content: one control height and plain table headers on every section. */
+:root .mims-admin-tab-content :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]), select) {
+  min-height: 0; height: 26px; padding: 2px 6px; font-size: 12px; border-radius: 0;
+}
+:root .mims-admin-tab-content table th {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: bold; color: var(--text-primary); background: var(--panel-head);
+}
+:root .mims-admin-tab-content table td { padding-top: 4px; padding-bottom: 4px; }
