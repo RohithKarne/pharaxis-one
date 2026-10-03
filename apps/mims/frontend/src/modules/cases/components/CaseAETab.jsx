@@ -321,8 +321,8 @@ export default function CaseAETab({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to close version')
-      setAeVersions(prev => prev.map(v => v.id === activeAeVer.id ? { ...v, status: data.status || 'Closed' } : v))
-      setActiveAeVer(prev => (prev ? { ...prev, status: data.status || 'Closed' } : prev))
+      setAeVersions(prev => prev.map(v => v.id === activeAeVer.id ? { ...v, status: data.status || 'Closed', is_locked: data.is_locked } : v))
+      setActiveAeVer(prev => (prev ? { ...prev, status: data.status || 'Closed', is_locked: data.is_locked } : prev))
       setSavedMsg('AE version closed'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) {
       toast.error(err.message)
@@ -448,7 +448,7 @@ export default function CaseAETab({
                 onClick={() => { setActiveAeVer(v); loadAETab(v.id, activeAeTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
+                {!!v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}

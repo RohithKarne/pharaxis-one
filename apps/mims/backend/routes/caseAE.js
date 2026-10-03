@@ -233,8 +233,12 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
       return res.status(400).json({ error: `Invalid status. Allowed: ${[...AE_STATUSES].join(', ')}.` });
     }
     const [upd] = await pool.execute(
-      'UPDATE case_ae_versions SET status = ? WHERE id = ? AND is_locked = 0',
-      [normStatus, req.params.versionId]
+      // Closing a version locks it (MIPM-161): the screen says closing "locks it for
+      // audit", but only the status changed and the closed version stayed editable
+      // until someone happened to start the next one.
+      `UPDATE case_ae_versions SET status = ?, is_locked = ?, locked_at = IF(? = 1, NOW(), locked_at)
+        WHERE id = ? AND is_locked = 0`,
+      [normStatus, normStatus === 'closed' ? 1 : 0, normStatus === 'closed' ? 1 : 0, req.params.versionId]
     );
     // WP2: a locked (or missing) version updates 0 rows — was silently returning 200
     // with the unchanged row, so the caller thought the status change succeeded.
