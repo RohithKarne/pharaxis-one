@@ -231,15 +231,8 @@ export default function AnalyticsPage() {
             {recentActivity.map((row, i) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', gap: 14,
-                padding: '10px 0', borderBottom: i < recentActivity.length - 1 ? '1px solid #F1F5F9' : 'none',
+                padding: '5px 0', borderBottom: i < recentActivity.length - 1 ? '1px solid #F1F5F9' : 'none',
               }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', background: '#F3F4F6',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, flexShrink: 0,
-                }}>
-                  {row.action === 'CREATE' ? '✚' : row.action === 'DELETE' ? '✕' : row.action === 'UPDATE' ? '~' : '●'}
-                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{row.action}</span>
                   {' '}

@@ -509,7 +509,7 @@ function ChatboxWidget({ clientCode }) {
           <div className="pp-chat-safety">
             {unwell === 'sent' ? (
               <p className="pp-chat-safety-done" role="status">
-                ✓ Thank you. Our safety team will review this. You can also give full details on the{' '}
+                Thank you. Our safety team will review this. You can also give full details on the{' '}
                 <Link to={`/portal/${clientCode}/submit?type=adverse_event`} onClick={() => setOpen(false)}>side effect form</Link>.
                 {' '}<button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report something else</button>
               </p>

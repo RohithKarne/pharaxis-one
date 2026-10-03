@@ -186,7 +186,7 @@ export default function EmailSettingsPage() {
           <div className="cp-field">
             <label>
               SMTP Password
-              {hasPassword && <span style={{ color: '#16A34A', fontSize: 11, marginLeft: 8 }}>● saved</span>}
+              {hasPassword && <span style={{ color: '#16A34A', fontSize: 11, marginLeft: 8 }}>(saved)</span>}
             </label>
             <input
               type="password"

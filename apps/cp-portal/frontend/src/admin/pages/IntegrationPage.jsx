@@ -270,7 +270,7 @@ export default function IntegrationPage() {
               </CanChange>
               {testResult[i.id] && (
                 <div className={`cp-test-result ${testResult[i.id].success ? 'success' : 'fail'}`}>
-                  {testResult[i.id].success ? `✓ Connected (HTTP ${testResult[i.id].status})` : `✗ Failed: ${testResult[i.id].error || `HTTP ${testResult[i.id].status}`}`}
+                  {testResult[i.id].success ? `Connected (HTTP ${testResult[i.id].status})` : `Failed: ${testResult[i.id].error || `HTTP ${testResult[i.id].status}`}`}
                 </div>
               )}
               <FieldMappingSection clientId={clientId} integration={i} />

@@ -484,7 +484,7 @@ export default function ClientDetailPage() {
             <div className="ck-checklist">
               {checklist.map((item, i) => (
                 <div key={i} className={`ck-check-item${item.done ? ' done' : ''}`} title={!item.done && item.hint ? item.hint : undefined}>
-                  <span className="ck-check-icon">{item.done ? '✓' : '○'}</span>
+                  <span className="ck-check-icon">{item.done ? 'Done' : 'To do'}</span>
                   <span className="ck-check-label">{item.label}</span>
                   {!item.done && item.path && (
                     <button

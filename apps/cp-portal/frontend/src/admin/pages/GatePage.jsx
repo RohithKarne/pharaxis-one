@@ -184,7 +184,7 @@ export default function GatePage() {
       {!!config.is_enabled && features.length > 0 && enabledTypes.length > 0 && (
         <div className="cp-card">
           <div className="cp-card-title">Feature Access by User Type</div>
-          <p className="cp-page-desc">Control which portal sections each user type can access. ✓ = visible, ✗ = hidden. Changes apply after saving.</p>
+          <p className="cp-page-desc">Control which portal sections each user type can access. Yes = visible, No = hidden. Changes apply after saving.</p>
           <div className="cp-access-matrix-wrap">
             <table className="cp-access-matrix">
               <thead>
@@ -212,7 +212,7 @@ export default function GatePage() {
                             onClick={() => toggleAccess(f.feature_key, t.type_key, allowed)}
                             title={`${allowed ? 'Visible' : 'Hidden'} for ${t.label}`}
                           >
-                            {allowed ? '✓' : '✗'}
+                            {allowed ? 'Yes' : 'No'}
                           </button>
                         </td>
                       )

@@ -447,7 +447,7 @@ export default function SubmissionsPage() {
                       {s.replies_waiting > 0 && (
                         <span title="The person replied to our answer and is waiting for a follow-up"
                           style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
-                          ↩ REPLY RECEIVED
+                          Reply received
                         </span>
                       )}
                       {s.ae_task_status && (

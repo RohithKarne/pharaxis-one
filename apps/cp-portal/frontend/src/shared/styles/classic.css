@@ -192,3 +192,8 @@
 /* Portal empty states are a line of text, without the large picture above it */
 :root .pp-empty-state > span:has(svg), :root .pp-ta-placeholder > span:has(svg) { display: none; }
 :root .pp-user-avatar { border-radius: 2px; }
+
+/* Setup checklist and section-access grid show words (Done / To do, Yes / No). */
+:root .ck-check-icon { width: 40px; text-align: left; font-size: 11px; }
+:root .cp-matrix-toggle { width: 40px; height: 22px; font-size: 12px; transition: none; }
+:root .pp-toast { animation: none; }

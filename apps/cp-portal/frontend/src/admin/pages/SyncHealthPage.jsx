@@ -139,7 +139,7 @@ export default function SyncHealthPage() {
                       </div>
                       {retryResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: retryResult[f.id].status === 'synced' ? '#16a34a' : '#dc2626' }}>
-                          {retryResult[f.id].status === 'synced' ? `✓ Synced → case ${retryResult[f.id].external_ref}` : `✗ ${retryResult[f.id].error || retryResult[f.id].status || 'failed'}`}
+                          {retryResult[f.id].status === 'synced' ? `Synced to case ${retryResult[f.id].external_ref}` : `Failed: ${retryResult[f.id].error || retryResult[f.id].status || 'failed'}`}
                         </div>
                       )}
                     </td>
@@ -176,7 +176,7 @@ export default function SyncHealthPage() {
                       )}
                       {fileResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: fileResult[f.id].status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
-                          {fileResult[f.id].status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${fileResult[f.id].error || 'failed'}`}
+                          {fileResult[f.id].status === 'forwarded' ? 'On the MIMS case' : `Failed: ${fileResult[f.id].error || 'not sent'}`}
                         </div>
                       )}
                     </td>
@@ -214,7 +214,7 @@ export default function SyncHealthPage() {
                         )}
                         {result && (
                           <div style={{ fontSize: 12, marginTop: 4, color: result.status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
-                            {result.status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${result.error || 'failed'}`}
+                            {result.status === 'forwarded' ? 'On the MIMS case' : `Failed: ${result.error || 'not sent'}`}
                           </div>
                         )}
                       </td>
