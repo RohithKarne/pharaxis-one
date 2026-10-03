@@ -79,6 +79,11 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       // WP2: no explicit release here — the finally block releases. Was double-released.
       return res.status(403).json({ error: 'Access denied' });
     }
+    const [[closedCase]] = await pool.execute(
+      'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [req.params.id]);
+    if (Number(closedCase?.is_closed) === 1) {
+      return res.status(409).json({ error: 'This case is closed. Reopen it to add a PC version.' });
+    }
     await conn.beginTransaction();
 
     const [existing] = await conn.execute(
@@ -167,6 +172,7 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
     if (!await verifyVersionOrg(req.params.versionId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    await guardLocked(req.params.versionId, req);
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
     // L-05: normalise and validate against a known set so an arbitrary status can't
@@ -193,7 +199,7 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
       'SELECT * FROM case_pc_versions WHERE id = ?', [req.params.versionId]
     );
     res.json(v);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 // ─── TAB: GENERAL ─────────────────────────────────────────────────────────────
@@ -211,7 +217,7 @@ router.get('/cases/pc/versions/:versionId/general', authenticate, async (req, re
 router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       complaint_description, pc_status, pc_category, pc_classification,
       date_of_complaint, date_received, severity, root_cause,
@@ -257,7 +263,7 @@ router.get('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
 router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       patient_name, date_of_birth, age, age_unit, sex, weight_kg,
       therapy_start_date, therapy_end_date, indication, injury_experienced,
@@ -304,7 +310,7 @@ router.get('/cases/pc/versions/:versionId/product-info', authenticate, async (re
 router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       product_id, product_name, product_type, product_category, lot_number,
       expiry_date, manufacturing_date, pack_size, quantity_available,
@@ -347,7 +353,7 @@ router.get('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
 router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { return_requested, return_date, return_address, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes, notes_return } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_return_retrieval
@@ -385,7 +391,7 @@ router.get('/cases/pc/versions/:versionId/replacement', authenticate, async (req
 router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes, notes_replacement } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_replacement
@@ -424,7 +430,7 @@ router.get('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
 router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, credit_note_number, notes, notes_refund } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_refund_credit
@@ -463,7 +469,7 @@ router.get('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (
 router.put('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { pc_flex_1, pc_flex_2, pc_flex_3 } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_flex_fields (version_id, pc_flex_1, pc_flex_2, pc_flex_3)
@@ -483,12 +489,25 @@ router.put('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (
 
 // ─── GUARD HELPER ─────────────────────────────────────────────────────────────
 
-async function guardLocked(versionId) {
+async function guardLocked(versionId, req) {
+  // MIPM-162: every PC write passes through here, so this is also where it needs
+  // the same case.update permission as the case itself and stops once the case is
+  // closed. Writes checked organisation membership only: a reviewer, who has no
+  // update right, could change the PC record, and so could anyone after closing.
   const [[v]] = await pool.execute(
-    'SELECT is_locked FROM case_pc_versions WHERE id = ?', [versionId]
+    `SELECT v.is_locked, v.case_id, ws.is_closed
+       FROM case_pc_versions v JOIN cases c ON c.id = v.case_id
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE v.id = ?`, [versionId]
   );
   if (!v) {
     const err = new Error('PC version not found'); err.status = 404; throw err;
+  }
+  if (!await verifyCaseScoped(v.case_id, req, 'case.update')) {
+    const err = new Error('You do not have permission to change this case.'); err.status = 403; throw err;
+  }
+  if (Number(v.is_closed) === 1) {
+    const err = new Error('This case is closed. Reopen it to change the PC record.'); err.status = 409; throw err;
   }
   if (v.is_locked) {
     const err = new Error('This PC version is locked and cannot be edited');

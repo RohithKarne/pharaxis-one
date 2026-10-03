@@ -82,7 +82,7 @@ async function ensureAeChildAccess(tableName, childId, req, { requireUnlocked = 
     throw err;
   }
   if (requireUnlocked) {
-    await guardLocked(row.version_id);
+    await guardLocked(row.version_id, req);
   }
   return row;
 }
@@ -117,6 +117,11 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
       // WP2: no explicit release here — the finally block releases. Was double-released.
       return res.status(403).json({ error: 'Access denied' });
+    }
+    const [[closedCase]] = await pool.execute(
+      'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [req.params.id]);
+    if (Number(closedCase?.is_closed) === 1) {
+      return res.status(409).json({ error: 'This case is closed. Reopen it to add an AE version.' });
     }
     await conn.beginTransaction();
 
@@ -223,6 +228,7 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
     if (!await verifyVersionOrg(req.params.versionId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    await guardLocked(req.params.versionId, req);
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
     // L-05: normalise and validate against a known set so an arbitrary status can't
@@ -251,7 +257,7 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
     res.json(v);
   } catch (err) {
     console.error('PUT AE version status error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -270,7 +276,7 @@ router.get('/cases/ae/versions/:versionId/general', authenticate, async (req, re
 router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       report_type,
       ae_status,
@@ -317,7 +323,7 @@ router.get('/cases/ae/versions/:versionId/events', authenticate, async (req, res
 router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       is_serious = 0, is_death = 0, is_life_threatening = 0,
@@ -433,7 +439,7 @@ router.get('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
 router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm,
       ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
@@ -476,7 +482,7 @@ router.get('/cases/ae/versions/:versionId/lab-results', authenticate, async (req
 router.post('/cases/ae/versions/:versionId/lab-results', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { lab_name, test_name, result, unit, normal_range, test_date } = req.body;
     const [ins] = await pool.execute(
       'INSERT INTO case_ae_lab_results (version_id, lab_name, test_name, result, unit, normal_range, test_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -510,7 +516,7 @@ router.get('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
 router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { notes, 'lab-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_lab_notes (version_id, notes) VALUES (?, ?)
@@ -540,7 +546,7 @@ router.get('/cases/ae/versions/:versionId/medical-history', authenticate, async 
 router.post('/cases/ae/versions/:versionId/medical-history', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { condition_name, start_date, end_date, is_ongoing = 0, notes } = req.body;
     const [ins] = await pool.execute(
       'INSERT INTO case_ae_medical_history (version_id, condition_name, start_date, end_date, is_ongoing, notes) VALUES (?, ?, ?, ?, ?, ?)',
@@ -574,7 +580,7 @@ router.get('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
 router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { notes, 'medical-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_medical_notes (version_id, notes) VALUES (?, ?)
@@ -608,7 +614,7 @@ router.get('/cases/ae/versions/:versionId/product-info', authenticate, async (re
 router.post('/cases/ae/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const {
       product_id, product_name, product_type, product_category, batch_lot_number, dose, dose_unit, route_of_admin,
       frequency, start_date, end_date, indication,
@@ -657,7 +663,7 @@ router.get('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (
 router.put('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (req, res) => {
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
-    await guardLocked(req.params.versionId);
+    await guardLocked(req.params.versionId, req);
     const { ae_flex_1, ae_flex_2, ae_flex_3 } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_flex_fields (version_id, ae_flex_1, ae_flex_2, ae_flex_3)
@@ -675,7 +681,11 @@ router.put('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (
 
 // ─── GUARD HELPER — reject writes to locked versions ─────────────────────────
 
-async function guardLocked(versionId) {
+async function guardLocked(versionId, req) {
+  // MIPM-162: every AE write passes through here, so this is also where it needs
+  // the same case.update permission as the case itself and stops once the case is
+  // closed. Writes checked organisation membership only: a reviewer, who has no
+  // update right, could change the AE record, and so could anyone after closing.
   // L-06 (TOCTOU): this check reads is_locked from case_ae_versions, but the guarded
   // writes target the per-tab tables (case_ae_general, case_ae_flex_fields, …) which do
   // not carry an is_locked column, so we cannot fold the guard into their WHERE clauses.
@@ -685,10 +695,19 @@ async function guardLocked(versionId) {
   // would require either an is_locked column on the tab tables or wrapping guard+write in a
   // single transaction with `SELECT ... FOR UPDATE` on the version row.
   const [[v]] = await pool.execute(
-    'SELECT is_locked FROM case_ae_versions WHERE id = ?', [versionId]
+    `SELECT v.is_locked, v.case_id, ws.is_closed
+       FROM case_ae_versions v JOIN cases c ON c.id = v.case_id
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE v.id = ?`, [versionId]
   );
   if (!v) {
     const err = new Error('AE version not found'); err.status = 404; throw err;
+  }
+  if (!await verifyCaseScoped(v.case_id, req, 'case.update')) {
+    const err = new Error('You do not have permission to change this case.'); err.status = 403; throw err;
+  }
+  if (Number(v.is_closed) === 1) {
+    const err = new Error('This case is closed. Reopen it to change the AE record.'); err.status = 409; throw err;
   }
   if (v.is_locked) {
     const err = new Error('This AE version is locked and cannot be edited');
