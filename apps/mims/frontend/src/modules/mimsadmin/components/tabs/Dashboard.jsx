@@ -264,7 +264,7 @@ export default function Dashboard({ onNavigateTab }) {
             loadActivity()
           }}>Refresh</button>
         </div>
-        <div className="card-body" style={{ maxHeight: 360, overflowY: 'auto', padding: 0 }}>
+        <div className="card-body" tabIndex={0} role="region" aria-label="Recent platform activity" style={{ maxHeight: 360, overflowY: 'auto', padding: 0 }}>
           {!secondaryReady && (
             <div style={{ padding: 18, color: 'var(--text-muted)', fontSize: 13 }}>Secondary activity loads after the main dashboard settles.</div>
           )}

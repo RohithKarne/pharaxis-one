@@ -1243,7 +1243,7 @@ export default function InboxPage() {
               </div>
 
               {/* Inquiry list */}
-              <div className="inbox-list">
+              <div className="inbox-list" tabIndex={0} role="region" aria-label="Messages">
                 {loading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
                 ) : inquiries.length === 0 ? (
@@ -1699,8 +1699,9 @@ export default function InboxPage() {
             </div>
             <div className="compose-modal-body">
               <div className="compose-field">
-                <label>View name</label>
+                <label htmlFor="inbox-save-view-name">View name</label>
                 <input
+                  id="inbox-save-view-name"
                   type="text"
                   value={saveViewName}
                   onChange={e => setSaveViewName(e.target.value)}

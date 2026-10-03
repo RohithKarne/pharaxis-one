@@ -26,7 +26,7 @@ function logScreenEvent(token, action, context) {
 // Stored status spelling varies by writer ("Sent", "SENT"), so it is compared in upper case.
 const STATUS_COLORS = {
   SENT:    { bg: '#dcfce7', color: '#15803d' },
-  FAILED:  { bg: '#fee2e2', color: '#dc2626' },
+  FAILED:  { bg: '#fee2e2', color: '#b91c1c' },
   PENDING: { bg: '#fef9c3', color: '#854d0e' },
   RETRY:   { bg: '#ffedd5', color: '#c2410c' },
 }
@@ -138,12 +138,12 @@ export default function TransmissionsPage() {
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
           <span className="tx-date-sep">System</span>
-          <select className="tx-filter-select" value={system} onChange={e => { setSystem(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { target_system: e.target.value }) }}>
+          <select className="tx-filter-select" aria-label="System" value={system} onChange={e => { setSystem(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { target_system: e.target.value }) }}>
             <option value="All">All</option>
             {systems.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <span className="tx-date-sep">Status</span>
-          <select className="tx-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { status: e.target.value }) }}>
+          <select className="tx-filter-select" aria-label="Status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { status: e.target.value }) }}>
             <option value="All">All</option>
             {Object.keys(statusCounts).filter(Boolean).map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>

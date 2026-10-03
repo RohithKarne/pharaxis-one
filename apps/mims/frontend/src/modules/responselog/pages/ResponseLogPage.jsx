@@ -141,7 +141,7 @@ export default function ResponseLogPage() {
         {/* Filters */}
         <div className="rl-filters">
           <input className="rl-search" placeholder="Search case #, text, author…" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
-          <select className="rl-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
+          <select className="rl-filter-select" aria-label="Status" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <input type="date" className="rl-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />

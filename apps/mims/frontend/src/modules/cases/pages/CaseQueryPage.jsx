@@ -99,6 +99,7 @@ export default function CaseQueryPage() {
           />
           <select
             className="cf-query-select"
+            aria-label="Has correspondence"
             value={filters.has_correspondence}
             onChange={e => setFilters(prev => ({ ...prev, has_correspondence: e.target.value }))}
           >
@@ -108,6 +109,7 @@ export default function CaseQueryPage() {
           </select>
           <select
             className="cf-query-select"
+            aria-label="Last communication"
             value={filters.corr_box}
             onChange={e => setFilters(prev => ({ ...prev, corr_box: e.target.value }))}
           >
@@ -150,7 +152,7 @@ export default function CaseQueryPage() {
           >
             Clear
           </button>
-          <select className="cf-query-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <select className="cf-query-select" aria-label="Sort by" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             <option value="created_at">Sort: Created At</option>
             <option value="updated_at">Sort: Updated At</option>
             <option value="case_number">Sort: Case Number</option>
@@ -158,11 +160,11 @@ export default function CaseQueryPage() {
             <option value="communication_count">Sort: Communication Count</option>
             <option value="last_comm_at">Sort: Last Communication</option>
           </select>
-          <select className="cf-query-select" value={sortDir} onChange={e => setSortDir(e.target.value)}>
+          <select className="cf-query-select" aria-label="Sort direction" value={sortDir} onChange={e => setSortDir(e.target.value)}>
             <option value="desc">Direction: Desc</option>
             <option value="asc">Direction: Asc</option>
           </select>
-          <select className="cf-query-select" value={pageSize} onChange={e => setPageSize(Number(e.target.value) || 25)}>
+          <select className="cf-query-select" aria-label="Page size" value={pageSize} onChange={e => setPageSize(Number(e.target.value) || 25)}>
             <option value={25}>Page Size: 25</option>
             <option value={50}>Page Size: 50</option>
             <option value={100}>Page Size: 100</option>

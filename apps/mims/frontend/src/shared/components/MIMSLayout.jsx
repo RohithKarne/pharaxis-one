@@ -81,6 +81,11 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
 
   return (
     <div className="mims-app-wrapper">
+      {/* First Tab stop: jump past the header and menu to the screen's own content. */}
+      <a href="#mims-main" className="mims-skip-link"
+        onClick={e => { e.preventDefault(); document.getElementById('mims-main')?.focus() }}>
+        Skip to content
+      </a>
       <MIMSHeader
         onBellClick={() => setNotifOpen(true)}
         onHelpClick={() => setHelpOpen(true)}
@@ -89,7 +94,7 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
         <MIMSNavbar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
         <div className="mims-content-area">
           {showStatStrip && <MIMSStatStrip />}
-          <div className={pageBodyClassName}>
+          <div id="mims-main" tabIndex={-1} className={pageBodyClassName}>
             {children}
           </div>
         </div>

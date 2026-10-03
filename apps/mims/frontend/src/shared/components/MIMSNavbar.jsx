@@ -78,7 +78,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Toggle button */}
       <button className="mims-sidenav-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
         <span className="mims-sidenav-icon"><Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} /></span>
-        {!collapsed && <span className="mims-sidenav-label" style={{ fontSize: 11, opacity: 0.7 }}>Collapse</span>}
+        {!collapsed && <span className="mims-sidenav-label" style={{ fontSize: 11 }}>Collapse</span>}
       </button>
 
       <div className="mims-sidenav-divider" />

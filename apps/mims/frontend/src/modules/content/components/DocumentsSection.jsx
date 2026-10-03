@@ -325,19 +325,19 @@ export default function DocumentsSection({ token, user }) {
       {subTab === 'all' && (
         <>
           <div className="cm-filters">
-            <select className="cm-form-select" style={{ width: 160 }} value={filters.folder_id} onChange={e => { setFilters(p => ({ ...p, folder_id: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Folder" style={{ width: 160 }} value={filters.folder_id} onChange={e => { setFilters(p => ({ ...p, folder_id: e.target.value })); setPage(1) }}>
               <option value="">All Folders</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select className="cm-form-select" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Document type" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
               <option value="">All Types</option>
               <option>SRD</option><option>Enclosure</option><option>Information Document</option><option>Internal Document</option>
             </select>
-            <select className="cm-form-select" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Status" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
               <option value="">All Statuses</option>
               <option>Draft</option><option>Pending</option><option>Under Review</option><option>Approved</option><option>Published</option><option>Archived</option>
             </select>
-            <select className="cm-form-select" style={{ width: 170 }} value={filters.authoring_source} onChange={e => { setFilters(p => ({ ...p, authoring_source: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Authoring" style={{ width: 170 }} value={filters.authoring_source} onChange={e => { setFilters(p => ({ ...p, authoring_source: e.target.value })); setPage(1) }}>
               <option value="">All Authoring</option>
               <option value="upload">Uploaded</option>
               <option value="internal">Internal</option>
@@ -424,7 +424,7 @@ export default function DocumentsSection({ token, user }) {
                 <thead>
                   <tr>
                     <th style={{ width: 36 }}>
-                      <input type="checkbox"
+                      <input type="checkbox" aria-label="Select all documents on this page"
                         checked={docs.length > 0 && docs.every(d => selectedDocIds.includes(d.id))}
                         onChange={e => setSelectedDocIds(e.target.checked ? docs.map(d => d.id) : [])}
                       />
@@ -444,7 +444,7 @@ export default function DocumentsSection({ token, user }) {
                   {docs.map(d => (
                     <tr key={d.id}>
                       <td>
-                        <input type="checkbox"
+                        <input type="checkbox" aria-label={`Select ${d.name || d.doc_id || 'document'}`}
                           checked={selectedDocIds.includes(d.id)}
                           onChange={e => setSelectedDocIds(prev => e.target.checked ? [...new Set([...prev, d.id])] : prev.filter(id => id !== d.id))}
                         />

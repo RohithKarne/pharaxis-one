@@ -297,7 +297,7 @@
 /* Page titles set inline at 18–20px read like the grey-bar titles elsewhere */
 :root :is(h1, h2)[style*="font-size: 20px"], :root :is(h1, h2)[style*="font-size: 18px"] { font-size: 15px !important; font-weight: bold !important; color: var(--primary) !important; }
 /* The round "?" help button beside the admin tabs is a small square button */
-:root .mims-admin-topnav [title^="Help for"] { border-radius: 2px !important; width: 22px !important; height: 22px !important; }
+:root .mims-admin-topnav [title^="Help for"] { border-radius: 2px !important; width: 24px !important; height: 24px !important; }
 
 /* Case Query toolbar: one row of short controls, date labels beside their boxes. */
 :root .cf-query-toolbar { align-items: center; gap: 6px; padding: 8px 10px; }
@@ -382,3 +382,19 @@
 
 /* Toasts: a plain message box, no slide-in. */
 :root .mims-toast { animation: none; padding: 6px 10px; font-size: 12px; min-width: 240px; }
+
+/* Accessibility (WCAG 2.2 AA): text at 4.5:1 or better against its background. The header
+   stripe keeps the bright orange; buttons and badges carrying white text use a darker one. */
+:root .mims-new-case-btn, :root .mims-new-case-btn:disabled, :root .mims-user-avatar { background: #b45309; color: #fff; }
+:root .mims-new-case-btn:hover:not(:disabled) { background: #92400e; }
+:root .mims-meta-label { color: rgba(255,255,255,0.75); }
+:root .mims-sidenav-toggle { color: #4a5563; }
+:root .cf-draft-badge { color: #555; }
+:root .inbox-layout-summary, :root .density-option:not(.active) { color: var(--text-secondary); }
+:root .bc-content-tab { color: var(--text-secondary); }
+:root .bc-folder-count, :root .bc-doc-meta span { color: #475569; }
+:root .tx-page-info { color: var(--text-secondary); }
+:root .rl-loading-row, :root .rl-empty-row, :root .rel-loading-row, :root .rel-empty-row, :root .rel-row-num { color: #5f6878 !important; }
+:root .mims-skip-link { position: absolute; left: 8px; top: -40px; z-index: 10000; background: #fff; color: var(--primary); border: 2px solid var(--primary); padding: 4px 10px; font-size: 13px; font-weight: bold; }
+:root .mims-skip-link:focus { top: 8px; }
+:root #mims-main:focus { outline: none; }
