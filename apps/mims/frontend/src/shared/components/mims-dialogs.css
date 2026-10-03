@@ -49,6 +49,7 @@
   color: inherit;
 }
 .mims-toast-close:hover { opacity: 1; }
+.mims-toast-action { background: none; border: 1px solid currentColor; padding: 2px 8px; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-decoration: none; flex-shrink: 0; }
 
 /* ── Confirm Modal ───────────────────────────────────────────────────── */
 .mims-confirm-overlay {

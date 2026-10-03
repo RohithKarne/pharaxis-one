@@ -13,6 +13,7 @@ import BulkUserImport from './BulkUserImport'
 import './Users.css'
 
 const API = '/api/admin'
+const PAGE_SIZE = 100
 
 function fmtDate(d) {
   if (!d) return '—'
@@ -56,8 +57,11 @@ export default function Users() {
   const [fltRole,    setFltRole]    = useState('')   // '' | 'admin' | 'agent' | 'reviewer' | 'content_manager'
   const [fltStatus,  setFltStatus]  = useState('')   // '' | 'active' | 'inactive' | 'disabled'
   const [fltGroup,   setFltGroup]   = useState('')   // security_group_id
+  const [page,       setPage]       = useState(0)
+  const [loadError,  setLoadError]  = useState('')
   const currentFilter = useMemo(() => ({ search, fltRole, fltStatus, fltGroup }), [search, fltRole, fltStatus, fltGroup])
   function applySavedView(f) {
+    setPage(0)
     setSearch(f.search || '')
     setFltRole(f.fltRole || '')
     setFltStatus(f.fltStatus || '')
@@ -75,20 +79,28 @@ export default function Users() {
     }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadUsers = useCallback(async (q = search) => {
+  // Search and filters run on the server, so they reach every user, not only the loaded page.
+  const loadUsers = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
-      const data = await httpFetch(
-        `${API}/users?search=${encodeURIComponent(q)}&limit=100`,
-        { headers: H }
-      ).then(r => r.json())
+      const qs = new URLSearchParams({
+        search, role: fltRole, status: fltStatus, group: fltGroup,
+        limit: PAGE_SIZE, offset: page * PAGE_SIZE,
+      })
+      const res = await httpFetch(`${API}/users?${qs}`, { headers: H })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not load users.')
       setUsers(data.users || [])
       setTotal(data.total || 0)
-    } catch { setUsers([]) }
+    } catch (e) {
+      setUsers([])
+      setLoadError(e instanceof TypeError ? 'Could not load users: the server could not be reached.' : e.message)
+    }
     finally   { setLoading(false) }
-  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, fltRole, fltStatus, fltGroup, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadUsers() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadUsers() }, [loadUsers])
 
   function showFlash(msg, type = 'success') {
     setFlash({ msg, type })
@@ -113,19 +125,8 @@ export default function Users() {
     showFlash(editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.')
   }
 
-  const filtered = users.filter(u => {
-    if (search) {
-      const q = search.toLowerCase()
-      if (!(u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.user_id?.toLowerCase().includes(q))) return false
-    }
-    if (fltRole   && u.role !== fltRole) return false
-    if (fltGroup  && String(u.security_group_id || '') !== String(fltGroup)) return false
-    if (fltStatus) {
-      const status = u.is_disabled ? 'disabled' : (u.is_active ? 'active' : 'inactive')
-      if (status !== fltStatus) return false
-    }
-    return true
-  })
+  const filtered = users
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="ma-usr-page">
@@ -149,7 +150,7 @@ export default function Users() {
             Add / Edit Users
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {loading ? 'Loading…' : `${total} user${total !== 1 ? 's' : ''} in system`}
+            {loading ? 'Loading…' : loadError ? 'Not loaded' : `${total} user${total !== 1 ? 's' : ''} found`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -157,11 +158,11 @@ export default function Users() {
             className="ma-usr-search"
             placeholder="Search name, email, user ID…"
             value={search}
-            onChange={e => { setSearch(e.target.value); loadUsers(e.target.value) }}
+            onChange={e => { setSearch(e.target.value); setPage(0) }}
           />
           <select
             value={fltRole}
-            onChange={e => setFltRole(e.target.value)}
+            onChange={e => { setFltRole(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
           >
             <option value="">All Roles</option>
@@ -172,7 +173,7 @@ export default function Users() {
           </select>
           <select
             value={fltStatus}
-            onChange={e => setFltStatus(e.target.value)}
+            onChange={e => { setFltStatus(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
           >
             <option value="">All Statuses</option>
@@ -182,7 +183,7 @@ export default function Users() {
           </select>
           <select
             value={fltGroup}
-            onChange={e => setFltGroup(e.target.value)}
+            onChange={e => { setFltGroup(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
           >
             <option value="">All Groups</option>
@@ -239,7 +240,10 @@ export default function Users() {
             {loading && (
               <tr><td colSpan={9} className="ma-usr-empty">Loading users…</td></tr>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && loadError && (
+              <tr><td colSpan={9} className="ma-usr-empty mims-load-error" role="alert">{loadError} <button className="ma-usr-edit-btn" onClick={() => loadUsers()}>Try again</button></td></tr>
+            )}
+            {!loading && !loadError && filtered.length === 0 && (
               <tr><td colSpan={9} className="ma-usr-empty">No users found.</td></tr>
             )}
             {!loading && filtered.map(u => (
@@ -287,6 +291,13 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      {total > PAGE_SIZE && (
+        <div className="ma-usr-pager">
+          <span>Showing {page * PAGE_SIZE + 1}–{Math.min(total, (page + 1) * PAGE_SIZE)} of {total}</span>
+          <button className="ma-usr-edit-btn" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}>Prev</button>
+          <button className="ma-usr-edit-btn" disabled={page + 1 >= pageCount || loading} onClick={() => setPage(p => p + 1)}>Next</button>
+        </div>
+      )}
 
       {/* Modal */}
       {modalOpen && (

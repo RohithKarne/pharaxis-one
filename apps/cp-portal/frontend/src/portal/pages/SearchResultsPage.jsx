@@ -39,7 +39,7 @@ export default function SearchResultsPage() {
   return (
     <div className="pp-container" style={{ maxWidth: 760, paddingTop: 32, paddingBottom: 60 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Search</h1>
-      <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
+      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
         {q ? <>Results for “<strong>{q}</strong>”</> : 'Enter a search term.'}
       </p>
 
@@ -50,7 +50,7 @@ export default function SearchResultsPage() {
         </div>
       ) : loading ? <div className="pp-loading">Searching…</div> : (
         results.length === 0 ? (
-          <div style={{ color: '#6B7280', fontSize: 14 }}>{q.trim().length >= 2 ? 'No results found.' : 'Type at least 2 characters.'}</div>
+          <div style={{ color: '#4B5563', fontSize: 14 }}>{q.trim().length >= 2 ? 'No results found.' : 'Type at least 2 characters.'}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {facets.length > 1 && (
@@ -73,7 +73,7 @@ export default function SearchResultsPage() {
                 <span style={{ flex: 1 }}>
                   <span style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--pp-primary, #6B3FA0)', fontWeight: 700 }}>{r.label}</span>
                   <span style={{ display: 'block', fontWeight: 600, fontSize: 15, color: '#1A1A2E', margin: '2px 0' }}>{r.title}</span>
-                  {r.snippet && <span style={{ display: 'block', fontSize: 13, color: '#6B7280' }}>{r.snippet}</span>}
+                  {r.snippet && <span style={{ display: 'block', fontSize: 13, color: '#4B5563' }}>{r.snippet}</span>}
                 </span>
               </button>
             ))}

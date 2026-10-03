@@ -47,16 +47,16 @@ function PreviewField({ field, options }) {
 
 export default function FormPreview({ fields }) {
   const active = (fields || []).filter(f => f.is_active !== 0 && f.field_type !== 'hidden')
-  if (active.length === 0) return <p style={{ color: '#6B7280', fontSize: 13 }}>No active fields to preview. Add or enable fields to see the form.</p>
+  if (active.length === 0) return <p style={{ color: '#4B5563', fontSize: 13 }}>No active fields to preview. Add or enable fields to see the form.</p>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {active.map(f => (
         <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontWeight: 600, fontSize: 13 }}>
-            {f.field_label}{f.is_required ? <span style={{ color: '#DC2626' }}> *</span> : null}
+            {f.field_label}{f.is_required ? <span style={{ color: '#B91C1C' }}> *</span> : null}
           </label>
           <PreviewField field={f} options={parseOptions(f.field_options)} />
-          {f.help_text && <span style={{ fontSize: 11, color: '#6B7280' }}>{f.help_text}</span>}
+          {f.help_text && <span style={{ fontSize: 11, color: '#4B5563' }}>{f.help_text}</span>}
         </div>
       ))}
       <button className="cp-btn cp-btn-primary" disabled style={{ marginTop: 8, opacity: 0.65, alignSelf: 'flex-start' }}>Submit (preview)</button>

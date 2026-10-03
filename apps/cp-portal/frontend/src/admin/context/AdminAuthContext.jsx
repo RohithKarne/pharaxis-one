@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const AdminAuthContext = createContext(null)
@@ -8,6 +8,18 @@ export function AdminAuthProvider({ children }) {
   const navigate = useNavigate()
   const [admin, setAdmin] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  // One plain notice when the server cannot be reached or fails on a load or a save, shown
+  // once however many requests fail together, so a failed load is never read as "nothing
+  // here" and a failed save never as done. Screens still handle the failure their own way.
+  const [failNotice, setFailNotice] = useState('')
+  const lastNotice = useRef(0)
+  function noticeFailure(text) {
+    const now = Date.now()
+    if (now - lastNotice.current < 30000) return
+    lastNotice.current = now
+    setFailNotice(text)
+    setTimeout(() => setFailNotice(''), 10000)
+  }
 
   function login(_token, adminData) {
     localStorage.removeItem('cp_admin_token')
@@ -67,9 +79,22 @@ export function AdminAuthProvider({ children }) {
     const originalFetch = window.fetch.bind(window)
     let active = true
     window.fetch = async (...args) => {
-      const res = await originalFetch(...args)
+      const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '')
+      const isAdminApi = url.includes('/api/admin/')
+      let res
       try {
-        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '')
+        res = await originalFetch(...args)
+      } catch (err) {
+        if (active && isAdminApi && err?.name !== 'AbortError') noticeFailure('Could not reach the server. Check your connection, then reload.')
+        throw err
+      }
+      try {
+        const method = String(args[1]?.method || 'GET').toUpperCase()
+        if (active && isAdminApi && res.status >= 500) {
+          noticeFailure(method === 'GET'
+            ? 'Could not load everything on this page: the server reported an error. Try again in a moment.'
+            : 'The server reported an error, so your last change may not have been saved. Check it and try again.')
+        }
         if (active && res.status === 401 && url.includes('/api/admin/') && !url.includes('/api/admin/auth/')) {
           logout()
           navigate('/admin/login', { replace: true })
@@ -129,6 +154,13 @@ export function AdminAuthProvider({ children }) {
   return (
     <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish, canChange }}>
       {children}
+      {failNotice && (
+        <div className="cp-fail-notice" role="alert">
+          <span>{failNotice}</span>
+          <button type="button" onClick={() => window.location.reload()}>Reload</button>
+          <button type="button" aria-label="Dismiss" onClick={() => setFailNotice('')}>×</button>
+        </div>
+      )}
     </AdminAuthContext.Provider>
   )
 }

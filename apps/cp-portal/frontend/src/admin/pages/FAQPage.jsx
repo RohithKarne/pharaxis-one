@@ -127,15 +127,15 @@ export default function FAQPage() {
               <div key={f.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--cp-border)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', marginBottom: 4 }}>{f.question}</div>
-                  <div style={{ fontSize: 13, color: '#6B7280', whiteSpace: 'pre-wrap' }}>{f.answer}</div>
+                  <div style={{ fontSize: 13, color: '#4B5563', whiteSpace: 'pre-wrap' }}>{f.answer}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-                  {!f.is_published && <span style={{ fontSize: 11, background: '#F3F4F6', color: '#9CA3AF', padding: '2px 6px', borderRadius: 10 }}>Draft</span>}
+                  {!f.is_published && <span style={{ fontSize: 11, background: '#F3F4F6', color: '#5F6B7A', padding: '2px 6px', borderRadius: 10 }}>Draft</span>}
                   <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(f)}>Edit</button>
                   </CanChange>
                   <CanChange area="faq">
-                  <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => handleDelete(f.id)}>Delete</button>
+                  <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#B91C1C' }} onClick={() => handleDelete(f.id)}>Delete</button>
                   </CanChange>
                 </div>
               </div>

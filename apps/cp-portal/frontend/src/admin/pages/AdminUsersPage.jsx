@@ -14,10 +14,10 @@ const ROLES = [
 const ROLE_BADGE = {
   superadmin:      { label: 'Superadmin',      color: '#7C3AED', bg: '#EDE9FE' },
   admin:           { label: 'Admin',           color: '#1D4ED8', bg: '#DBEAFE' },
-  content_manager: { label: 'Content Manager', color: '#D97706', bg: '#FEF3C7' },
+  content_manager: { label: 'Content Manager', color: '#92400E', bg: '#FEF3C7' },
   reviewer:        { label: 'Reviewer',        color: '#0891B2', bg: '#CFFAFE' },
   safety_reviewer: { label: 'Safety Reviewer', color: '#B91C1C', bg: '#FEE2E2' },
-  viewer:          { label: 'Viewer',          color: '#6B7280', bg: '#F3F4F6' },
+  viewer:          { label: 'Viewer',          color: '#4B5563', bg: '#F3F4F6' },
 }
 
 const EMPTY_FORM = { name: '', email: '', password: '', role: 'content_manager' }
@@ -239,7 +239,7 @@ export default function AdminUsersPage() {
                       <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
                     </div>
                     <div className="cp-field">
-                      <label>Password * <span style={{ fontSize: 11, color: '#6B7280' }}>(min 8 characters)</span></label>
+                      <label>Password * <span style={{ fontSize: 11, color: '#4B5563' }}>(min 8 characters)</span></label>
                       <input required minLength={8} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                     </div>
                   </>

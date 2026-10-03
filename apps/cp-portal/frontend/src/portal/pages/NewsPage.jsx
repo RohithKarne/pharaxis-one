@@ -180,7 +180,7 @@ export default function NewsPage() {
                     background: savedIds.includes(post.id) ? '#DBEAFE' : 'rgba(255,255,255,0.9)',
                     border: '1px solid #E2E8F0', borderRadius: 6,
                     padding: '4px 8px', cursor: 'pointer', fontSize: 14,
-                    color: savedIds.includes(post.id) ? '#1D4ED8' : '#6B7280',
+                    color: savedIds.includes(post.id) ? '#1D4ED8' : '#4B5563',
                     lineHeight: 1,
                   }}
                   onClick={e => toggleSave(e, post)}
@@ -199,7 +199,7 @@ export default function NewsPage() {
       {totalPages > 1 && (
         <div className="pp-news-pagination">
           <button className="pp-btn pp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-          <span style={{ fontSize: 13, color: '#6B7280', alignSelf: 'center' }}>Page {page} of {totalPages}</span>
+          <span style={{ fontSize: 13, color: '#4B5563', alignSelf: 'center' }}>Page {page} of {totalPages}</span>
           <button className="pp-btn pp-btn-outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
         </div>
       )}

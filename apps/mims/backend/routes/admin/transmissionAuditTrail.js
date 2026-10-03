@@ -78,33 +78,57 @@ router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole(
 // GET /api/admin/transmission-audit-trail — list transmissions with filters
 router.get('/transmission-audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const { case_id, target_system, status, from_date, to_date, page = 1, limit = 100 } = req.query;
+    const { case_id, target_system, status, from_date, to_date, q, page = 1, limit = 100 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
-    let query = `SELECT t.*
-                 FROM transmission_audit_trail t
-                 JOIN cases c ON c.id = t.case_id
-                 WHERE 1=1`;
-    const params = [];
-
+    // Scope only: used for the system list, so the dropdown offers what is really stored.
+    let scopeSql = ' FROM transmission_audit_trail t JOIN cases c ON c.id = t.case_id WHERE 1=1';
+    const scopeParams = [];
     if (!hasPlatformAdminScope(req)) {
-      query += ' AND c.org_id = ?';
-      params.push(req.user.orgId);
+      scopeSql += ' AND c.org_id = ?';
+      scopeParams.push(req.user.orgId);
     }
 
-    if (case_id)       { query += ' AND t.case_id = ?';        params.push(case_id); }
-    if (target_system) { query += ' AND t.target_system = ?';  params.push(target_system); }
-    if (status)        { query += ' AND t.status = ?';         params.push(status); }
-    if (from_date)     { query += ' AND t.timestamp >= ?';     params.push(from_date); }
-    if (to_date)       { query += ' AND t.timestamp <= ?';     params.push(to_date); }
+    // Every filter, the search included, runs here so it reaches all rows and not only one page.
+    let filterSql = '';
+    const params = [];
+    if (case_id)       { filterSql += ' AND t.case_id = ?';        params.push(case_id); }
+    if (target_system) { filterSql += ' AND t.target_system = ?';  params.push(target_system); }
+    if (from_date)     { filterSql += ' AND t.timestamp >= ?';     params.push(from_date); }
+    // A date-only "to" means the whole of that day.
+    if (to_date)       { filterSql += ' AND t.timestamp <= ?';     params.push(/^\d{4}-\d{2}-\d{2}$/.test(to_date) ? `${to_date} 23:59:59` : to_date); }
+    if (q && String(q).trim()) {
+      const like = `%${String(q).trim().replace(/[\\%_]/g, '\\$&')}%`;
+      filterSql += ' AND (c.case_number LIKE ? OR CAST(t.case_id AS CHAR) = ? OR t.target_system LIKE ? OR t.user_name LIKE ? OR t.payload_summary LIKE ?)';
+      params.push(like, String(q).trim(), like, like, like);
+    }
+    const statusSql = status ? ' AND t.status = ?' : '';
+    const statusParams = status ? [status] : [];
 
-    const countQuery = query.replace('SELECT t.*', 'SELECT COUNT(*) AS total');
-    const [[{ total }]] = await pool.execute(countQuery, params);
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total${scopeSql}${filterSql}${statusSql}`,
+      [...scopeParams, ...params, ...statusParams]
+    );
+    // Counts by status for the same filters, before the status filter, so the totals and the
+    // status dropdown describe every matching row.
+    const [statusRows] = await pool.execute(
+      `SELECT UPPER(t.status) AS status, COUNT(*) AS n${scopeSql}${filterSql} GROUP BY UPPER(t.status)`,
+      [...scopeParams, ...params]
+    );
+    const [systemRows] = await pool.execute(
+      `SELECT DISTINCT t.target_system${scopeSql} AND t.target_system IS NOT NULL ORDER BY t.target_system`,
+      scopeParams
+    );
 
-    query += ` ORDER BY t.timestamp DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
-    const [entries] = await pool.execute(query, params);
+    const [entries] = await pool.execute(
+      `SELECT t.*, c.case_number${scopeSql}${filterSql}${statusSql}
+       ORDER BY t.timestamp DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`,
+      [...scopeParams, ...params, ...statusParams]
+    );
 
-    res.json({ entries, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    const statusCounts = Object.fromEntries(statusRows.map(r => [r.status || '', Number(r.n)]));
+    const systems = systemRows.map(r => r.target_system);
+    res.json({ entries, total, statusCounts, systems, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /transmission-audit-trail error:', err);
     res.status(500).json({ error: 'Server error.' });

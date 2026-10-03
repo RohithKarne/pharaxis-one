@@ -269,7 +269,7 @@ export default function DocumentsPage() {
 
       {aiMode ? (
         <>
-          <div style={{ fontStyle: 'italic', color: '#6B7280', marginBottom: 12 }}>
+          <div style={{ fontStyle: 'italic', color: '#4B5563', marginBottom: 12 }}>
             AI-assisted results — review source documents before use
           </div>
           {aiError ? (
@@ -300,7 +300,7 @@ export default function DocumentsPage() {
                     {doc.category && <span>{doc.category} · </span>}
                     {formatFileSize(doc.file_size)}
                   </div>
-                  <div style={{ fontStyle: 'italic', color: '#6B7280', marginTop: 8 }}>
+                  <div style={{ fontStyle: 'italic', color: '#4B5563', marginTop: 8 }}>
                     {doc.reason || 'Matched semantically to your query.'}
                   </div>
                   {doc.is_expiring_soon && (
@@ -323,7 +323,7 @@ export default function DocumentsPage() {
                       disabled={savingId === doc.id}
                       aria-label={savedIds.includes(doc.id) ? `Unsave ${doc.title}` : `Save ${doc.title}`}
                       style={{
-                        color: savedIds.includes(doc.id) ? '#1D4ED8' : '#6B7280',
+                        color: savedIds.includes(doc.id) ? '#1D4ED8' : '#4B5563',
                         borderColor: savedIds.includes(doc.id) ? '#BFDBFE' : undefined,
                         background: savedIds.includes(doc.id) ? '#EFF6FF' : undefined,
                       }}
@@ -371,7 +371,7 @@ export default function DocumentsPage() {
                   disabled={savingId === doc.id}
                   aria-label={savedIds.includes(doc.id) ? `Unsave ${doc.title}` : `Save ${doc.title}`}
                   style={{
-                    color: savedIds.includes(doc.id) ? '#1D4ED8' : '#6B7280',
+                    color: savedIds.includes(doc.id) ? '#1D4ED8' : '#4B5563',
                     borderColor: savedIds.includes(doc.id) ? '#BFDBFE' : undefined,
                     background: savedIds.includes(doc.id) ? '#EFF6FF' : undefined,
                   }}

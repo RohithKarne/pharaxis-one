@@ -85,6 +85,7 @@ export function initClientObservability({ app = 'mims' } = {}) {
             exception_id: exceptionId,
             request_id: requestId,
             status_code: response.status,
+            method: String(init.method || 'GET').toUpperCase(),
             route: req || window.location.pathname,
             // 502/503/504 with no message is the dev proxy (or a gateway) while the
             // server restarts — say that, not "API request failed" (M-51 follow-up).
@@ -108,6 +109,8 @@ export function initClientObservability({ app = 'mims' } = {}) {
             exception_id: exceptionId,
             request_id: requestId,
             status_code: 0,
+            method: String(init.method || 'GET').toUpperCase(),
+            aborted: err?.name === 'AbortError',
             route: req || window.location.pathname,
             message: err?.name === 'TypeError' ? SERVER_RESTARTING_MESSAGE : (err?.message || 'Network error'),
           },

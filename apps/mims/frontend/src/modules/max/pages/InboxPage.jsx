@@ -11,6 +11,8 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { parseServerTime } from '../../../shared/utils/serverTime.js'
+import toast from '../../../shared/utils/toast'
+import useRememberedFilters, { hasRememberedFilters } from '../../../shared/hooks/useRememberedFilters.js'
 
 import EmailBody, { compactEmailBodyText } from '../components/EmailBody'
 import InboxFilterBar from '../components/InboxFilterBar'
@@ -74,16 +76,24 @@ export default function InboxPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false) // H5: proper loading state
   const [fetching, setFetching]       = useState(false)
   const [fetchResult, setFetchResult] = useState(null)
-  const [activeTab, setActiveTab]     = useState('Inbox')
-  const [search, setSearch]           = useState('')
+  // Tab, search, dates, tenant and the advanced filters are kept for this user, so they are
+  // still set on return. A remembered set wins over the default saved view.
+  const hadRememberedFilters = useRef(hasRememberedFilters(user?.id, 'inbox'))
+  const [kept, setKept] = useRememberedFilters('inbox', {
+    activeTab: 'Inbox', search: '', filterFrom: '', filterTo: '', tenantFilterOrgId: '',
+    advFilters: { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' },
+  })
+  const { activeTab, search, filterFrom, filterTo, tenantFilterOrgId, advFilters } = kept
+  const { setActiveTab, setSearch, setFilterFrom, setFilterTo, setTenantFilterOrgId, setAdvFilters } = useMemo(() => {
+    const keep = name => value => setKept(prev => ({ ...prev, [name]: typeof value === 'function' ? value(prev[name]) : value }))
+    return { setActiveTab: keep('activeTab'), setSearch: keep('search'), setFilterFrom: keep('filterFrom'),
+      setFilterTo: keep('filterTo'), setTenantFilterOrgId: keep('tenantFilterOrgId'), setAdvFilters: keep('advFilters') }
+  }, [setKept])
   const [sortAsc, setSortAsc]         = useState(false)
   const [page, setPage]               = useState(1)
   const [selected, setSelected]       = useState(null)
   const [attachments, setAttachments] = useState([])
   const [compose, setCompose]         = useState(null)
-  const [filterFrom, setFilterFrom]   = useState('')
-  const [filterTo, setFilterTo]       = useState('')
-  const [tenantFilterOrgId, setTenantFilterOrgId] = useState('')
   const [bulkSelected, setBulkSelected] = useState(new Set())
   const [bulkTriageState, setBulkTriageState] = useState('')
   const [bulkAssignee, setBulkAssignee] = useState('')
@@ -100,16 +110,14 @@ export default function InboxPage() {
   // ── Phase 2 state ─────────────────────────────────────────────
   const [users, setUsers]           = useState([])           // F1
   const [templates, setTemplates]   = useState([])           // F3
-  const [advFilters, setAdvFilters] = useState({             // F8
-    color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '',
-  })
   const [showAdvFilters, setShowAdvFilters] = useState(false)
   const [selectionMode, setSelectionMode]   = useState(false)
   const [savedViews, setSavedViews]         = useState([])   // F9
   const [saveViewName, setSaveViewName]     = useState('')
+  const [shareView, setShareView]           = useState(false)
   const [showSaveViewModal, setShowSaveViewModal] = useState(false)
   const [viewNotice, setViewNotice]         = useState(null) // F9: stale-value / limit messages
-  const defaultViewAppliedRef               = useRef(false)  // F9: auto-apply default only once per mount
+  const defaultViewAppliedRef               = useRef(hadRememberedFilters.current)  // F9: auto-apply default only once per mount, and not over remembered filters
   const [notes, setNotes]                   = useState([])   // F5
   const [newNote, setNewNote]               = useState('')
   const [notesLoading, setNotesLoading]     = useState(false)
@@ -225,6 +233,9 @@ export default function InboxPage() {
         id: v.id,
         name: v.view_name,
         isDefault: !!v.is_default,
+        isMine: v.is_mine !== false,
+        isShared: !!v.is_shared,
+        owner: v.owner_name || '',
         ...(v.filter_json || {}),
       }))
       setSavedViews(views)
@@ -280,7 +291,7 @@ export default function InboxPage() {
       responseSla: reportFilters.responseSla || '',
     }))
     setPage(1)
-  }, [location.state])
+  }, [location.state, setAdvFilters])
 
   async function loadAttachments(inquiryId) {
     // H5 FIX: track loading state separately so "Loading…" doesn't show forever on failure
@@ -652,7 +663,13 @@ export default function InboxPage() {
 
   async function patchInquiry(id, body) {
     if (inboxSource === 'db') {
-      await httpFetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => {})
+      // Assign, triage, priority, due date and lock all save here; a refusal must not look like success.
+      // An unreachable server, a server error and a sign-in refusal already get their own notice.
+      const res = await httpFetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => null)
+      if (res && !res.ok && res.status < 500 && res.status !== 401 && res.status !== 403) {
+        const d = await res.json().catch(() => ({}))
+        toast.error(`Not saved: ${String(d.error || 'the server refused the change').replace(/\.$/, '')}. Reload to see the message as it is.`, 8000)
+      }
     }
   }
 
@@ -767,7 +784,7 @@ export default function InboxPage() {
   const EMPTY_ADV = { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' }
 
   // Persist a view (create or overwrite by name). Server clears other defaults when asDefault.
-  async function persistView(name, filterJson, asDefault) {
+  async function persistView(name, filterJson, asDefault, shared = false) {
     const res = await httpFetch('/api/admin/user-preferences/views', {
       method: 'POST',
       headers: AUTH_H,
@@ -776,25 +793,31 @@ export default function InboxPage() {
         view_name: name,
         filter_json: filterJson,
         is_default: asDefault ? 1 : 0,
+        is_shared: shared ? 1 : 0,
       }),
     })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      if (d.error) throw new Error(d.error)
+    }
     return res.ok
   }
 
   async function saveCurrentView(name) {
     const trimmed = (name || '').trim()
     if (!trimmed) return
-    const isExisting = savedViews.some(v => v.name === trimmed)
-    if (!isExisting && savedViews.length >= 5) {
+    const mine = savedViews.filter(v => v.isMine)
+    const isExisting = mine.some(v => v.name === trimmed)
+    if (!isExisting && mine.length >= 5) {
       setViewNotice('You have reached the limit of 5 saved views. Delete one before saving a new view.')
       return
     }
     const filterJson = { search, filterFrom, filterTo, tenantFilterOrgId, advFilters }
     try {
-      const ok = await persistView(trimmed, filterJson, false)
+      const ok = await persistView(trimmed, filterJson, false, shareView)
       if (ok) { setViewNotice(null); await loadViews() }
       else setViewNotice('Could not save the view. Please try again.')
-    } catch { setViewNotice('Could not save the view. Please try again.') }
+    } catch (e) { setViewNotice(e?.message ? `Could not save the view: ${e.message}` : 'Could not save the view. Please try again.') }
   }
 
   // Apply a view, silently dropping filter values the user no longer has access to.
@@ -825,7 +848,7 @@ export default function InboxPage() {
       const ok = await persistView(view.name, {
         search: view.search, filterFrom: view.filterFrom, filterTo: view.filterTo,
         tenantFilterOrgId: view.tenantFilterOrgId, advFilters: view.advFilters,
-      }, !view.isDefault)
+      }, !view.isDefault, view.isShared)
       if (ok) await loadViews()
     } catch { /* keep current state on failure */ }
   }
@@ -835,7 +858,8 @@ export default function InboxPage() {
     try {
       const res = await httpFetch(`/api/admin/user-preferences/views/${view.id}`, { method: 'DELETE', headers: AUTH_H })
       if (res.ok) await loadViews()
-    } catch { /* ignore */ }
+      else setViewNotice('Could not delete the view. Reload the page and try again.')
+    } catch { setViewNotice('Could not delete the view: MIMS could not be reached.') }
   }
 
   // ── Computed state ────────────────────────────────────────────
@@ -1036,6 +1060,7 @@ export default function InboxPage() {
     if (!trimmed) return
     await saveCurrentView(trimmed)
     setSaveViewName('')
+    setShareView(false)
     setShowSaveViewModal(false)
   }
 
@@ -1120,15 +1145,22 @@ export default function InboxPage() {
                 )}
                 {savedViews.map((v) => (
                   <span key={v.id} className={`saved-view-chip${v.isDefault ? ' is-default' : ''}`}>
-                    <button className="chip-label" onClick={() => applyView(v)}>
-                      {v.isDefault ? '★ ' : ''}{v.name}
+                    <button className="chip-label" onClick={() => applyView(v)}
+                      title={v.isMine ? (v.isShared ? 'Shared with your organisation' : 'Only you see this view') : `Shared by ${v.owner}`}>
+                      {v.isDefault ? '★ ' : ''}{v.name}{v.isMine ? (v.isShared ? ' (shared)' : '') : ` (from ${v.owner})`}
                     </button>
-                    <button
-                      className="chip-default"
-                      title={v.isDefault ? 'Remove as default' : 'Set as default'}
-                      onClick={() => toggleDefaultView(v)}
-                    >{v.isDefault ? '★' : '☆'}</button>
-                    <button className="chip-delete" title="Delete view" onClick={() => deleteView(v)}>✕</button>
+                    {/* Only the owner can change or delete a view; a shared one is read-only to others. */}
+                    {v.isMine && (
+                      <>
+                        <button
+                          className="chip-default"
+                          title={v.isDefault ? 'Remove as default' : 'Set as default'}
+                          aria-label={v.isDefault ? `Remove ${v.name} as default` : `Set ${v.name} as default`}
+                          onClick={() => toggleDefaultView(v)}
+                        >{v.isDefault ? '★' : '☆'}</button>
+                        <button className="chip-delete" title="Delete view" aria-label={`Delete view ${v.name}`} onClick={() => deleteView(v)}>✕</button>
+                      </>
+                    )}
                   </span>
                 ))}
               </div>
@@ -1211,7 +1243,7 @@ export default function InboxPage() {
               </div>
 
               {/* Inquiry list */}
-              <div className="inbox-list">
+              <div className="inbox-list" tabIndex={0} role="region" aria-label="Messages">
                 {loading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
                 ) : inquiries.length === 0 ? (
@@ -1667,8 +1699,9 @@ export default function InboxPage() {
             </div>
             <div className="compose-modal-body">
               <div className="compose-field">
-                <label>View name</label>
+                <label htmlFor="inbox-save-view-name">View name</label>
                 <input
+                  id="inbox-save-view-name"
                   type="text"
                   value={saveViewName}
                   onChange={e => setSaveViewName(e.target.value)}
@@ -1676,6 +1709,10 @@ export default function InboxPage() {
                   placeholder="For example: Safety queue overdue"
                 />
               </div>
+              <label className="compose-field mims-check-row">
+                <input type="checkbox" checked={shareView} onChange={e => setShareView(e.target.checked)} />
+                Share with my organisation (others can use it; only you can change it)
+              </label>
               <div className="notes-empty" style={{ paddingTop: 0 }}>
                 This stores the current search, date range, tenant, and advanced filters.
               </div>

@@ -94,7 +94,7 @@ export default function FeaturesPage() {
           <div key={f.feature_key} className={`cp-feature-row ${f.is_enabled ? 'enabled' : 'disabled'}`}>
             <div className="cp-feature-toggle">
               <label className="cp-toggle-switch">
-                <input type="checkbox" checked={!!f.is_enabled} disabled={saving === f.feature_key}
+                <input type="checkbox" aria-label={`Turn ${f.feature_key.replace(/_/g, ' ')} on or off`} checked={!!f.is_enabled} disabled={saving === f.feature_key}
                   onChange={() => toggle(f.feature_key, f.is_enabled)} />
                 <span className="cp-toggle-slider" />
               </label>
@@ -102,7 +102,7 @@ export default function FeaturesPage() {
             <div className="cp-feature-info">
               <div className="cp-feature-key">{f.feature_key}</div>
               {FEATURE_DESCRIPTIONS[f.feature_key] && (
-                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{FEATURE_DESCRIPTIONS[f.feature_key]}</div>
+                <div style={{ fontSize: 11, color: '#5F6B7A', marginTop: 2 }}>{FEATURE_DESCRIPTIONS[f.feature_key]}</div>
               )}
               <input className="cp-feature-label-input" defaultValue={f.display_name || ''}
                 onBlur={e => updateLabel(f.feature_key, e.target.value)}
@@ -110,7 +110,7 @@ export default function FeaturesPage() {
             </div>
             <div className="cp-feature-order" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>Order: {f.display_order}</span>
-              <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: f.is_enabled ? '#DCFCE7' : '#F3F4F6', color: f.is_enabled ? '#16A34A' : '#6B7280' }}>{f.is_enabled ? 'Enabled' : 'Disabled'}</span>
+              <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: f.is_enabled ? '#DCFCE7' : '#F3F4F6', color: f.is_enabled ? '#166534' : '#4B5563' }}>{f.is_enabled ? 'Enabled' : 'Disabled'}</span>
             </div>
           </div>
         ))}

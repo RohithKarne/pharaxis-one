@@ -303,14 +303,14 @@ export default function PortalHomePage() {
                 </h2>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
-                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>My activity</Link>
-                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>Notification preferences</Link>
+                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>My activity</Link>
+                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>Notification preferences</Link>
               </div>
             </div>
 
             {followedTopics.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {followedTopics.map(f => (
                     <Link key={f.id} to={`${base}/therapeutic-areas`} className="pp-chip" style={{ textDecoration: 'none', color: 'var(--pp-primary)' }}>
@@ -328,7 +328,7 @@ export default function PortalHomePage() {
                     style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>News</div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{post.title}</div>
-                    {post.category && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>{post.category}</div>}
+                    {post.category && <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4 }}>{post.category}</div>}
                   </Link>
                 ))}
                 {forYouDocs.map(doc => (
@@ -336,7 +336,7 @@ export default function PortalHomePage() {
                     style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Document</div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{doc.title}</div>
-                    {doc.doc_type && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, textTransform: 'uppercase' }}>{doc.doc_type}</div>}
+                    {doc.doc_type && <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4, textTransform: 'uppercase' }}>{doc.doc_type}</div>}
                   </Link>
                 ))}
               </div>

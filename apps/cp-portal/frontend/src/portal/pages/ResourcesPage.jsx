@@ -44,7 +44,7 @@ export default function ResourcesPage() {
 
       <div className="pp-filter-bar">
         <input className="pp-search-input" placeholder="Search resources…" value={search} onChange={e => setSearch(e.target.value)} />
-        <select value={filter} onChange={e => setFilter(e.target.value)}>
+        <select aria-label="Resource type" value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="">All Types</option>
           {types.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
         </select>

@@ -13,9 +13,9 @@ function formatTherapeuticAreas(val) {
 }
 
 const STATUS_STYLES = {
-  pending:   { background: '#FEF3C7', color: '#D97706' },
-  confirmed: { background: '#DCFCE7', color: '#16A34A' },
-  cancelled: { background: '#FEE2E2', color: '#DC2626' },
+  pending:   { background: '#FEF3C7', color: '#92400E' },
+  confirmed: { background: '#DCFCE7', color: '#166534' },
+  cancelled: { background: '#FEE2E2', color: '#B91C1C' },
   completed: { background: '#DBEAFE', color: '#2563EB' },
 }
 
@@ -212,7 +212,7 @@ export default function MSLPage() {
             padding: '8px 20px', background: 'none', border: 'none', cursor: 'pointer',
             borderBottom: tab === t.key ? '2px solid var(--cp-primary)' : '2px solid transparent',
             marginBottom: -2, fontWeight: tab === t.key ? 700 : 400,
-            color: tab === t.key ? 'var(--cp-primary)' : '#6B7280', fontSize: 14,
+            color: tab === t.key ? 'var(--cp-primary)' : '#4B5563', fontSize: 14,
           }}>
             {t.label}
           </button>
@@ -286,7 +286,7 @@ export default function MSLPage() {
                   <button className="cp-modal-close" onClick={() => setSlotMSL(null)}>✕</button>
                 </div>
                 <div className="cp-modal-body">
-                  <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>Define bookable time slots. HCPs pick from these when requesting a meeting. (Google/Outlook calendar sync is a later phase.)</p>
+                  <p style={{ fontSize: 12, color: '#4B5563', marginBottom: 12 }}>Define bookable time slots. HCPs pick from these when requesting a meeting. (Google/Outlook calendar sync is a later phase.)</p>
                   <CanChange area="msls">
                   <form onSubmit={addSlot} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
                     <div className="cp-field" style={{ margin: 0 }}><label>Start</label><input type="datetime-local" required value={slotForm.starts_at} onChange={e => setSlotForm(f => ({ ...f, starts_at: e.target.value }))} /></div>
@@ -296,7 +296,7 @@ export default function MSLPage() {
                   </CanChange>
                   {slotMsg && <div className="cp-error" style={{ marginBottom: 10 }}>{slotMsg}</div>}
                   {slots.length === 0 ? (
-                    <p style={{ fontSize: 13, color: '#9CA3AF' }}>No slots defined yet.</p>
+                    <p style={{ fontSize: 13, color: '#5F6B7A' }}>No slots defined yet.</p>
                   ) : (
                     <table className="cp-table">
                       <thead><tr><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead>
@@ -406,7 +406,7 @@ export default function MSLPage() {
                 <tbody>
                   {bookings.map(b => (
                     <tr key={b.id}>
-                      <td>{b.msl_name}{b.msl_title ? <div style={{ fontSize: 11, color: '#9CA3AF' }}>{b.msl_title}</div> : null}</td>
+                      <td>{b.msl_name}{b.msl_title ? <div style={{ fontSize: 11, color: '#5F6B7A' }}>{b.msl_title}</div> : null}</td>
                       <td>{b.requester_name}</td>
                       <td>{b.requester_email}</td>
                       <td>{b.preferred_date ? b.preferred_date.slice(0, 10) : '—'}</td>
@@ -422,7 +422,7 @@ export default function MSLPage() {
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEditBooking(b)}>Update</button>
                         </CanChange>
                         <CanChange area="msls">
-                        <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => deleteBooking(b.id)}>Delete</button>
+                        <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#B91C1C' }} onClick={() => deleteBooking(b.id)}>Delete</button>
                         </CanChange>
                       </td>
                     </tr>

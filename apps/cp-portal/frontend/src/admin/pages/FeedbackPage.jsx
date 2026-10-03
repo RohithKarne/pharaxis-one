@@ -60,7 +60,7 @@ export default function FeedbackPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Stars rating={Math.round(avgRating)} />
             <span style={{ fontSize: 15, fontWeight: 700, color: '#1A1A2E' }}>{avgRating}</span>
-            <span style={{ fontSize: 13, color: '#6B7280' }}>avg · {total} response{total !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 13, color: '#4B5563' }}>avg · {total} response{total !== 1 ? 's' : ''}</span>
           </div>
         )}
       </div>
@@ -86,13 +86,13 @@ export default function FeedbackPage() {
               {items.map(f => (
                 <tr key={f.id}>
                   <td><Stars rating={f.rating} /></td>
-                  <td style={{ maxWidth: 320, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.message || <span style={{ color: '#9CA3AF' }}>—</span>}</td>
-                  <td>{f.user_email || <span style={{ color: '#9CA3AF' }}>Anonymous</span>}</td>
-                  <td style={{ fontSize: 12, color: '#6B7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.page_url || '—'}</td>
+                  <td style={{ maxWidth: 320, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.message || <span style={{ color: '#5F6B7A' }}>—</span>}</td>
+                  <td>{f.user_email || <span style={{ color: '#5F6B7A' }}>Anonymous</span>}</td>
+                  <td style={{ fontSize: 12, color: '#4B5563', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.page_url || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{f.submitted_at ? new Date(f.submitted_at).toLocaleString() : '—'}</td>
                   <td>
                     <CanChange area="feedback">
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#DC2626' }} onClick={() => handleDelete(f.id)}>Delete</button>
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#B91C1C' }} onClick={() => handleDelete(f.id)}>Delete</button>
                     </CanChange>
                   </td>
                 </tr>

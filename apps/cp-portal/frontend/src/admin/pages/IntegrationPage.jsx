@@ -79,7 +79,7 @@ function FieldMappingSection({ clientId, integration }) {
         <select value={formType} onChange={e => setFormType(e.target.value)}>
           {Object.keys(MIMS_TARGETS).map(t => <option key={t} value={t}>{FORM_TYPE_LABELS[t]}</option>)}
         </select>
-        <span style={{ fontSize: 12, color: '#64748b' }}>Portal form field → MIMS case field. Mappings override the built-in defaults.</span>
+        <span style={{ fontSize: 12, color: '#475569' }}>Portal form field → MIMS case field. Mappings override the built-in defaults.</span>
       </div>
 
       {typeMappings.length > 0 && (
@@ -121,7 +121,7 @@ function FieldMappingSection({ clientId, integration }) {
         <button type="submit" className="cp-btn cp-btn-sm cp-btn-primary" disabled={busy}>{busy ? 'Saving…' : '+ Add Mapping'}</button>
       </form>
       </CanChange>
-      {msg && <div style={{ marginTop: 8, fontSize: 13, color: msg === 'Mapping saved.' ? '#16a34a' : '#dc2626' }}>{msg}</div>}
+      {msg && <div style={{ marginTop: 8, fontSize: 13, color: msg === 'Mapping saved.' ? '#166534' : '#b91c1c' }}>{msg}</div>}
     </div>
   )
 }

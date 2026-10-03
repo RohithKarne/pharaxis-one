@@ -9,11 +9,11 @@ const TABS = ['Therapeutic Areas', 'Drugs', 'Events', 'Resources']
 const endpoints = { 'Therapeutic Areas': 'therapeutic-areas', Drugs: 'drugs', Events: 'events', Resources: 'resources' }
 
 const STATUS_COLORS = {
-  draft:       { background: '#F3F4F6', color: '#6B7280' },
+  draft:       { background: '#F3F4F6', color: '#4B5563' },
   in_review:   { background: '#DBEAFE', color: '#1E40AF' },
   in_progress: { background: '#FFEDD5', color: '#9A3412' },
   published:   { background: '#DCFCE7', color: '#166534' },
-  archived:    { background: '#F3F4F6', color: '#6B7280' },
+  archived:    { background: '#F3F4F6', color: '#4B5563' },
   expired:     { background: '#FEE2E2', color: '#991B1B' },
 }
 
@@ -22,7 +22,7 @@ function statusBadge(item) {
     return <span style={{ ...STATUS_COLORS[item.status], padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{item.status}</span>
   }
   const active = item.is_active !== 0
-  return <span style={{ background: active ? '#DCFCE7' : '#F3F4F6', color: active ? '#166534' : '#6B7280', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{active ? 'active' : 'inactive'}</span>
+  return <span style={{ background: active ? '#DCFCE7' : '#F3F4F6', color: active ? '#166534' : '#4B5563', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{active ? 'active' : 'inactive'}</span>
 }
 
 export default function ContentPage() {
@@ -143,7 +143,7 @@ export default function ContentPage() {
       <div className="cp-section-header">
         <h3>{tab}</h3>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#6B7280', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#4B5563', cursor: 'pointer' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
             Show inactive
           </label>
@@ -290,7 +290,7 @@ export default function ContentPage() {
                 <CanChange area="content">
                 {item.is_active !== 0
                   ? <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(endpoints[tab], item.id)}>Deactivate</button>
-                  : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#16A34A', borderColor: '#16A34A' }} onClick={() => reactivate(endpoints[tab], item.id)}>Reactivate</button>
+                  : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#166534', borderColor: '#16A34A' }} onClick={() => reactivate(endpoints[tab], item.id)}>Reactivate</button>
                 }
                 </CanChange>
               </div>

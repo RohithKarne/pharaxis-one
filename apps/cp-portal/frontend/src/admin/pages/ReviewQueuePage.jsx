@@ -5,7 +5,7 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
 
 const STATUS_STYLE = {
-  review:   { background: '#FEF3C7', color: '#D97706' },
+  review:   { background: '#FEF3C7', color: '#92400E' },
   approved: { background: '#CCFBF1', color: '#0D9488' },
 }
 
@@ -83,7 +83,7 @@ export default function ReviewQueuePage() {
     if (rows.length === 0) return null
     return (
       <div key={title} style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
           {title} ({rows.length})
         </div>
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
@@ -122,7 +122,7 @@ export default function ReviewQueuePage() {
                         {STATUS_LABELS[item.status] || item.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, color: '#6B7280' }}>
+                    <td style={{ fontSize: 12, color: '#4B5563' }}>
                       {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
                     </td>
                     <td style={{ fontSize: 13 }}><OwnerCell item={item} /></td>
@@ -144,7 +144,7 @@ export default function ReviewQueuePage() {
                           </button>
                           <button
                             className="cp-btn cp-btn-sm"
-                            style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+                            style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}
                             disabled={acting === key}
                             onClick={() => transition(item, 'draft')}
                           >

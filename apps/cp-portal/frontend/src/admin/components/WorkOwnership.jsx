@@ -23,11 +23,11 @@ async function post(url, body) {
 }
 
 export function OwnerCell({ item }) {
-  if (!item.owner_id) return <span style={{ color: '#6B7280' }}>Nobody yet</span>
+  if (!item.owner_id) return <span style={{ color: '#4B5563' }}>Nobody yet</span>
   return (
     <>
       {item.owned_by_me ? <strong>You</strong> : (item.owner_name || 'Unknown')}
-      <div style={{ fontSize: 12, color: '#6B7280' }}>
+      <div style={{ fontSize: 12, color: '#4B5563' }}>
         since {item.owner_since ? new Date(item.owner_since).toLocaleString() : '—'}
       </div>
     </>

@@ -52,14 +52,14 @@ export default function ResetPasswordPage() {
 
         {done ? (
           <>
-            <p style={{ color: '#16A34A', fontSize: 14 }}>Your password has been reset.</p>
+            <p style={{ color: '#166534', fontSize: 14 }}>Your password has been reset.</p>
             <button className="pp-btn pp-btn-primary pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/login`)}>
               Go to Sign In
             </button>
           </>
         ) : !token ? (
           <>
-            <p style={{ color: '#DC2626', fontSize: 14 }}>This reset link is missing or invalid. Please request a new one.</p>
+            <p style={{ color: '#B91C1C', fontSize: 14 }}>This reset link is missing or invalid. Please request a new one.</p>
             <button className="pp-btn pp-btn-outline pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/forgot-password`)}>
               Request a new link
             </button>
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
             {error && <div className="pp-error-msg">{error}</div>}
             <form onSubmit={submit} className="pp-auth-form">
               <div className="pp-field pp-field-password">
-                <label>New password <span style={{ fontSize: 11, color: '#6B7280' }}>(min 8 characters)</span></label>
+                <label>New password <span style={{ fontSize: 11, color: '#4B5563' }}>(min 8 characters)</span></label>
                 <div className="pp-input-wrapper">
                   <input type={show ? 'text' : 'password'} required value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••" />
                   <button type="button" className="pp-password-toggle" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'}>
