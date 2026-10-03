@@ -38,12 +38,16 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
       },
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('@tiptap'))                          return 'editor'
-            if (id.includes('jspdf') || id.includes('xlsx'))    return 'export-libs'
-            if (id.includes('react'))                           return 'vendor'
-          }
+        // React gets the highest priority so it is claimed first. Each group also
+        // takes in the packages its modules import, so under the old manualChunks
+        // rule the editor group swallowed React and every page, login included,
+        // had to download the 400 KB editor before it could render.
+        codeSplitting: {
+          groups: [
+            { name: 'vendor',      test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/, priority: 3 },
+            { name: 'editor',      test: /node_modules[\\/]@tiptap[\\/]/,                                              priority: 2 },
+            { name: 'export-libs', test: /node_modules[\\/](jspdf|xlsx)[\\/]/,                                       priority: 1 },
+          ],
         },
       },
     }
