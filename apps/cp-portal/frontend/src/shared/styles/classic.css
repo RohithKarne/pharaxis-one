@@ -201,3 +201,6 @@
 /* Accessibility (WCAG 2.2 AA): small buttons and row dropdowns are at least 24px tall to tap or click. */
 :root .cp-btn-sm, :root .cp-table td select { min-height: 24px; }
 :root .cp-btn:focus-visible { outline: 2px solid var(--cp-text); outline-offset: 2px; }
+
+/* A list that could not load reads as an error, not as an empty list. */
+:root .pp-load-error p { color: #b91c1c; font-weight: bold; }

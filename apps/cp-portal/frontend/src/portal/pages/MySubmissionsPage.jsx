@@ -86,7 +86,7 @@ export default function MySubmissionsPage() {
       </div>
 
       {loading ? <SkeletonCards count={4} /> : loadError ? (
-        <div className="pp-empty-state" role="alert">
+        <div className="pp-empty-state pp-load-error" role="alert">
           <p>We could not load your requests just now. Please try again.</p>
           <button type="button" className="pp-btn pp-btn-primary" onClick={() => { setLoading(true); load() }}>Try again</button>
         </div>
