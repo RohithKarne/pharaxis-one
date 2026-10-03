@@ -5,8 +5,9 @@ import PageLoader from './PageLoader'
 import Icon from '../../shared/components/Icon'
 
 const NAV_ITEMS = [
-  { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true },
-  { to: '/admin/clients',          label: 'Clients',         icon: 'building' },
+  // CPPM-133: platformOnly — a client's own staff cannot read these, so they are not offered.
+  { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true, platformOnly: true },
+  { to: '/admin/clients',          label: 'Clients',         icon: 'building', platformOnly: true },
   // CPPM-62: records that belong to no client (platform-admin sign-ins, failed
   // sign-ins for unknown emails). Shown to the platform admin only.
   { to: '/admin/audit',            label: 'Platform Audit Trail', icon: 'clipboard', exact: true, superadminOnly: true },
@@ -126,6 +127,7 @@ export default function AdminLayout({ children }) {
     .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
     .filter(sec => sec.tabs.length > 0)
   const shownSection = sections.find(sec => sec.key === currentSection?.key)
+  const mainItems = NAV_ITEMS.filter(item => (!item.superadminOnly || admin?.role === 'superadmin') && !(item.platformOnly && admin?.clientId))
   const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
@@ -212,8 +214,8 @@ export default function AdminLayout({ children }) {
         </div>
 
         <nav className="cp-sidebar-nav">
-          <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>
-          {NAV_ITEMS.filter(item => !item.superadminOnly || admin?.role === 'superadmin').map(item => (
+          {mainItems.length > 0 && <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>}
+          {mainItems.map(item => (
             <NavLink
               key={item.to} to={item.to} end={item.exact}
               title={item.label}

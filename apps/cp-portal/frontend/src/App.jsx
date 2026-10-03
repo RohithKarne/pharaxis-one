@@ -81,6 +81,14 @@ const TrainingModulePage      = lazy(() => import('./portal/pages/TrainingModule
 const TrialsAdminPage         = lazy(() => import('./admin/pages/TrialsAdminPage'))
 const TrainingAdminPage       = lazy(() => import('./admin/pages/TrainingAdminPage'))
 
+// CPPM-133: the dashboard and the client list are the platform admin's. A client's
+// own staff, who cannot read them, go to their client instead.
+function PlatformOnly({ children }) {
+  const { admin } = useAdminAuth()
+  if (admin?.clientId) return <Navigate to={`/admin/clients/${admin.clientId}`} replace />
+  return children
+}
+
 function AdminGuard({ children }) {
   const { admin, authLoading, signOut } = useAdminAuth()
   const location = useLocation()
@@ -193,8 +201,8 @@ function AdminRoutes() {
       <Routes>
         {/* Admin Console */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
-        <Route path="/admin/clients" element={<AdminGuard><ClientsPage /></AdminGuard>} />
+        <Route path="/admin" element={<AdminGuard><PlatformOnly><AdminDashboard /></PlatformOnly></AdminGuard>} />
+        <Route path="/admin/clients" element={<AdminGuard><PlatformOnly><ClientsPage /></PlatformOnly></AdminGuard>} />
         <Route path="/admin/clients/:clientId" element={<AdminGuard><ClientDetailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/branding" element={<AdminGuard><BrandingPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/features" element={<AdminGuard><FeaturesPage /></AdminGuard>} />
