@@ -154,7 +154,7 @@ function DetailSidebar({ doc, token, onClose }) {
             </div>
             <div className="bc-detail-row">
               <span className="bc-detail-label">Author</span>
-              <span className="bc-detail-val">{doc.author_name || doc.created_by || '—'}</span>
+              <span className="bc-detail-val">{doc.author_name || doc.created_by_name || '—'}</span>
             </div>
             <div className="bc-detail-row">
               <span className="bc-detail-label">Created</span>

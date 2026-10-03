@@ -19,6 +19,7 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { getUserModules } = require('../../utils/userModules');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { createNotification } = require('../../services/notificationCenterService');
 function safeStoredFilename(originalname) {
@@ -174,6 +175,15 @@ async function getScopedDocument(req, documentId) {
   return rows[0] || null;
 }
 
+// MIPM-184: people without Content Management (agents) read only published
+// documents. The Browse Content page listed Draft, Under Review and Approved
+// documents next to published ones, and any of them could be opened and downloaded.
+async function publishedOnly(req) {
+  if (hasPlatformAdminScope(req)) return false;
+  const modules = await getUserModules(req.user.userId);
+  return !modules.includes('content_mgmt');
+}
+
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -249,6 +259,9 @@ router.get('/documents', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
 
+    if (await publishedOnly(req)) {
+      query += " AND d.status = 'Published'";
+    }
     if (status) {
       query += ' AND d.status = ?';
       params.push(status);
@@ -452,6 +465,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
 
     const [versions] = await pool.execute(
       `SELECT vh.*, u.name AS author_name
@@ -1443,13 +1457,14 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
 router.get('/documents/:id/download', authenticate, async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
-      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+      `SELECT d.file_path, d.file_name, d.file_mime, d.status, f.org_id
        FROM cm_documents d
        JOIN cm_folders f ON f.id = d.folder_id
        WHERE d.id = ?`,
       [req.params.id]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
     const isSA = hasGlobalAdminScope(req.user);
     if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
     if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });
@@ -1469,13 +1484,14 @@ router.get('/documents/:id/download', authenticate, async (req, res) => {
 router.get('/documents/:id/file', authenticate, async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
-      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+      `SELECT d.file_path, d.file_name, d.file_mime, d.status, f.org_id
        FROM cm_documents d
        JOIN cm_folders f ON f.id = d.folder_id
        WHERE d.id = ?`,
       [req.params.id]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
 
     // Org scope check (platform-admin bypasses)
     const isSA = hasGlobalAdminScope(req.user);
