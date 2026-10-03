@@ -31,7 +31,7 @@ export default function TrialsAdminPage() {
       })
       const d = await res.json()
       if (res.ok) {
-        setMsg(editingId ? '✓ Changes saved.' : '✓ Clinical Trial published.')
+        setMsg(editingId ? 'Changes saved.' : 'Clinical Trial published.')
         setEditingId(null)
         setForm(EMPTY)
         const updated = await fetch(`/api/admin/trials/${clientId}`, { headers: adminHeaders() }).then(r => r.json())

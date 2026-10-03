@@ -59,7 +59,7 @@ export default function DataRequestsPage() {
         <>
           <div className="cp-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Requests {pending > 0 ? `· ${pending} pending` : ''}</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
           </div>
 
           {requests.length === 0 ? (

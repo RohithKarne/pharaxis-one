@@ -141,7 +141,7 @@ export default function PortalUsersPage() {
         <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
         <CanChange area="users">
         <button className="cp-btn cp-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowBulkAdd(true)}>
-          ⇪ Bulk Add Users
+          Bulk Add Users
         </button>
         </CanChange>
       </div>

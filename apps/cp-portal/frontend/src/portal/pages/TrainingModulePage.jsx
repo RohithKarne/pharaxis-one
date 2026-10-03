@@ -70,7 +70,7 @@ export default function TrainingModulePage() {
 
   return (
     <div className="pp-container pp-page-content" style={{ padding: '24px 0', maxWidth: 820 }}>
-      <Link to={`${base}/training`} style={{ fontSize: 13 }}>← All training modules</Link>
+      <Link to={`${base}/training`} style={{ fontSize: 13 }}>All training modules</Link>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E', margin: '10px 0 4px' }}>{module.title}</h1>
       <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
         {module.type} · {module.duration} · Pass mark {module.pass_score}% · Version {module.version}

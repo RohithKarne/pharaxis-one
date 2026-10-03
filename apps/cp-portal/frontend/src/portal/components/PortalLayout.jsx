@@ -392,8 +392,8 @@ function SpecialtyPrompt({ clientCode }) {
   return (
     <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">
       <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
-        <h2>Personalize your experience</h2>
-        <p>What's your area of practice? We'll tailor content and recommendations to your specialty.</p>
+        <h2>Your area of practice</h2>
+        <p>Choose your specialty. It is saved to your profile.</p>
         <div className="pp-specialty-grid">
           {SPECIALTIES.map(s => (
             <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>

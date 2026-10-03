@@ -246,7 +246,7 @@ export default function SafetyPage() {
                   }}
                 />
                 {form.publish_at && new Date(form.publish_at) < new Date() && (
-                  <span style={{ fontSize: 12, color: '#B45309' }}>⚠ Date is in the past — alert will publish immediately.</span>
+                  <span style={{ fontSize: 12, color: '#B45309' }}>Date is in the past — alert will publish immediately.</span>
                 )}
               </div>
               <div className="cp-field">

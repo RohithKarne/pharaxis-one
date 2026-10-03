@@ -74,7 +74,7 @@ export default function TrainingAdminPage() {
     setMsg('')
     try {
       await call(editingId ? `${api}/${editingId}` : api, editingId ? 'PUT' : 'POST', form)
-      setMsg(editingId ? '✓ Changes saved.' : '✓ Module created. Add its questions, then set it to Available.')
+      setMsg(editingId ? 'Changes saved.' : 'Module created. Add its questions, then set it to Available.')
       setEditingId(null)
       setForm(EMPTY)
       const list = await loadModules()
@@ -129,7 +129,7 @@ export default function TrainingAdminPage() {
       const url = qEditingId ? `${api}/${qModule.id}/questions/${qEditingId}` : `${api}/${qModule.id}/questions`
       await call(url, qEditingId ? 'PUT' : 'POST', qForm)
       setQForm(EMPTY_Q); setQEditingId(null)
-      setQMsg('✓ Saved. The module is now a new version.')
+      setQMsg('Saved. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
       setQMsg(`✕ ${err.message}`)
@@ -140,7 +140,7 @@ export default function TrainingAdminPage() {
     if (!confirm('Remove this question?')) return
     try {
       await call(`${api}/${qModule.id}/questions/${q.id}`, 'DELETE')
-      setQMsg('✓ Removed. The module is now a new version.')
+      setQMsg('Removed. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
       setQMsg(`✕ ${err.message}`)
@@ -298,7 +298,7 @@ export default function TrainingAdminPage() {
                 <li key={q.id} style={{ marginBottom: 10, fontSize: 13 }}>
                   <div style={{ fontWeight: 600 }}>{q.question}</div>
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0' }}>
-                    {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{i === q.correct_index ? '✓' : '○'} {o}</li>)}
+                    {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{o}{i === q.correct_index ? ' (correct answer)' : ''}</li>)}
                   </ul>
                   <CanChange area="training">
                   <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>

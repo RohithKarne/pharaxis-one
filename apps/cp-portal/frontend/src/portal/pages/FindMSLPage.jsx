@@ -150,7 +150,6 @@ END:VCALENDAR`
             </div>
             {bookingDone ? (
               <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
                 <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
                 <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 16 }}>
                   Your request has been received. The MSL team will follow up with you shortly.

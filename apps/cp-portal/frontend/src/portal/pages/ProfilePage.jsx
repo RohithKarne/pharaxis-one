@@ -194,7 +194,7 @@ export default function ProfilePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingProfile}>
             {savingProfile ? 'Saving…' : 'Save Changes'}
           </button>
-          {profileMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ {profileMsg}</span>}
+          {profileMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{profileMsg}</span>}
           {profileErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{profileErr}</span>}
         </div>
       </form>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingPwd}>
             {savingPwd ? 'Updating…' : 'Update Password'}
           </button>
-          {pwdMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ {pwdMsg}</span>}
+          {pwdMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{pwdMsg}</span>}
           {pwdErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
         </div>
       </form>

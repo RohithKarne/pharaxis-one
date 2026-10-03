@@ -55,7 +55,7 @@ export default function ChatRecordsPage() {
 
         {open ? (
           <div style={card}>
-            <button onClick={() => setOpen(null)} style={{ border: 'none', background: 'none', color: 'var(--cp-primary)', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 12 }}>← Back to all conversations</button>
+            <button onClick={() => setOpen(null)} style={{ border: 'none', background: 'none', color: 'var(--cp-primary)', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 12 }}>Back to all conversations</button>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{who(open.conversation)} <span style={{ fontWeight: 400, color: '#64748B' }}>· {open.conversation.user_type || 'unknown type'}</span></h3>
             <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
               {open.conversation.email} · started {fmt(open.conversation.started_at)} · {open.conversation.provider || '—'}{open.conversation.model ? ` / ${open.conversation.model}` : ''}

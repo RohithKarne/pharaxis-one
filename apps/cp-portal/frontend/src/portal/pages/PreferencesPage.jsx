@@ -98,7 +98,7 @@ export default function PreferencesPage() {
           {saving ? 'Saving…' : 'Save Preferences'}
         </button>
         {saved && (
-          <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ Saved</span>
+          <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>Saved</span>
         )}
         {saveError && (
           <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{saveError}</span>

@@ -71,8 +71,8 @@ export default function MyActivityPage() {
         <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Topics you follow</h2>
         {follows.length === 0 ? (
           <p style={{ color: 'var(--pp-text-muted)', fontSize: 14 }}>
-            You're not following anything yet. Follow a therapeutic area to personalize your home feed.{' '}
-            <Link to={`${base}/therapeutic-areas`} style={{ color: 'var(--pp-primary)' }}>Browse topics →</Link>
+            You are not following any topics. Follow a therapeutic area to see its updates on your home page.{' '}
+            <Link to={`${base}/therapeutic-areas`} style={{ color: 'var(--pp-primary)' }}>Browse topics</Link>
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

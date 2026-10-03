@@ -198,9 +198,9 @@ export default function NewsPage() {
 
       {totalPages > 1 && (
         <div className="pp-news-pagination">
-          <button className="pp-btn pp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Previous</button>
+          <button className="pp-btn pp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
           <span style={{ fontSize: 13, color: '#6B7280', alignSelf: 'center' }}>Page {page} of {totalPages}</span>
-          <button className="pp-btn pp-btn-outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+          <button className="pp-btn pp-btn-outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
         </div>
       )}
     </div>

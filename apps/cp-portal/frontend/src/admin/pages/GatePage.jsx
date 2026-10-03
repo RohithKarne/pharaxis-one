@@ -138,7 +138,7 @@ export default function GatePage() {
           </div>
         )}
 
-        {saved && <div className="cp-success">✓ Gate settings saved.</div>}
+        {saved && <div className="cp-success">Gate settings saved.</div>}
         <div className="cp-form-actions">
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
         </div>
@@ -222,7 +222,7 @@ export default function GatePage() {
               </tbody>
             </table>
           </div>
-          {accessSaved && <div className="cp-success" style={{ marginTop: 12 }}>✓ Access matrix saved.</div>}
+          {accessSaved && <div className="cp-success" style={{ marginTop: 12 }}>Access matrix saved.</div>}
           <div className="cp-form-actions">
             <button type="button" className="cp-btn cp-btn-primary" onClick={saveAccessMatrix}>Save Access Matrix</button>
           </div>

@@ -77,7 +77,7 @@ export default function EventsPage() {
                 </div>
                 {ev.registration_url && (
                   <a href={ev.registration_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-sm pp-btn-primary">
-                    Register →
+                    Register
                   </a>
                 )}
               </div>

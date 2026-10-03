@@ -148,14 +148,14 @@ export default function SavedItemsPage() {
                     to={`${base}/news/${item.item_id}`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item →
+                    Go to item
                   </Link>
                 ) : item.withdrawn ? null : (
                   <Link
                     to={`${base}/documents`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item →
+                    Go to item
                   </Link>
                 )}
                 <button

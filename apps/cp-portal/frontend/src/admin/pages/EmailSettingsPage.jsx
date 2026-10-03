@@ -220,8 +220,8 @@ export default function EmailSettingsPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
           <LoadingButton onClick={handleSave}>Save Settings</LoadingButton>
-          {saved && <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 500 }}>✓ Saved</span>}
-          {saveError && <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>✗ {saveError}</span>}
+          {saved && <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 500 }}>Saved</span>}
+          {saveError && <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>{saveError}</span>}
         </div>
       </div>
 
@@ -258,7 +258,7 @@ export default function EmailSettingsPage() {
             color:      testMsg.type === 'success' ? '#16A34A' : '#DC2626',
             border: `1px solid ${testMsg.type === 'success' ? '#BBF7D0' : '#FECACA'}`,
           }}>
-            {testMsg.type === 'success' ? '✓ ' : '✗ '}{testMsg.text}
+            {testMsg.text}
           </div>
         )}
       </div>
@@ -272,11 +272,11 @@ export default function EmailSettingsPage() {
         </p>
         {resendMsg && (
           <div style={{ marginBottom: 12, fontSize: 13, color: resendMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
-            {resendMsg.type === 'success' ? '✓ ' : '✗ '}{resendMsg.text}
+            {resendMsg.text}
           </div>
         )}
         {outbox.emails.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#16A34A' }}>✓ No failed or pending emails.</div>
+          <div style={{ fontSize: 13, color: '#16A34A' }}>No failed or pending emails.</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>

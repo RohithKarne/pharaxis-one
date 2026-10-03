@@ -94,7 +94,7 @@ export default function SyncHealthPage() {
 
   return (
     <AdminLayout title="Sync Health">
-      <p className="cp-page-desc">Live health of the MIMS integration — submission sync status and failed syncs with one-click retry.</p>
+      <p className="cp-page-desc">Portal submissions sent to MIMS. Failed ones can be retried from here.</p>
 
       {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
       {loading ? <div className="cp-loading">Loading…</div> : (
@@ -108,7 +108,7 @@ export default function SyncHealthPage() {
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2>Failed Syncs {failures.length > 0 ? `(${failures.length})` : ''}</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
           </div>
 
           {failures.length === 0 ? (
@@ -133,7 +133,7 @@ export default function SyncHealthPage() {
                         </button>
                         <CanChange area="submissions">
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
-                          {retrying === f.id ? 'Retrying…' : '↻ Retry'}
+                          {retrying === f.id ? 'Retrying…' : 'Retry'}
                         </button>
                         </CanChange>
                       </div>
@@ -171,7 +171,7 @@ export default function SyncHealthPage() {
                     <td>
                       {canChange('submissions') && (
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFile(f.id)} disabled={retrying === `file-${f.id}`}>
-                          {retrying === `file-${f.id}` ? 'Sending…' : '↻ Send again'}
+                          {retrying === `file-${f.id}` ? 'Sending…' : 'Send again'}
                         </button>
                       )}
                       {fileResult[f.id] && (
@@ -209,7 +209,7 @@ export default function SyncHealthPage() {
                       <td>
                         {canChange('submissions') && (
                           <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFollowUp(f.id)} disabled={retrying === `fu-${f.id}`}>
-                            {retrying === `fu-${f.id}` ? 'Sending…' : '↻ Send again'}
+                            {retrying === `fu-${f.id}` ? 'Sending…' : 'Send again'}
                           </button>
                         )}
                         {result && (

@@ -66,7 +66,7 @@ export default function ResourcesPage() {
                   </div>
                   {(r.url || r.file_path) && (
                     <a href={r.url || r.file_path} target="_blank" rel="noopener noreferrer" className="pp-resource-link">
-                      View →
+                      View
                     </a>
                   )}
                 </div>

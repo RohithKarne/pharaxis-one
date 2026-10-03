@@ -39,7 +39,7 @@ export default function TrainingPage() {
   return (
     <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
       <div className="pp-page-header" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>CME & REMS Educational Training Hub</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>CME and REMS Training</h1>
         <p style={{ color: '#6B7280', fontSize: 14 }}>Read each module’s document, answer its questions, and download a certificate when you pass.</p>
       </div>
 

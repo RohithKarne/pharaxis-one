@@ -118,7 +118,7 @@ export default function FAQPage() {
       )}
 
       {faqs.length === 0 ? (
-        <div className="cp-empty"><p>No FAQ items yet. Add your first one.</p></div>
+        <div className="cp-empty"><p>No FAQ items.</p></div>
       ) : (
         Object.entries(grouped).map(([cat, items]) => (
           <div key={cat} className="cp-card" style={{ marginBottom: 16 }}>

@@ -101,7 +101,7 @@ export default function ContactPage() {
         <div className="pp-contact-card">
           <h3>Medical Information</h3>
           <p>For medical information requests and clinical inquiries, use our submission portal.</p>
-          <Link to={`${base}/submit`} className="pp-contact-action">Submit a medical inquiry →</Link>
+          <Link to={`${base}/submit`} className="pp-contact-action">Submit a medical inquiry</Link>
           {/* Contact details come from the client record; render only if present. */}
           {client.contact_email && (
             <a href={`mailto:${client.contact_email}`} className="pp-contact-link">{client.contact_email}</a>
@@ -117,7 +117,7 @@ export default function ContactPage() {
         <div className="pp-contact-card pp-contact-card-alert">
           <h3>Adverse Events</h3>
           <p>To report a suspected adverse event or side effect, please use our secure reporting form.</p>
-          <Link to={`${base}/submit?type=adverse_event`} className="pp-contact-action pp-contact-action-alert">Report a side effect →</Link>
+          <Link to={`${base}/submit?type=adverse_event`} className="pp-contact-action pp-contact-action-alert">Report a side effect</Link>
         </div>
       </div>
 
@@ -131,7 +131,6 @@ export default function ContactPage() {
           <div className="pp-contact-note">Contact form submissions are not currently available for this portal.</div>
         ) : status === 'success' ? (
           <div className="pp-contact-success" role="status">
-            <div className="pp-contact-success-icon">✓</div>
             <h3>Message sent</h3>
             <p>
               Thank you{name ? `, ${name.split(' ')[0]}` : ''}. We have received your message

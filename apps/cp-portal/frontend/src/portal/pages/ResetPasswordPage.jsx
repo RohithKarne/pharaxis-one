@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
 
         {done ? (
           <>
-            <p style={{ color: '#16A34A', fontSize: 14 }}>✓ Your password has been reset.</p>
+            <p style={{ color: '#16A34A', fontSize: 14 }}>Your password has been reset.</p>
             <button className="pp-btn pp-btn-primary pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/login`)}>
               Go to Sign In
             </button>

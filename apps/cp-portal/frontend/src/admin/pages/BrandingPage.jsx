@@ -303,7 +303,7 @@ export default function BrandingPage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
-        {saved && <div className="cp-success">✓ Branding saved.</div>}
+        {saved && <div className="cp-success">Branding saved.</div>}
 
         <div className="cp-form-actions">
           <LoadingButton onClick={handleSave} disabled={saving}>Save Branding</LoadingButton>

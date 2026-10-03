@@ -161,7 +161,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
           <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>
           {m.ae_screen_answer === 'Yes' && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
-              ⚠ Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
+              Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
             </div>
           )}
           {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Said nobody became unwell.</div>}
@@ -462,7 +462,7 @@ export default function SubmissionsPage() {
                             color:      s.ae_task_status === 'open' ? '#B91C1C' : '#475569',
                           }}
                         >
-                          {s.ae_task_status === 'open' ? '⚠ SAFETY REVIEW' : '✓ REVIEWED'}
+                          {s.ae_task_status === 'open' ? 'SAFETY REVIEW' : 'REVIEWED'}
                         </span>
                       )}
                     </td>
@@ -506,7 +506,7 @@ export default function SubmissionsPage() {
                       {s.status === 'failed_sync' && canEdit && (
                         <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
                           style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
-                          ↻ Retry
+                          Retry
                         </button>
                       )}
                     </td>

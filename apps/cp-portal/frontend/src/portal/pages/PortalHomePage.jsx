@@ -147,7 +147,7 @@ export default function PortalHomePage() {
       key:   'therapeutic_areas',
       icon:  'beaker',
       title: 'Therapeutic Areas',
-      desc:  'Explore our focus areas across diseases and treatment categories.',
+      desc:  'Information by disease area and treatment category.',
       path:  'therapeutic-areas',
     },
     {

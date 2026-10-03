@@ -176,7 +176,7 @@ export default function SafetyQueuePage() {
                   {mineOnly ? 'Show all' : 'Show mine'}
                 </button>
               )}
-              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
             </div>
           </div>
 

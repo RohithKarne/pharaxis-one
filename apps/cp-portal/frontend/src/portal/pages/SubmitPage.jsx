@@ -156,7 +156,6 @@ export default function SubmitPage() {
     return (
       <div className="pp-container pp-page-content">
         <div className="pp-success-card">
-          <div className="pp-success-icon">✓</div>
           <h2>Submission Received</h2>
           <p>Your reference number is <strong>{submitted.reference}</strong></p>
           {submitted.attachments_blocked?.length > 0 && (
@@ -195,7 +194,7 @@ export default function SubmitPage() {
       ) : (
         <div className="pp-form-wrapper">
           <div className="pp-form-header">
-            <button className="pp-back-btn" onClick={() => setSelectedType(null)}>← Back</button>
+            <button className="pp-back-btn" onClick={() => setSelectedType(null)}>Back</button>
             <h2>{FORM_TYPES.find(t => t.key === selectedType)?.label}</h2>
           </div>
 

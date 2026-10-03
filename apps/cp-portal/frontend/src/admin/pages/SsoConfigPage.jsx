@@ -162,7 +162,7 @@ export default function SsoConfigPage() {
           <button className="cp-btn cp-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save SSO settings'}
           </button>
-          {saved && <span style={{ color: '#16A34A', fontSize: 13 }}>✓ Saved</span>}
+          {saved && <span style={{ color: '#16A34A', fontSize: 13 }}>Saved</span>}
         </div>
       </div>
       </ReadOnlyUnless>
