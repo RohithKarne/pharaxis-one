@@ -65,9 +65,25 @@ async function listClients(pool) {
     return acc;
   }, {});
 
+  // CPPM-130: what each client has waiting on someone — the same counts the Inbox
+  // shows (Safety Queue, Review Queue, Access Requests, Data Requests).
+  const [waitingRows] = await pool.execute(`
+    SELECT c.id AS client_id,
+      (SELECT COUNT(*) FROM cp_ae_review_tasks t WHERE t.client_id = c.id AND t.status = 'open') AS safety,
+      (SELECT COUNT(*) FROM cp_news_posts n WHERE n.client_id = c.id AND n.status = 'review')
+        + (SELECT COUNT(*) FROM cp_documents d WHERE d.client_id = c.id AND d.status = 'review' AND d.is_active = 1) AS review,
+      (SELECT COUNT(*) FROM cp_portal_users u WHERE u.client_id = c.id AND u.access_status = 'requested') AS access,
+      (SELECT COUNT(*) FROM cp_data_requests r WHERE r.client_id = c.id AND r.status = 'pending') AS data_requests
+    FROM cp_clients c WHERE c.is_active = 1
+  `);
+  const waiting = Object.fromEntries(waitingRows.map(r => [r.client_id, {
+    safety: Number(r.safety), review: Number(r.review), access: Number(r.access), data_requests: Number(r.data_requests),
+  }]));
+
   return rows.map(client => ({
     ...readinessForClient(client, expiredDocCounts),
     expiring_soon_doc_count: expiringSoonCounts[client.id] || 0,
+    waiting: waiting[client.id] || { safety: 0, review: 0, access: 0, data_requests: 0 },
   }));
 }
 
