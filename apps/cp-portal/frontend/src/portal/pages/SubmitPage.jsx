@@ -239,13 +239,9 @@ export default function SubmitPage() {
                     {field.label}
                     {field.is_required ? <span className="pp-required" aria-hidden="true"> *</span> : null}
                   </label>
-                  {/* Scoped to system-managed fields deliberately. help_text is
-                      configurable on every field but has never been rendered
-                      anywhere in the portal — fixing that generally is a separate
-                      change, not one to bundle into a safety feature. For the AE
-                      screening question the help text is the mitigation, so it
-                      has to appear. */}
-                  {field.system_managed && field.help_text
+                  {/* CPPM-87: help text the client writes appears under every field,
+                      not only under the built-in screening question. */}
+                  {field.help_text
                     ? <span className="pp-field-help">{field.help_text}</span> : null}
                   {field.field_type === 'radio' ? (
                     /* Radio, not a dropdown: for a safety question the question and
