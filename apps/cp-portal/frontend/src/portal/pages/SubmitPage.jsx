@@ -36,6 +36,7 @@ export default function SubmitPage() {
   const [formValues, setFormValues]     = useState({})
   const [submitting, setSubmitting]     = useState(false)
   const [submitted, setSubmitted]       = useState(null)
+  const [submittedType, setSubmittedType] = useState(null)
   const [error, setError]               = useState('')
   const [fieldErrors, setFieldErrors]   = useState({})
   const [fieldsLoading, setFieldsLoading] = useState(false)
@@ -173,6 +174,7 @@ export default function SubmitPage() {
         return
       }
       clearDraft()
+      setSubmittedType(selectedType)
       setSubmitted(data)
     } catch {
       setError('Submission failed. Please check your connection and try again.')
@@ -206,7 +208,12 @@ export default function SubmitPage() {
               Your report itself was received.
             </p>
           )}
-          <p className="pp-success-sub">{slaText}</p>
+          {/* CPPM-94: a side effect report is not a question with a reply time. */}
+          <p className="pp-success-sub">
+            {submittedType === 'adverse_event'
+              ? 'Our drug safety team will review your report and may contact you for more details.'
+              : slaText}
+          </p>
           <div className="pp-success-actions">
             <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>Submit Another</button>
             <Link to={`/portal/${clientCode}`} className="pp-btn pp-btn-primary">Back to Home</Link>
