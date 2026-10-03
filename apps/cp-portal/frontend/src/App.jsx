@@ -136,7 +136,9 @@ function PortalRoutes() {
           <Route path="reset-password"    element={<ResetPasswordPage />} />
           <Route path="verify-email"     element={<VerifyEmailPage />} />
           <Route path="sso-complete"      element={<SsoCompletePage />} />
-          <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
+          {/* CPPM-106: any request form opens this page — SubmitPage itself shows only
+              the forms that are switched on, and says so when none are. */}
+          <Route path="submit"            element={<SubmitPage />} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
           <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
           <Route path="resources"         element={<FeatureGuard featureKey="resources"><ResourcesPage /></FeatureGuard>} />

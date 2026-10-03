@@ -182,12 +182,16 @@ export default function SubmitPage() {
   }
 
   const SUBMISSION_KEYS = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
+  if (SUBMISSION_KEYS.some(k => isFeatureEnabled(k) === null)) return <div className="pp-loading">Loading…</div>
   const anyEnabled = SUBMISSION_KEYS.some(k => isFeatureEnabled(k))
   if (!anyEnabled) {
     return <div className="pp-container pp-page-content"><div className="pp-info-box">Submission forms are not available for this portal.</div></div>
   }
   // Filter form types to only show enabled ones
   const availableTypes = FORM_TYPES.filter(t => isFeatureEnabled(t.key))
+  if (selectedType && !isFeatureEnabled(selectedType)) {
+    return <div className="pp-container pp-page-content"><div className="pp-info-box">This form is not available on this portal. <Link to={`/portal/${clientCode}/submit`}>See the forms that are</Link>.</div></div>
+  }
 
   if (submitted) {
     return (
