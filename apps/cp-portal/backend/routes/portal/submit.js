@@ -19,7 +19,7 @@ const { validateAnswer, isFlagged, isScreenedType, AE_SCREEN_KEY, AE_SCREEN_DETA
 const { systemAudit, auditWithin } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline, REOPENED_NOTE } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
-const { loadFormFields, missingRequired } = require('../../services/formFields');
+const { loadFormFields, missingRequired, invalidAnswers } = require('../../services/formFields');
 const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
@@ -171,6 +171,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       return res.status(400).json({
         error: `Please fill in: ${missing.map(f => f.label || f.field_key).join(', ')}.`,
         fields: missing.map(f => f.field_key),
+      });
+    }
+    const invalid = invalidAnswers(formFields, parsedForm);
+    if (invalid.length) {
+      return res.status(400).json({
+        error: invalid.map(x => x.msg).join(' '),
+        fields: invalid.map(x => x.f.field_key),
+        field_errors: Object.fromEntries(invalid.map(x => [x.f.field_key, x.msg])),
       });
     }
 

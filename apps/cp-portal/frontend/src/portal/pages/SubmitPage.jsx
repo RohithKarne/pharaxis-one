@@ -10,6 +10,21 @@ const FORM_TYPES = [
   { key: 'other_inquiry',       label: 'Other Request',               desc: 'General inquiry or request not covered by the above categories.' },
 ]
 
+// The choices a select, radio or multiselect field offers: a JSON array, newline
+// text, or a JSON array encoded twice by the old form builder (CPPM-95).
+export function optionList(raw) {
+  if (Array.isArray(raw)) return raw.map(o => String(o).trim()).filter(Boolean)
+  let s = String(raw ?? '').trim()
+  for (let i = 0; i < 2 && (s.startsWith('[') || s.startsWith('"')); i++) {
+    try {
+      const v = JSON.parse(s)
+      if (Array.isArray(v)) return v.map(o => String(o).trim()).filter(Boolean)
+      s = String(v).trim()
+    } catch { break }
+  }
+  return s.split('\n').map(o => o.trim()).filter(Boolean)
+}
+
 export default function SubmitPage() {
   const { clientCode, portalHeaders, isFeatureEnabled, portalConfig } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
@@ -78,6 +93,7 @@ export default function SubmitPage() {
   // the controlling field holds that value. Used by the AE screening detail box,
   // which appears only after the visitor answers "Yes".
   function isVisible(field, values = formValues) {
+    if (field.field_type === 'hidden') return false // CPPM-85: never shown to the person
     const cond = field.show_when
     if (!cond || !cond.field) return true
     return String(values[cond.field] || '') === String(cond.equals)
@@ -102,7 +118,8 @@ export default function SubmitPage() {
     // Only validate what the visitor can actually see. A required-but-hidden
     // field would block submission with no visible cause and no way to fix it.
     formFields.filter(f => f.is_required && isVisible(f)).forEach(f => {
-      if (!formValues[f.field_key] || String(formValues[f.field_key]).trim() === '') {
+      const v = formValues[f.field_key]
+      if (!v || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')) {
         errors[f.field_key] = `${f.field_label || f.label} is required.`
       }
     })
@@ -127,8 +144,10 @@ export default function SubmitPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error || 'Submission failed. Please try again.')
+        // CPPM-85: the server names each answer it refused, and why.
+        if (data.field_errors) setFieldErrors(data.field_errors)
         // CPPM-7: the server names the required fields it found empty.
-        if (Array.isArray(data.fields)) {
+        else if (Array.isArray(data.fields)) {
           setFieldErrors(Object.fromEntries(data.fields.map(k => {
             const f = formFields.find(x => x.field_key === k)
             return [k, `${f?.field_label || f?.label || k} is required.`]
@@ -233,7 +252,7 @@ export default function SubmitPage() {
                        both answers must be visible without interaction. A select
                        shows "-- Select --" and reads as furniture to scroll past. */
                     <div className="pp-radio-group" role="radiogroup" aria-label={field.label}>
-                      {String(field.options || '').split('\n').map(o => o.trim()).filter(Boolean).map(o => (
+                      {optionList(field.options).map(o => (
                         <label key={o} className="pp-radio-label">
                           <input
                             type="radio"
@@ -258,19 +277,27 @@ export default function SubmitPage() {
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}>
                       <option value="">-- Select --</option>
-                      {(() => {
-                        // Options may be stored as a JSON array (e.g. ["HCP","Patient"])
-                        // or as newline-separated text. Handle both, else the whole
-                        // array renders as a single broken option.
-                        const raw = String(field.options || '').trim()
-                        let opts = []
-                        if (raw.startsWith('[')) { try { opts = JSON.parse(raw) } catch { opts = [] } }
-                        if (!opts.length) opts = raw.split('\n')
-                        return opts.map(o => String(o).trim()).filter(Boolean)
-                      })().map(o => (
+                      {optionList(field.options).map(o => (
                         <option key={o} value={o}>{o}</option>
                       ))}
                     </select>
+                  ) : field.field_type === 'multiselect' ? (
+                    /* CPPM-85: tick boxes, one per choice — not a text box. */
+                    <div className="pp-radio-group" role="group" aria-label={field.label}>
+                      {optionList(field.options).map(o => {
+                        const picked = Array.isArray(formValues[field.field_key]) ? formValues[field.field_key] : []
+                        return (
+                          <label key={o} className="pp-radio-label">
+                            <input
+                              type="checkbox"
+                              checked={picked.includes(o)}
+                              onChange={e => handleFieldChange(field.field_key, e.target.checked ? [...picked, o] : picked.filter(x => x !== o))}
+                            />
+                            <span>{o}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
                   ) : field.field_type === 'checkbox' ? (
                     <label className="pp-checkbox-label">
                       <input
@@ -282,7 +309,8 @@ export default function SubmitPage() {
                     </label>
                   ) : (
                     <input
-                      type={field.field_type === 'email' ? 'email' : field.field_type === 'phone' ? 'tel' : 'text'}
+                      type={{ email: 'email', phone: 'tel', date: 'date', number: 'number' }[field.field_type] || 'text'}
+                      inputMode={field.field_type === 'number' ? 'decimal' : undefined}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}
                       placeholder={field.placeholder || ''}
