@@ -111,7 +111,7 @@ export default function AttachmentGallery({
                 <button onClick={(e) => { e.stopPropagation(); setTagPicker(a.id) }} title="Tag / source" style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'var(--accent,#1a4f9c)', fontSize: 11,
-                }}>🏷</button>
+                }}>Tag</button>
                 <button onClick={() => del(a.id)} style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
                   color: '#b91c1c', fontSize: 11,
@@ -147,16 +147,16 @@ function Thumb({ attachment }) {
       />
     )
   }
-  return <div style={{ fontSize: 36 }}>{icon(mt)}</div>
+  return <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{icon(mt)}</div>
 }
 
 function icon(mt) {
-  if (mt.includes('word') || mt.includes('document')) return '📄'
-  if (mt.includes('sheet') || mt.includes('excel'))    return '📊'
-  if (mt.includes('zip') || mt.includes('compressed')) return '🗜'
-  if (mt.startsWith('audio/'))                          return '🔊'
-  if (mt.startsWith('video/'))                          return '🎬'
-  return '📎'
+  if (mt.includes('word') || mt.includes('document')) return 'DOC'
+  if (mt.includes('sheet') || mt.includes('excel'))    return 'XLS'
+  if (mt.includes('zip') || mt.includes('compressed')) return 'ZIP'
+  if (mt.startsWith('audio/'))                          return 'AUDIO'
+  if (mt.startsWith('video/'))                          return 'VIDEO'
+  return 'FILE'
 }
 function fmtSize(b) {
   if (!b) return '–'

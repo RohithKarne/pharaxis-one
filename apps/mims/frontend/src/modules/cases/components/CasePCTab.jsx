@@ -359,7 +359,7 @@ export default function CasePCTab({
           {pcClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
         <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
-          🧪 {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
+          {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>
       {!canCreatePcVersion && (
@@ -368,7 +368,6 @@ export default function CasePCTab({
 
       {pcVersions.length === 0 ? (
         <div className="cf-empty-state">
-          <div className="cf-empty-icon" aria-hidden="true">📦</div>
           <h3 className="cf-empty-title">No PC versions yet</h3>
           <p className="cf-empty-msg">
             Create the first PC version to start the product-complaint investigation.
@@ -391,7 +390,7 @@ export default function CasePCTab({
                 onClick={() => { setActivePcVer(v); loadPCTab(v.id, activePcTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">🔒</span>}
+                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}

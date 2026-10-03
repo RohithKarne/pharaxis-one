@@ -63,7 +63,6 @@ function OverviewTab({ report, running, onRun }) {
   if (!report) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🧪</div>
         <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No Test Run Yet</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>Click "Run Full Suite" to execute all regression tests and see the health of the app.</p>
         <button onClick={onRun} style={{ padding: '10px 28px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
@@ -100,7 +99,7 @@ function OverviewTab({ report, running, onRun }) {
               {/* Module header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: allPass ? '#f0fdf4' : '#fef2f2', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 16 }}>{allPass ? '✅' : '❌'}</span>
+                  <span style={{ fontSize: 16 }}>{allPass ? '✓' : '✕'}</span>
                   <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{mod.name}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -257,7 +256,7 @@ function DbTablesTab({ token }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
         <div style={{ padding: '8px 16px', background: health.status === 'ok' ? '#f0fdf4' : '#fef2f2', border: '1px solid', borderColor: health.status === 'ok' ? '#86efac' : '#fca5a5', borderRadius: 8, fontSize: 13, fontWeight: 600, color: health.status === 'ok' ? '#16a34a' : '#dc2626' }}>
-          {health.status === 'ok' ? `✅ DB Connected — ${health.table_count} tables` : `❌ DB Error: ${health.error}`}
+          {health.status === 'ok' ? `✓ DB Connected — ${health.table_count} tables` : `✕ DB Error: ${health.error}`}
         </div>
         <input
           style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, width: 240, background: 'var(--surface)', color: 'var(--text-primary)' }}
@@ -274,7 +273,6 @@ function DbTablesTab({ token }) {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', background: 'var(--surface)', userSelect: 'none' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 14 }}>🗄️</span>
                 <span style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-primary)' }}>{t.name}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
@@ -386,7 +384,7 @@ function HistoryTab({ token }) {
                     <div key={mod.name} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: allPass ? '#f0fdf4' : '#fef2f2', borderBottom: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>{allPass ? '✅' : '❌'}</span>
+                          <span>{allPass ? '✓' : '✕'}</span>
                           <span style={{ fontWeight: 700, fontSize: 13 }}>{mod.name}</span>
                         </div>
                         <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
@@ -457,10 +455,10 @@ export default function RegressionPage({ embedded = false } = {}) {
   }
 
   const TABS = [
-    { key: 'overview', label: '📊 Overview' },
-    { key: 'api', label: '🔗 API Catalog' },
-    { key: 'db', label: '🗄️ DB Tables' },
-    { key: 'history', label: '📜 History' },
+    { key: 'overview', label: 'Overview' },
+    { key: 'api', label: 'API Catalog' },
+    { key: 'db', label: 'DB Tables' },
+    { key: 'history', label: 'History' },
   ]
 
   const content = (
@@ -470,7 +468,7 @@ export default function RegressionPage({ embedded = false } = {}) {
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h2 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>🧪 Regression Testing Suite</h2>
+              <h2 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Regression Testing Suite</h2>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                 Full app health check — APIs, DB schema, feature smoke tests.
                 {lastRunAt && <span style={{ marginLeft: 8 }}>Last run: {lastRunAt.toLocaleTimeString()}</span>}
@@ -483,7 +481,7 @@ export default function RegressionPage({ embedded = false } = {}) {
                 disabled={running}
                 style={{ padding: '10px 24px', background: running ? 'var(--border)' : 'var(--primary)', color: running ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 8, cursor: running ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}
               >
-                {running ? '⏳ Running…' : '▶ Run Full Suite'}
+                {running ? 'Running…' : '▶ Run Full Suite'}
               </button>
             </div>
           </div>

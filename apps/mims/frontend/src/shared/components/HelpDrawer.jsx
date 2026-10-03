@@ -137,7 +137,6 @@ export default function HelpDrawer({ open, onClose }) {
         {/* Header */}
         <div className="hd-header">
           <div className="hd-header-left">
-            <span className="hd-help-icon">❓</span>
             <span className="hd-header-title">Help</span>
           </div>
           <button className="hd-close" onClick={onClose} aria-label="Close help">✕</button>

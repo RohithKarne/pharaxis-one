@@ -461,7 +461,7 @@ function FeatureRequestsTab({ token }) {
                 <td style={{ padding: '9px 12px', color: 'var(--text-secondary, #64748b)', textTransform: 'capitalize' }}>{row.use_frequency}</td>
                 <td style={{ padding: '9px 12px' }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: row.priority === 'critical' ? '#e01e5a' : 'var(--text-secondary, #64748b)' }}>
-                    {row.priority === 'critical' ? '🔴 Critical' : '💚 Nice-to-have'}
+                    {row.priority === 'critical' ? 'Critical' : 'Nice-to-have'}
                   </span>
                 </td>
                 <td style={{ padding: '9px 12px' }}><StatusPill value={row.status} /></td>
@@ -583,8 +583,8 @@ export default function AdminUATPanel({ initialTab = 'bugs' }) {
 
       {/* Tabs */}
       <div style={{ borderBottom: '2px solid var(--border, #e2e8f0)', marginBottom: 20 }}>
-        <button style={tabBtn(tab === 'bugs')}    onClick={() => setTab('bugs')}>🐛 Bug Reports {stats ? `(${(stats.bugs?.new_count || 0) + (stats.bugs?.investigating_count || 0)} open)` : ''}</button>
-        <button style={tabBtn(tab === 'features')} onClick={() => setTab('features')}>💡 Feature Requests {stats ? `(${stats.features?.new_count || 0} new)` : ''}</button>
+        <button style={tabBtn(tab === 'bugs')}    onClick={() => setTab('bugs')}>Bug Reports {stats ? `(${(stats.bugs?.new_count || 0) + (stats.bugs?.investigating_count || 0)} open)` : ''}</button>
+        <button style={tabBtn(tab === 'features')} onClick={() => setTab('features')}>Feature Requests {stats ? `(${stats.features?.new_count || 0} new)` : ''}</button>
       </div>
 
       {tab === 'bugs'     && <BugReportsTab token={token} />}

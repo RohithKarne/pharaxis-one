@@ -3,11 +3,6 @@ import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import toast from '../../../../shared/utils/toast.js'
 
-const COPY_CATEGORY_ICONS = {
-  picklists:'📋', case_form:'📝', workflow:'⚙️', integrations:'🔗',
-  sites:'🏢', case_numbering:'🔢', products:'💊', cm_settings:'📁', exports:'📤',
-}
-
 export default function CopyDivision() {
   const { token } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
@@ -88,7 +83,7 @@ export default function CopyDivision() {
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {Object.entries(result).map(([k,n]) => {
               const cat = categories.find(c => c.key === k)
-              return <span key={k} style={{ padding:'3px 10px', background:'#dcfce7', color:'#15803d', borderRadius:20, fontSize:12 }}>{COPY_CATEGORY_ICONS[k]} {cat?.label}: <strong>{n}</strong></span>
+              return <span key={k} style={{ padding:'3px 10px', background:'#dcfce7', color:'#15803d', borderRadius:20, fontSize:12 }}>{cat?.label}: <strong>{n}</strong></span>
             })}
           </div>
         </div>
@@ -131,7 +126,6 @@ export default function CopyDivision() {
             <label key={cat.key} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', border:`1.5px solid ${selected[cat.key]?'var(--primary)':'#e2e8f0'}`, borderRadius:8, cursor:'pointer', background: selected[cat.key]?'#f5f3ff':'#fff' }}>
               <input type="checkbox" checked={!!selected[cat.key]} style={{ marginTop:2, accentColor:'var(--primary)' }}
                 onChange={e => { setSelected(s=>({...s,[cat.key]:e.target.checked})); setPreview(null); setConfirmed(false) }} />
-              <span style={{ fontSize:16 }}>{COPY_CATEGORY_ICONS[cat.key]||'📦'}</span>
               <span>
                 <span style={{ display:'block', fontSize:13, fontWeight:600, color:'#0f172a' }}>{cat.label}</span>
                 <span style={{ display:'block', fontSize:11, color:'#64748b' }}>{cat.description}</span>
@@ -158,7 +152,7 @@ export default function CopyDivision() {
               const cat = categories.find(c => c.key === key)
               return (
                 <div key={key} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 12px' }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:'#0f172a', marginBottom:6 }}>{COPY_CATEGORY_ICONS[key]} {cat?.label}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:'#0f172a', marginBottom:6 }}>{cat?.label}</div>
                   {Object.entries(tables).map(([tbl,n]) => (
                     <div key={tbl} style={{ display:'flex', justifyContent:'space-between', fontSize:11, padding:'2px 0', borderTop:'1px solid #f1f5f9' }}>
                       <span style={{ color:'#64748b', fontFamily:'monospace' }}>{tbl}</span>
@@ -183,7 +177,7 @@ export default function CopyDivision() {
           onClick={handlePreview}
           disabled={!canPreview || previewing}
           style={{ padding:'10px 22px', background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', borderRadius:8, fontSize:14, fontWeight:600, cursor: canPreview&&!previewing?'pointer':'not-allowed', opacity: canPreview&&!previewing?1:.5 }}
-        >{previewing ? 'Loading…' : '🔍 Preview'}</button>
+        >{previewing ? 'Loading…' : 'Preview'}</button>
         {preview && totalRows > 0 && (
           <button
             onClick={handleExecute}

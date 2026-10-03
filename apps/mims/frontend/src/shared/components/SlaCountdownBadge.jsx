@@ -60,7 +60,7 @@ export default function SlaCountdownBadge({ dueAt, slaDue, compact }) {
     badgeClass = 'cf-sla-badge-red';
     statusText = 'BREACHED';
     timeString = `(-${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m)`;
-    icon = '🚨';
+    icon = '⚠';
   } else if (diffH <= 48) {
     badgeClass = 'cf-sla-badge-amber';
     statusText = compact ? '' : 'remaining';

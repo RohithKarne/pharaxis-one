@@ -225,7 +225,6 @@ export default function NotificationOverlay({ open, onClose }) {
           {!loading && error && <div className="mims-notif-error">{error}</div>}
           {!loading && !error && rows.length === 0 && (
             <div className="mims-notif-empty">
-              <div style={{ fontSize: 32, marginBottom: 10 }}>🔔</div>
               <div>No notifications yet.</div>
             </div>
           )}

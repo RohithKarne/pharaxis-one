@@ -177,7 +177,6 @@ export default function AdminCaseImportPanel({ H }) {
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500, cursor: 'pointer' }}><input type="checkbox" /> Dry Run — validate without importing</label>
         </div>
         <div style={{ border: `2px dashed ${importFile ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, padding: 32, textAlign: 'center', marginBottom: 24, cursor: 'pointer' }} onClick={() => document.getElementById('case-import-file-input').click()}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
           <p style={{ margin: '0 0 8px', fontWeight: 500 }}>{importFile ? importFile.name : 'Drop file here or click to browse'}</p>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{importFile ? `${(importFile.size / 1024).toFixed(1)} KB — ready to upload` : 'Supported: .csv, .xlsx, .xls, .xml, .json'}</p>
           <input id="case-import-file-input" type="file" accept=".csv,.xlsx,.xls,.xml,.json" style={{ display: 'none' }} onChange={e => { setImportFile(e.target.files[0] || null); setImportUploadMsg('') }} />

@@ -375,7 +375,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 16 }}>📎</span>
                     <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
                   </div>
                   <div
@@ -388,7 +387,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 16 }}>✏️</span>
                     <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
                   </div>
                   <div
@@ -401,7 +399,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 16 }}>Ⓜ</span>
                     <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
@@ -410,7 +407,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               {form.response_doc_type === 'File' && file && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 10px', fontSize: 12, marginTop: 20 }}>
-                  <span>📄</span><span>{file.name}</span>
+                  <span>{file.name}</span>
                   <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(file.size / 1024).toFixed(0)} KB</span>
                   <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 14 }} onClick={() => setFile(null)}>×</button>
                 </div>
@@ -714,7 +711,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   transition: 'border-color 0.15s',
                 }}
               >
-                <span style={{ fontSize: 20 }}>📁</span>
                 <span>Click to attach source files <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>(multiple allowed — PDF, DOC, DOCX, XLS, XLSX, TXT)</span></span>
               </div>
               <input
@@ -729,7 +725,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {sourceAttachments.map((f, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', fontSize: 13 }}>
-                      <span>📄</span>
                       <span style={{ flex: 1 }}>{f.name}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(f.size / 1024).toFixed(0)} KB</span>
                       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 12, fontWeight: 600 }} onClick={() => viewLocalFile(f)}>View</button>
@@ -744,7 +739,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Previously uploaded</div>
                   {savedAttachments.map(att => (
                     <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', fontSize: 13 }}>
-                      <span>📄</span>
                       <span style={{ flex: 1 }}>{att.file_name}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{att.file_size != null ? `${(att.file_size / 1024).toFixed(0)} KB` : ''}</span>
                       <button
@@ -768,7 +762,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           <div style={{ padding: '4px 0', maxWidth: 800 }}>
             {doc && doc.owner_user_id && (
               <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 16px', marginBottom: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>🔒</span>
                 <span>This document is <strong>locked</strong> to its owner. Only the owner can publish or release it.</span>
               </div>
             )}

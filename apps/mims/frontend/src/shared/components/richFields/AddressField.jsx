@@ -62,7 +62,7 @@ export default function AddressField({ value = {}, onChange, label, readOnly }) 
           background: 'var(--accent-soft,#eaf2ff)', fontSize: 12,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span>📍 {suggestions[0].formatted}</span>
+          <span>{suggestions[0].formatted}</span>
           <button onClick={() => applySug(suggestions[0])} style={pickBtn}>Use</button>
         </div>
       )}
@@ -79,7 +79,7 @@ export default function AddressField({ value = {}, onChange, label, readOnly }) 
           disabled={readOnly} style={{ ...ipt, flex: 1, textTransform: 'uppercase' }} />
         {value.lat && value.lng && (
           <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
-            📍 {Number(value.lat).toFixed(4)}, {Number(value.lng).toFixed(4)}
+            {Number(value.lat).toFixed(4)}, {Number(value.lng).toFixed(4)}
           </span>
         )}
       </div>

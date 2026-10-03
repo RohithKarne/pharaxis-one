@@ -194,7 +194,6 @@ function DivisionWizard({ H, orgId, onBack, flash, msg, creating = false, onCrea
 function Placeholder({ label }) {
   return (
     <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>🗂️</div>
       <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</div>
       <div style={{ fontSize: 13 }}>Placeholder — configuration for this tab is planned for a later phase.</div>
     </div>

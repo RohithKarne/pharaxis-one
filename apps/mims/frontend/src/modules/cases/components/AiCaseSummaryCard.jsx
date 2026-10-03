@@ -45,7 +45,6 @@ export default function AiCaseSummaryCard({ caseId, headers }) {
     <div className="cf-ai-summary-card">
       <div className="cf-ai-summary-header">
         <div className="cf-ai-summary-title">
-          <span>✨</span>
           <strong>AI Case Summary</strong>
         </div>
         <div className="cf-ai-summary-actions">

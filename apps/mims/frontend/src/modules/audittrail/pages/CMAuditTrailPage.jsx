@@ -200,7 +200,6 @@ function RightPanel({ entityItem, token }) {
     return (
       <div className="cmat-right">
         <div className="cmat-right-empty">
-          <div className="cmat-right-empty-icon">📁</div>
           <div>Select a CM entity to view its change history</div>
         </div>
       </div>

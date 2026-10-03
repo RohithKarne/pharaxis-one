@@ -1,7 +1,6 @@
 export function LockedIntegration({ label }) {
   return (
     <div style={{ padding: 32, textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
       <h3 style={{ marginBottom: 8 }}>{label}</h3>
       <p style={{ color: 'var(--text-muted)' }}>This integration is not enabled for your organisation.<br />Please contact us to activate it.</p>
     </div>

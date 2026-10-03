@@ -22,7 +22,7 @@ export default function HaClockBar({ caseId }) {
   if (!clocks.length) return null
   return <div className="cf-ha-clock-bar" aria-label="Health authority reporting clocks">
     {clocks.map(c => <span key={c.ha_code} className={`cf-ha-clock-chip ${c.status || 'unknown'}`} title={`${c.name || c.ha_code} due ${c.due_at ? String(c.due_at).slice(0, 10) : 'not started'}`}>
-      <strong>{c.ha_code}</strong> {c.submission_window_days || 15}d {c.satisfied_at ? '✓' : '⏱'} {c.days_remaining == null ? 'not started' : `${c.days_remaining}d left`}{c.is_expedited ? ' · expedited' : ''}
+      <strong>{c.ha_code}</strong> {c.submission_window_days || 15}d {c.satisfied_at ? '✓' : ''} {c.days_remaining == null ? 'not started' : `${c.days_remaining}d left`}{c.is_expedited ? ' · expedited' : ''}
     </span>)}
   </div>
 }

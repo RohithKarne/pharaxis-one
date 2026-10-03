@@ -47,7 +47,7 @@ export default function SlaChip({ caseId }) {
   const remaining = t.remaining_seconds
   return (
     <span style={chipStyle(t.status)} title={`State: ${t.state} · SLA ${t.sla_hours}h`}>
-      ⏱ {t.state} · {remaining >= 0 ? fmtDuration(remaining) + ' left' : 'over by ' + fmtDuration(Math.abs(remaining))}
+      {t.state} · {remaining >= 0 ? fmtDuration(remaining) + ' left' : 'over by ' + fmtDuration(Math.abs(remaining))}
     </span>
   )
 }

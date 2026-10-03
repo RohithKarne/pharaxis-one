@@ -65,12 +65,12 @@ const AdminESignDashboardPanel = () => {
             <p className="text-sm text-gray-500 uppercase tracking-wider mb-1">Status</p>
             {intact ? (
               <div className="flex items-center text-green-700 font-bold text-lg">
-                <span className="mr-2">✅</span>
+                <span className="mr-2">✓</span>
                 Intact — every recorded signature matches the chain
               </div>
             ) : (
               <div className="flex items-center text-red-600 font-bold text-lg">
-                <span className="mr-2">❌</span>
+                <span className="mr-2">✕</span>
                 Chain Broken
               </div>
             )}

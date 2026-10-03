@@ -41,7 +41,7 @@ export default function PcSignalsWidget({ onOpen }) {
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 13 }}>
-          🚨 PC Signals {signals.length > 0 && (
+          PC Signals {signals.length > 0 && (
             <span style={{
               marginLeft: 6, padding: '0 7px', borderRadius: 9,
               background: '#b91c1c', color: '#fff', fontSize: 10,

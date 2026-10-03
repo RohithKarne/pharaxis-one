@@ -143,7 +143,7 @@ function DuplicateLogPane() {
         <p style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
           The <code>duplicate_detection_log</code> table fills automatically when a
           field with <em>Duplicate check</em> enabled (configured in Customize Forms
-          ⚙ Rules) detects a potential match.
+          Rules) detects a potential match.
         </p>
         <ul style={{ paddingLeft: 20, color: 'var(--text-secondary)' }}>
           <li><strong>Soft</strong> hits (default org-scope) warn the user but allow save.</li>

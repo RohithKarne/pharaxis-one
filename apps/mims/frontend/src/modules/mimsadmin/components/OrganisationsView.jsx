@@ -336,10 +336,10 @@ export default function OrganisationsView({ H, flash }) {
                 color: org.is_active ? '#155724' : '#721c24',
               }}>{org.is_active ? 'Active' : 'Inactive'}</span>
               <span style={{ fontSize: 11, marginLeft: 8, color: 'var(--text-muted)' }}>
-                ⏱ {org.session_timeout_minutes || 30} min timeout
+                {org.session_timeout_minutes || 30} min timeout
               </span>
               <span style={{ fontSize: 11, marginLeft: 8, color: org.two_factor_enabled ? '#155724' : 'var(--text-muted)' }}>
-                🔐 2FA {org.two_factor_enabled ? 'On' : 'Off'}
+                2FA {org.two_factor_enabled ? 'On' : 'Off'}
               </span>
             </div>
             </div>
@@ -352,7 +352,7 @@ export default function OrganisationsView({ H, flash }) {
                   setWizardOrg(org)
                 }}
               >
-                🪄 Setup Wizard
+                Setup Wizard
               </button>
               <button
                 className="btn btn-outline"
@@ -374,7 +374,7 @@ export default function OrganisationsView({ H, flash }) {
                   logoInputRefs.current[org.id]?.click()
                 }}
               >
-                📷 Logo
+                Logo
               </button>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{org.is_active ? 'Active' : 'Inactive'}</span>
               <div
@@ -477,7 +477,7 @@ export default function OrganisationsView({ H, flash }) {
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${item.passed ? '#c3e6cb' : '#ffeeba'}`, borderRadius: 8, padding: 12, background: item.passed ? '#f8fff9' : '#fffaf0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ fontSize: 18 }}>
-                          {item.passed ? '✅' : '❌'}
+                          {item.passed ? '✓' : '✕'}
                         </div>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: item.passed ? '#155724' : '#856404' }}>{item.name}</div>
@@ -552,7 +552,7 @@ export default function OrganisationsView({ H, flash }) {
                                   setSiteEditForm({ name: s.name, country: s.country || '' })
                                 }
                               }}
-                            >✏</button>
+                            >Edit</button>
                             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.is_active ? 'Active' : 'Inactive'}</span>
                             <div onClick={() => toggleSite(s)} style={{
                               width: 36, height: 20, borderRadius: 10, cursor: 'pointer',

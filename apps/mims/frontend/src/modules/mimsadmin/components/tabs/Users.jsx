@@ -213,7 +213,7 @@ export default function Users() {
                 showFlash('CSV downloaded.')
               } catch { showFlash('Network error.', 'error') }
             }}
-          >⬇ Export CSV</button>
+          >Export CSV</button>
           <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>⇪ Bulk Add</button>
           <button className="ma-usr-btn-add" onClick={openCreate}>+ Add User</button>
         </div>

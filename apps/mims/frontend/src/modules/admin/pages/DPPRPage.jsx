@@ -225,7 +225,7 @@ export default function DPPRPage({ embedded = false } = {}) {
         {isAdmin && (
           <div className="dp-header-actions">
             <button className="dp-btn-run" onClick={runNow} disabled={running}>
-              {running ? '⏳ Running…' : '▶ Run Now'}
+              {running ? 'Running…' : '▶ Run Now'}
             </button>
             <button className="dp-btn-primary" onClick={openAdd}>+ Add Rule</button>
           </div>
@@ -237,7 +237,7 @@ export default function DPPRPage({ embedded = false } = {}) {
       {/* Run result */}
       {runResult && (
         <div className="dp-run-result">
-          <div className="dp-run-result-title">✅ DPPR Run Complete — {runResult.length} rule(s) processed</div>
+          <div className="dp-run-result-title">✓ DPPR Run Complete — {runResult.length} rule(s) processed</div>
           {runResult.map((r, i) => (
             <div key={i} className="dp-run-result-row">
               {r.rule_name} ({r.domain}) — {r.action}: scanned {r.scanned}, affected {r.affected}
@@ -376,7 +376,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                       {isAdmin && (
                         <td>
                           <div className="dp-row-actions">
-                            <button className="dp-icon-btn primary" onClick={() => openEdit(r)} title="Edit">✏</button>
+                            <button className="dp-icon-btn primary" onClick={() => openEdit(r)} title="Edit">Edit</button>
                             <button
                               className={`dp-icon-btn ${r.is_active ? 'dp-toggle-on' : 'dp-toggle-off'}`}
                               onClick={() => toggleRule(r)}

@@ -152,7 +152,6 @@ export default function SystemActivity() {
           </div>
         ) : rows.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', gap: 8 }}>
-            <div style={{ fontSize: 28 }}>🧾</div>
             <div style={{ fontSize: 14 }}>No system activity entries yet.</div>
             <div style={{ fontSize: 12 }}>Email import runs will appear here once the service runs.</div>
           </div>

@@ -144,7 +144,6 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
       <div className="card-body" style={{ padding: 0, overflowX: 'auto', background: '#fafafa', position: 'relative' }}>
         {!activeStates.length ? (
            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-             <div style={{ fontSize: 40, marginBottom: 8 }}>⬡</div>
              <p>No active workflow states. Add states first to view the diagram.</p>
            </div>
         ) : (
@@ -173,16 +172,16 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
               
               // Condition Badges
               const badges = []
-              if (rule.require_password || rule.e_signature_required) badges.push('✍️')
-              if (rule.require_checklist || rule.required_role) badges.push('👤')
-              if (rule.require_comment || rule.sla_hours) badges.push('⏱️')
+              if (rule.require_password || rule.e_signature_required) badges.push('E-Sign')
+              if (rule.require_checklist || rule.required_role) badges.push('Role')
+              if (rule.require_comment || rule.sla_hours) badges.push('SLA')
 
               return (
                 <g key={rule.id} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setEditingRule({...rule, isNew: false}) }}>
                   <path d={`M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`} fill="none" stroke={active ? 'var(--primary, #4f6ef7)' : '#ccc'} strokeWidth={active ? 3 : 2} strokeDasharray={active ? undefined : '5,4'} markerEnd={active ? 'url(#wf-arrow)' : 'url(#wf-arrow-gray)'} opacity={active ? 0.85 : 0.45} />
                   {badges.length > 0 && (
                     <text x={(sx + ex) / 2 - uy * 16} y={(sy + ey) / 2 + ux * 16} textAnchor="middle" fontSize="12" fill="var(--warning, #f59e0b)" fontWeight="700">
-                      {badges.join('')}
+                      {badges.join(' · ')}
                     </text>
                   )}
                   {/* Invisible wider path for easier clicking */}
@@ -220,16 +219,16 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
                 <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. Submit for Review" value={editingRule.transition_name || ''} onChange={e => setEditingRule(r => ({ ...r, transition_name: e.target.value }))} />
               </div>
               <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Required Role 👤</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Required Role </label>
                 <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. QA Manager" value={editingRule.required_role || ''} onChange={e => setEditingRule(r => ({ ...r, required_role: e.target.value, require_checklist: !!e.target.value }))} />
               </div>
               <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>SLA Hours ⏱️</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>SLA Hours </label>
                 <input type="number" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. 24" value={editingRule.sla_hours || ''} onChange={e => setEditingRule(r => ({ ...r, sla_hours: e.target.value, require_comment: !!e.target.value }))} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={editingRule.require_password} onChange={e => setEditingRule(r => ({ ...r, require_password: e.target.checked }))} /> E-Signature Required ✍️
+                  <input type="checkbox" checked={editingRule.require_password} onChange={e => setEditingRule(r => ({ ...r, require_password: e.target.checked }))} /> E-Signature Required 
                 </label>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
@@ -245,7 +244,7 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
 
         <div style={{ display: 'flex', gap: 20, padding: '12px 20px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
           <span><strong>Hint:</strong> Click a node to select, then click another to link. Drag nodes to reposition.</span>
-          <span style={{ marginLeft: 'auto' }}>✍️ = E-Sign &nbsp; 👤 = Role &nbsp; ⏱️ = SLA</span>
+          <span style={{ marginLeft: 'auto' }}>Link labels show the conditions set on a transition: E-Sign, Role, SLA.</span>
         </div>
       </div>
     </div>
@@ -316,7 +315,7 @@ export function ImpactPreviewModal({ panel, onClose }) {
           ))}
           {data.affected_cases === 0 && (data.warnings || []).length === 0 && (
             <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#15803d' }}>
-              ✅ No existing records are affected by this change. Safe to proceed.
+              ✓ No existing records are affected by this change. Safe to proceed.
             </div>
           )}
         </div>
@@ -444,7 +443,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-        {[{ key: 'states', label: 'Workflow States' }, { key: 'triggers', label: 'Activity Triggers' }, { key: 'rules', label: 'Transition Rules' }, { key: 'diagram', label: '⬡ State Diagram' }].map(t => (
+        {[{ key: 'states', label: 'Workflow States' }, { key: 'triggers', label: 'Activity Triggers' }, { key: 'rules', label: 'Transition Rules' }, { key: 'diagram', label: 'State Diagram' }].map(t => (
           <button key={t.key} onClick={() => setWfTab(t.key)}
             style={{ padding: '10px 20px', border: 'none', borderBottom: wfTab === t.key ? '2px solid var(--primary)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: wfTab === t.key ? 700 : 400, color: wfTab === t.key ? 'var(--primary)' : 'var(--text-secondary)' }}>
             {t.label}
@@ -528,8 +527,8 @@ export default function AdminWorkflowPanel({ H, flash }) {
                       <td><StatusPill active={t.is_active} /></td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => { setTriggerEditTarget(t); setTriggerForm({ activity_id: t.activity_id, trigger_type: t.trigger_type, target_state_id: t.target_state_id || '', alert_rule: t.alert_rule || '', assign_to: t.assign_to || '' }); setTriggerModal('edit') }}>✏ Edit</button>
-                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteTrigger(t)}>🗑</button>
+                          <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => { setTriggerEditTarget(t); setTriggerForm({ activity_id: t.activity_id, trigger_type: t.trigger_type, target_state_id: t.target_state_id || '', alert_rule: t.alert_rule || '', assign_to: t.assign_to || '' }); setTriggerModal('edit') }}>Edit</button>
+                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteTrigger(t)}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -661,9 +660,9 @@ export default function AdminWorkflowPanel({ H, flash }) {
                       <tr key={rule.id}>
                         <td><strong>{rule.from_state_name || rule.from_state_id}</strong></td>
                         <td><strong>{rule.to_state_name || rule.to_state_id}</strong></td>
-                        <td style={{ textAlign: 'center' }}>{rule.require_password ? '✅' : '—'}</td>
-                        <td style={{ textAlign: 'center' }}>{rule.require_checklist ? '✅' : '—'}</td>
-                        <td style={{ textAlign: 'center' }}>{rule.require_comment ? '✅' : '—'}</td>
+                        <td style={{ textAlign: 'center' }}>{rule.require_password ? '✓' : '—'}</td>
+                        <td style={{ textAlign: 'center' }}>{rule.require_checklist ? '✓' : '—'}</td>
+                        <td style={{ textAlign: 'center' }}>{rule.require_comment ? '✓' : '—'}</td>
                         <td><StatusPill active={rule.is_active} /></td>
                         <td>
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }} disabled={impactLoading} onClick={() => fetchImpact('workflow_rule', rule.from_state_id, `Rule: ${rule.from_state_name || rule.from_state_id} → ${rule.to_state_name || rule.to_state_id}`)}>
@@ -675,7 +674,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
                             if (!await confirm('Delete this transition rule?')) return
                             const r = await httpFetch(`/api/admin/workflow-rules/${rule.id}`, { method: 'DELETE', headers: H })
                             if (r.ok) setWfRules(prev => prev.filter(x => x.id !== rule.id))
-                          }}>🗑 Delete</button>
+                          }}>Delete</button>
                         </td>
                       </tr>
                     ))}

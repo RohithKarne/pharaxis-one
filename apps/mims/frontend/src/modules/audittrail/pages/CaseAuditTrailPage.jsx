@@ -132,7 +132,6 @@ function RightPanel({ caseItem, token }) {
     return (
       <div className="cat-right">
         <div className="cat-right-empty">
-          <div className="cat-right-empty-icon">📋</div>
           <div>Select a case to view its audit history</div>
         </div>
       </div>

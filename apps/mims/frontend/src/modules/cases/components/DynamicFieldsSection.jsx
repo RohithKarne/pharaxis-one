@@ -361,7 +361,7 @@ export default function DynamicFieldsSection({
 
   return (
     <div className="cf-dyn-fields-section">
-      <div className="cf-dyn-fields-title">⚙ Additional Fields (Admin-Configured)</div>
+      <div className="cf-dyn-fields-title">Additional Fields (Admin-Configured)</div>
       {activeSections.map(section => (
         <div key={section.section_name} className="cf-dyn-section">
           <div className="cf-dyn-section-label">{section.section_label || section.section_name}</div>

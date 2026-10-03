@@ -105,7 +105,6 @@ function RightPanel({ caseItem, token }) {
     return (
       <div className="tat-right">
         <div className="tat-right-empty">
-          <div className="tat-right-empty-icon">📡</div>
           <div>Select a case to view its transmission history</div>
         </div>
       </div>

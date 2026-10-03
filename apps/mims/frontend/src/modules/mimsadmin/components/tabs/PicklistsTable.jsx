@@ -360,8 +360,8 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-spacer" />
-        <button className="ma-pt-action-btn" onClick={exportCsv} title="Download current filtered view as CSV">⬇ Export CSV</button>
-        <button className="ma-pt-action-btn" onClick={() => setModal({ mode: 'import' })} title="Upload CSV to bulk-create/update values">⬆ Import CSV</button>
+        <button className="ma-pt-action-btn" onClick={exportCsv} title="Download current filtered view as CSV">Export CSV</button>
+        <button className="ma-pt-action-btn" onClick={() => setModal({ mode: 'import' })} title="Upload CSV to bulk-create/update values">Import CSV</button>
         <button className="ma-pt-add-btn" onClick={() => setModal({ mode: 'create' })}>+ Add Value</button>
       </div>
 

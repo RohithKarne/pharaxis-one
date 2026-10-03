@@ -192,7 +192,7 @@ function DetailSidebar({ doc, token, onClose }) {
                     download={doc.file_name || 'document'}
                     className="bc-download-link"
                   >
-                    ⬇ Download {doc.file_name || 'file'}
+                    Download {doc.file_name || 'file'}
                   </a>
                 ) : (
                   <span className="bc-download-link" style={{ opacity: 0.7 }}>
@@ -481,13 +481,13 @@ export default function BrowseContentPage() {
             className={`bc-content-tab ${contentTab === 'documents' ? 'bc-content-tab--active' : ''}`}
             onClick={() => switchTab('documents')}
           >
-            📄 Documents
+            Documents
           </button>
           <button
             className={`bc-content-tab ${contentTab === 'modules' ? 'bc-content-tab--active' : ''}`}
             onClick={() => switchTab('modules')}
           >
-            🧩 Modules
+            Modules
           </button>
         </div>
 
@@ -561,7 +561,7 @@ export default function BrowseContentPage() {
         <div className="bc-layout">
           {/* Folder sidebar */}
           <aside className="bc-folder-panel">
-            <div className="bc-folder-heading">📁 Folders</div>
+            <div className="bc-folder-heading">Folders</div>
 
             {contentTab === 'documents' && <>
               <button
@@ -612,7 +612,6 @@ export default function BrowseContentPage() {
 
               {!loading && !error && documents.length === 0 && (
                 <div className="bc-empty">
-                  <div className="bc-empty-icon">📄</div>
                   <div className="bc-empty-text">No documents found{hasDocFilter ? ' matching your filters' : ''}.</div>
                   {hasDocFilter && <button className="bc-clear-btn" onClick={clearDocFilters}>Clear filters</button>}
                 </div>
@@ -630,12 +629,7 @@ export default function BrowseContentPage() {
                       onKeyDown={e => e.key === 'Enter' && setSelected(doc)}
                     >
                       <div className="bc-doc-card-top">
-                        <span className="bc-doc-type-icon">
-                          {doc.response_doc_type === 'MI Letter' ? '📋'
-                            : doc.response_doc_type === 'SPC' ? '📑'
-                            : doc.response_doc_type === 'FAQ' ? '❓'
-                            : '📄'}
-                        </span>
+                        <span className="bc-doc-type-icon">{doc.response_doc_type}</span>
                         <StatusBadge status={doc.status} />
                       </div>
                       <div className="bc-doc-name">{doc.name}</div>
@@ -646,7 +640,7 @@ export default function BrowseContentPage() {
                         )}
                       </div>
                       {doc.folder_name && (
-                        <div className="bc-doc-folder">📁 {doc.folder_name}</div>
+                        <div className="bc-doc-folder">{doc.folder_name}</div>
                       )}
                       {doc.search_tags && (
                         <div className="bc-doc-keywords">
@@ -691,7 +685,6 @@ export default function BrowseContentPage() {
 
               {!modLoading && !modError && modules.length === 0 && (
                 <div className="bc-empty">
-                  <div className="bc-empty-icon">🧩</div>
                   <div className="bc-empty-text">No modules found{hasModFilter ? ' matching your filters' : ''}.</div>
                   {hasModFilter && <button className="bc-clear-btn" onClick={clearModFilters}>Clear filters</button>}
                 </div>
@@ -709,7 +702,6 @@ export default function BrowseContentPage() {
                       onKeyDown={e => e.key === 'Enter' && setSelectedMod(mod)}
                     >
                       <div className="bc-doc-card-top">
-                        <span className="bc-doc-type-icon">🧩</span>
                         <StatusBadge status={mod.status} />
                       </div>
                       <div className="bc-doc-name">{mod.name}</div>
@@ -721,11 +713,11 @@ export default function BrowseContentPage() {
                       </div>
                       {mod.module_type && (
                         <div className="bc-doc-folder" style={{ color: '#7c3aed' }}>
-                          ⬡ {mod.module_type}
+                          {mod.module_type}
                         </div>
                       )}
                       {mod.folder_name && (
-                        <div className="bc-doc-folder">📁 {mod.folder_name}</div>
+                        <div className="bc-doc-folder">{mod.folder_name}</div>
                       )}
                       {mod.search_tags && (
                         <div className="bc-doc-keywords">

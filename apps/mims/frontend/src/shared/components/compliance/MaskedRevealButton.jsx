@@ -61,7 +61,7 @@ export default function MaskedRevealButton({
         padding: '2px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
         border: '1px solid var(--border)', borderRadius: 4,
         background: 'var(--surface,#fff)', color: 'var(--text-secondary)',
-      }}>{shown ? '🙈 hide' : '👁 reveal'}</button>
+      }}>{shown ? 'hide' : 'reveal'}</button>
     </span>
   )
 }

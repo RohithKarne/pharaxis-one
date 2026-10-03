@@ -122,7 +122,7 @@ export default function CaseFormShell({
           {t8 && <RunMacroButton caseId={caseId} />}
           {transitions.map(t => (
             <button key={t} onClick={() => tryTransition(t)} style={primaryBtn}>
-              {t9 ? '✍ ' : ''}{cap(t)}
+              {cap(t)}
             </button>
           ))}
           {t5 && (

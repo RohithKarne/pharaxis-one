@@ -22,7 +22,6 @@ const TAB_STATUS = { Outbox: 'outbox' }
 const COLORS = ['red', 'yellow', 'green', 'blue']
 const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
-const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 // CSV export asks the server for this many rows of the current filter in one go; the
 // server caps at the same number and the screen says so when more matched.
@@ -1217,7 +1216,6 @@ export default function InboxPage() {
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
                 ) : inquiries.length === 0 ? (
                   <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: 32 }}>📭</div>
                     <div style={{ marginTop: 8 }}>No inquiries in {activeTab}</div>
                   </div>
                 ) : (
@@ -1277,7 +1275,6 @@ export default function InboxPage() {
             <div className="inbox-detail-panel">
               {!selected ? (
                 <div className="inbox-detail-empty">
-                  <div style={{ fontSize: 40 }}>📧</div>
                   <div>Select an inquiry to view details</div>
                 </div>
               ) : (
@@ -1443,7 +1440,7 @@ export default function InboxPage() {
                                 setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, priority: v } : i))
                                 setSelected(s => ({ ...s, priority: v }))
                               }}>
-                              {PRIORITY_ICON[p]} {p.charAt(0).toUpperCase() + p.slice(1)}
+                              {p.charAt(0).toUpperCase() + p.slice(1)}
                             </button>
                           ))}
                         </div>
@@ -1472,25 +1469,25 @@ export default function InboxPage() {
                           className={`inbox-insight-btn ${insightPanel === 'notes' ? 'active' : ''}`}
                           onClick={() => setInsightPanel(p => p === 'notes' ? null : 'notes')}
                         >
-                          📝 Internal Notes {notes.length > 0 ? `(${notes.length})` : ''}
+                          Internal Notes {notes.length > 0 ? `(${notes.length})` : ''}
                         </button>
                         <button
                           className={`inbox-insight-btn ${insightPanel === 'history' ? 'active' : ''}`}
                           onClick={() => setInsightPanel(p => p === 'history' ? null : 'history')}
                         >
-                          📇 Sender & Case History
+                          Sender & Case History
                         </button>
                         <button
                           className={`inbox-insight-btn ${insightPanel === 'recommendations' ? 'active' : ''}`}
                           onClick={() => setInsightPanel(p => p === 'recommendations' ? null : 'recommendations')}
                         >
-                          🔎 Inbox-to-Case Recos ({recommendations.length})
+                          Inbox-to-Case Recos ({recommendations.length})
                         </button>
                         <button
                           className={`inbox-insight-btn ${insightPanel === 'receipts' ? 'active' : ''}`}
                           onClick={() => setInsightPanel(p => p === 'receipts' ? null : 'receipts')}
                         >
-                          👁 Read Receipts ({selected.read_receipt_count || 0})
+                          Read Receipts ({selected.read_receipt_count || 0})
                         </button>
                       </div>
                     </div>
@@ -1516,7 +1513,7 @@ export default function InboxPage() {
                                   URL.revokeObjectURL(url)
                                 }}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
-                                📎 {att.filename}
+                                {att.filename}
                                 {att.size_bytes > 0 && (
                                   <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({(att.size_bytes / 1024).toFixed(1)} KB)</span>
                                 )}
@@ -1538,10 +1535,10 @@ export default function InboxPage() {
                   <aside className={`inbox-side-drawer ${insightPanel ? 'open' : ''}`} aria-hidden={!insightPanel}>
                     <div className="inbox-side-drawer-header">
                       <span>
-                        {insightPanel === 'notes' && '📝 Internal Notes'}
-                        {insightPanel === 'history' && '📇 Sender and Case History'}
-                        {insightPanel === 'recommendations' && `🔎 Inbox-to-Case Recommendations (${recommendations.length})`}
-                        {insightPanel === 'receipts' && `👁 Read Receipts (${readReceipts.length})`}
+                        {insightPanel === 'notes' && 'Internal Notes'}
+                        {insightPanel === 'history' && 'Sender and Case History'}
+                        {insightPanel === 'recommendations' && `Inbox-to-Case Recommendations (${recommendations.length})`}
+                        {insightPanel === 'receipts' && `Read Receipts (${readReceipts.length})`}
                       </span>
                       <button className="compose-close" onClick={() => setInsightPanel(null)}>✕</button>
                     </div>
@@ -1765,7 +1762,7 @@ export default function InboxPage() {
         <div className="compose-overlay" onClick={() => !caseFlow.actionBusy && setCaseFlow(prev => ({ ...prev, open: false }))}>
           <div className="compose-modal" onClick={e => e.stopPropagation()}>
             <div className="compose-modal-header">
-              <span>{caseFlow.mode === 'create' ? '＋ Create Case from Email' : '🔗 Append Email to Existing Case'}</span>
+              <span>{caseFlow.mode === 'create' ? '＋ Create Case from Email' : 'Append Email to Existing Case'}</span>
               <button className="compose-close" onClick={() => !caseFlow.actionBusy && setCaseFlow(prev => ({ ...prev, open: false }))}>✕</button>
             </div>
             <div className="compose-modal-body">

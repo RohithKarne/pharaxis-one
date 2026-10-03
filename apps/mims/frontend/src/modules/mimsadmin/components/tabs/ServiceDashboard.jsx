@@ -163,7 +163,6 @@ export default function ServiceDashboard() {
           </div>
         ) : services.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', gap: 8 }}>
-            <div style={{ fontSize: 28 }}>🖥️</div>
             <div style={{ fontSize: 14 }}>No services registered yet.</div>
           </div>
         ) : (
@@ -258,7 +257,7 @@ export default function ServiceDashboard() {
                             color: '#fff',
                           }}
                         >
-                          ⚙ Configure
+                          Configure
                         </button>
                       ) : (
                         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>

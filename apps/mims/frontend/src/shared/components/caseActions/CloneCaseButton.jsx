@@ -40,6 +40,6 @@ export default function CloneCaseButton({ caseId, onCloned, variant = 'primary',
     <button onClick={clone} disabled={busy} style={{
       padding: '6px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600,
       cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1, ...style,
-    }}>📋 {busy ? 'Cloning…' : label}</button>
+    }}>{busy ? 'Cloning…' : label}</button>
   )
 }

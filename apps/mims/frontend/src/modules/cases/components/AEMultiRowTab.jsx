@@ -150,7 +150,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     { key: 'condition_name', label: 'Condition' },
     { key: 'start_date',     label: 'Start Date' },
     { key: 'end_date',       label: 'End Date' },
-    { key: 'is_ongoing',     label: 'Ongoing', render: v => v ? '✅' : '—' },
+    { key: 'is_ongoing',     label: 'Ongoing', render: v => v ? '✓' : '—' },
     { key: 'notes',          label: 'Notes' },
   ]
   const piCols = [
@@ -163,8 +163,8 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     { key: 'route_of_admin', label: 'Route' },
     { key: 'frequency',      label: 'Frequency' },
     { key: 'indication',     label: 'Indication' },
-    { key: 'is_suspect',     label: 'Suspect',     render: v => v ? '✅' : '—' },
-    { key: 'is_concomitant', label: 'Concomitant', render: v => v ? '✅' : '—' },
+    { key: 'is_suspect',     label: 'Suspect',     render: v => v ? '✓' : '—' },
+    { key: 'is_concomitant', label: 'Concomitant', render: v => v ? '✓' : '—' },
   ]
   const eventCols = [
     { key: 'event_description', label: 'Event Description' },
@@ -175,8 +175,8 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     { key: 'causality_assessment', label: 'Causality Assessment' },
     { key: 'start_date',        label: 'Start Date' },
     { key: 'end_date',          label: 'End Date' },
-    { key: 'is_serious',        label: 'Serious', render: v => v ? '✅' : '—' },
-    { key: 'is_death',          label: 'Death',   render: v => v ? '✅' : '—' },
+    { key: 'is_serious',        label: 'Serious', render: v => v ? '✓' : '—' },
+    { key: 'is_death',          label: 'Death',   render: v => v ? '✓' : '—' },
   ]
   const baseCols = tabKey === 'lab-results' ? labCols : tabKey === 'medical-history' ? mhCols : tabKey === 'events' ? eventCols : piCols
   // Column headings follow the same admin settings as the form; a hidden field's column goes.

@@ -247,7 +247,7 @@ export default function HelpGuide() {
               Stale Articles
               <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>not reviewed in 90+ days</span>
             </h3>
-            {stale.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No stale articles. ✅</div>}
+            {stale.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No stale articles. ✓</div>}
             {stale.map(art => (
               <div key={art.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, background: '#fffbeb' }}>
                 <div>

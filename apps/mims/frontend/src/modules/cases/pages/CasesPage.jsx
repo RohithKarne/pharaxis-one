@@ -502,7 +502,7 @@ export default function CasesPage() {
           <h1 className="cf-cases-title">Case Management</h1>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="cf-cases-view-btn" onClick={() => setCrossCaseModalOpen(true)}>
-              🔍 Cross-Case Search
+              Cross-Case Search
             </button>
             <button className="cf-new-case-btn" onClick={openModal}
               disabled={!hasCapability('case.create')}
@@ -770,7 +770,6 @@ export default function CasesPage() {
                           style={{ flex: 1, padding: '10px 6px', border: `2px solid ${newCase.case_type === ct.key ? ct.color : 'var(--border, #e5e7eb)'}`,
                             borderRadius: 8, background: newCase.case_type === ct.key ? ct.color + '15' : 'transparent',
                             color: newCase.case_type === ct.key ? ct.color : 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: newCase.case_type === ct.key ? 700 : 400 }}>
-                          <div aria-hidden="true" style={{ fontSize: 18, marginBottom: 4 }}>{ct.key === 'MI' ? '💊' : ct.key === 'AE' ? '⚠️' : '📦'}</div>
                           <div>{ct.key}</div>
                           <div style={{ fontSize: 10, opacity: 0.8 }}>{ct.label}</div>
                         </button>

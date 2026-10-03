@@ -19,13 +19,6 @@ import './CustomizeForms.css'
 
 const API = '/api/admin'
 
-const CAT_ICONS = {
-  shared: '🔗',
-  ae:     '⚠️',
-  mi:     '💬',
-  pc:     '📦',
-}
-
 const RULE_TYPES = [
   { value: 'visibility', label: 'Visibility' },
   { value: 'required', label: 'Required' },
@@ -259,7 +252,6 @@ export default function CustomizeForms() {
               className={`ma-cf-cat-item${activeCat === c.key ? ' active' : ''}`}
               onClick={() => setActiveCat(c.key)}
             >
-              <span className="ma-cf-cat-icon">{CAT_ICONS[c.key] || '📋'}</span>
               {c.label}
             </div>
           ))}
@@ -413,7 +405,7 @@ export default function CustomizeForms() {
                                 className="ma-cf-rules-btn"
                                 onClick={() => setRulesField(f)}
                               >
-                                ⚙ Rules
+                                Rules
                               </button>
                             )}
                           </td>
@@ -427,7 +419,7 @@ export default function CustomizeForms() {
                                 onClick={() => setAdvancedField(f)}
                                 title="Field type, help text, max length, defaults, picklist binding, masking"
                               >
-                                ⚙ More
+                                More
                               </button>
                             )}
                           </td>

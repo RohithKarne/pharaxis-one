@@ -58,7 +58,7 @@ export default function MentionsInbox({ onOpen, limit = 25, unreadOnly = true })
         {loading && <div style={{ padding: 14, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>}
         {!loading && items.length === 0 && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12, textAlign: 'center' }}>
-            🎉 You're caught up.
+            You're caught up.
           </div>
         )}
         {!loading && items.map(m => (

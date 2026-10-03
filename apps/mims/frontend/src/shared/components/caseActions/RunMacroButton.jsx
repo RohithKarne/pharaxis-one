@@ -56,7 +56,7 @@ export default function RunMacroButton({ caseId, onRan }) {
         padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
         background: 'transparent', color: 'var(--accent,#1a4f9c)',
         border: '1px solid var(--accent,#1a4f9c)', borderRadius: 4,
-      }}>⚡ Macros ▾</button>
+      }}>Macros ▾</button>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 30,

@@ -114,9 +114,9 @@ export default function ImageAnnotator({
       {label && <div style={lbl}>{label}</div>}
       {!readOnly && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <Btn label="✏ Pen"   active={tool==='pen'}   onClick={() => setTool('pen')} />
-          <Btn label="📍 Pin"  active={tool==='pin'}   onClick={() => setTool('pin')} />
-          <Btn label="🩹 Erase" active={tool==='erase'} onClick={() => setTool('erase')} />
+          <Btn label="Pen"   active={tool==='pen'}   onClick={() => setTool('pen')} />
+          <Btn label="Pin"  active={tool==='pin'}   onClick={() => setTool('pin')} />
+          <Btn label="Erase" active={tool==='erase'} onClick={() => setTool('erase')} />
           <input type="color" value={color} onChange={e => setColor(e.target.value)}
             style={{ width: 28, height: 24, padding: 0, border: '1px solid var(--border)' }} />
           <span style={{ flex: 1 }} />

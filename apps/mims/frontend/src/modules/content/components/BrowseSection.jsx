@@ -113,7 +113,7 @@ export default function BrowseSection({ token }) {
                 style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === f.id ? 'var(--primary-light,#f0f4ff)' : 'transparent', fontWeight: selectedFolderId === f.id ? 600 : 400, color: selectedFolderId === f.id ? 'var(--primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'var(--bg)' }}
                 onMouseLeave={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'transparent' }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>📁 {f.name}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6, flexShrink: 0 }}>{count}</span>
               </div>
             )
@@ -169,7 +169,7 @@ export default function BrowseSection({ token }) {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {item.doc_type && <span style={{ marginRight: 8 }}>{item.doc_type}</span>}
                     <span style={{ marginRight: 8 }}>{authoringSourceLabel(item)}</span>
-                    {item.folder_name && <span>📁 {item.folder_name}</span>}
+                    {item.folder_name && <span>{item.folder_name}</span>}
                   </div>
                 )}
                 {contentType === 'faqs' && item.tags && (

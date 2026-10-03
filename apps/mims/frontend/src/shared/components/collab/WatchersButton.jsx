@@ -64,7 +64,7 @@ export default function WatchersButton({ caseId }) {
         borderRadius: 4, cursor: 'pointer',
         color: 'var(--text-secondary)',
       }}>
-        👁 {items.length} watcher{items.length === 1 ? '' : 's'}
+        {items.length} watcher{items.length === 1 ? '' : 's'}
       </button>
       {open && (
         <div style={{

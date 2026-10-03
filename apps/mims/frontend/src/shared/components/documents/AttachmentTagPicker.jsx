@@ -92,7 +92,7 @@ export default function AttachmentTagPicker({ attachmentId, onClose, onChanged }
             <option value="">— Untagged —</option>
             {types.map(g => (
               <optgroup key={g.code} label={g.label}>
-                {g.types.map(t => <option key={t.id} value={t.id}>{t.label}{t.requires_pii_redaction ? ' 🔒' : ''}</option>)}
+                {g.types.map(t => <option key={t.id} value={t.id}>{t.label}{t.requires_pii_redaction ? ' ' : ''}</option>)}
               </optgroup>
             ))}
           </select>
