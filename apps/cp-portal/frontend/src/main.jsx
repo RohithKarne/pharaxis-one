@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import AppErrorBoundary from './shared/components/AppErrorBoundary.jsx'
 import './index.css'
+import './shared/styles/classic.css'
 
 const configuredBase = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')
 const routerBasename = configuredBase || (window.location.pathname.startsWith('/cp-portal/') ? '/cp-portal' : undefined)
