@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
         <button className="cp-btn cp-btn-outline" onClick={handleExport} disabled={exporting}>
-          {exporting ? 'Exporting…' : '⬇ Export CSV'}
+          {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
 
@@ -247,7 +247,7 @@ export default function AnalyticsPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 13, flexShrink: 0,
                 }}>
-                  {row.action === 'CREATE' ? '✚' : row.action === 'DELETE' ? '✕' : row.action === 'UPDATE' ? '✎' : '●'}
+                  {row.action === 'CREATE' ? '✚' : row.action === 'DELETE' ? '✕' : row.action === 'UPDATE' ? '~' : '●'}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{row.action}</span>

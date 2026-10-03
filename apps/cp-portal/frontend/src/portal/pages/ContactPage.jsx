@@ -99,7 +99,6 @@ export default function ContactPage() {
 
       <div className="pp-contact-layout">
         <div className="pp-contact-card">
-          <div className="pp-contact-icon">🏥</div>
           <h3>Medical Information</h3>
           <p>For medical information requests and clinical inquiries, use our submission portal.</p>
           <Link to={`${base}/submit`} className="pp-contact-action">Submit a medical inquiry →</Link>
@@ -109,7 +108,6 @@ export default function ContactPage() {
           )}
         </div>
         <div className="pp-contact-card">
-          <div className="pp-contact-icon">📞</div>
           <h3>Phone Support</h3>
           <p>Our medical affairs team is available Monday to Friday during business hours.</p>
           {client.contact_phone

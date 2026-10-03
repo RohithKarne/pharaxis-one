@@ -182,7 +182,6 @@ export default function SafetyQueuePage() {
 
           {shown.length === 0 ? (
             <div className="cp-empty">
-              <div style={{ fontSize: 40 }}>🩺</div>
               <p>{tab !== 'open' ? 'Nothing closed yet.'
                 : mineOnly && tasks.length ? 'You are not holding any tasks.'
                 : 'No submissions are awaiting safety review.'}</p>

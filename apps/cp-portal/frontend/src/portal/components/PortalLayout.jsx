@@ -245,7 +245,7 @@ export default function PortalLayout({ children }) {
                   aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
                   onClick={() => setBellOpen(o => !o)}
                 >
-                  🔔
+                  Notifications
                   {unreadCount > 0 && (
                     <span className="pp-bell-badge">{unreadCount}</span>
                   )}
@@ -325,7 +325,7 @@ export default function PortalLayout({ children }) {
             ) : (
               <Link to={`${base}/login`} className="pp-btn pp-btn-outline">{t('btn.sign_in')}</Link>
             ))}
-            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
+            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>Menu</button>
           </div>
         </div>
       </header>

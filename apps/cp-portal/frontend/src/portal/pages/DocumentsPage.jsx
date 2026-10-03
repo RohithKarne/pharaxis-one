@@ -277,7 +277,7 @@ export default function DocumentsPage() {
           ) : aiLoading ? (
             <div className="pp-loading" role="status" aria-live="polite">Searching…</div>
           ) : aiResults.length === 0 ? (
-            <div className="pp-empty-state"><span>📁</span><p>No relevant documents found for your query</p></div>
+            <div className="pp-empty-state"><p>No relevant documents found for your query</p></div>
           ) : (
             <div className="pp-docs-grid">
               {aiResults.map(doc => (
@@ -315,7 +315,7 @@ export default function DocumentsPage() {
                       disabled={downloading === doc.id}
                       aria-label={`Download ${doc.title}`}
                     >
-                      {downloading === doc.id ? 'Downloading…' : '⬇ Download'}
+                      {downloading === doc.id ? 'Downloading…' : 'Download'}
                     </button>
                     <button
                       className="pp-btn pp-btn-outline pp-btn-sm"
@@ -329,7 +329,7 @@ export default function DocumentsPage() {
                       }}
                       title={savedIds.includes(doc.id) ? 'Unsave' : 'Save'}
                     >
-                      {savingId === doc.id ? '…' : '🔖'}
+                      {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                     </button>
                   </div>
                 </div>
@@ -338,7 +338,7 @@ export default function DocumentsPage() {
           )}
         </>
       ) : filtered.length === 0 ? (
-        <div className="pp-empty-state"><span>📁</span><p>No documents found.</p></div>
+        <div className="pp-empty-state"><p>No documents found.</p></div>
       ) : (
         <div className="pp-docs-grid">
           {filtered.map(doc => (
@@ -355,7 +355,7 @@ export default function DocumentsPage() {
               </div>
               <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`Quick View ${doc.title}`}>
-                  👁️ Quick View
+                  Quick View
                 </button>
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
@@ -363,7 +363,7 @@ export default function DocumentsPage() {
                   disabled={downloading === doc.id}
                   aria-label={`Download ${doc.title}`}
                 >
-                  {downloading === doc.id ? 'Downloading…' : '⬇ Download'}
+                  {downloading === doc.id ? 'Downloading…' : 'Download'}
                 </button>
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
@@ -377,7 +377,7 @@ export default function DocumentsPage() {
                   }}
                   title={savedIds.includes(doc.id) ? 'Unsave' : 'Save'}
                 >
-                  {savingId === doc.id ? '…' : '🔖'}
+                  {savingId === doc.id ? '…' : (savedIds.includes(doc.id) ? 'Unsave' : 'Save')}
                 </button>
               </div>
             </div>

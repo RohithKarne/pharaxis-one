@@ -157,6 +157,7 @@
 :root .pp-cta-card { background: #f5f6f7; border: 1px solid #c9ced6; color: #222; padding: 14px 18px; }
 :root .pp-cta-card h2, :root .pp-cta-card p { color: #222; }
 :root .pp-cta-card .pp-btn { color: var(--pp-btn-text); background: var(--pp-btn); }
+:root .pp-chat-fab { border-radius: 2px; width: 44px; height: 44px; }
 
 /* ─── Inline styles: square corners, no drop shadows ──────── */
 :root [style*="border-radius: 4px"], :root [style*="border-radius: 5px"], :root [style*="border-radius: 6px"],

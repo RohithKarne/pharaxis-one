@@ -108,7 +108,7 @@ export default function FormsPage() {
       <div className="cp-section-header">
         <h3>{formType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Fields</h3>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="cp-btn cp-btn-outline" onClick={() => setShowPreview(true)}>👁 Preview</button>
+          <button className="cp-btn cp-btn-outline" onClick={() => setShowPreview(true)}>Preview</button>
           <CanChange area="forms">
           <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Field</button>
           </CanChange>

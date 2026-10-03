@@ -4,17 +4,6 @@ import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 
 // LOW-15: resource_type icon map (extended)
-const TYPE_ICON = {
-  pdf: '📄',
-  video: '🎬',
-  link: '🔗',
-  document: '📝',
-  presentation: '📊',
-  image: '🖼️',
-  publication: '📄',
-  other: '📎',
-}
-
 export default function ResourcesPage() {
   const { clientCode } = usePortal()
   const [resources, setResources] = useState([])
@@ -62,7 +51,7 @@ export default function ResourcesPage() {
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><span>📚</span><p>No resources found.</p></div>
+        <div className="pp-empty-state"><p>No resources found.</p></div>
       ) : (
         groupKeys.map(cat => (
           <div key={cat} className="pp-resource-group">
@@ -70,8 +59,6 @@ export default function ResourcesPage() {
             <div className="pp-resource-grid">
               {grouped[cat].map(r => (
                 <div key={r.id} className="pp-resource-card">
-                  {/* LOW-15: resource_type icon */}
-                  <span className="pp-resource-icon">{TYPE_ICON[r.resource_type?.toLowerCase()] || '📎'}</span>
                   <div className="pp-resource-body">
                     <div className="pp-resource-type">{r.resource_type || 'Resource'}</div>
                     <h3 className="pp-resource-title">{r.title}</h3>

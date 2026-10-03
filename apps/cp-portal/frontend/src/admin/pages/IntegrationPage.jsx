@@ -245,7 +245,7 @@ export default function IntegrationPage() {
       {error && !showAdd && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {loading ? <div className="cp-loading">Loading…</div> : integrations.length === 0 ? (
-        <div className="cp-empty"><div style={{ fontSize: 40 }}>🔗</div><p>No integrations configured.</p></div>
+        <div className="cp-empty"><p>No integrations configured.</p></div>
       ) : (
         <div className="cp-integration-list">
           {integrations.map(i => (
@@ -261,7 +261,7 @@ export default function IntegrationPage() {
               <CanChange area="integration">
               <div className="cp-integration-actions">
                 <button className="cp-btn cp-btn-sm" onClick={() => testConnection(i.id)} disabled={testing === i.id}>
-                  {testing === i.id ? 'Testing…' : '⚡ Test Connection'}
+                  {testing === i.id ? 'Testing…' : 'Test Connection'}
                 </button>
                 <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(i.id, i.is_active)}>
                   {i.is_active ? 'Disable' : 'Enable'}

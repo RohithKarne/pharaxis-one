@@ -318,7 +318,7 @@ export default function MSLPage() {
           )}
 
           {loading ? <div className="cp-loading">Loading…</div> : msls.length === 0 ? (
-            <div className="cp-empty"><div style={{ fontSize: 40 }}>👤</div><p>No MSLs added yet.</p></div>
+            <div className="cp-empty"><p>No MSLs added yet.</p></div>
           ) : (
             <table className="cp-table">
               <thead><tr><th>Name</th><th>Title</th><th>Region</th><th>Specialty</th><th>Therapeutic Areas</th><th>Email</th><th>Status</th><th></th></tr></thead>

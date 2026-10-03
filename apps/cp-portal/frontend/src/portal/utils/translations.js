@@ -232,12 +232,12 @@ const TRANSLATIONS = {
 }
 
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en', label: 'English',  flag: '🇬🇧' },
-  { code: 'fr', label: 'Français', flag: '🇫🇷' },
-  { code: 'de', label: 'Deutsch',  flag: '🇩🇪' },
-  { code: 'es', label: 'Español',  flag: '🇪🇸' },
-  { code: 'ja', label: '日本語',   flag: '🇯🇵' },
-  { code: 'zh', label: '中文',     flag: '🇨🇳' },
+  { code: 'en', label: 'English' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'es', label: 'Español' },
+  { code: 'ja', label: '日本語' },
+  { code: 'zh', label: '中文' },
 ]
 
 export function translate(lang, key) {

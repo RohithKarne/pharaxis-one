@@ -63,7 +63,7 @@ export default function DataRequestsPage() {
           </div>
 
           {requests.length === 0 ? (
-            <div className="cp-empty"><div style={{ fontSize: 40 }}>🛡️</div><p>No data requests yet.</p></div>
+            <div className="cp-empty"><p>No data requests yet.</p></div>
           ) : (
             <table className="cp-table">
               <thead>

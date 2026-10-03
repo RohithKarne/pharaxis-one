@@ -74,13 +74,13 @@ export default function TrainingAdminPage() {
     setMsg('')
     try {
       await call(editingId ? `${api}/${editingId}` : api, editingId ? 'PUT' : 'POST', form)
-      setMsg(editingId ? '✅ Changes saved.' : '✅ Module created. Add its questions, then set it to Available.')
+      setMsg(editingId ? '✓ Changes saved.' : '✓ Module created. Add its questions, then set it to Available.')
       setEditingId(null)
       setForm(EMPTY)
       const list = await loadModules()
       if (qModule) setQModule(list.find(m => m.id === qModule.id) || null)
     } catch (err) {
-      setMsg(`❌ ${err.message}`)
+      setMsg(`✕ ${err.message}`)
     }
   }
 
@@ -103,7 +103,7 @@ export default function TrainingAdminPage() {
       if (qModule?.id === m.id) setQModule(null)
       loadModules()
     } catch (err) {
-      setMsg(`❌ ${err.message}`)
+      setMsg(`✕ ${err.message}`)
     }
   }
 
@@ -129,10 +129,10 @@ export default function TrainingAdminPage() {
       const url = qEditingId ? `${api}/${qModule.id}/questions/${qEditingId}` : `${api}/${qModule.id}/questions`
       await call(url, qEditingId ? 'PUT' : 'POST', qForm)
       setQForm(EMPTY_Q); setQEditingId(null)
-      setQMsg('✅ Saved. The module is now a new version.')
+      setQMsg('✓ Saved. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
-      setQMsg(`❌ ${err.message}`)
+      setQMsg(`✕ ${err.message}`)
     }
   }
 
@@ -140,10 +140,10 @@ export default function TrainingAdminPage() {
     if (!confirm('Remove this question?')) return
     try {
       await call(`${api}/${qModule.id}/questions/${q.id}`, 'DELETE')
-      setQMsg('✅ Removed. The module is now a new version.')
+      setQMsg('✓ Removed. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
-      setQMsg(`❌ ${err.message}`)
+      setQMsg(`✕ ${err.message}`)
     }
   }
 
@@ -172,7 +172,7 @@ export default function TrainingAdminPage() {
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      setCMsg(`❌ ${err.message}`)
+      setCMsg(`✕ ${err.message}`)
     }
   }
 

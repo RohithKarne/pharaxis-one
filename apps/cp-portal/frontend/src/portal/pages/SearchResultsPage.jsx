@@ -3,8 +3,6 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
-const TYPE_ICON = { news: '📰', safety: '⚠️', faq: '❓', ta: '🧬', drug: '💊', resource: '📚', document: '📁' }
-
 export default function SearchResultsPage() {
   const { clientCode, user } = usePortal()
   const [params] = useSearchParams()
@@ -72,7 +70,6 @@ export default function SearchResultsPage() {
                   padding: '14px 16px', cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'flex-start',
                 }}
               >
-                <span style={{ fontSize: 20 }}>{TYPE_ICON[r.type] || '🔎'}</span>
                 <span style={{ flex: 1 }}>
                   <span style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--pp-primary, #6B3FA0)', fontWeight: 700 }}>{r.label}</span>
                   <span style={{ display: 'block', fontWeight: 600, fontSize: 15, color: '#1A1A2E', margin: '2px 0' }}>{r.title}</span>

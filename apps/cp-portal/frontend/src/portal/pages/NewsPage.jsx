@@ -159,7 +159,7 @@ export default function NewsPage() {
                 }
                 <div className="pp-news-card-body">
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {post.is_pinned ? <span style={{ fontSize: 11, background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>📌 Pinned</span> : null}
+                    {post.is_pinned ? <span style={{ fontSize: 11, background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>Pinned</span> : null}
                     {post.category && <div className="pp-news-card-cat">{post.category}</div>}
                   </div>
                   <div className="pp-news-card-title">{post.title}</div>
@@ -188,7 +188,7 @@ export default function NewsPage() {
                   aria-label={savedIds.includes(post.id) ? `Unsave ${post.title}` : `Save ${post.title}`}
                   title={savedIds.includes(post.id) ? 'Unsave' : 'Save'}
                 >
-                  🔖
+                  {savedIds.includes(post.id) ? 'Unsave' : 'Save'}
                 </button>
               )}
             </div>

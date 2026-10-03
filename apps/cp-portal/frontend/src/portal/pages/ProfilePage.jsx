@@ -239,7 +239,7 @@ export default function ProfilePage() {
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" className="pp-btn pp-btn-outline" onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Preparing…' : '⬇ Download my data'}
+            {exporting ? 'Preparing…' : 'Download my data'}
           </button>
           <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
             onClick={() => setShowDelete(true)}>

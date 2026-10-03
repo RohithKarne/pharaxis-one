@@ -38,7 +38,6 @@ export default function FAQPortalPage() {
 
       {faqs.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#9CA3AF' }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>❓</div>
           <p>No FAQ items available yet.</p>
         </div>
       ) : (

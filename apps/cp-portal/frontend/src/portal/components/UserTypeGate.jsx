@@ -58,7 +58,6 @@ export default function UserTypeGate() {
               className={`pp-gate-type-card ${selected === t.type_key ? 'pp-gate-type-selected' : ''}`}
               onClick={() => setSelected(t.type_key)}
             >
-              <span className="pp-gate-type-icon">{t.icon || '👤'}</span>
               <span className="pp-gate-type-label">{t.label}</span>
               {t.description && <span className="pp-gate-type-desc">{t.description}</span>}
               <span className="pp-gate-type-check">{selected === t.type_key ? '✓' : ''}</span>

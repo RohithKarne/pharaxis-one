@@ -4,10 +4,10 @@ import { usePortal } from '../context/PortalContext'
 import Icon from '../../shared/components/Icon'
 
 const FORM_TYPES = [
-  { key: 'medical_inquiry',     label: 'Medical Information Request', icon: '📋', desc: 'Request for medical/scientific information about our products or therapeutic areas.' },
-  { key: 'adverse_event',       label: 'Report Adverse Event',        icon: '⚠️',  desc: 'Report a suspected adverse event or side effect related to our products.' },
-  { key: 'product_complaint',   label: 'Report Product Complaint',    icon: '📦', desc: 'Report a quality complaint or issue with a product.' },
-  { key: 'other_inquiry',       label: 'Other Request',               icon: '✉️',  desc: 'General inquiry or request not covered by the above categories.' },
+  { key: 'medical_inquiry',     label: 'Medical Information Request', desc: 'Request for medical/scientific information about our products or therapeutic areas.' },
+  { key: 'adverse_event',       label: 'Report Adverse Event',        desc: 'Report a suspected adverse event or side effect related to our products.' },
+  { key: 'product_complaint',   label: 'Report Product Complaint',    desc: 'Report a quality complaint or issue with a product.' },
+  { key: 'other_inquiry',       label: 'Other Request',               desc: 'General inquiry or request not covered by the above categories.' },
 ]
 
 export default function SubmitPage() {
@@ -187,7 +187,6 @@ export default function SubmitPage() {
         <div className="pp-form-type-grid">
           {availableTypes.map(t => (
             <button key={t.key} className="pp-form-type-card" onClick={() => setSelectedType(t.key)}>
-              <div className="pp-form-type-icon">{t.icon}</div>
               <div className="pp-form-type-label">{t.label}</div>
               <div className="pp-form-type-desc">{t.desc}</div>
             </button>
@@ -204,7 +203,7 @@ export default function SubmitPage() {
 
           {Object.keys(formValues).length > 0 && (
             <div style={{ padding: '10px 14px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.85rem' }}>
-              <span>💾 <strong>Draft Auto-Saved</strong> — Your in-progress form entries are saved locally.</span>
+              <span><strong>Draft Auto-Saved</strong> — Your in-progress form entries are saved locally.</span>
               <button type="button" onClick={() => { clearDraft(); setFormValues({}) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
             </div>
           )}

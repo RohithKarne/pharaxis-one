@@ -31,16 +31,16 @@ export default function TrialsAdminPage() {
       })
       const d = await res.json()
       if (res.ok) {
-        setMsg(editingId ? '✅ Changes saved.' : '✅ Clinical Trial published.')
+        setMsg(editingId ? '✓ Changes saved.' : '✓ Clinical Trial published.')
         setEditingId(null)
         setForm(EMPTY)
         const updated = await fetch(`/api/admin/trials/${clientId}`, { headers: adminHeaders() }).then(r => r.json())
         setTrials(updated.trials || [])
       } else {
-        setMsg(`❌ ${d.error || 'Failed to add trial.'}`)
+        setMsg(`✕ ${d.error || 'Failed to add trial.'}`)
       }
     } catch {
-      setMsg('❌ Error saving trial.')
+      setMsg('✕ Error saving trial.')
     }
   }
 
@@ -61,9 +61,9 @@ export default function TrialsAdminPage() {
     try {
       const res = await fetch(`/api/admin/trials/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
       // 404: someone else removed it already
-      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(`❌ ${d.error || `Could not delete (error ${res.status}).`}`); return }
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(`✕ ${d.error || `Could not delete (error ${res.status}).`}`); return }
       setTrials(prev => prev.filter(t => t.id !== id))
-    } catch { setMsg('❌ Network error — please try again.') }
+    } catch { setMsg('✕ Network error — please try again.') }
   }
 
   return (

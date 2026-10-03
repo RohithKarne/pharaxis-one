@@ -118,7 +118,7 @@ export default function SyncHealthPage() {
           </div>
 
           {failures.length === 0 ? (
-            <div className="cp-empty"><div style={{ fontSize: 40 }}>✅</div><p>No failed syncs. Integration is healthy.</p></div>
+            <div className="cp-empty"><p>No failed syncs. Integration is healthy.</p></div>
           ) : (
             <table className="cp-table">
               <thead>
@@ -135,7 +135,7 @@ export default function SyncHealthPage() {
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
-                          🔍 Inspect
+                          Inspect
                         </button>
                         <CanChange area="submissions">
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>

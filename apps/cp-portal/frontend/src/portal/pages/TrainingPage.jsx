@@ -44,7 +44,7 @@ export default function TrainingPage() {
       </div>
 
       {loading ? <SkeletonCards count={3} /> : modules.length === 0 ? (
-        <div className="pp-empty-state"><span>🎓</span><p>No training modules currently available.</p></div>
+        <div className="pp-empty-state"><p>No training modules currently available.</p></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {modules.map(mod => {
