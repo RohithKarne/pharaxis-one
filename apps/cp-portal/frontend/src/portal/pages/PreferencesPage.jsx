@@ -6,7 +6,8 @@ import { useToast } from '../../shared/components/Toast'
 const NOTIF_TYPES = [
   { key: 'news',      label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
   { key: 'documents', label: 'Documents',             desc: 'Notify me when new documents are added to the library.' },
-  { key: 'safety',    label: 'Safety Alerts',         desc: 'Notify me when safety alerts are issued.' },
+  // CPPM-108: high and critical alerts are always sent; this switch covers the rest.
+  { key: 'safety',    label: 'Safety Alerts (medium and informational)', desc: 'Notify me when medium or informational safety alerts are issued. High and critical safety alerts are always sent to you.' },
   { key: 'digest',    label: 'Weekly Digest Email',   desc: 'Email me a weekly summary of new content.' },
 ]
 
