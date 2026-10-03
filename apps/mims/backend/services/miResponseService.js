@@ -129,9 +129,10 @@ async function buildResponsePackage(req, caseId, payload = {}) {
 
   let template = null;
   if (payload.template_id) {
+    // MIPM-190: a response uses a published template; templates are never 'Active'.
     const [templateRows] = await pool.execute(
       `SELECT t.* FROM cm_templates t LEFT JOIN users u ON u.id = t.created_by
-        WHERE t.id = ? AND t.status = 'Active'
+        WHERE t.id = ? AND t.status = 'Published'
           AND (? = 1 OR u.org_id = ? OR EXISTS (
             SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
           )) LIMIT 1`,

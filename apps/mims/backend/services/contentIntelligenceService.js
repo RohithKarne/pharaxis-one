@@ -76,11 +76,13 @@ const DEFAULT_EVIDENCE_RULES = [
     priority: 30,
   },
   {
-    rule_name: 'Template response requires active status',
+    // MIPM-190: templates move Draft → Approved → Published; none is ever 'Active',
+    // so this rule refused every template publish.
+    rule_name: 'Template must be approved or published',
     applies_to: 'template',
     mode_scope: 'response',
     check_type: 'status_in',
-    check_config: { values: ['Active'] },
+    check_config: { values: ['Approved', 'Published'] },
     severity: 'block',
     priority: 10,
   },
@@ -460,7 +462,7 @@ function computeEvidenceRiskScore(context, blockers, warnings) {
   score += Math.min(20, context.open_contradictions * 5);
   if (context.is_expired) score += 20;
   if (context.mode === 'publish' && context.status !== 'Approved') score += 10;
-  if (context.mode === 'response' && context.status !== 'Active' && context.content_type === 'template') score += 10;
+  if (context.mode === 'response' && !['Approved', 'Published'].includes(context.status) && context.content_type === 'template') score += 10;
   if (context.content_length < 40) score += 10;
   return clamp(score, 0, 100);
 }
@@ -636,7 +638,7 @@ async function listEvidenceRuns({ orgId, limit = 50 }) {
 async function loadContradictionCorpus(orgId, includeNonPublished = false) {
   const docStatuses = includeNonPublished ? ['Draft', 'CheckedOut', 'Pending', 'Under Review', 'Approved', 'Published'] : ['Approved', 'Published'];
   const faqStatuses = includeNonPublished ? ['Draft', 'CheckedOut', 'Pending', 'Under Review', 'Approved', 'Published'] : ['Approved', 'Published'];
-  const tmplStatuses = includeNonPublished ? ['Active', 'Inactive'] : ['Active'];
+  const tmplStatuses = includeNonPublished ? ['Draft', 'Approved', 'Published'] : ['Approved', 'Published'];
 
   const [documents] = await pool.execute(
     `SELECT d.id, d.name, d.content_html, d.usage_instructions
