@@ -45,6 +45,8 @@ export default function SubmitPage() {
   // CPPM-88: true once the person has typed or restored something of their own, so
   // the "draft saved" note never appears for details we filled in for them.
   const [dirty, setDirty]               = useState(false)
+  // CPPM-112: side effect reports and complaints show every answer once before Send.
+  const [reviewing, setReviewing]       = useState(false)
 
   const ATTACH_MAX = 10 * 1024 * 1024
   // CPPM-12: legacy .doc is no longer accepted — macros cannot be separated out of it.
@@ -65,6 +67,7 @@ export default function SubmitPage() {
   function removeAttachment(i) { setAttachments(a => a.filter((_, idx) => idx !== i)) }
 
   useEffect(() => {
+    setReviewing(false)
     if (!selectedType) return
     setFieldsLoading(true)
     fetch(`/api/portal/content/${clientCode}/forms/${selectedType}`)
@@ -153,9 +156,16 @@ export default function SubmitPage() {
     return Object.keys(errors).length === 0
   }
 
+  const CHECK_FIRST = ['adverse_event', 'product_complaint']
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!validate()) return
+    if (CHECK_FIRST.includes(selectedType) && !reviewing) {
+      setReviewing(true); setError('')
+      window.scrollTo?.({ top: 0 })
+      return
+    }
     setSubmitting(true); setError('')
     const fd = new FormData()
     fd.append('form_data', JSON.stringify(formValues))
@@ -169,6 +179,7 @@ export default function SubmitPage() {
       // A 413 / proxy error may return non-JSON (HTML) — parse defensively.
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
+        setReviewing(false) // back to the form, where the refused answers are marked
         setError(data.error || 'Submission failed. Please try again.')
         // CPPM-85: the server names each answer it refused, and why.
         if (data.field_errors) setFieldErrors(data.field_errors)
@@ -269,6 +280,9 @@ export default function SubmitPage() {
             <div className="pp-info-box">No form fields have been configured for this submission type. Please contact your administrator.</div>
           ) : (
             <form onSubmit={handleSubmit} className="pp-submission-form">
+              {reviewing ? (
+                <CheckAnswers fields={formFields.filter(f => isVisible(f))} values={formValues} attachments={attachments} />
+              ) : <>
               {formFields.filter(f => isVisible(f)).map(field => (
                 <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   <label>
@@ -373,19 +387,44 @@ export default function SubmitPage() {
                   </ul>
                 )}
               </div>
+              </>}
               <div className="pp-form-disclaimer">
                 <small>By submitting this form, you confirm that the information provided is accurate to the best of your knowledge. This portal is intended for medical information purposes only and does not provide medical advice.</small>
               </div>
               <div className="pp-form-actions">
                 <button type="submit" className="pp-btn pp-btn-primary" disabled={submitting}>
-                  {submitting ? 'Submitting…' : 'Submit'}
+                  {submitting ? 'Submitting…' : reviewing ? 'Send' : CHECK_FIRST.includes(selectedType) ? 'Check your answers' : 'Submit'}
                 </button>
-                <button type="button" className="pp-btn pp-btn-outline" onClick={() => setSelectedType(null)}>Cancel</button>
+                {reviewing
+                  ? <button type="button" className="pp-btn pp-btn-outline" disabled={submitting} onClick={() => setReviewing(false)}>Edit answers</button>
+                  : <button type="button" className="pp-btn pp-btn-outline" onClick={() => setSelectedType(null)}>Cancel</button>}
               </div>
             </form>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+// CPPM-112: every answer the person can see, on one screen, before Send.
+function CheckAnswers({ fields, values, attachments }) {
+  const shown = v => Array.isArray(v) ? (v.length ? v.join(', ') : '—')
+    : v === true ? 'Yes' : v === false || v == null || String(v).trim() === '' ? '—' : String(v)
+  return (
+    <section aria-labelledby="pp-check-title">
+      <h3 id="pp-check-title" style={{ margin: '0 0 4px' }}>Check your answers</h3>
+      <p style={{ margin: '0 0 16px', color: 'var(--pp-text-muted, #6B7280)' }}>Nothing has been sent yet. Press Send when everything is right, or Edit answers to change something.</p>
+      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'minmax(140px, 34%) 1fr', gap: '10px 16px' }}>
+        {fields.map(f => (
+          <div key={f.field_key} style={{ display: 'contents' }}>
+            <dt style={{ fontWeight: 600 }}>{f.label}</dt>
+            <dd style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{f.field_type === 'checkbox' ? (values[f.field_key] ? 'Yes' : 'No') : shown(values[f.field_key])}</dd>
+          </div>
+        ))}
+        <dt style={{ fontWeight: 600 }}>Attachments</dt>
+        <dd style={{ margin: 0 }}>{attachments.length ? attachments.map(a => a.name).join(', ') : 'None'}</dd>
+      </dl>
+    </section>
   )
 }
