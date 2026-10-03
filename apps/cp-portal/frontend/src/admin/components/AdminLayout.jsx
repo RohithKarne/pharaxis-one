@@ -101,6 +101,9 @@ const SEGMENT_TITLES = {
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',
+  trials:         'Clinical Trials', // CPPM-125
+  training:       'CME & Training',
+  sso:            'Single Sign-On',
 }
 
 function deriveTitle(pathname) {
