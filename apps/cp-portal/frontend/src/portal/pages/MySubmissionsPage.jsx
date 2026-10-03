@@ -162,9 +162,10 @@ export default function MySubmissionsPage() {
                     View Request Details & Activity History
                   </summary>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>Submission Summary:</div>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-                      {s.form_data?.inquiry_details || s.form_data?.event_description || s.form_data?.complaint_details || 'Request submitted successfully to Medical Affairs team.'}
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>What you wrote:</div>
+                    {/* CPPM-86: the person's own words, from the server. */}
+                    <p style={{ margin: 0, fontSize: '13px', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                      {s.request_text || 'No written details were included with this request.'}
                     </p>
                     <div style={{ marginTop: 8, fontSize: '11px', color: '#94a3b8' }}>
                       Last update: {formatDate(s.timeline?.length ? s.timeline[s.timeline.length - 1].at : s.submitted_at)}
