@@ -15,9 +15,9 @@ const TYPE_LABELS = {
 const STATUS_COLORS = {
   submitted:     { background: '#DBEAFE', color: '#1E40AF' },
   pending_sync:  { background: '#FFEDD5', color: '#9A3412' },
-  synced:        { background: '#DCFCE7', color: '#16A34A' },
+  synced:        { background: '#DCFCE7', color: '#166534' },
   failed_sync:   { background: '#FEE2E2', color: '#991B1B' },
-  closed:        { background: '#F3F4F6', color: '#6B7280' },
+  closed:        { background: '#F3F4F6', color: '#4B5563' },
 }
 
 const STATUS_LABELS = {
@@ -78,7 +78,7 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, s
       ) : (
         <>
           {/* CPPM-60: a role that may not change enquiries can read a draft but not write one */}
-          {!canEdit && !answer ? <div style={{ fontSize: 13, color: '#6B7280' }}>No answer drafted yet.</div> : null}
+          {!canEdit && !answer ? <div style={{ fontSize: 13, color: '#4B5563' }}>No answer drafted yet.</div> : null}
           {!canEdit && answer ? <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>{answer.body}</div> : null}
           {canEdit && <>
           <textarea rows={5} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
@@ -94,13 +94,13 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, s
               style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
               Approve &amp; send
             </button>
-            {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
+            {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#4B5563' }}>Draft by {answer.drafted_by_name}</span>}
           </div>
           </>}
         </>
       )}
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
-      {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 8, fontWeight: 600 }}>{err}</div>}
     </div>
     {/* Bridge row 8: a request in MIMS is answered there, so no follow-up is written here. */}
     {sent && !sentToMims && <ConversationPanel clientId={clientId} submissionId={submissionId} canApprove={canApprove} canEdit={canEdit} onChanged={onChanged} />}
@@ -152,7 +152,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>
         Conversation after the answer{waiting ? <span style={{ marginLeft: 8, color: '#B45309' }}>· Reply waiting for a follow-up</span> : null}
       </div>
-      {thread.length === 0 && <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>No replies yet.</div>}
+      {thread.length === 0 && <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 8 }}>No replies yet.</div>}
       {thread.map(m => m.direction === 'in' ? (
         <div key={m.id} style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8 }}>
           <div style={{ fontSize: 11, color: '#92400E', marginBottom: 6, fontWeight: 600 }}>
@@ -164,7 +164,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
               Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
             </div>
           )}
-          {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Said nobody became unwell.</div>}
+          {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#4B5563' }}>Said nobody became unwell.</div>}
         </div>
       ) : (
         <div key={m.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>
@@ -177,7 +177,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
       ))}
       {!canEdit && draft && (
         <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
-          <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Follow-up being drafted by {draft.drafted_by_name || 'unknown'}</div>
+          <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 6 }}>Follow-up being drafted by {draft.drafted_by_name || 'unknown'}</div>
           {draft.body}
         </div>
       )}
@@ -195,11 +195,11 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
             style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
             Approve &amp; send follow-up
           </button>
-          {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {draft.drafted_by_name}</span>}
+          {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#4B5563' }}>Draft by {draft.drafted_by_name}</span>}
         </div>
       </>}
       {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
-      {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 8, fontWeight: 600 }}>{err}</div>}
     </div>
   )
 }
@@ -222,8 +222,12 @@ export default function SubmissionsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [mineOnly, setMineOnly] = useState(false)   // CPPM-61
+  const [page, setPage]         = useState(1)
+  const [matched, setMatched]   = useState(0)
+  const [mineCount, setMineCount] = useState(0)
+  const PAGE_SIZE = 100
 
-  useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
+  useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search, dateFrom, dateTo, mineOnly, page])
 
   // `quiet` reloads the rows without swapping the whole page for "Loading…", which
   // would close a hand-over box that is still open (CPPM-61).
@@ -234,12 +238,19 @@ export default function SubmissionsPage() {
       if (typeFilter)   params.set('type', typeFilter)
       if (statusFilter) params.set('status', statusFilter)
       if (search)       params.set('search', search)
+      if (dateFrom)     params.set('from', dateFrom)
+      if (dateTo)       params.set('to', dateTo)
+      if (mineOnly)     params.set('mine', '1')
+      params.set('page', page)
+      params.set('limit', PAGE_SIZE)
       const res = await fetch(`/api/admin/submissions/${clientId}?${params}`, { headers: adminHeaders() })
       if (!res.ok) throw new Error('Failed to load submissions.')
       const d   = await res.json()
       setSubmissions(d.submissions || [])
       setCounts(d.counts || [])
       setTotal(d.total || 0)
+      setMatched(d.matched || 0)
+      setMineCount(d.mine_count || 0)
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     }
@@ -332,8 +343,9 @@ export default function SubmissionsPage() {
 
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
 
-  const mineCount = submissions.filter(s => s.owned_by_me).length
-  const shown = mineOnly ? submissions.filter(s => s.owned_by_me) : submissions
+  // Filters, dates and "mine" are applied by the server, across every submission.
+  const shown = submissions
+  const pageCount = Math.max(1, Math.ceil(matched / PAGE_SIZE))
 
   return (
     <AdminLayout title="Submissions">
@@ -356,42 +368,44 @@ export default function SubmissionsPage() {
       <div className="cp-table-toolbar">
         <select
           className="cp-select"
+          aria-label="Type"
           value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
+          onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
         >
           <option value="">All Types</option>
           {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <select
           className="cp-select"
+          aria-label="Status"
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
         >
           <option value="">All Statuses</option>
           {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
           placeholder="Search name, email, ref…"
           className="cp-search-input"
         />
         <label className="cp-date-filter">From
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
           />
         </label>
         <label className="cp-date-filter">To
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
           />
         </label>
         {/* CPPM-61: the enquiries this person holds */}
         {!hasRole('viewer') && (
-          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setMineOnly(m => !m)}>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setMineOnly(m => !m); setPage(1) }}>
             {mineOnly ? 'Show all' : `Show mine${mineCount ? ` (${mineCount})` : ''}`}
           </button>
         )}
         {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
-          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1) }}>
             Clear
           </button>
         )}
@@ -415,7 +429,7 @@ export default function SubmissionsPage() {
       )}
 
       {shown.length === 0 ? (
-        <div className="cp-empty"><p>{mineOnly && submissions.length ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
+        <div className="cp-empty"><p>{mineOnly ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
       ) : (
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
@@ -482,7 +496,7 @@ export default function SubmissionsPage() {
                              onClick={e => e.stopPropagation()}
                              style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS #{s.external_ref} ↗</a>
                         ) : (
-                          <span style={{ color: '#6B7280' }}>MIMS #{s.external_ref}</span>
+                          <span style={{ color: '#4B5563' }}>MIMS #{s.external_ref}</span>
                         )
                       ) : null}
                     </td>
@@ -496,6 +510,7 @@ export default function SubmissionsPage() {
                           onChanged={() => load(true)} onMessage={setMsg} />
                       </span>
                       {canEdit ? <select
+                        aria-label={`Status of ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
                         value={s.status}
                         onClick={e => e.stopPropagation()}
                         onChange={e => updateStatus(s.id, e.target.value)}
@@ -518,7 +533,7 @@ export default function SubmissionsPage() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
                           {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (
                             <div key={k}>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
+                              <div style={{ fontSize: 11, color: '#5F6B7A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
                               <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
                             </div>
                           ))}
@@ -529,7 +544,7 @@ export default function SubmissionsPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {s.attachments.map(a => a.scan_status && a.scan_status !== 'clean' ? (
                                 /* CPPM-39: only files cleared by the virus scan are downloadable. */
-                                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6B7280' }}>
+                                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4B5563' }}>
                                   {a.file_name}{' '}
                                   <span style={{ color: a.scan_status === 'infected' ? '#B91C1C' : '#92400E', fontSize: 11, fontWeight: 600 }}>
                                     {{ infected: 'Removed — contained a known virus', missing: 'File no longer available' }[a.scan_status] || 'Held — being checked for viruses'}
@@ -538,7 +553,7 @@ export default function SubmissionsPage() {
                               ) : (
                                 <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
-                                  {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
+                                  {a.file_name} <span style={{ color: '#5F6B7A', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
                                 </a>
                               ))}
                             </div>
@@ -550,7 +565,7 @@ export default function SubmissionsPage() {
                             <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Information the person added ({s.followups.length})</div>
                             {s.followups.map(f => (
                               <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
-                                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>
+                                <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 4 }}>
                                   {new Date(f.created_at).toLocaleString()} · {{
                                     forwarded: 'On the MIMS case',
                                     pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
@@ -573,7 +588,16 @@ export default function SubmissionsPage() {
           </table>
         </div>
       )}
-      <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>Showing {submissions.length} of {total} submissions (max 200)</div>
+      <div className="cp-pager">
+        <span>{matched ? `Showing ${(page - 1) * PAGE_SIZE + 1}–${(page - 1) * PAGE_SIZE + submissions.length} of ${matched}` : 'Showing 0'}{matched !== total ? ` (${total} in all)` : ''}</span>
+        {pageCount > 1 && (
+          <>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+            <span>Page {page} of {pageCount}</span>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>Next</button>
+          </>
+        )}
+      </div>
     </AdminLayout>
   )
 }

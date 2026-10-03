@@ -55,7 +55,7 @@ export default function PreferencesPage() {
   return (
     <div className="pp-container" style={{ maxWidth: 600, paddingTop: 40, paddingBottom: 60 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>Notification Preferences</h1>
-      <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 28 }}>
+      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
         Choose which types of notifications you receive when new content is published.
       </p>
 
@@ -63,7 +63,12 @@ export default function PreferencesPage() {
         {NOTIF_TYPES.map(({ key, label, desc }) => (
           <div
             key={key}
+            role="switch"
+            aria-checked={!!prefs[key]}
+            aria-label={label}
+            tabIndex={0}
             onClick={() => setPrefs(p => ({ ...p, [key]: !p[key] }))}
+            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setPrefs(p => ({ ...p, [key]: !p[key] })) } }}
             style={{
               display: 'flex', alignItems: 'center', gap: 16,
               background: '#fff', border: `2px solid ${prefs[key] ? 'var(--pp-primary, #6B3FA0)' : '#E5E7EB'}`,
@@ -73,7 +78,7 @@ export default function PreferencesPage() {
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E' }}>{label}</div>
-              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{desc}</div>
+              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 2 }}>{desc}</div>
             </div>
             <div style={{
               width: 44, height: 24, borderRadius: 12, position: 'relative',
@@ -99,10 +104,10 @@ export default function PreferencesPage() {
           {saving ? 'Saving…' : 'Save Preferences'}
         </button>
         {saved && (
-          <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>Saved</span>
+          <span style={{ color: '#166534', fontSize: 13, fontWeight: 500 }}>Saved</span>
         )}
         {saveError && (
-          <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{saveError}</span>
+          <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{saveError}</span>
         )}
       </div>
     </div>

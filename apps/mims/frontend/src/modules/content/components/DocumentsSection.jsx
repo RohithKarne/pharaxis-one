@@ -139,8 +139,11 @@ export default function DocumentsSection({ token, user }) {
   const [relationsDoc, setRelationsDoc] = useState(null)
   const [usageDoc, setUsageDoc] = useState(null)
 
+  const [loadError, setLoadError] = useState('')
+
   const loadDocs = useCallback(async (nextFilters = appliedFilters, nextPage = page) => {
     setLoading(true)
+    setLoadError('')
     try {
       const filterPayload = Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => value && value !== false))
       const params = new URLSearchParams({ page: nextPage, limit: LIMIT, ...filterPayload })
@@ -149,8 +152,10 @@ export default function DocumentsSection({ token, user }) {
         const d = await res.json()
         setDocs(Array.isArray(d) ? d : d.documents || [])
         setTotal(d.total || 0)
+      } else {
+        setLoadError('Could not load documents.')
       }
-    } catch { /* silent */ }
+    } catch { setLoadError('Could not load documents: the server could not be reached.') }
     setLoading(false)
   }, [token, appliedFilters, page]) // eslint-disable-line
 
@@ -320,19 +325,19 @@ export default function DocumentsSection({ token, user }) {
       {subTab === 'all' && (
         <>
           <div className="cm-filters">
-            <select className="cm-form-select" style={{ width: 160 }} value={filters.folder_id} onChange={e => { setFilters(p => ({ ...p, folder_id: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Folder" style={{ width: 160 }} value={filters.folder_id} onChange={e => { setFilters(p => ({ ...p, folder_id: e.target.value })); setPage(1) }}>
               <option value="">All Folders</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select className="cm-form-select" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Document type" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
               <option value="">All Types</option>
               <option>SRD</option><option>Enclosure</option><option>Information Document</option><option>Internal Document</option>
             </select>
-            <select className="cm-form-select" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Status" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
               <option value="">All Statuses</option>
               <option>Draft</option><option>Pending</option><option>Under Review</option><option>Approved</option><option>Published</option><option>Archived</option>
             </select>
-            <select className="cm-form-select" style={{ width: 170 }} value={filters.authoring_source} onChange={e => { setFilters(p => ({ ...p, authoring_source: e.target.value })); setPage(1) }}>
+            <select className="cm-form-select" aria-label="Authoring" style={{ width: 170 }} value={filters.authoring_source} onChange={e => { setFilters(p => ({ ...p, authoring_source: e.target.value })); setPage(1) }}>
               <option value="">All Authoring</option>
               <option value="upload">Uploaded</option>
               <option value="internal">Internal</option>
@@ -407,15 +412,19 @@ export default function DocumentsSection({ token, user }) {
           )}
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
+          ) : loadError ? (
+            <div className="cm-empty mims-load-error" role="alert"><p>{loadError}</p><button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => loadDocs()}>Try again</button></div>
           ) : docs.length === 0 ? (
             <div className="cm-empty"><p>No documents found.</p></div>
           ) : (
             <>
+              {/* Long document and folder names need room; the table scrolls sideways instead of squeezing them. */}
+              <div style={{ overflowX: 'auto' }}>
               <table className="cm-table">
                 <thead>
                   <tr>
                     <th style={{ width: 36 }}>
-                      <input type="checkbox"
+                      <input type="checkbox" aria-label="Select all documents on this page"
                         checked={docs.length > 0 && docs.every(d => selectedDocIds.includes(d.id))}
                         onChange={e => setSelectedDocIds(e.target.checked ? docs.map(d => d.id) : [])}
                       />
@@ -435,20 +444,20 @@ export default function DocumentsSection({ token, user }) {
                   {docs.map(d => (
                     <tr key={d.id}>
                       <td>
-                        <input type="checkbox"
+                        <input type="checkbox" aria-label={`Select ${d.name || d.doc_id || 'document'}`}
                           checked={selectedDocIds.includes(d.id)}
                           onChange={e => setSelectedDocIds(prev => e.target.checked ? [...new Set([...prev, d.id])] : prev.filter(id => id !== d.id))}
                         />
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
-                      <td style={{ fontWeight: 500, maxWidth: 200 }}>{d.name}</td>
+                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>{d.name}</td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span>{d.doc_type}</span>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getAuthoringSourceLabel(d)}</span>
                         </div>
                       </td>
-                      <td>{d.folder_name || '—'}</td>
+                      <td style={{ minWidth: 140 }}>{d.folder_name || '—'}</td>
                       <td style={{ textAlign: 'center' }}>{d.version || '1.0'}</td>
                       <td><StatusBadge status={d.status} /></td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{d.checked_out_by_name || '—'}</td>
@@ -458,10 +467,11 @@ export default function DocumentsSection({ token, user }) {
                   ))}
                 </tbody>
               </table>
+              </div>
               {totalPages > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
                   <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹ Prev</button>
-                  <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>Page {page} of {totalPages}</span>
+                  <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>Page {page} of {totalPages} · {total} documents</span>
                   <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next ›</button>
                 </div>
               )}

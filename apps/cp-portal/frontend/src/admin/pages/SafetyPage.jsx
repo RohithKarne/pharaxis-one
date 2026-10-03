@@ -143,9 +143,9 @@ export default function SafetyPage() {
   }
 
   function statusBadgeStyle(status) {
-    if (status === 'active')   return { background: '#DCFCE7', color: '#16A34A' }
-    if (status === 'resolved') return { background: '#F3F4F6', color: '#6B7280' }
-    if (status === 'archived') return { background: '#F3F4F6', color: '#9CA3AF' }
+    if (status === 'active')   return { background: '#DCFCE7', color: '#166534' }
+    if (status === 'resolved') return { background: '#F3F4F6', color: '#4B5563' }
+    if (status === 'archived') return { background: '#F3F4F6', color: '#5F6B7A' }
     return {}
   }
 

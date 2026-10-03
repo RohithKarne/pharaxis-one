@@ -41,12 +41,13 @@ export default function HelpHint({ featureKey, label = 'Help for this screen', p
 
   const iconStyle = placement === 'topbar'
     ? { width: 30, height: 30, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 14 }
-    : { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: 12, lineHeight: 1, background: 'transparent' }
+    : { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 6px', minWidth: 24, minHeight: 24, border: '1px solid var(--border)', borderRadius: 12, lineHeight: 1, background: 'transparent' }
 
   return (
     <>
       <span
         title={label}
+        aria-label={label}
         role="button"
         tabIndex={0}
         onClick={onOpen}

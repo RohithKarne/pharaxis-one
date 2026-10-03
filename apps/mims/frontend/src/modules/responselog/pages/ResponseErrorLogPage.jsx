@@ -10,6 +10,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './ResponseErrorLogPage.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import useRememberedFilters from '../../../shared/hooks/useRememberedFilters.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -86,10 +87,11 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
   const [error,     setError]     = useState(null)
   const [detail,    setDetail]    = useState(null)
 
-  const [caseId,     setCaseId]     = useState('')
-  const [errorType,  setErrorType]  = useState('')
-  const [fromDate,   setFromDate]   = useState('')
-  const [toDate,     setToDate]     = useState('')
+  // Kept for this user, so the filters are still set on return.
+  const [filters, setFilters] = useRememberedFilters('response-error-log', { caseId: '', errorType: '', fromDate: '', toDate: '' })
+  const { caseId, errorType, fromDate, toDate } = filters
+  const setFilter = name => value => setFilters(prev => ({ ...prev, [name]: value }))
+  const setCaseId = setFilter('caseId'), setErrorType = setFilter('errorType'), setFromDate = setFilter('fromDate'), setToDate = setFilter('toDate')
   const [page,       setPage]       = useState(1)
   const limit = 50
 
@@ -136,7 +138,7 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
         </div>
 
         <div className="rel-filters">
-          <input className="rel-filter-input" placeholder="Filter by Case ID…" value={caseId} onChange={e => { setCaseId(e.target.value); setPage(1) }} />
+          <input className="rel-filter-input" data-shortcut="search" placeholder="Filter by Case ID…" value={caseId} onChange={e => { setCaseId(e.target.value); setPage(1) }} />
           <input className="rel-filter-input" placeholder="Error type…" value={errorType} onChange={e => { setErrorType(e.target.value); setPage(1) }} />
           <input type="date" className="rel-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />
           <span style={{ color:'#475569' }}>to</span>

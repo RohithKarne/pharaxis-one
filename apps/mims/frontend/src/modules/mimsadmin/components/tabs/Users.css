@@ -27,6 +27,7 @@
 .ma-usr-edit-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .ma-usr-empty { padding: 48px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+.ma-usr-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--text-muted); }
 
 /* ── Modal overlay ── */
 .ma-usr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; }

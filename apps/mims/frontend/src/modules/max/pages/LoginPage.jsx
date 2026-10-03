@@ -587,8 +587,10 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                     <div className="login-stage-card-copy">Enter the password for this account to continue into {modeConfig.title}.</div>
                   </div>
                   <div className="form-group">
-                    <label>Password</label>
+                    <label htmlFor="login-password">Password</label>
                     <input
+                      id="login-password"
+                      autoFocus
                       className="form-control"
                       type="password"
                       placeholder="Enter your password"

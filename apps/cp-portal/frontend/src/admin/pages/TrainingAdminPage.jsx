@@ -216,7 +216,7 @@ export default function TrainingAdminPage() {
             </select>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={label}>CME Credits <span style={{ fontWeight: 400, color: '#6B7280' }}>(only if an accrediting body has granted them; never printed on certificates)</span></label>
+            <label style={label}>CME Credits <span style={{ fontWeight: 400, color: '#4B5563' }}>(only if an accrediting body has granted them; never printed on certificates)</span></label>
             <input value={form.credits} onChange={e => setForm({ ...form, credits: e.target.value })} placeholder="Leave blank if none" style={input} />
           </div>
           <div style={{ marginBottom: 12 }}>
@@ -262,7 +262,7 @@ export default function TrainingAdminPage() {
                   <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9', background: qModule?.id === m.id ? '#F5F3FF' : undefined }}>
                     <td style={{ padding: 8 }}>
                       <div style={{ fontWeight: 600 }}>{m.title}</div>
-                      <div style={{ fontSize: 11, color: '#6B7280' }}>Version {m.version} · {m.document_title || 'no document'}</div>
+                      <div style={{ fontSize: 11, color: '#4B5563' }}>Version {m.version} · {m.document_title || 'no document'}</div>
                     </td>
                     <td style={{ padding: 8 }}>{m.status}</td>
                     <td style={{ padding: 8 }}>{m.question_count} question{m.question_count === 1 ? '' : 's'} · {readiness(m)}</td>
@@ -274,7 +274,7 @@ export default function TrainingAdminPage() {
                       </CanChange>
                       <button onClick={() => openQuestions(m)} style={{ ...link, color: 'var(--cp-primary)' }}>Questions</button>
                       <CanChange area="training">
-                      <button onClick={() => handleDelete(m)} style={{ ...link, color: '#DC2626' }}>Delete</button>
+                      <button onClick={() => handleDelete(m)} style={{ ...link, color: '#B91C1C' }}>Delete</button>
                       </CanChange>
                     </td>
                   </tr>
@@ -288,10 +288,10 @@ export default function TrainingAdminPage() {
       {qModule && (
         <div className="cp-card" style={{ ...card, marginTop: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Questions — {qModule.title} <span style={{ fontWeight: 400, color: '#6B7280', fontSize: 13 }}>(version {qModule.version})</span></h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Questions — {qModule.title} <span style={{ fontWeight: 400, color: '#4B5563', fontSize: 13 }}>(version {qModule.version})</span></h3>
             <button onClick={() => setQModule(null)} style={{ ...link, color: '#374151' }}>Close</button>
           </div>
-          <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>Adding, changing or removing a question starts a new version of the module. Earlier completions keep the version they passed.</p>
+          <p style={{ fontSize: 12, color: '#4B5563', marginBottom: 12 }}>Adding, changing or removing a question starts a new version of the module. Earlier completions keep the version they passed.</p>
           {questions.length === 0 ? <div style={{ fontSize: 13, marginBottom: 16 }}>No questions yet.</div> : (
             <ol style={{ paddingLeft: 20, marginBottom: 16 }}>
               {questions.map(q => (
@@ -304,7 +304,7 @@ export default function TrainingAdminPage() {
                   <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>
                   </CanChange>
                   <CanChange area="training">
-                  <button onClick={() => deleteQuestion(q)} style={{ ...link, color: '#DC2626' }}>Remove</button>
+                  <button onClick={() => deleteQuestion(q)} style={{ ...link, color: '#B91C1C' }}>Remove</button>
                   </CanChange>
                 </li>
               ))}
@@ -320,7 +320,7 @@ export default function TrainingAdminPage() {
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                 <input type="radio" name="correct" checked={qForm.correct_index === i} onChange={() => setQForm(f => ({ ...f, correct_index: i }))} aria-label={`Answer ${i + 1} is right`} />
                 <input required value={o} onChange={e => setOption(i, e.target.value)} placeholder={`Answer ${i + 1}`} style={input} />
-                {qForm.options.length > 2 && <button type="button" onClick={() => removeOption(i)} style={{ ...link, color: '#DC2626' }} aria-label={`Remove answer ${i + 1}`}>✕</button>}
+                {qForm.options.length > 2 && <button type="button" onClick={() => removeOption(i)} style={{ ...link, color: '#B91C1C' }} aria-label={`Remove answer ${i + 1}`}>✕</button>}
               </div>
             ))}
             {qForm.options.length < 6 && (
@@ -370,10 +370,10 @@ export default function TrainingAdminPage() {
               {completions.map(c => (
                 <tr key={c.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                   <td style={{ padding: 8 }}>{new Date(c.taken_at).toLocaleString()}</td>
-                  <td style={{ padding: 8 }}>{c.person_name}<div style={{ fontSize: 11, color: '#6B7280' }}>{c.person_email}</div></td>
+                  <td style={{ padding: 8 }}>{c.person_name}<div style={{ fontSize: 11, color: '#4B5563' }}>{c.person_email}</div></td>
                   <td style={{ padding: 8 }}>{c.module_title}</td>
                   <td style={{ padding: 8 }}>{c.module_version}</td>
-                  <td style={{ padding: 8 }}>{c.score}% <span style={{ color: '#6B7280' }}>(pass {c.pass_score}%)</span></td>
+                  <td style={{ padding: 8 }}>{c.score}% <span style={{ color: '#4B5563' }}>(pass {c.pass_score}%)</span></td>
                   <td style={{ padding: 8, color: c.passed ? '#047857' : '#B45309', fontWeight: 600 }}>{c.passed ? 'Passed' : 'Failed'}</td>
                   <td style={{ padding: 8, fontFamily: 'monospace' }}>{c.reference || '—'}</td>
                 </tr>

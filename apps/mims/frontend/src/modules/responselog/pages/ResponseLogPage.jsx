@@ -11,6 +11,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../responselog.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import useRememberedFilters from '../../../shared/hooks/useRememberedFilters.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -81,10 +82,11 @@ export default function ResponseLogPage() {
   const [error,     setError]     = useState(null)
   const [detail,    setDetail]    = useState(null)
 
-  const [search,    setSearch]    = useState('')
-  const [status,    setStatus]    = useState('All')
-  const [fromDate,  setFromDate]  = useState('')
-  const [toDate,    setToDate]    = useState('')
+  // Kept for this user, so the filters are still set on return.
+  const [filters, setFilters] = useRememberedFilters('response-log', { search: '', status: 'All', fromDate: '', toDate: '' })
+  const { search, status, fromDate, toDate } = filters
+  const setFilter = name => value => setFilters(prev => ({ ...prev, [name]: value }))
+  const setSearch = setFilter('search'), setStatus = setFilter('status'), setFromDate = setFilter('fromDate'), setToDate = setFilter('toDate')
   const [page,      setPage]      = useState(1)
   const limit = 50
 
@@ -139,7 +141,7 @@ export default function ResponseLogPage() {
         {/* Filters */}
         <div className="rl-filters">
           <input className="rl-search" placeholder="Search case #, text, author…" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
-          <select className="rl-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
+          <select className="rl-filter-select" aria-label="Status" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <input type="date" className="rl-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />

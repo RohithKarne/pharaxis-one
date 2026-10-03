@@ -502,6 +502,7 @@ export default function BrowseContentPage() {
             />
             <select
               className="bc-filter-select"
+              aria-label="Folder"
               value={folderId}
               onChange={e => { setFolderId(e.target.value); setPage(1) }}
             >
@@ -510,6 +511,7 @@ export default function BrowseContentPage() {
             </select>
             <select
               className="bc-filter-select"
+              aria-label="Status"
               value={status}
               onChange={e => { setStatus(e.target.value); setPage(1) }}
             >
@@ -517,6 +519,7 @@ export default function BrowseContentPage() {
             </select>
             <select
               className="bc-filter-select"
+              aria-label="Document type"
               value={docType}
               onChange={e => { setDocType(e.target.value); setPage(1) }}
             >
@@ -538,6 +541,7 @@ export default function BrowseContentPage() {
             />
             <select
               className="bc-filter-select"
+              aria-label="Folder"
               value={modFolderId}
               onChange={e => setModFolderId(e.target.value)}
             >
@@ -546,6 +550,7 @@ export default function BrowseContentPage() {
             </select>
             <select
               className="bc-filter-select"
+              aria-label="Status"
               value={modStatus}
               onChange={e => setModStatus(e.target.value)}
             >

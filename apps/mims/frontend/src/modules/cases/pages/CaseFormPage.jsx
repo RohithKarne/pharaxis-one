@@ -107,6 +107,21 @@ export default function CaseFormPage() {
   useEffect(() => { guard.setDirty(!!draftStatus && draftStatus !== 'Saved') },
     [draftStatus, guard])
 
+  // Ctrl+S (Cmd+S on a Mac) does what Save Case does, from anywhere on the form,
+  // instead of the browser's "save page" dialog.
+  const saveShortcut = useRef(null)
+  useEffect(() => { saveShortcut.current = saving ? null : saveCaseAndSections })
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault()
+        saveShortcut.current?.()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   function handleBackNavigation() {
     const from = location.state?.from
     if (from && typeof from === 'string') { navigate(from); return }
@@ -157,7 +172,7 @@ export default function CaseFormPage() {
               Response
             </button>
           )}
-          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving}>
+          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving} title="Save Case (Ctrl+S)">
             {saving ? 'Saving…' : 'Save Case'}
           </button>
         </div>

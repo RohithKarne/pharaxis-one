@@ -113,7 +113,7 @@ export default function SsoConfigPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 15 }}>
                 {p.label}
-                {p.configured && <span className="cp-badge" style={{ marginLeft: 10, background: '#DCFCE7', color: '#16A34A' }}>Configured</span>}
+                {p.configured && <span className="cp-badge" style={{ marginLeft: 10, background: '#DCFCE7', color: '#166534' }}>Configured</span>}
               </h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!p.is_active} onChange={e => updateProvider(p.provider_key, { is_active: e.target.checked })} />
@@ -162,7 +162,7 @@ export default function SsoConfigPage() {
           <button className="cp-btn cp-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save SSO settings'}
           </button>
-          {saved && <span style={{ color: '#16A34A', fontSize: 13 }}>Saved</span>}
+          {saved && <span style={{ color: '#166534', fontSize: 13 }}>Saved</span>}
         </div>
       </div>
       </ReadOnlyUnless>

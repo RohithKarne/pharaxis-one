@@ -331,7 +331,7 @@ export default function DocumentsPage() {
             {' '}require attention within the next 30 days.
           </span>
           {alertMsg && (
-            <span style={{ fontSize: 12, color: alertMsg.type === 'success' ? '#16A34A' : '#DC2626', fontWeight: 500 }}>
+            <span style={{ fontSize: 12, color: alertMsg.type === 'success' ? '#166534' : '#B91C1C', fontWeight: 500 }}>
               {alertMsg.text}
             </span>
           )}
@@ -391,7 +391,7 @@ export default function DocumentsPage() {
           {categories.map(cat => (
             <span key={cat.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#F3F4F6', borderRadius: 6, padding: '4px 10px', fontSize: 13 }}>
               {cat.name}
-              <button type="button" className="cp-link-btn" style={{ fontSize: 11, color: '#DC2626' }} onClick={() => deleteCategory(cat.id)}>✕</button>
+              <button type="button" className="cp-link-btn" style={{ fontSize: 11, color: '#B91C1C' }} onClick={() => deleteCategory(cat.id)}>✕</button>
             </span>
           ))}
         </div>
@@ -485,7 +485,7 @@ export default function DocumentsPage() {
                     value={form.publish_at}
                     onChange={e => setField('publish_at', e.target.value)}
                   />
-                  <span style={{ fontSize: 11, color: '#6B7280', marginTop: 4, display: 'block' }}>
+                  <span style={{ fontSize: 11, color: '#4B5563', marginTop: 4, display: 'block' }}>
                     {form.status === 'scheduled' ? 'Will auto-publish at this date/time' : 'Leave blank to publish immediately when status changes to Published'}
                   </span>
                 </div>
@@ -543,7 +543,7 @@ export default function DocumentsPage() {
               <div className="cp-field">
                 <label>Next Review Due</label>
                 <input type="date" value={editForm.review_due_at || ''} onChange={e => setEditForm(f => ({ ...f, review_due_at: e.target.value }))} />
-                <span style={{ fontSize: 11, color: '#6B7280', marginTop: 4, display: 'block' }}>
+                <span style={{ fontSize: 11, color: '#4B5563', marginTop: 4, display: 'block' }}>
                   {editDoc.approved_by_name
                     ? `Approved by ${editDoc.approved_by_name}${editDoc.approved_at ? ` on ${editDoc.approved_at.slice(0, 10)}` : ''}.`
                     : isNeverApprovedLive(editDoc)
@@ -559,7 +559,7 @@ export default function DocumentsPage() {
                     value={editForm.publish_at || ''}
                     onChange={e => setEditForm(f => ({ ...f, publish_at: e.target.value }))}
                   />
-                  <span style={{ fontSize: 11, color: '#6B7280', marginTop: 4, display: 'block' }}>
+                  <span style={{ fontSize: 11, color: '#4B5563', marginTop: 4, display: 'block' }}>
                     {editForm.status === 'scheduled' ? 'Will auto-publish at this date/time' : 'Leave blank to publish immediately when status changes to Published'}
                   </span>
                 </div>
@@ -656,22 +656,22 @@ export default function DocumentsPage() {
                   <td>
                     <span className="cp-status-badge" style={{
                       background: docLiveLabel(d) !== docStatusLabel(d.status) ? '#FEF3C7' : d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
-                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
+                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#166534' : d.status === 'archived' ? '#5F6B7A' : d.status === 'review' ? '#92400E' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#4B5563',
                     }}>{docLiveLabel(d)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
                   {/* CPPM-31: who certified this version, and when it must be looked at again */}
                   <td>
                     {d.approved_by_name
-                      ? <>{d.approved_by_name}<span style={{ display: 'block', fontSize: 11, color: '#6B7280' }}>{d.approved_at ? d.approved_at.slice(0, 10) : ''}</span></>
+                      ? <>{d.approved_by_name}<span style={{ display: 'block', fontSize: 11, color: '#4B5563' }}>{d.approved_at ? d.approved_at.slice(0, 10) : ''}</span></>
                       : isNeverApprovedLive(d)
-                        ? <span style={{ color: '#DC2626', fontWeight: 600 }} title="Live or scheduled without anyone's approval — added before approval was required">Never approved</span>
-                        : <span style={{ color: '#9CA3AF' }}>Not approved</span>}
+                        ? <span style={{ color: '#B91C1C', fontWeight: 600 }} title="Live or scheduled without anyone's approval — added before approval was required">Never approved</span>
+                        : <span style={{ color: '#5F6B7A' }}>Not approved</span>}
                   </td>
-                  <td style={{ color: isOverdue(d.review_due_at) ? '#DC2626' : undefined }}>
+                  <td style={{ color: isOverdue(d.review_due_at) ? '#B91C1C' : undefined }}>
                     {d.review_due_at ? d.review_due_at.slice(0, 10) : '—'}
                   </td>
-                  <td style={{ color: d.expires_at && new Date(d.expires_at) < new Date() ? '#DC2626' : undefined }}>
+                  <td style={{ color: d.expires_at && new Date(d.expires_at) < new Date() ? '#B91C1C' : undefined }}>
                     {d.expires_at ? d.expires_at.slice(0, 10) : '—'}
                   </td>
                   <td>{formatFileSize(d.file_size)}</td>
@@ -681,7 +681,7 @@ export default function DocumentsPage() {
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(d)}>Edit</button>}
                     {canWrite && d.status === 'draft' && (
-                      <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A' }} onClick={() => quickDocAction(d, 'review')}>Submit for Review</button>
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }} onClick={() => quickDocAction(d, 'review')}>Submit for Review</button>
                     )}
                     {/* CPPM-71: approve a never-approved live document as it stands (it stays live), or retire it */}
                     {canApprove && isNeverApprovedLive(d) && (
@@ -693,7 +693,7 @@ export default function DocumentsPage() {
                     {canApprove && d.status === 'review' && (
                       <>
                         <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve</button>
-                        <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }} onClick={() => quickDocAction(d, 'draft')}>Reject</button>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }} onClick={() => quickDocAction(d, 'draft')}>Reject</button>
                       </>
                     )}
                   </td>

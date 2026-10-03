@@ -72,7 +72,7 @@ export default function TrainingModulePage() {
     <div className="pp-container pp-page-content" style={{ padding: '24px 0', maxWidth: 820 }}>
       <Link to={`${base}/training`} style={{ fontSize: 13 }}>All training modules</Link>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E', margin: '10px 0 4px' }}>{module.title}</h1>
-      <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
+      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
         {module.type} · {module.duration} · Pass mark {module.pass_score}% · Version {module.version}
       </p>
 
@@ -118,7 +118,7 @@ export default function TrainingModulePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={!allAnswered || submitting}>
             {submitting ? 'Submitting…' : 'Submit answers'}
           </button>
-          {!allAnswered && <span style={{ fontSize: 12, color: '#6B7280', marginLeft: 10 }}>Answer every question to submit.</span>}
+          {!allAnswered && <span style={{ fontSize: 12, color: '#4B5563', marginLeft: 10 }}>Answer every question to submit.</span>}
         </form>
       )}
 

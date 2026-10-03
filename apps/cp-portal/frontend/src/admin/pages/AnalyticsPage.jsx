@@ -36,7 +36,7 @@ function SectionCard({ title, children, style }) {
 }
 
 function EmptyState({ msg }) {
-  return <div style={{ textAlign: 'center', color: '#9CA3AF', padding: '32px 0', fontSize: 13 }}>{msg}</div>
+  return <div style={{ textAlign: 'center', color: '#5F6B7A', padding: '32px 0', fontSize: 13 }}>{msg}</div>
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -236,12 +236,12 @@ export default function AnalyticsPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{row.action}</span>
                   {' '}
-                  <span style={{ fontSize: 13, color: '#6B7280' }}>{row.entity || ''}</span>
+                  <span style={{ fontSize: 13, color: '#4B5563' }}>{row.entity || ''}</span>
                   {row.admin_name && (
-                    <span style={{ fontSize: 12, color: '#9CA3AF' }}> · {row.admin_name}</span>
+                    <span style={{ fontSize: 12, color: '#5F6B7A' }}> · {row.admin_name}</span>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: '#5F6B7A', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
                 </div>
               </div>

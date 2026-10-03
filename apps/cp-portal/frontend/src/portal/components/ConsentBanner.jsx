@@ -170,7 +170,7 @@ export default function ConsentBanner() {
                 <div className="pp-consent-toggle-label">Necessary</div>
                 <div className="pp-consent-toggle-desc">Required for the portal to function. Cannot be disabled.</div>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#16A34A' }}>Always On</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>Always On</span>
             </div>
 
             {PREFERENCE_TOGGLES.map(t => (

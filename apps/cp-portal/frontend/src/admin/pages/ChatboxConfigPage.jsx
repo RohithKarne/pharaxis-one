@@ -102,7 +102,7 @@ export default function ChatboxConfigPage() {
           )}
           <div className="cp-field">
             {/* Was keyed on is_active, so an enabled chatbox with no key claimed one was set. */}
-            <label>API Key {config.has_api_key ? '(set — leave blank to keep current)' : <span style={{ color: '#DC2626' }}>(not set — the assistant cannot answer until you add one)</span>}</label>
+            <label>API Key {config.has_api_key ? '(set — leave blank to keep current)' : <span style={{ color: '#B91C1C' }}>(not set — the assistant cannot answer until you add one)</span>}</label>
             <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
               placeholder={config.has_api_key ? '••••••••' : 'Paste API key…'} />
           </div>

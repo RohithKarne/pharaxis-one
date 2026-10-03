@@ -203,13 +203,13 @@ export default function SafetyQueuePage() {
                       {t.source === 'chat'
                         ? <Link to={`/admin/clients/${clientId}/chat-records?conversation=${t.chat_conversation_id}`}>Chat · view conversation</Link>
                         : `Submission #${t.submission_id}`}
-                      {t.reply_id ? <div style={{ fontSize: 12, color: '#6B7280' }}>Raised by a reply to our answer</div> : null}
+                      {t.reply_id ? <div style={{ fontSize: 12, color: '#4B5563' }}>Raised by a reply to our answer</div> : null}
                     </td>
                     <td>{String(t.submission_type || '').replace(/_/g, ' ')}</td>
                     <td>{t.submitter_name || t.submitter_email || '—'}</td>
                     <td>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</td>
                     <td style={{ maxWidth: 380, whiteSpace: 'pre-wrap' }}>
-                      {detailOf(t) || <em style={{ color: '#6B7280' }}>No detail given — flag still stands</em>}
+                      {detailOf(t) || <em style={{ color: '#4B5563' }}>No detail given — flag still stands</em>}
                     </td>
                     {tab === 'closed' ? (
                       <td>
@@ -225,7 +225,7 @@ export default function SafetyQueuePage() {
                         ) : t.outcome === 'reviewed_not_ae'
                           ? <span title="Clinical judgement">Reviewed — not an AE</span>
                           : <span title={t.outcome_reason || ''}>Cleared administratively</span>}
-                        <div style={{ fontSize: 12, color: '#6B7280' }}>
+                        <div style={{ fontSize: 12, color: '#4B5563' }}>
                           {t.closed_by_name || 'unknown'}{t.closed_at ? ` · ${new Date(t.closed_at).toLocaleDateString()}` : ''}
                         </div>
                       </td>
@@ -234,11 +234,11 @@ export default function SafetyQueuePage() {
                         {t.owner_id ? (
                           <>
                             {t.owned_by_me ? <strong>You</strong> : (t.owner_name || 'Unknown')}
-                            <div style={{ fontSize: 12, color: '#6B7280' }}>
+                            <div style={{ fontSize: 12, color: '#4B5563' }}>
                               since {t.owner_since ? new Date(t.owner_since).toLocaleString() : '—'}
                             </div>
                           </>
-                        ) : <span style={{ color: '#6B7280' }}>Nobody yet</span>}
+                        ) : <span style={{ color: '#4B5563' }}>Nobody yet</span>}
                       </td>
                     )}
                     <td>
@@ -307,7 +307,7 @@ export default function SafetyQueuePage() {
             <div className="cp-modal-body">
 
             <div style={{ padding: 12, background: '#F9FAFB', borderRadius: 6, whiteSpace: 'pre-wrap' }}>
-              {detailOf(open) || <em style={{ color: '#6B7280' }}>The submitter answered “Yes” but gave no detail.</em>}
+              {detailOf(open) || <em style={{ color: '#4B5563' }}>The submitter answered “Yes” but gave no detail.</em>}
             </div>
 
             <label style={{ display: 'block', opacity: canJudge ? 1 : 0.5 }}>
@@ -315,7 +315,7 @@ export default function SafetyQueuePage() {
                      checked={outcome === 'reviewed_not_ae'}
                      onChange={e => setOutcome(e.target.value)} />
               {' '}Reviewed — not an adverse event
-              <div style={{ fontSize: 12, color: '#6B7280', marginLeft: 24 }}>
+              <div style={{ fontSize: 12, color: '#4B5563', marginLeft: 24 }}>
                 A clinical judgement. Safety reviewer role only.
               </div>
             </label>
@@ -325,7 +325,7 @@ export default function SafetyQueuePage() {
                      checked={outcome === 'confirmed_ae'}
                      onChange={e => setOutcome(e.target.value)} />
               {' '}Confirmed side effect — send to MIMS
-              <div style={{ fontSize: 12, color: '#6B7280', marginLeft: 24 }}>
+              <div style={{ fontSize: 12, color: '#4B5563', marginLeft: 24 }}>
                 A clinical judgement. Creates an adverse event case in MIMS. Safety reviewer role only.
               </div>
             </label>
@@ -335,7 +335,7 @@ export default function SafetyQueuePage() {
                 <input value={productName} onChange={e => setProductName(e.target.value)} placeholder="Product (required)" />
                 <textarea rows={3} value={eventDescription} onChange={e => setEventDescription(e.target.value)}
                           placeholder="What happened (required)" style={{ width: '100%' }} />
-                <label style={{ fontSize: 12, color: '#6B7280' }}>
+                <label style={{ fontSize: 12, color: '#4B5563' }}>
                   When it started (if known){' '}
                   <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
                 </label>
@@ -347,7 +347,7 @@ export default function SafetyQueuePage() {
                      checked={outcome === 'cleared_administrative'}
                      onChange={e => setOutcome(e.target.value)} />
               {' '}Clear administratively
-              <div style={{ fontSize: 12, color: '#6B7280', marginLeft: 24 }}>
+              <div style={{ fontSize: 12, color: '#4B5563', marginLeft: 24 }}>
                 Not a clinical decision — duplicate, test submission, or no longer required. A reason is required.
               </div>
             </label>

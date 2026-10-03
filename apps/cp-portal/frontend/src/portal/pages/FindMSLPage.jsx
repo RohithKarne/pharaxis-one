@@ -143,7 +143,7 @@ export default function FindMSLPage() {
             {bookingDone ? (
               <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
                 <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
-                <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 16 }}>
+                <div style={{ color: '#4B5563', fontSize: 14, marginBottom: 16 }}>
                   Your request has been received. The MSL team will follow up with you shortly.
                 </div>
                 <div style={{ marginBottom: 20 }}>
@@ -175,7 +175,7 @@ export default function FindMSLPage() {
                         return <option key={s.id} value={s.id}>{label}</option>
                       })}
                     </select>
-                    <span style={{ fontSize: 11, color: '#6B7280' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
+                    <span style={{ fontSize: 11, color: '#4B5563' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
                   </div>
                 )}
                 <div className="cp-field-row">

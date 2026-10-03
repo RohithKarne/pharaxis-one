@@ -61,19 +61,19 @@ export default function VerifyEmailPage() {
         {status === 'verifying' && (
           <>
             <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Verifying your email…</h2>
-            <p style={{ color: '#6B7280', fontSize: 14 }}>Please wait a moment.</p>
+            <p style={{ color: '#4B5563', fontSize: 14 }}>Please wait a moment.</p>
           </>
         )}
         {status === 'success' && (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#16A34A' }}>Email Verified!</h2>
-            <p style={{ color: '#6B7280', fontSize: 14 }}>Your account is active. Redirecting you now…</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#166534' }}>Email Verified!</h2>
+            <p style={{ color: '#4B5563', fontSize: 14 }}>Your account is active. Redirecting you now…</p>
           </>
         )}
         {(status === 'error' || status === 'expired') && (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#DC2626' }}>Verification Failed</h2>
-            <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>{message}</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#B91C1C' }}>Verification Failed</h2>
+            <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>{message}</p>
             <button className="pp-btn pp-btn-primary" onClick={resend}>
               Resend Verification Email
             </button>

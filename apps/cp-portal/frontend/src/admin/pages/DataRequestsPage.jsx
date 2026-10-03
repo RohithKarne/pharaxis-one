@@ -73,7 +73,7 @@ export default function DataRequestsPage() {
                 {requests.map(r => (
                   <tr key={r.id}>
                     <td style={{ textTransform: 'capitalize' }}>{r.request_type}</td>
-                    <td>{r.requester_name || '—'}<br /><span style={{ fontSize: 12, color: '#64748b' }}>{r.requester_email}</span></td>
+                    <td>{r.requester_name || '—'}<br /><span style={{ fontSize: 12, color: '#475569' }}>{r.requester_email}</span></td>
                     <td><span style={{ color: STATUS_TONE[r.status] || '#334155', fontWeight: 600, textTransform: 'capitalize' }}>{r.status}</span></td>
                     <td>{r.requested_at ? new Date(r.requested_at).toLocaleString() : '—'}</td>
                     <td style={{ maxWidth: 280, fontSize: 12, color: '#475569' }}>{r.notes || '—'}</td>
@@ -89,7 +89,7 @@ export default function DataRequestsPage() {
                             Reject
                           </button>
                         </div>
-                      ) : <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>}
+                      ) : <span style={{ fontSize: 12, color: '#5f6b7a' }}>—</span>}
                       {result[r.id] && <div style={{ fontSize: 11, marginTop: 4, color: '#475569', maxWidth: 320 }}>{result[r.id]}</div>}
                     </td>
                   </tr>

@@ -196,7 +196,7 @@ export default function CompliancePage() {
                   version it did not like ("v1.1", the "v1.0" default) and was a silent
                   way to make every visitor consent again. */}
               <div style={{ fontSize: 15, fontWeight: 600 }}>{config.version || '—'}</div>
-              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4 }}>
                 Changes by itself when you save different banner wording, or with Force Re-acceptance below.
               </div>
             </div>
@@ -222,7 +222,7 @@ export default function CompliancePage() {
       {/* S5-13: Re-acceptance trigger */}
       <div className="cp-card" style={{ marginTop: 24, borderLeft: '4px solid #F59E0B' }}>
         <div className="cp-card-title">Force Re-acceptance</div>
-        <p style={{ fontSize: 13, color: '#6B7280', margin: '0 0 16px' }}>
+        <p style={{ fontSize: 13, color: '#4B5563', margin: '0 0 16px' }}>
           Bumps the consent version and requires all portal users to re-accept on their next visit. Use this when your privacy policy or terms have materially changed.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -236,7 +236,7 @@ export default function CompliancePage() {
             {triggering ? 'Triggering…' : 'Trigger Re-acceptance Now'}
           </button>
           {triggerMsg && (
-            <span style={{ fontSize: 13, fontWeight: 500, color: triggerMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: triggerMsg.type === 'success' ? '#166534' : '#B91C1C' }}>
               {triggerMsg.text}
             </span>
           )}

@@ -186,7 +186,7 @@ export default function EmailSettingsPage() {
           <div className="cp-field">
             <label>
               SMTP Password
-              {hasPassword && <span style={{ color: '#16A34A', fontSize: 11, marginLeft: 8 }}>(saved)</span>}
+              {hasPassword && <span style={{ color: '#166534', fontSize: 11, marginLeft: 8 }}>(saved)</span>}
             </label>
             <input
               type="password"
@@ -220,8 +220,8 @@ export default function EmailSettingsPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
           <LoadingButton onClick={handleSave}>Save Settings</LoadingButton>
-          {saved && <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 500 }}>Saved</span>}
-          {saveError && <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>{saveError}</span>}
+          {saved && <span style={{ fontSize: 13, color: '#166534', fontWeight: 500 }}>Saved</span>}
+          {saveError && <span style={{ fontSize: 13, color: '#B91C1C', fontWeight: 500 }}>{saveError}</span>}
         </div>
       </div>
 
@@ -229,7 +229,7 @@ export default function EmailSettingsPage() {
         <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#1A1A2E' }}>
           Send Test Email
         </h3>
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#6B7280' }}>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#4B5563' }}>
           Send a test email to verify your SMTP configuration is working. Save your settings first.
         </p>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
@@ -255,7 +255,7 @@ export default function EmailSettingsPage() {
           <div style={{
             marginTop: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13,
             background: testMsg.type === 'success' ? '#F0FDF4' : '#FEF2F2',
-            color:      testMsg.type === 'success' ? '#16A34A' : '#DC2626',
+            color:      testMsg.type === 'success' ? '#166534' : '#B91C1C',
             border: `1px solid ${testMsg.type === 'success' ? '#BBF7D0' : '#FECACA'}`,
           }}>
             {testMsg.text}
@@ -267,16 +267,16 @@ export default function EmailSettingsPage() {
         <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600, color: '#1A1A2E' }}>
           Email Delivery
         </h3>
-        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#6B7280' }}>
-          {outbox.counts.sent} sent · {outbox.counts.pending} retrying · <strong style={{ color: outbox.counts.failed ? '#DC2626' : undefined }}>{outbox.counts.failed} failed</strong>
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#4B5563' }}>
+          {outbox.counts.sent} sent · {outbox.counts.pending} retrying · <strong style={{ color: outbox.counts.failed ? '#B91C1C' : undefined }}>{outbox.counts.failed} failed</strong>
         </p>
         {resendMsg && (
-          <div style={{ marginBottom: 12, fontSize: 13, color: resendMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
+          <div style={{ marginBottom: 12, fontSize: 13, color: resendMsg.type === 'success' ? '#166534' : '#B91C1C' }}>
             {resendMsg.text}
           </div>
         )}
         {outbox.emails.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#16A34A' }}>No failed or pending emails.</div>
+          <div style={{ fontSize: 13, color: '#166534' }}>No failed or pending emails.</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -289,16 +289,16 @@ export default function EmailSettingsPage() {
                 <tr key={e.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                   <td style={{ padding: 8 }}>{e.to_email}</td>
                   <td style={{ padding: 8 }}>{e.subject}</td>
-                  <td style={{ padding: 8, fontWeight: 600, color: e.status === 'failed' ? '#DC2626' : '#B45309' }}>
+                  <td style={{ padding: 8, fontWeight: 600, color: e.status === 'failed' ? '#B91C1C' : '#B45309' }}>
                     {e.status === 'failed' ? `Failed (${e.attempts} tries)` : `Retrying (${e.attempts} so far)`}
                   </td>
-                  <td style={{ padding: 8, color: '#6B7280', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.last_error || ''}>{e.last_error || '—'}</td>
+                  <td style={{ padding: 8, color: '#4B5563', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.last_error || ''}>{e.last_error || '—'}</td>
                   <td style={{ padding: 8 }}>
                     {e.status === 'failed' && !e.is_sensitive && (
                       <button className="cp-btn cp-btn-outline" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => handleResend(e.id)}>Resend</button>
                     )}
                     {e.status === 'failed' && !!e.is_sensitive && (
-                      <span style={{ fontSize: 12, color: '#6B7280' }}>Person must request a new link</span>
+                      <span style={{ fontSize: 12, color: '#4B5563' }}>Person must request a new link</span>
                     )}
                   </td>
                 </tr>

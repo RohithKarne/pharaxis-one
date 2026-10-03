@@ -300,14 +300,14 @@ export default function PortalHomePage() {
                 </h2>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
-                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>My activity</Link>
-                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>Notification preferences</Link>
+                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>My activity</Link>
+                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>Notification preferences</Link>
               </div>
             </div>
 
             {followedTopics.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {followedTopics.map(f => (
                     <Link key={f.id} to={`${base}/therapeutic-areas`} className="pp-chip" style={{ textDecoration: 'none', color: 'var(--pp-primary)' }}>
@@ -321,7 +321,7 @@ export default function PortalHomePage() {
             {forYou && (
               <div>
                 <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#1A1A2E' }}>For you</h3>
-                <p style={{ margin: '0 0 10px', fontSize: 13, color: '#6B7280' }}>
+                <p style={{ margin: '0 0 10px', fontSize: 13, color: '#4B5563' }}>
                   {forYou.basis === 'latest'
                     ? 'The latest from this portal. Choose your specialty or follow an area to see what matches you.'
                     : `Matched to ${forYou.words.join(', ')}.`}
@@ -337,7 +337,7 @@ export default function PortalHomePage() {
                           style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 'var(--pp-radius, 2px)', padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: kind[1], textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{kind[0]}</div>
                           <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{it.title}</div>
-                          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                          <div style={{ fontSize: 12, color: '#4B5563', marginTop: 4 }}>
                             {it.type === 'event' ? formatLongDate(it.at) : it.because ? `Matches ${it.because}` : formatLongDate(it.at)}
                           </div>
                         </Link>

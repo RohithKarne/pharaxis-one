@@ -17,12 +17,30 @@ const { downloadRefusal } = require('../../utils/virusScan');
 const { requireRole } = require('../../middleware/auth');
 const workOwnership = require('../../utils/workOwnership');
 
+// One set of filters for the list and the export, so what is on screen is what is exported.
+// The search also finds the reference people quote back to us (CP-000123).
+function submissionFilters(q, clientId, adminId) {
+  let sql = ' WHERE s.client_id = ?';
+  const params = [clientId];
+  if (q.type)   { sql += ' AND s.submission_type = ?'; params.push(q.type); }
+  if (q.status) { sql += ' AND s.status = ?';          params.push(q.status); }
+  if (q.search) {
+    const like = `%${q.search}%`;
+    const ref = /^cp-?0*(\d+)$/i.exec(String(q.search).trim());
+    sql += ` AND (s.submitter_name LIKE ? OR s.submitter_email LIKE ? OR s.external_ref LIKE ?${ref ? ' OR s.id = ?' : ''})`;
+    params.push(like, like, like);
+    if (ref) params.push(Number(ref[1]));
+  }
+  if (q.from) { sql += ' AND s.submitted_at >= ?'; params.push(`${q.from} 00:00:00`); }
+  if (q.to)   { sql += ' AND s.submitted_at <= ?'; params.push(`${q.to} 23:59:59`); }
+  if (q.mine === '1') { sql += ' AND s.owner_id = ?'; params.push(adminId || 0); }
+  return { sql, params };
+}
+
 // GET /api/admin/submissions/:clientId
 // Returns submissions with optional filter by submission_type and status
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const { type, status, search } = req.query;
-
     // PD-2: ae_task_status surfaces the safety flag inline, so a reviewer sees it
     // in the list they already work from rather than only in the safety queue.
     let query = `
@@ -44,19 +62,14 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       FROM cp_submissions s
       LEFT JOIN cp_portal_users u ON s.user_id = u.id
       LEFT JOIN cp_admin_users o ON o.id = s.owner_id
-      WHERE s.client_id = ?
     `;
-    const params = [req.params.clientId];
-
-    if (type)   { query += ' AND s.submission_type = ?'; params.push(type); }
-    if (status) { query += ' AND s.status = ?';          params.push(status); }
-    if (search) {
-      query += ' AND (s.submitter_name LIKE ? OR s.submitter_email LIKE ? OR s.external_ref LIKE ?)';
-      const s = `%${search}%`;
-      params.push(s, s, s);
-    }
-
-    query += ' ORDER BY s.submitted_at DESC LIMIT 200';
+    // Every filter runs here, dates and "mine" included, and the list pages through all
+    // matches instead of stopping at the newest 200.
+    const f = submissionFilters(req.query, req.params.clientId, req.admin.adminId);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    query += f.sql + ` ORDER BY s.submitted_at DESC, s.id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
+    const params = f.params;
 
     const [rows] = await pool.execute(query, params);
 
@@ -99,8 +112,10 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     );
 
     const [[total]] = await pool.execute('SELECT COUNT(*) as n FROM cp_submissions WHERE client_id = ?', [req.params.clientId]);
+    const [[matched]] = await pool.execute(`SELECT COUNT(*) as n FROM cp_submissions s${f.sql}`, f.params);
+    const [[mine]] = await pool.execute('SELECT COUNT(*) as n FROM cp_submissions WHERE client_id = ? AND owner_id = ?', [req.params.clientId, req.admin.adminId || 0]);
 
-    res.json({ submissions: rows, counts, total: total?.n || 0 });
+    res.json({ submissions: rows, counts, total: total?.n || 0, matched: matched?.n || 0, mine_count: mine?.n || 0, page, limit });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -117,17 +132,10 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
              s.submitter_type, s.status, s.external_ref, s.submitted_at, s.form_data
       FROM cp_submissions s
-      WHERE s.client_id = ?
     `;
-    const params = [req.params.clientId];
-    if (type)   { query += ' AND s.submission_type = ?'; params.push(type); }
-    if (status) { query += ' AND s.status = ?';          params.push(status); }
-    if (search) {
-      query += ' AND (s.submitter_name LIKE ? OR s.submitter_email LIKE ? OR s.external_ref LIKE ?)';
-      const x = `%${search}%`; params.push(x, x, x);
-    }
-    if (from) { query += ' AND s.submitted_at >= ?'; params.push(`${from} 00:00:00`); }
-    if (to)   { query += ' AND s.submitted_at <= ?'; params.push(`${to} 23:59:59`); }
+    const f = submissionFilters(req.query, req.params.clientId, req.admin.adminId);
+    query += f.sql;
+    const params = f.params;
     query += ' ORDER BY s.submitted_at DESC';  // no LIMIT — full dataset
 
     const [rows] = await pool.execute(query, params);

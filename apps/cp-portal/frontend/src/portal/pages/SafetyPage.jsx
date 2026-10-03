@@ -83,7 +83,7 @@ export default function SafetyPage() {
         <div className="pp-alert-header">
           <SeverityBadge severity={alert.severity} />
           {isResolved && <span className="pp-severity-badge resolved">Resolved</span>}
-          <span style={{ fontSize: 12, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
             {alert.alert_type?.replace(/_/g, ' ')}
           </span>
         </div>
