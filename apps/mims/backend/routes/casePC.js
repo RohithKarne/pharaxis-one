@@ -118,7 +118,7 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
     if (!latest) {
       const [[intake]] = await conn.execute(
         `SELECT i.product_name, i.batch_lot_number, i.expiry_date, i.complaint_category, i.complaint_description,
-                c.date_received
+                i.sample_available, i.sample_return_requested, c.date_received
            FROM case_pc_intake i JOIN cases c ON c.id = i.case_id
           WHERE i.case_id = ? ORDER BY i.id DESC LIMIT 1`,
         [req.params.id]
@@ -128,11 +128,16 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
           `INSERT INTO case_pc_general (version_id, complaint_description, pc_category, date_received) VALUES (?, ?, ?, ?)`,
           [result.insertId, intake.complaint_description || null, intake.complaint_category || null, intake.date_received || null]
         );
-        if (intake.product_name || intake.batch_lot_number) {
+        // Sample available and return requested were captured at intake too, but
+        // the version's Product Info and Return / Retrieval tabs started unticked (MIPM-167).
+        if (intake.product_name || intake.batch_lot_number || Number(intake.sample_available) === 1) {
           await conn.execute(
-            `INSERT INTO case_pc_product_info (version_id, product_name, lot_number, expiry_date) VALUES (?, ?, ?, ?)`,
-            [result.insertId, intake.product_name || null, intake.batch_lot_number || null, intake.expiry_date || null]
+            `INSERT INTO case_pc_product_info (version_id, product_name, lot_number, expiry_date, quantity_available) VALUES (?, ?, ?, ?, ?)`,
+            [result.insertId, intake.product_name || null, intake.batch_lot_number || null, intake.expiry_date || null, Number(intake.sample_available) === 1 ? 1 : 0]
           );
+        }
+        if (Number(intake.sample_return_requested) === 1) {
+          await conn.execute('INSERT INTO case_pc_return_retrieval (version_id, return_requested) VALUES (?, 1)', [result.insertId]);
         }
       }
     }
