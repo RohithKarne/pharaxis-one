@@ -261,7 +261,6 @@ export default function DashboardPage() {
     setShowWebauthnBanner(false)
   }
 
-  const firstName = user?.name?.split(' ')[0] || 'there'
   const roleName = roleLabel(user?.role)
   const focusCards = buildFocusCards({ user, summary, sessions, canSeeObservability })
   const canAccessModule = (moduleKey) => (hasModuleAccess ? hasModuleAccess(moduleKey) : false)
@@ -353,23 +352,11 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="mims-home-hero">
-          <div className="mims-home-hero-copy">
-            <div className="mims-home-eyebrow">{roleName} Workspace</div>
-            <h1>Welcome back, {firstName}</h1>
-            <p>
-              {canSeeObservability
-                ? 'Track work ownership, approvals, and platform health from one operating view.'
-                : 'See your active workload and response activity without jumping across modules.'}
-            </p>
-            <div className="mims-home-meta">
-              <span className="mims-home-meta-pill strong">{roleName}</span>
-              {orgName && <span className="mims-home-meta-pill">{orgName}</span>}
-            </div>
-          </div>
-          <div className="mims-home-hero-actions">
-            <button className="btn btn-outline" onClick={() => setShowPersonalise(true)}>Personalise Dashboard</button>
-            <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
+        <div className="mims-page-titlebar">
+          <h1>Overview<span className="mims-page-titlebar-sub">{roleName}{orgName ? ` · ${orgName}` : ''}</span></h1>
+          <div className="mims-page-titlebar-actions">
+            <button className="btn" onClick={() => setShowPersonalise(true)}>Personalise</button>
+            <button className="btn" onClick={loadDashboard} disabled={loading}>Refresh</button>
             <button className="btn btn-primary" onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')} onClick={() => navigate('/cases')}>Open Case Management</button>
           </div>
         </div>
@@ -444,52 +431,50 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <section className="mims-home-focus-grid" aria-label="Today focus">
-          {focusCards.filter(item => preferences.visibleWidgets.includes(item.id)).map((item) => (
-            <article key={item.title} className={`mims-home-focus-card ${item.tone || ''}`}>
-              <div className="mims-home-focus-top">
-                <div>
-                  <div className="mims-home-focus-title">{item.title}</div>
-                  <div className="mims-home-focus-body">{item.body}</div>
-                </div>
-                <strong>{item.value}</strong>
-              </div>
-              <button className="btn btn-outline" style={{ fontSize: 12 }} onMouseEnter={() => prefetchRoutePath(item.actionTo)} onFocus={() => prefetchRoutePath(item.actionTo)} onClick={() => navigate(item.actionTo)}>
-                {item.actionLabel}
-              </button>
-            </article>
-          ))}
-        </section>
+        {focusCards.some(item => preferences.visibleWidgets.includes(item.id)) && (
+          <article className="card" style={{ marginBottom: 10 }}>
+            <div className="card-header"><h3>Work queues</h3></div>
+            <table className="admin-table mims-queue-table">
+              <tbody>
+                {focusCards.filter(item => preferences.visibleWidgets.includes(item.id)).map((item) => (
+                  <tr key={item.title}>
+                    <td>
+                      <strong>{item.title}</strong>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{item.body}</div>
+                    </td>
+                    <td className="num">{item.value}</td>
+                    <td style={{ width: 200 }}>
+                      <a href="#" onMouseEnter={() => prefetchRoutePath(item.actionTo)} onFocus={() => prefetchRoutePath(item.actionTo)} onClick={(e) => { e.preventDefault(); navigate(item.actionTo) }}>
+                        {item.actionLabel}
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </article>
+        )}
 
         {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
         {preferences.visibleWidgets.includes('workspace_launchpad') && (
-          <section className="mims-workbench-grid" aria-label="Workspace launchpad" style={{ gridTemplateColumns: '1fr' }}>
-            <article className="card mims-workbench-panel">
-              <div className="card-header">
-                <h3>Workspace Launchpad</h3>
-                <span className="mims-workbench-panel-note">Open the module you need and get to work.</span>
-              </div>
-              <div className="card-body">
-                <div className="mims-workbench-card-grid">
-                  {moduleLaunchers.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className="mims-workbench-card"
-                      onMouseEnter={() => prefetchRoutePath(item.to)}
-                      onFocus={() => prefetchRoutePath(item.to)}
-                      onClick={() => navigate(item.to)}
-                    >
-                      <strong>{item.title}</strong>
-                      <span>{item.body}</span>
-                      <small>Open workspace</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </article>
-          </section>
+          <article className="card">
+            <div className="card-header"><h3>Modules</h3></div>
+            <table className="admin-table mims-module-list">
+              <tbody>
+                {moduleLaunchers.map((item) => (
+                  <tr key={item.key}>
+                    <td>
+                      <a href="#" onMouseEnter={() => prefetchRoutePath(item.to)} onFocus={() => prefetchRoutePath(item.to)} onClick={(e) => { e.preventDefault(); navigate(item.to) }}>
+                        {item.title}
+                      </a>
+                    </td>
+                    <td>{item.body}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </article>
         )}
 
         {preferences.visibleWidgets.includes('pinned_reports') && preferences.pinnedReports.length > 0 && (

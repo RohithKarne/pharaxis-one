@@ -6,9 +6,9 @@ import { useState } from 'react'
 // triage, not typed during intake. Case Type moved to the New Case action; the
 // workflow fields moved to the final step, where the work actually happens.
 const WIZARD_STEPS = [
-  { id: 1, label: 'Step 1: Reporter & Patient', icon: '👤' },
-  { id: 2, label: 'Step 2: Product & Details', icon: '📦' },
-  { id: 3, label: 'Step 3: Response & Workflow', icon: '✍️' },
+  { id: 1, label: 'Reporter & Patient' },
+  { id: 2, label: 'Product & Details' },
+  { id: 3, label: 'Response & Workflow' },
 ]
 
 const LAST_STEP = WIZARD_STEPS.length
@@ -16,7 +16,6 @@ const LAST_STEP = WIZARD_STEPS.length
 export default function CaseFormWizard({
   activeStep,
   setActiveStep,
-  caseType,
   caseNumber,
   saving,
   onSave,
@@ -30,18 +29,15 @@ export default function CaseFormWizard({
     <div className="cf-wizard-container" style={{ marginBottom: 24 }}>
       {/* Sticky Stepper Bar */}
       <div style={{
-        background: '#fff',
-        border: '1px solid var(--border-color, #e5e7eb)',
-        borderRadius: 12,
-        padding: '16px 20px',
-        marginBottom: 20,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        background: 'var(--panel-head)',
+        border: '1px solid var(--border)',
+        padding: '6px 10px 0',
+        marginBottom: 10,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 20 }}>{caseType === 'AE' ? '🚨' : caseType === 'PC' ? '📦' : '💬'}</span>
             <div>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>
                 {caseNumber ? `Case ${caseNumber}` : 'New Case Intake'}
               </h2>
               {/* Case type and status deliberately not repeated here — the page
@@ -61,7 +57,7 @@ export default function CaseFormWizard({
               </button>
             ) : (
               <button type="button" className="btn btn-primary" onClick={() => onSave(false)} disabled={saving}>
-                {saving ? 'Saving Case…' : '💾 Complete & Save Case'}
+                {saving ? 'Saving Case…' : 'Complete & Save Case'}
               </button>
             )}
           </div>
@@ -70,7 +66,7 @@ export default function CaseFormWizard({
         {/* Step Progress Tracker */}
         {/* minmax(0, 1fr) + minWidth 0: the step labels shorten with an ellipsis on
             narrow panes instead of pushing the strip off to the right (M-78). */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, minmax(0, 1fr))`, gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, minmax(0, 1fr))`, gap: 2, marginBottom: -1 }}>
           {WIZARD_STEPS.map(step => {
             const isActive = activeStep === step.id
             // A tick means the step has what it needs, not that it was passed
@@ -86,20 +82,19 @@ export default function CaseFormWizard({
                   alignItems: 'center',
                   gap: 8,
                   minWidth: 0,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid',
-                  borderColor: isActive ? 'var(--primary, #2563eb)' : isCompleted ? '#bbf7d0' : '#e5e7eb',
-                  background: isActive ? '#eff6ff' : isCompleted ? '#f0fdf4' : '#f9fafb',
-                  color: isActive ? '#1e40af' : isCompleted ? '#166534' : '#6b7280',
-                  fontWeight: isActive ? 700 : 500,
-                  fontSize: 13,
+                  padding: '5px 10px',
+                  border: '1px solid var(--border)',
+                  borderBottom: isActive ? '1px solid #fff' : '1px solid var(--border)',
+                  borderTop: isActive ? '2px solid var(--accent)' : '1px solid var(--border)',
+                  background: isActive ? '#fff' : '#eef1f4',
+                  color: isActive ? '#000' : '#333',
+                  fontWeight: isActive ? 700 : 400,
+                  fontSize: 12,
                   cursor: 'pointer',
                   textAlign: 'left',
-                  transition: 'all 0.2s ease',
                 }}
               >
-                <span style={{ fontSize: 14 }}>{isCompleted ? '✓' : step.icon}</span>
+                <span style={{ color: isCompleted ? 'var(--success)' : 'inherit' }}>{isCompleted ? '✓' : `${step.id}.`}</span>
                 <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                   {step.label}
                 </span>
@@ -133,7 +128,7 @@ export default function CaseFormWizard({
           </button>
         ) : (
           <button type="button" className="btn btn-primary" onClick={() => onSave(false)} disabled={saving}>
-            {saving ? 'Saving Case…' : '💾 Complete & Save Case'}
+            {saving ? 'Saving Case…' : 'Complete & Save Case'}
           </button>
         )}
       </div>
