@@ -128,9 +128,18 @@ router.get('/users/orgs', authenticate, requireRole('admin', 'platform_admin'), 
 // ── GET /api/admin/users — list all users globally ────────────────────────────
 router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const { search = '', limit = 100, offset = 0 } = req.query;
+    const { search = '', limit = 100, offset = 0, role = '', status = '', group = '' } = req.query;
     const like = `%${search}%`;
     const scope = orgScopeForUsers(req);
+    // Role, status and group are filtered here, not in the browser, so they reach every user
+    // and not only the page that was loaded.
+    let filterSql = '';
+    const filterParams = [];
+    if (role) { filterSql += ' AND u.role = ?'; filterParams.push(role); }
+    if (group) { filterSql += ' AND u.security_group_id = ?'; filterParams.push(group); }
+    if (status === 'disabled') filterSql += ' AND u.is_disabled = 1';
+    else if (status === 'active') filterSql += ' AND u.is_disabled = 0 AND u.is_active = 1';
+    else if (status === 'inactive') filterSql += ' AND u.is_disabled = 0 AND u.is_active = 0';
     const [users] = await pool.execute(
       `SELECT
          u.id, u.user_id, u.name, u.email, u.initials, u.role,
@@ -153,17 +162,17 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
        WHERE ${scope.sql}
-         AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
+         AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)${filterSql}
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
-      [...scope.params, like, like, like]
+      [...scope.params, like, like, like, ...filterParams]
     );
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM users u
        WHERE ${scope.sql}
-         AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
-      [...scope.params, like, like, like]
+         AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)${filterSql}`,
+      [...scope.params, like, like, like, ...filterParams]
     );
     res.json({ users, total });
   } catch (err) {

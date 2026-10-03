@@ -411,6 +411,8 @@ export default function DocumentsSection({ token, user }) {
             <div className="cm-empty"><p>No documents found.</p></div>
           ) : (
             <>
+              {/* Long document and folder names need room; the table scrolls sideways instead of squeezing them. */}
+              <div style={{ overflowX: 'auto' }}>
               <table className="cm-table">
                 <thead>
                   <tr>
@@ -441,14 +443,14 @@ export default function DocumentsSection({ token, user }) {
                         />
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
-                      <td style={{ fontWeight: 500, maxWidth: 200 }}>{d.name}</td>
+                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>{d.name}</td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span>{d.doc_type}</span>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getAuthoringSourceLabel(d)}</span>
                         </div>
                       </td>
-                      <td>{d.folder_name || '—'}</td>
+                      <td style={{ minWidth: 140 }}>{d.folder_name || '—'}</td>
                       <td style={{ textAlign: 'center' }}>{d.version || '1.0'}</td>
                       <td><StatusBadge status={d.status} /></td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{d.checked_out_by_name || '—'}</td>
@@ -458,10 +460,11 @@ export default function DocumentsSection({ token, user }) {
                   ))}
                 </tbody>
               </table>
+              </div>
               {totalPages > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
                   <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹ Prev</button>
-                  <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>Page {page} of {totalPages}</span>
+                  <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>Page {page} of {totalPages} · {total} documents</span>
                   <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next ›</button>
                 </div>
               )}

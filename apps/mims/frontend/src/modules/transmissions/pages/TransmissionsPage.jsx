@@ -22,18 +22,18 @@ function logScreenEvent(token, action, context) {
   }).catch(() => {})
 }
 
+// Stored status spelling varies by writer ("Sent", "SENT"), so it is compared in upper case.
 const STATUS_COLORS = {
-  Sent:    { bg: '#dcfce7', color: '#15803d' },
-  Failed:  { bg: '#fee2e2', color: '#dc2626' },
-  Pending: { bg: '#fef9c3', color: '#854d0e' },
-  Retry:   { bg: '#ffedd5', color: '#c2410c' },
+  SENT:    { bg: '#dcfce7', color: '#15803d' },
+  FAILED:  { bg: '#fee2e2', color: '#dc2626' },
+  PENDING: { bg: '#fef9c3', color: '#854d0e' },
+  RETRY:   { bg: '#ffedd5', color: '#c2410c' },
 }
-
-const TARGET_SYSTEMS = ['All', 'Argus', 'Veeva', 'TrackWise', 'EMEA', 'CRM', 'Other']
-const STATUSES       = ['All', 'Sent', 'Failed', 'Pending', 'Retry']
+const STATUS_LABELS = { SENT: 'Sent', FAILED: 'Failed', PENDING: 'Pending', RETRY: 'Retry', NO_TARGET: 'No target' }
+const statusLabel = s => STATUS_LABELS[String(s || '').toUpperCase()] || s
 
 function StatusBadge({ status }) {
-  const s = STATUS_COLORS[status] || { bg: '#f1f5f9', color: '#475569' }
+  const s = STATUS_COLORS[String(status || '').toUpperCase()] || { bg: '#f1f5f9', color: '#475569' }
   return (
     <span style={{
       display: 'inline-block',
@@ -44,7 +44,7 @@ function StatusBadge({ status }) {
       background: s.bg,
       color: s.color,
     }}>
-      {status || '—'}
+      {status ? statusLabel(status) : '—'}
     </span>
   )
 }
@@ -61,9 +61,12 @@ export default function TransmissionsPage() {
   const [total,      setTotal]      = useState(0)
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState(null)
+  const [statusCounts, setStatusCounts] = useState({})
+  const [systems,    setSystems]    = useState([])
 
   // filters
   const [search,     setSearch]     = useState('')
+  const [query,      setQuery]      = useState('')
   const [system,     setSystem]     = useState('All')
   const [status,     setStatus]     = useState('All')
   const [fromDate,   setFromDate]   = useState('')
@@ -75,6 +78,12 @@ export default function TransmissionsPage() {
     logScreenEvent(token, 'PAGE_VIEW', {})
   }, [token])
 
+  // The search runs on the server; wait for a pause in typing before asking.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -84,29 +93,22 @@ export default function TransmissionsPage() {
       if (status !== 'All')  params.set('status', status)
       if (fromDate)           params.set('from_date', fromDate)
       if (toDate)             params.set('to_date', toDate)
+      if (query)              params.set('q', query)
 
       const res  = await httpFetch(`${API}/admin/transmission-audit-trail?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to load transmissions.'); return }
 
-      let rows = data.entries || []
-      if (search.trim()) {
-        const q = search.trim().toLowerCase()
-        rows = rows.filter(r =>
-          String(r.case_id).toLowerCase().includes(q) ||
-          (r.target_system || '').toLowerCase().includes(q) ||
-          (r.user_name || '').toLowerCase().includes(q) ||
-          (r.payload_summary || '').toLowerCase().includes(q)
-        )
-      }
-      setEntries(rows)
+      setEntries(data.entries || [])
       setTotal(data.total || 0)
+      setStatusCounts(data.statusCounts || {})
+      setSystems(data.systems || [])
     } catch {
       setError('Network error.')
     } finally {
       setLoading(false)
     }
-  }, [fromDate, headers, page, search, status, system, toDate])
+  }, [fromDate, headers, page, query, status, system, toDate])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 
@@ -130,17 +132,19 @@ export default function TransmissionsPage() {
         <div className="tx-filters">
           <input
             className="tx-search"
-            placeholder="Search case ID, system, user, payload…"
+            placeholder="Search case number, system, user, payload…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
           <span className="tx-date-sep">System</span>
           <select className="tx-filter-select" value={system} onChange={e => { setSystem(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { target_system: e.target.value }) }}>
-            {TARGET_SYSTEMS.map(s => <option key={s}>{s}</option>)}
+            <option value="All">All</option>
+            {systems.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <span className="tx-date-sep">Status</span>
           <select className="tx-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { status: e.target.value }) }}>
-            {STATUSES.map(s => <option key={s}>{s}</option>)}
+            <option value="All">All</option>
+            {Object.keys(statusCounts).filter(Boolean).map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
           <span className="tx-date-sep">From</span>
           <input
@@ -179,20 +183,18 @@ export default function TransmissionsPage() {
           </div>
           <div className="tx-stat">
             <span className="tx-stat-val" style={{ color: '#15803d' }}>
-              {entries.filter(r => r.status === 'Sent').length}
+              {statusCounts.SENT || 0}
             </span>
-            <span className="tx-stat-label">Sent (this page)</span>
+            <span className="tx-stat-label">Sent</span>
           </div>
           <div className="tx-stat">
             <span className="tx-stat-val" style={{ color: '#dc2626' }}>
-              {entries.filter(r => r.status === 'Failed').length}
+              {statusCounts.FAILED || 0}
             </span>
-            <span className="tx-stat-label">Failed (this page)</span>
+            <span className="tx-stat-label">Failed</span>
           </div>
           <div className="tx-stat">
-            <span className="tx-stat-val">
-              {[...new Set(entries.map(r => r.target_system).filter(Boolean))].length}
-            </span>
+            <span className="tx-stat-val">{systems.length}</span>
             <span className="tx-stat-label">Systems</span>
           </div>
         </div>
@@ -206,7 +208,7 @@ export default function TransmissionsPage() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Case ID</th>
+                  <th>Case</th>
                   <th>Target System</th>
                   <th>Status</th>
                   <th>Response Code</th>
@@ -231,7 +233,7 @@ export default function TransmissionsPage() {
                         onClick={() => navigate(`/cases/${row.case_id}`)}
                         title="Open case"
                       >
-                        {row.case_id}
+                        {row.case_number || row.case_id}
                       </button>
                     </td>
                     <td>
