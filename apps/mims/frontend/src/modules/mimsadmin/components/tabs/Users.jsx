@@ -58,6 +58,7 @@ export default function Users() {
   const [fltStatus,  setFltStatus]  = useState('')   // '' | 'active' | 'inactive' | 'disabled'
   const [fltGroup,   setFltGroup]   = useState('')   // security_group_id
   const [page,       setPage]       = useState(0)
+  const [loadError,  setLoadError]  = useState('')
   const currentFilter = useMemo(() => ({ search, fltRole, fltStatus, fltGroup }), [search, fltRole, fltStatus, fltGroup])
   function applySavedView(f) {
     setPage(0)
@@ -81,15 +82,21 @@ export default function Users() {
   // Search and filters run on the server, so they reach every user, not only the loaded page.
   const loadUsers = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const qs = new URLSearchParams({
         search, role: fltRole, status: fltStatus, group: fltGroup,
         limit: PAGE_SIZE, offset: page * PAGE_SIZE,
       })
-      const data = await httpFetch(`${API}/users?${qs}`, { headers: H }).then(r => r.json())
+      const res = await httpFetch(`${API}/users?${qs}`, { headers: H })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not load users.')
       setUsers(data.users || [])
       setTotal(data.total || 0)
-    } catch { setUsers([]) }
+    } catch (e) {
+      setUsers([])
+      setLoadError(e instanceof TypeError ? 'Could not load users: the server could not be reached.' : e.message)
+    }
     finally   { setLoading(false) }
   }, [search, fltRole, fltStatus, fltGroup, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -143,7 +150,7 @@ export default function Users() {
             Add / Edit Users
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {loading ? 'Loading…' : `${total} user${total !== 1 ? 's' : ''} found`}
+            {loading ? 'Loading…' : loadError ? 'Not loaded' : `${total} user${total !== 1 ? 's' : ''} found`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -233,7 +240,10 @@ export default function Users() {
             {loading && (
               <tr><td colSpan={9} className="ma-usr-empty">Loading users…</td></tr>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && loadError && (
+              <tr><td colSpan={9} className="ma-usr-empty" role="alert">{loadError} <button className="ma-usr-edit-btn" onClick={() => loadUsers()}>Try again</button></td></tr>
+            )}
+            {!loading && !loadError && filtered.length === 0 && (
               <tr><td colSpan={9} className="ma-usr-empty">No users found.</td></tr>
             )}
             {!loading && filtered.map(u => (

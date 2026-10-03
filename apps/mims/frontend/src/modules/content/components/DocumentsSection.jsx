@@ -139,8 +139,11 @@ export default function DocumentsSection({ token, user }) {
   const [relationsDoc, setRelationsDoc] = useState(null)
   const [usageDoc, setUsageDoc] = useState(null)
 
+  const [loadError, setLoadError] = useState('')
+
   const loadDocs = useCallback(async (nextFilters = appliedFilters, nextPage = page) => {
     setLoading(true)
+    setLoadError('')
     try {
       const filterPayload = Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => value && value !== false))
       const params = new URLSearchParams({ page: nextPage, limit: LIMIT, ...filterPayload })
@@ -149,8 +152,10 @@ export default function DocumentsSection({ token, user }) {
         const d = await res.json()
         setDocs(Array.isArray(d) ? d : d.documents || [])
         setTotal(d.total || 0)
+      } else {
+        setLoadError('Could not load documents.')
       }
-    } catch { /* silent */ }
+    } catch { setLoadError('Could not load documents: the server could not be reached.') }
     setLoading(false)
   }, [token, appliedFilters, page]) // eslint-disable-line
 
@@ -407,6 +412,8 @@ export default function DocumentsSection({ token, user }) {
           )}
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
+          ) : loadError ? (
+            <div className="cm-empty" role="alert"><p>{loadError}</p><button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => loadDocs()}>Try again</button></div>
           ) : docs.length === 0 ? (
             <div className="cm-empty"><p>No documents found.</p></div>
           ) : (

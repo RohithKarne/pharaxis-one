@@ -11,6 +11,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { parseServerTime } from '../../../shared/utils/serverTime.js'
+import toast from '../../../shared/utils/toast'
 
 import EmailBody, { compactEmailBodyText } from '../components/EmailBody'
 import InboxFilterBar from '../components/InboxFilterBar'
@@ -652,7 +653,13 @@ export default function InboxPage() {
 
   async function patchInquiry(id, body) {
     if (inboxSource === 'db') {
-      await httpFetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => {})
+      // Assign, triage, priority, due date and lock all save here; a refusal must not look like success.
+      // An unreachable server, a server error and a sign-in refusal already get their own notice.
+      const res = await httpFetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => null)
+      if (res && !res.ok && res.status < 500 && res.status !== 401 && res.status !== 403) {
+        const d = await res.json().catch(() => ({}))
+        toast.error(`Not saved: ${String(d.error || 'the server refused the change').replace(/\.$/, '')}. Reload to see the message as it is.`, 8000)
+      }
     }
   }
 
