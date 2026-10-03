@@ -1,4 +1,4 @@
-/* Classic look for the CP Portal admin console (2026-10-03).
+/* Classic look for the CP Portal admin console and public portal (2026-10-03).
    Arial 13px, square corners, grey title bars, column-lined tables,
    light list-style navigation. Loaded after index.css; selectors use a
    :root prefix so they win without !important. !important is kept for
@@ -125,6 +125,38 @@
 :root .ck-panel-block--urgent { border-top: 1px solid var(--cp-border); padding-top: 0; }
 :root .ck-panel-block--urgent .ck-panel-title { color: #a30000; }
 :root .ck-issue-count { background: none; padding: 0; font-size: 12px; }
+
+/* ─── Public portal ────────────────────────────────────────
+   Colours come from the client's branding (--pp-*), never fixed here. */
+:root .pp-root { background: #fff; }
+:root .pp-header { border-top: 4px solid var(--pp-primary); border-bottom: 1px solid #c9ced6; }
+:root .pp-nav-link, :root .pp-nav-dropdown-btn { font-size: 13px; font-weight: normal; color: #333; }
+:root .pp-btn { font-weight: bold; }
+:root .pp-btn-outline { background: #f5f6f7; border: 1px solid #a9b2bd; }
+:root .pp-hero { background: #eef0f4; border-bottom: 1px solid #c9ced6; padding: 24px 0; }
+:root .pp-hero-title { font-size: 26px; font-weight: bold; color: #222; }
+:root .pp-hero-subtitle { font-size: 14px; color: #333; }
+:root .pp-hero-search-wrap { border: 1px solid #a9b2bd; background: #fff; }
+:root .pp-hero-search-btn { border-radius: 2px; }
+:root .pp-search-suggestions { margin-top: 8px; }
+:root .pp-search-suggestions button, :root .pp-search-suggestions a { border: 0; background: none; color: var(--pp-link); text-decoration: underline; padding: 0 4px; font-size: 13px; }
+:root .pp-safety-card, :root .pp-quick-links, :root .pp-top-task-card, :root .pp-feature-card,
+:root .pp-update-panel, :root .pp-safety-info-box { border: 1px solid #c9ced6; background: #fff; box-shadow: none; transform: none; }
+:root .pp-quick-links-title, :root .pp-update-panel-head { background: #dfe3ea; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #c9ced6; }
+:root .pp-update-panel-head h2 { font-size: 14px; }
+:root .pp-top-task-icon, :root .pp-feature-icon, :root .pp-safety-card-icon, :root .pp-feature-card .pp-feature-icon { display: none; }
+:root .pp-top-task-card, :root .pp-feature-card { min-height: 0; padding: 12px 14px; }
+:root .pp-top-task-card:hover, :root .pp-feature-card:hover { background: #fff8e6; }
+:root .pp-top-task-body h3, :root .pp-feature-title { font-size: 15px; color: var(--pp-link); text-decoration: underline; }
+:root .pp-feature-link, :root .pp-top-task-body > span, :root .pp-update-panel-head a { color: var(--pp-link); text-decoration: underline; font-weight: normal; }
+:root .pp-section-heading h2 { font-size: 16px; border-bottom: 2px solid var(--pp-primary); padding-bottom: 4px; width: 100%; }
+:root .pp-chip { border-radius: 0; }
+:root .pp-auth-card { border-radius: 0; box-shadow: none; border: 1px solid #b9c2cd; padding: 18px 20px; max-width: 420px; }
+:root .pp-field input, :root .pp-field textarea, :root .pp-field select { border-radius: 0; border-color: #a9b2bd; padding: 6px 8px; }
+:root .pp-cta-section { padding: 16px 0; }
+:root .pp-cta-card { background: #f5f6f7; border: 1px solid #c9ced6; color: #222; padding: 14px 18px; }
+:root .pp-cta-card h2, :root .pp-cta-card p { color: #222; }
+:root .pp-cta-card .pp-btn { color: var(--pp-btn-text); background: var(--pp-btn); }
 
 /* ─── Inline styles: square corners, no drop shadows ──────── */
 :root [style*="border-radius: 4px"], :root [style*="border-radius: 5px"], :root [style*="border-radius: 6px"],
