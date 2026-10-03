@@ -4,7 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import Icon from '../../shared/components/Icon'
 import { formatDate as formatDayOnly, formatDateTime } from '../../shared/utils/datetime'
-import { STATUS_LABELS } from '../utils/submissionStatus'
+import { STATUS_LABELS, statusLabel } from '../utils/submissionStatus'
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',
@@ -19,6 +19,10 @@ export default function MySubmissionsPage() {
   const [subs, setSubs]   = useState([])
   const [screening, setScreening] = useState([])
   const [loading, setLoading] = useState(true)
+  // CPPM-111: find a submission — words or reference, type, status; answered first.
+  const [query, setQuery]       = useState('')
+  const [typeFilter, setTypeFilter]     = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   // CPPM-4: this endpoint returns the same list plus each request's history.
   // CPPM-63: and the conversation after the answer, and the screening question for a reply.
@@ -53,6 +57,18 @@ export default function MySubmissionsPage() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
   }
 
+  const q = query.trim().toLowerCase()
+  const shown = subs
+    .filter(s => !typeFilter || s.submission_type === typeFilter)
+    .filter(s => !statusFilter || statusLabel(s.status) === statusFilter)
+    .filter(s => !q || [`CP-${String(s.id).padStart(6, '0')}`, s.request_text, s.answer, s.external_ref]
+      .some(v => String(v || '').toLowerCase().includes(q)))
+    // Answered first, newest first within each group (the list arrives newest first).
+    .sort((a, b) => (b.answer ? 1 : 0) - (a.answer ? 1 : 0))
+  const typesPresent = [...new Set(subs.map(s => s.submission_type))]
+  const statusesPresent = [...new Set(subs.map(s => statusLabel(s.status)))]
+  const filtering = !!(q || typeFilter || statusFilter)
+
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -74,8 +90,32 @@ export default function MySubmissionsPage() {
           <Link to={`/portal/${clientCode}/submit`} className="pp-btn pp-btn-primary">Submit a Request</Link>
         </div>
       ) : (
+        <>
+        <div className="pp-filter-bar" role="search" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <input className="pp-search-input" type="search" value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="Search by reference or words" aria-label="Search your submissions" style={{ flex: '1 1 220px' }} />
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label="Filter by type">
+            <option value="">All types</option>
+            {typesPresent.map(t => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {statusesPresent.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+        {filtering && (
+          <p role="status" style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 12px' }}>
+            {shown.length} of {subs.length} submissions shown.
+          </p>
+        )}
+        {shown.length === 0 ? (
+          <div className="pp-empty-state">
+            <p>No submissions match your search.</p>
+            <button type="button" className="pp-btn pp-btn-outline" onClick={() => { setQuery(''); setTypeFilter(''); setStatusFilter('') }}>Clear search and filters</button>
+          </div>
+        ) : (
         <div className="pp-submissions-list">
-          {subs.map(s => {
+          {shown.map(s => {
             const status = STATUS_LABELS[s.status] || { label: 'In progress', cls: 'pp-status-pending' }
 
             return (
@@ -163,6 +203,8 @@ export default function MySubmissionsPage() {
             )
           })}
         </div>
+        )}
+        </>
       )}
     </div>
   )
