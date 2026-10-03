@@ -54,7 +54,7 @@ const {
   normalizeRole, parseRolesCsv, canViewSensitiveField, maskStringValue, applySensitiveMask,
   buildCaseOwnershipClause,
   normalizeFieldOverrides, normalizeAeTransmissionPriority, normalizePcTransmissionPriority,
-  buildGlobalCaseSearchClause, logResponseError, writeCaseAudit, writeAuditLog, pushNotification, withTxn,
+  buildGlobalCaseSearchClause, getCaseListColumns, logResponseError, writeCaseAudit, writeAuditLog, pushNotification, withTxn,
   verifyCaseOrg, findActivePicklistEntry, assertActivePicklistValue,
   buildReporterPatientSchemaSnapshot, buildCaseSchemaSnapshot,
   loadSensitiveFieldConfigMap, emitOutboundEvent,
@@ -272,8 +272,9 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
         END AS last_comm_box` : `
         0 AS communication_count, NULL AS last_comm_at, NULL AS last_comm_box`;
 
+    const caseColumns = await getCaseListColumns('c');
     let query = `
-      SELECT c.*,
+      SELECT ${caseColumns},
         o.name  AS org_name,
         s.name  AS site_name,
         ws.name AS status_name,
@@ -399,8 +400,9 @@ router.get('/cases/my', authenticate, async (req, res) => {
       orgClause = ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
+    const caseColumns = await getCaseListColumns('c');
     const [rows] = await pool.execute(
-      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
+      `SELECT ${caseColumns}, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
               (SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id) AS sla_due
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
@@ -435,8 +437,9 @@ router.get('/cases/unassigned', authenticate, requireScopedCapability('case.view
       orgClause += ` AND ${buildCaseOwnershipClause('c')}`;
       params.push(req.user.userId, req.user.userId);
     }
+    const caseColumns = await getCaseListColumns('c');
     const [rows] = await pool.execute(
-      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
+      `SELECT ${caseColumns}, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
               (SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id) AS sla_due
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
