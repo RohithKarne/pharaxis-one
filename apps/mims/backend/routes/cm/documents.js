@@ -937,10 +937,10 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (doc.status !== 'Approved') return res.status(400).json({ error: 'Only Approved documents can be published.' });
-    // Owner lock enforcement — only the document owner can publish
-    if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Only the document owner can publish. Ask the owner to release the document first.' });
-    }
+    // MIPM-180: no owner lock on publish. The owner is the author who checked it in,
+    // and authors do not hold content.publish, so with the lock nobody could publish
+    // an author's document; "release" would have reset it to Draft. Publishing needs
+    // content.publish and the publisher's e-signature (below).
 
     const evidenceGate = await enforceEvidenceGate({
       orgId: doc.folder_org_id || req.user.orgId,
@@ -1281,9 +1281,6 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
       if (action === 'publish') {
         if (doc.status !== 'Approved') {
           results.failed.push({ id: docId, reason: `Cannot publish from status: ${doc.status}` }); continue;
-        }
-        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
-          results.failed.push({ id: docId, reason: 'Owner lock — not your document' }); continue;
         }
 
         const evidenceGate = await enforceEvidenceGate({
