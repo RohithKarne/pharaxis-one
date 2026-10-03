@@ -76,6 +76,7 @@ export default function CaseFormWizard({
               <button
                 key={step.id}
                 type="button"
+                aria-label={`Step ${step.id}: ${step.label}`}
                 onClick={() => setActiveStep(step.id)}
                 style={{
                   display: 'flex',
