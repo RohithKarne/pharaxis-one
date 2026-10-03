@@ -40,8 +40,21 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
           || visible('.mims-page-body input[type="search"], .mims-page-body input[placeholder^="Search" i]')
         if (search) { e.preventDefault(); search.focus(); search.select() }
       } else if (e.key === 'n') {
-        const newCase = document.querySelector('.mims-new-case-btn')
-        if (newCase && !newCase.disabled) { e.preventDefault(); newCase.click() }
+        // The New Case form opens from Case Management; from any other screen, go there first.
+        const openForm = () => {
+          const btn = document.querySelector('.cf-new-case-btn')
+          if (!btn || btn.disabled) return false
+          btn.click()
+          return true
+        }
+        const goToCases = document.querySelector('.mims-new-case-btn')
+        if (openForm()) e.preventDefault()
+        else if (goToCases && !goToCases.disabled) {
+          e.preventDefault()
+          goToCases.click()
+          let tries = 0
+          const timer = setInterval(() => { if (openForm() || ++tries > 30) clearInterval(timer) }, 100)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
