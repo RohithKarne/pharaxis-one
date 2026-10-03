@@ -2629,6 +2629,11 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
       );
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
+      // MIPM-171: the signature and its reason belong on the case trail too — they
+      // were only in the system log, so the case's E-signatures view was empty.
+      if (['APPROVED', 'SENT'].includes(responseStatus)) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_ESIGN', `MI response ${responseStatus}: e-signature reason`, null, reason, conn);
+      }
       // Bridge row 8: an answer going out is a change to the case, so a connected
       // portal's change list picks it up and shows the person their answer.
       if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
