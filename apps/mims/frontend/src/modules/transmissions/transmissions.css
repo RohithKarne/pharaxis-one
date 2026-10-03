@@ -41,7 +41,7 @@
   background: #f1f5f9;
   color: #334155;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -71,7 +71,7 @@
   min-width: 220px;
   padding: 8px 12px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   color: #1e293b;
   background: #fff;
@@ -80,7 +80,7 @@
 .tx-filter-select {
   padding: 8px 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   color: #334155;
   background: #fff;
@@ -90,7 +90,7 @@
 .tx-filter-date {
   padding: 7px 9px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   color: #334155;
   background: #fff;
@@ -106,7 +106,7 @@
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -130,10 +130,10 @@
   padding: 14px 20px;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 2px;
   min-width: 110px;
   gap: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: none;
 }
 
 .tx-stat-val {
@@ -148,7 +148,7 @@
   color: #64748b;
   text-align: center;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 /* Error */
@@ -157,7 +157,7 @@
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
-  border-radius: 8px;
+  border-radius: 2px;
   font-size: 13px;
 }
 
@@ -165,8 +165,8 @@
 .tx-table-wrap {
   overflow-x: auto;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  border-radius: 2px;
+  box-shadow: none;
 }
 
 .tx-table {
@@ -189,7 +189,7 @@
   white-space: nowrap;
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 .tx-table td {
@@ -242,7 +242,7 @@
   padding: 2px 9px;
   background: #eff6ff;
   color: #1d4ed8;
-  border-radius: 10px;
+  border-radius: 2px;
   font-size: 11px;
   font-weight: 600;
 }
@@ -293,7 +293,7 @@
   background: #fff;
   color: #334155;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -328,8 +328,8 @@
 .tx-table-wrap {
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid #dbe3ef;
-  border-radius: 20px;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  border-radius: 2px;
+  box-shadow: none;
 }
 
 .tx-header {
@@ -348,7 +348,7 @@
 .tx-refresh-btn,
 .tx-clear-btn {
   min-height: 36px;
-  border-radius: 12px;
+  border-radius: 2px;
 }
 
 .tx-filters {
@@ -360,7 +360,7 @@
 .tx-filter-select,
 .tx-filter-date {
   min-height: 40px;
-  border-radius: 12px;
+  border-radius: 2px;
   border-color: #d7dfeb;
   background: #fbfcff;
 }
@@ -376,7 +376,7 @@
   align-items: flex-start;
   min-width: 0;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: 2px;
   box-shadow: none;
   background: #f7f9fc;
 }

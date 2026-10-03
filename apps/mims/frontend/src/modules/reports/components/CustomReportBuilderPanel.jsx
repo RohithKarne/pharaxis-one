@@ -110,7 +110,7 @@ export default function CustomReportBuilderPanel({ headers, onSavePreset }) {
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Build, filter, group, and visualize custom operational reports</p>
         </div>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : '💾 Save Custom Report'}
+          {saving ? 'Saving…' : 'Save Custom Report'}
         </button>
       </div>
 

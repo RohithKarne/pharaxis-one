@@ -360,8 +360,8 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-spacer" />
-        <button className="ma-pt-action-btn" onClick={exportCsv} title="Download current filtered view as CSV">⬇ Export CSV</button>
-        <button className="ma-pt-action-btn" onClick={() => setModal({ mode: 'import' })} title="Upload CSV to bulk-create/update values">⬆ Import CSV</button>
+        <button className="ma-pt-action-btn" onClick={exportCsv} title="Download current filtered view as CSV">Export CSV</button>
+        <button className="ma-pt-action-btn" onClick={() => setModal({ mode: 'import' })} title="Upload CSV to bulk-create/update values">Import CSV</button>
         <button className="ma-pt-add-btn" onClick={() => setModal({ mode: 'create' })}>+ Add Value</button>
       </div>
 
@@ -760,7 +760,7 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
                     <label>Tenant <span className="req">*</span></label>
                     <select className="ma-pt-select" value={form.org_id} onChange={e => set('org_id', e.target.value)}>
                       <option value="">— Select tenant —</option>
-                      {tenants.length > 1 && <option value="all">★ All Tenants (bulk-apply)</option>}
+                      {tenants.length > 1 && <option value="all">All Tenants (bulk apply)</option>}
                       {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>

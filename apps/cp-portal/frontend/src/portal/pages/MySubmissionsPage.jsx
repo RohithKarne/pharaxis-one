@@ -159,7 +159,7 @@ export default function MySubmissionsPage() {
                 {/* Expandable Activity Details */}
                 <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
-                    🔍 View Request Details & Activity History
+                    View Request Details & Activity History
                   </summary>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>Submission Summary:</div>

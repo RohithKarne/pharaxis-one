@@ -72,7 +72,7 @@ export default function SmartFields() {
 
   return (
     <div style={pageShell}>
-      <Header flash={flash} title="Smart Field Rules" sub="Smart defaults · Auto-calc · Typeahead sources" />
+      <Header flash={flash} title="Smart Field Rules" sub="Default values, calculated fields and typeahead sources" />
       <div style={body}>
         {/* Left list */}
         <div style={leftCol}>

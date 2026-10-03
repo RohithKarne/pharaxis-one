@@ -85,7 +85,7 @@ export default function ExceptionLogsPage() {
         <div className="mims-home-hero">
           <div>
             <h1>Exception Logs</h1>
-            <p>Centralized exception stream with traceable exception IDs for API and client failures.</p>
+            <p>Errors recorded by the server and by browsers. Each one has an exception ID.</p>
           </div>
           <div className="mims-home-hero-actions">
             <button className="btn btn-outline" onClick={() => load(page, query)} disabled={loading}>Refresh</button>

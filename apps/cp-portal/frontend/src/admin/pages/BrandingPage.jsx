@@ -220,6 +220,7 @@ export default function BrandingPage() {
               <label>Body Font</label>
               <select value={branding.font_family || ''} onChange={e => set('font_family', e.target.value)}>
                 <option value="">Default (System Font)</option>
+                <option value="Arial, Helvetica, sans-serif">Arial (Default)</option>
                 <option value="Inter, sans-serif">Inter</option>
                 <option value="'Roboto', sans-serif">Roboto</option>
                 <option value="'Open Sans', sans-serif">Open Sans</option>
@@ -233,7 +234,8 @@ export default function BrandingPage() {
             </div>
             <div className="cp-field">
               <label>Heading Font</label>
-              <select value={branding.heading_font || 'Inter, sans-serif'} onChange={e => set('heading_font', e.target.value)}>
+              <select value={branding.heading_font || 'Arial, Helvetica, sans-serif'} onChange={e => set('heading_font', e.target.value)}>
+                <option value="Arial, Helvetica, sans-serif">Arial (Default)</option>
                 <option value="Inter, sans-serif">Inter</option>
                 <option value="'Roboto', sans-serif">Roboto</option>
                 <option value="'Open Sans', sans-serif">Open Sans</option>
@@ -252,10 +254,11 @@ export default function BrandingPage() {
             </div>
             <div className="cp-field">
               <label>Border Radius</label>
-              <select value={branding.border_radius || '8px'} onChange={e => set('border_radius', e.target.value)}>
+              <select value={branding.border_radius || '2px'} onChange={e => set('border_radius', e.target.value)}>
                 <option value="0px">0px (Sharp)</option>
+                <option value="2px">2px (Default)</option>
                 <option value="4px">4px (Subtle)</option>
-                <option value="8px">8px (Default)</option>
+                <option value="8px">8px (Soft)</option>
                 <option value="12px">12px (Rounded)</option>
                 <option value="16px">16px (Pill)</option>
               </select>
@@ -300,7 +303,7 @@ export default function BrandingPage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
-        {saved && <div className="cp-success">✓ Branding saved.</div>}
+        {saved && <div className="cp-success">Branding saved.</div>}
 
         <div className="cp-form-actions">
           <LoadingButton onClick={handleSave} disabled={saving}>Save Branding</LoadingButton>

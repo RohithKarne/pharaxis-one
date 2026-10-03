@@ -25,8 +25,8 @@ export default function AdminCrmIntPanel({ config, setConfig, status, H }) {
     try {
       const r = await httpFetch('/api/admin/integrations/crm/test-connection', { method: 'POST', headers: H })
       const d = await r.json()
-      setTestResult(d.success ? '✓ CRM connection verified' : '✗ ' + (d.error || 'Connection failed'))
-    } catch { setTestResult('✗ Connection failed — check credentials') }
+      setTestResult(d.success ? 'CRM connection verified' : (d.error || 'Connection failed'))
+    } catch { setTestResult('Connection failed. Please check credentials.') }
     finally { setTestLoading(false) }
   }
 
@@ -123,7 +123,7 @@ export default function AdminCrmIntPanel({ config, setConfig, status, H }) {
       <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save Settings'}</button>
         <button className="btn btn-secondary" disabled={testLoading} onClick={testConnection}>{testLoading ? 'Testing…' : 'Test Connection'}</button>
-        {testResult && <span style={{ fontSize: 13, color: testResult.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
+        {testResult && <span style={{ fontSize: 13, color: testResult.endsWith('connection verified') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
       </div>
 
       <div style={{ marginTop: 32 }}>

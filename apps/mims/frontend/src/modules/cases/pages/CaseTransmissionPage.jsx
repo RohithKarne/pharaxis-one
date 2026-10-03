@@ -97,7 +97,7 @@ export default function CaseTransmissionPage() {
     <MIMSLayout showStatStrip={false} surfaceVariant="workspace" compact>
       <div className="cf-form-page">
         <div className="cf-form-header">
-          <button className="cf-back-btn" onClick={() => navigate(`/cases/${id}`)}>← Back to case</button>
+          <button className="cf-back-btn" onClick={() => navigate(`/cases/${id}`)}>Back to case</button>
           <div className="cf-form-header-info">
             <span className="cf-form-case-num">{data.payload?.source?.case_number || `Case ${id}`}</span>
             <span className="cf-form-type-badge" style={{ background: data.case_type === 'AE' ? '#dc2626' : '#d97706' }}>

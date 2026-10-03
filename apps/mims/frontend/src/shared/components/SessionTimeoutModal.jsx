@@ -41,7 +41,6 @@ export default function SessionTimeoutModal({ visible, remainingSeconds, onStay 
         boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
         border: `2px solid ${isUrgent ? '#dc3545' : 'var(--border, #dee2e6)'}`
       }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }}>⏱</div>
         <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary, #212529)' }}>
           Session Expiring Soon
         </h3>

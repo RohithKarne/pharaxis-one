@@ -52,7 +52,7 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
             <button key={m} className={`cm-btn cm-btn-sm ${mode === m ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
               style={{ textTransform: 'capitalize', opacity: saving ? 0.6 : 1 }}
               onClick={() => toggleMode(m)} disabled={saving}>
-              {m === 'sequential' ? '⬇ Seq' : '⇉ Par'}
+              {m === 'sequential' ? 'Sequential' : 'Parallel'}
             </button>
           ))}
         </div>
@@ -351,7 +351,7 @@ export default function DocumentsSection({ token, user }) {
             }}>Filter</button>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-            <input className="cm-form-input" style={{ width: 300 }} placeholder="🔍 Full-text content search…" value={ftQuery}
+            <input className="cm-form-input" style={{ width: 300 }} placeholder="Full-text content search…" value={ftQuery}
               onChange={e => { setFtQuery(e.target.value); if (!e.target.value) setFtResults(null) }}
               onKeyDown={async e => {
                 if (e.key === 'Enter' && ftQuery.trim().length >= 2) {
@@ -408,7 +408,7 @@ export default function DocumentsSection({ token, user }) {
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
           ) : docs.length === 0 ? (
-            <div className="cm-empty"><div className="cm-empty-icon">📄</div><p>No documents found. Create your first one!</p></div>
+            <div className="cm-empty"><p>No documents found.</p></div>
           ) : (
             <>
               <table className="cm-table">
@@ -472,7 +472,7 @@ export default function DocumentsSection({ token, user }) {
 
       {subTab === 'checkedin' && (
         checkedInDocs.length === 0 ? (
-          <div className="cm-empty"><div className="cm-empty-icon">📥</div><p>No documents currently checked in (Pending review).</p></div>
+          <div className="cm-empty"><p>No documents currently checked in (Pending review).</p></div>
         ) : (
           <table className="cm-table">
             <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Last Updated</th><th>Actions</th></tr></thead>
@@ -500,7 +500,7 @@ export default function DocumentsSection({ token, user }) {
 
       {subTab === 'checkedout' && (
         checkedOutDocs.length === 0 ? (
-          <div className="cm-empty"><div className="cm-empty-icon">📤</div><p>No documents currently checked out.</p></div>
+          <div className="cm-empty"><p>No documents currently checked out.</p></div>
         ) : (
           <table className="cm-table">
             <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Checked Out By</th><th>Checked Out At</th><th>Auto-releases At</th><th>Actions</th></tr></thead>
@@ -520,7 +520,7 @@ export default function DocumentsSection({ token, user }) {
                     <td style={{ fontSize: 12 }}>
                       {expiresAt ? (
                         <span style={{ color: isExpiringSoon ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isExpiringSoon ? 600 : 400 }}>
-                          {isExpiringSoon ? '⚠ ' : ''}auto-releases {expiresAt.toLocaleString()}
+                          {isExpiringSoon ? 'Soon: ' : ''}auto-releases {expiresAt.toLocaleString()}
                         </span>
                       ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
@@ -540,7 +540,7 @@ export default function DocumentsSection({ token, user }) {
 
       {subTab === 'reviews' && (
         reviews.length === 0 ? (
-          <div className="cm-empty"><div className="cm-empty-icon">✅</div><p>No review tasks assigned to you.</p></div>
+          <div className="cm-empty"><p>No review tasks assigned to you.</p></div>
         ) : (
           <table className="cm-table">
             <thead>

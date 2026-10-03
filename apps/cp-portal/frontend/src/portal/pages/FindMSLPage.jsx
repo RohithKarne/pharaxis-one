@@ -115,24 +115,19 @@ END:VCALENDAR`
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><span>👨‍⚕️</span><p>No MSLs found matching your search.</p></div>
+        <div className="pp-empty-state"><p>No MSLs found matching your search.</p></div>
       ) : (
         <div className="pp-msl-grid">
           {filtered.map(m => (
             <div key={m.id} className="pp-msl-card">
               <div className="pp-msl-avatar">{(m.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
               <div className="pp-msl-info">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                  <div className="pp-msl-name">{m.name}</div>
-                  <span style={{ background: '#DEF7EC', color: '#03543F', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12 }}>
-                    🟢 Available Today
-                  </span>
-                </div>
+                <div className="pp-msl-name">{m.name}</div>
                 {m.title     && <div className="pp-msl-title">{m.title}</div>}
-                {m.specialty && <div className="pp-msl-specialty">🔬 {m.specialty}</div>}
-                {m.region    && <div className="pp-msl-region">📍 {m.region}{m.territory ? ` · ${m.territory}` : ''}</div>}
-                {m.email     && <a href={`mailto:${m.email}`} className="pp-msl-email">✉️ {m.email}</a>}
-                {m.phone     && <div className="pp-msl-phone">📞 {m.phone}</div>}
+                {m.specialty && <div className="pp-msl-specialty">{m.specialty}</div>}
+                {m.region    && <div className="pp-msl-region">{m.region}{m.territory ? ` · ${m.territory}` : ''}</div>}
+                {m.email     && <a href={`mailto:${m.email}`} className="pp-msl-email">{m.email}</a>}
+                {m.phone     && <div className="pp-msl-phone">{m.phone}</div>}
                 <button
                   onClick={() => openBooking(m)}
                   style={{ marginTop: 10, padding: '6px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
@@ -155,14 +150,13 @@ END:VCALENDAR`
             </div>
             {bookingDone ? (
               <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
                 <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
                 <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 16 }}>
                   Your request has been received. The MSL team will follow up with you shortly.
                 </div>
                 <div style={{ marginBottom: 20 }}>
                   <button className="cp-btn cp-btn-outline" onClick={() => downloadIcsCalendar(bookingMSL, bookingForm)} style={{ fontSize: 13, fontWeight: 600 }}>
-                    📅 Add to Calendar (.ics)
+                    Add to Calendar (.ics)
                   </button>
                 </div>
                 <button className="cp-btn cp-btn-primary" onClick={() => setBookingMSL(null)}>Close</button>

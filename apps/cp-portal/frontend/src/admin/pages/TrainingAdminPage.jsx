@@ -74,13 +74,13 @@ export default function TrainingAdminPage() {
     setMsg('')
     try {
       await call(editingId ? `${api}/${editingId}` : api, editingId ? 'PUT' : 'POST', form)
-      setMsg(editingId ? '✅ Changes saved.' : '✅ Module created. Add its questions, then set it to Available.')
+      setMsg(editingId ? 'Changes saved.' : 'Module created. Add its questions, then set it to Available.')
       setEditingId(null)
       setForm(EMPTY)
       const list = await loadModules()
       if (qModule) setQModule(list.find(m => m.id === qModule.id) || null)
     } catch (err) {
-      setMsg(`❌ ${err.message}`)
+      setMsg(`✕ ${err.message}`)
     }
   }
 
@@ -103,7 +103,7 @@ export default function TrainingAdminPage() {
       if (qModule?.id === m.id) setQModule(null)
       loadModules()
     } catch (err) {
-      setMsg(`❌ ${err.message}`)
+      setMsg(`✕ ${err.message}`)
     }
   }
 
@@ -129,10 +129,10 @@ export default function TrainingAdminPage() {
       const url = qEditingId ? `${api}/${qModule.id}/questions/${qEditingId}` : `${api}/${qModule.id}/questions`
       await call(url, qEditingId ? 'PUT' : 'POST', qForm)
       setQForm(EMPTY_Q); setQEditingId(null)
-      setQMsg('✅ Saved. The module is now a new version.')
+      setQMsg('Saved. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
-      setQMsg(`❌ ${err.message}`)
+      setQMsg(`✕ ${err.message}`)
     }
   }
 
@@ -140,10 +140,10 @@ export default function TrainingAdminPage() {
     if (!confirm('Remove this question?')) return
     try {
       await call(`${api}/${qModule.id}/questions/${q.id}`, 'DELETE')
-      setQMsg('✅ Removed. The module is now a new version.')
+      setQMsg('Removed. The module is now a new version.')
       refreshQuestions()
     } catch (err) {
-      setQMsg(`❌ ${err.message}`)
+      setQMsg(`✕ ${err.message}`)
     }
   }
 
@@ -172,7 +172,7 @@ export default function TrainingAdminPage() {
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      setCMsg(`❌ ${err.message}`)
+      setCMsg(`✕ ${err.message}`)
     }
   }
 
@@ -232,7 +232,7 @@ export default function TrainingAdminPage() {
             </select>
           </div>
           {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
-          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: 'var(--cp-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
             {editingId ? 'Save changes' : 'Create module'}
           </button>
           {editingId && (
@@ -270,9 +270,9 @@ export default function TrainingAdminPage() {
                     <td style={{ padding: 8 }}>{m.pass_count} / {m.attempt_count}</td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
                       <CanChange area="training">
-                      <button onClick={() => startEdit(m)} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                      <button onClick={() => startEdit(m)} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>
                       </CanChange>
-                      <button onClick={() => openQuestions(m)} style={{ ...link, color: '#6B3FA0' }}>Questions</button>
+                      <button onClick={() => openQuestions(m)} style={{ ...link, color: 'var(--cp-primary)' }}>Questions</button>
                       <CanChange area="training">
                       <button onClick={() => handleDelete(m)} style={{ ...link, color: '#DC2626' }}>Delete</button>
                       </CanChange>
@@ -298,10 +298,10 @@ export default function TrainingAdminPage() {
                 <li key={q.id} style={{ marginBottom: 10, fontSize: 13 }}>
                   <div style={{ fontWeight: 600 }}>{q.question}</div>
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0' }}>
-                    {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{i === q.correct_index ? '✓' : '○'} {o}</li>)}
+                    {q.options.map((o, i) => <li key={i} style={{ color: i === q.correct_index ? '#047857' : '#4B5563' }}>{o}{i === q.correct_index ? ' (correct answer)' : ''}</li>)}
                   </ul>
                   <CanChange area="training">
-                  <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: '#6B3FA0' }}>Edit</button>
+                  <button onClick={() => { setQEditingId(q.id); setQForm({ question: q.question, options: q.options, correct_index: q.correct_index }); setQMsg('') }} style={{ ...link, color: 'var(--cp-primary)' }}>Edit</button>
                   </CanChange>
                   <CanChange area="training">
                   <button onClick={() => deleteQuestion(q)} style={{ ...link, color: '#DC2626' }}>Remove</button>
@@ -324,7 +324,7 @@ export default function TrainingAdminPage() {
               </div>
             ))}
             {qForm.options.length < 6 && (
-              <button type="button" onClick={() => setQForm(f => ({ ...f, options: [...f.options, ''] }))} style={{ ...link, color: '#6B3FA0', marginBottom: 10 }}>+ Add an answer</button>
+              <button type="button" onClick={() => setQForm(f => ({ ...f, options: [...f.options, ''] }))} style={{ ...link, color: 'var(--cp-primary)', marginBottom: 10 }}>+ Add an answer</button>
             )}
             {qMsg && <div style={{ fontSize: 13, margin: '6px 0 10px', fontWeight: 600 }}>{qMsg}</div>}
             <div>

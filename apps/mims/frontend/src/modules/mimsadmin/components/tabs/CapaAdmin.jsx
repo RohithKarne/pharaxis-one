@@ -58,7 +58,7 @@ export default function CapaAdmin() {
       method: 'POST', headers: H, body: JSON.stringify({ to_status: toStatus, note }),
     })
     if (!r.ok) { showFlash('Transition failed', 'error'); return }  // WP7: don't claim success on a failed transition
-    showFlash(`→ ${toStatus}`); loadDetails(id); load()
+    showFlash(`Moved to ${toStatus}`); loadDetails(id); load()
   }
 
   async function addAction() {
@@ -157,7 +157,7 @@ export default function CapaAdmin() {
                       style={{
                         ...ghostBtn, fontSize: 11, padding: '4px 10px',
                         opacity: selected.status === s ? 0.4 : 1,
-                      }}>→ {s}</button>
+                      }}>Move to {s}</button>
                   ))}
                 </div>
                 <button onClick={logEffectiveness} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px', marginTop: 8 }}>Log effectiveness</button>
@@ -172,13 +172,13 @@ export default function CapaAdmin() {
                 <div key={a.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <strong>{a.action_type}</strong>
-                    {a.completed_at ? <span style={chip('#1a7a3f')}>✓ done</span> : (
+                    {a.completed_at ? <span style={chip('#1a7a3f')}>Done</span> : (
                       <button onClick={() => completeAction(a.id)} style={miniBtn('#1a7a3f')}>Complete</button>
                     )}
                   </div>
                   <div style={{ marginTop: 3 }}>{a.description}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                    {a.assigned_to_name && `→ ${a.assigned_to_name}`}
+                    {a.assigned_to_name && `Assigned to ${a.assigned_to_name}`}
                     {a.target_date && ` · due ${a.target_date.slice(0, 10)}`}
                     {a.completed_at && ` · completed ${new Date(a.completed_at).toLocaleDateString()}`}
                   </div>

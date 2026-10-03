@@ -47,10 +47,10 @@ function groupPrivilegesByCategory(privileges) {
   }, {})
 }
 
-function cardStyle(accent = '#0f766e') {
+// Plain bordered panel; callers still pass an accent colour, which is no longer drawn.
+function cardStyle() {
   return {
     border: '1px solid var(--border)',
-    borderLeft: `4px solid ${accent}`,
     borderRadius: 10,
     padding: 16,
     background: 'var(--surface)',
@@ -60,8 +60,8 @@ function cardStyle(accent = '#0f766e') {
 
 function buttonStyle(primary = false) {
   return {
-    border: primary ? '1px solid #0f766e' : '1px solid var(--border)',
-    background: primary ? '#0f766e' : 'var(--surface)',
+    border: primary ? '1px solid var(--primary)' : '1px solid var(--border)',
+    background: primary ? 'var(--primary)' : 'var(--surface)',
     color: primary ? '#fff' : 'var(--text-primary)',
     borderRadius: 8,
     padding: '8px 12px',
@@ -360,18 +360,15 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     const summary = overview?.summary || {}
     return (
       <div style={{ display: 'grid', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
+        <div className="summary-line">
           {[
-            ['Users', summary.users || 0, '#0f766e'],
-            ['Sites', summary.sites || 0, '#2563eb'],
-            ['Groups', summary.groups || 0, '#7c3aed'],
-            ['Pending Requests', summary.pending_requests || 0, '#d97706'],
-            ['Validation Issues', summary.validation_issues || 0, '#dc2626'],
-          ].map(([label, value, color]) => (
-            <div key={label} style={cardStyle(color)}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</div>
-              <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{value}</div>
-            </div>
+            ['Users', summary.users || 0],
+            ['Sites', summary.sites || 0],
+            ['Groups', summary.groups || 0],
+            ['Pending requests', summary.pending_requests || 0],
+            ['Validation issues', summary.validation_issues || 0],
+          ].map(([label, value]) => (
+            <span key={label}>{label}: <b>{value}</b></span>
           ))}
         </div>
         <div style={cardStyle('#dc2626')}>
@@ -664,7 +661,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   return (
     <div style={{ padding: 24, maxWidth: 1320 }}>
-      <SectionHeader title="Access Configurations" desc="Unified tenant, site, group, privilege, report, authentication, and audit controls for enterprise MIMS clients." />
+      <SectionHeader title="Access Configurations" desc="Organisation, site, group, privilege, report, sign-in and audit settings." />
       {renderOrgSelector()}
       {renderTabs()}
       {renderActiveTab()}

@@ -14,7 +14,7 @@ const FEATURE_DESCRIPTIONS = {
   news_announcements:   'Latest news and announcements',
   document_library:     'Managed document repository',
   safety_communications:'Safety alerts and drug recalls',
-  chatbox:              'AI-powered medical assistant',
+  chatbox:              'Chat assistant for medical questions',
   user_auth:            'Portal user login and registration',
   hcp_gate:             'HCP identity confirmation on first visit',
 }
@@ -87,7 +87,7 @@ export default function FeaturesPage() {
       </div>
 
       {error && <div className="cp-error">{error}</div>}
-      {saved && <div className="cp-success">✓ Feature updated.</div>}
+      {saved && <div className="cp-success">Feature updated.</div>}
 
       <div className="cp-features-list">
         {features.map(f => (

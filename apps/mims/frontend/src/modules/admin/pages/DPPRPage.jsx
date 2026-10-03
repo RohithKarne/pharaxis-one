@@ -225,7 +225,7 @@ export default function DPPRPage({ embedded = false } = {}) {
         {isAdmin && (
           <div className="dp-header-actions">
             <button className="dp-btn-run" onClick={runNow} disabled={running}>
-              {running ? '⏳ Running…' : '▶ Run Now'}
+              {running ? 'Running…' : 'Run Now'}
             </button>
             <button className="dp-btn-primary" onClick={openAdd}>+ Add Rule</button>
           </div>
@@ -237,7 +237,7 @@ export default function DPPRPage({ embedded = false } = {}) {
       {/* Run result */}
       {runResult && (
         <div className="dp-run-result">
-          <div className="dp-run-result-title">✅ DPPR Run Complete — {runResult.length} rule(s) processed</div>
+          <div className="dp-run-result-title">DPPR Run Complete — {runResult.length} rule(s) processed</div>
           {runResult.map((r, i) => (
             <div key={i} className="dp-run-result-row">
               {r.rule_name} ({r.domain}) — {r.action}: scanned {r.scanned}, affected {r.affected}
@@ -376,7 +376,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                       {isAdmin && (
                         <td>
                           <div className="dp-row-actions">
-                            <button className="dp-icon-btn primary" onClick={() => openEdit(r)} title="Edit">✏</button>
+                            <button className="dp-icon-btn primary" onClick={() => openEdit(r)} title="Edit">Edit</button>
                             <button
                               className={`dp-icon-btn ${r.is_active ? 'dp-toggle-on' : 'dp-toggle-off'}`}
                               onClick={() => toggleRule(r)}
@@ -394,8 +394,8 @@ export default function DPPRPage({ embedded = false } = {}) {
                 <div className="dp-pagination">
                   <span>Page {page} of {Math.ceil(total / LIMIT)}</span>
                   <div className="dp-pg-btns">
-                    <button className="dp-pg-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-                    <button className="dp-pg-btn" disabled={page >= Math.ceil(total / LIMIT)} onClick={() => setPage(p => p + 1)}>Next →</button>
+                    <button className="dp-pg-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+                    <button className="dp-pg-btn" disabled={page >= Math.ceil(total / LIMIT)} onClick={() => setPage(p => p + 1)}>Next</button>
                   </div>
                 </div>
               )}
@@ -410,7 +410,7 @@ export default function DPPRPage({ embedded = false } = {}) {
           <div className="dp-card-header">
             <span className="dp-card-title">Execution History ({logTotal})</span>
             <button className="dp-btn-secondary" style={{ fontSize:12, padding:'6px 12px' }}
-              onClick={() => fetchLog(logPage)}>↺ Refresh</button>
+              onClick={() => fetchLog(logPage)}>Refresh</button>
           </div>
           {execLog.length === 0 ? (
             <div className="dp-empty">No execution history yet. {scheduleOn ? 'Rules run daily at 02:00 UTC or use ' : 'Use '}<strong>Run Now</strong>.</div>
@@ -457,8 +457,8 @@ export default function DPPRPage({ embedded = false } = {}) {
                 <div className="dp-pagination">
                   <span>Page {logPage} of {Math.ceil(logTotal / LIMIT)}</span>
                   <div className="dp-pg-btns">
-                    <button className="dp-pg-btn" disabled={logPage <= 1} onClick={() => setLogPage(p => p - 1)}>← Prev</button>
-                    <button className="dp-pg-btn" disabled={logPage >= Math.ceil(logTotal / LIMIT)} onClick={() => setLogPage(p => p + 1)}>Next →</button>
+                    <button className="dp-pg-btn" disabled={logPage <= 1} onClick={() => setLogPage(p => p - 1)}>Prev</button>
+                    <button className="dp-pg-btn" disabled={logPage >= Math.ceil(logTotal / LIMIT)} onClick={() => setLogPage(p => p + 1)}>Next</button>
                   </div>
                 </div>
               )}
@@ -590,7 +590,7 @@ export default function DPPRPage({ embedded = false } = {}) {
 
             {form.action === 'Delete' && (
               <div className="dp-warn-box" style={{ marginBottom:14 }}>
-                ⚠ <strong>Delete</strong> action permanently nulls out all PII fields in the selected domain.
+                <strong>Delete</strong> action permanently nulls out all PII fields in the selected domain.
                 This cannot be undone. Ensure your legal/compliance team has approved this rule.
               </div>
             )}

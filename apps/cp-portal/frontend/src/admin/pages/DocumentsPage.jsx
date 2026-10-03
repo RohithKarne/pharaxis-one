@@ -331,7 +331,7 @@ export default function DocumentsPage() {
           </span>
           {alertMsg && (
             <span style={{ fontSize: 12, color: alertMsg.type === 'success' ? '#16A34A' : '#DC2626', fontWeight: 500 }}>
-              {alertMsg.type === 'success' ? '✓ ' : '✗ '}{alertMsg.text}
+              {alertMsg.text}
             </span>
           )}
           <div style={{ display: 'flex', gap: 8 }}>

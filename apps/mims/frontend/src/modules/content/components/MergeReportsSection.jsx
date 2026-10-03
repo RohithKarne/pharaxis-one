@@ -334,7 +334,7 @@ ${safeHtml}
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading merge reports…</p>
       ) : reports.length === 0 ? (
-        <div className="cm-empty"><div className="cm-empty-icon">📋</div><p>No merge reports yet. Create one to get started!</p></div>
+        <div className="cm-empty"><p>No merge reports yet. Create one to get started!</p></div>
       ) : (
         <table className="cm-table">
           <thead>
@@ -362,8 +362,8 @@ ${safeHtml}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditReport(r); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(r)}>Check Out</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInReport(r)}>Check In</button>
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" style={{ color: '#7c3aed', borderColor: '#7c3aed' }} onClick={() => openGenerate(r)}>⚡ Generate</button>
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openScheduleManager(r)}>⏱ Schedule</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" style={{ color: '#7c3aed', borderColor: '#7c3aed' }} onClick={() => openGenerate(r)}>Generate</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openScheduleManager(r)}>Schedule</button>
                     <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(r)}>Archive</button>
                   </div>
                 </td>
@@ -425,7 +425,7 @@ ${safeHtml}
             onClick={e => e.stopPropagation()}
           >
             <div className="cm-modal-header">
-              <h3 className="cm-modal-title">⚡ Generate — {generateTarget.name}</h3>
+              <h3 className="cm-modal-title">Generate — {generateTarget.name}</h3>
               <button className="cm-modal-close" onClick={() => setGenerateTarget(null)}>✕</button>
             </div>
 
@@ -448,7 +448,7 @@ ${safeHtml}
                 disabled={genLoading}
                 style={{ background: '#7c3aed', borderColor: '#7c3aed', flexShrink: 0 }}
               >
-                {genLoading ? 'Generating…' : '⚡ Generate'}
+                {genLoading ? 'Generating…' : 'Generate'}
               </button>
             </div>
 
@@ -480,10 +480,10 @@ td,th{border:1px solid #d1d5db;padding:6px 10px;}th{background:#f9fafb;}</style>
                 />
                 <div style={{ padding: '10px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 10, background: '#fff', flexShrink: 0 }}>
                   <button className="cm-btn cm-btn-secondary" onClick={handleDownloadHtml}>
-                    ⬇ Download HTML
+                    Download HTML
                   </button>
                   <button className="cm-btn cm-btn-secondary" onClick={handlePrintPdf}>
-                    🖨 Print / Save as PDF
+                    Print / Save as PDF
                   </button>
                   <span style={{ fontSize: 12, color: '#94a3b8', alignSelf: 'center', marginLeft: 'auto' }}>
                     Generated {genResult.case_id ? `for case ${genResult.merge_data?.case_number || genResult.case_id}` : 'without case data'} · {new Date().toLocaleTimeString()}

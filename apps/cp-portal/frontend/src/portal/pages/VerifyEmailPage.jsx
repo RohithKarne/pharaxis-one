@@ -60,21 +60,18 @@ export default function VerifyEmailPage() {
       <div className="pp-auth-card" style={{ textAlign: 'center', padding: '40px 32px' }}>
         {status === 'verifying' && (
           <>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Verifying your email…</h2>
             <p style={{ color: '#6B7280', fontSize: 14 }}>Please wait a moment.</p>
           </>
         )}
         {status === 'success' && (
           <>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>✅</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#16A34A' }}>Email Verified!</h2>
             <p style={{ color: '#6B7280', fontSize: 14 }}>Your account is active. Redirecting you now…</p>
           </>
         )}
         {(status === 'error' || status === 'expired') && (
           <>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>❌</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#DC2626' }}>Verification Failed</h2>
             <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>{message}</p>
             <button className="pp-btn pp-btn-primary" onClick={resend}>

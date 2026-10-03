@@ -283,7 +283,7 @@ export default function TemplatesSection({ token }) {
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading templates…</p>
       ) : templates.length === 0 ? (
-        <div className="cm-empty"><div className="cm-empty-icon">📝</div><p>No templates found. Create your first template!</p></div>
+        <div className="cm-empty"><p>No templates found. Create your first template!</p></div>
       ) : (
         <table className="cm-table">
           <thead>

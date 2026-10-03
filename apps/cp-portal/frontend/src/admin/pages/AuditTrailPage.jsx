@@ -213,7 +213,7 @@ export default function AuditTrailPage() {
               URL.revokeObjectURL(url);
             }}
           >
-            📥 Export GxP Audit Package (CSV)
+            Export GxP Audit Package (CSV)
           </button>
         </div>
 

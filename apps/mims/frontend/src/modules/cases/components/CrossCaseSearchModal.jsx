@@ -142,8 +142,8 @@ export default function CrossCaseSearchModal({ onClose }) {
                           </span>
                         </div>
                         <div style={{ fontSize: '13px', color: 'var(--text-secondary, #4b5563)' }}>
-                          {match.email && <span style={{ marginRight: '12px' }}>✉️ {match.email}</span>}
-                          {match.phone && <span>📞 {match.phone}</span>}
+                          {match.email && <span style={{ marginRight: '12px' }}>{match.email}</span>}
+                          {match.phone && <span>{match.phone}</span>}
                         </div>
                       </div>
                       

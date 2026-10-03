@@ -41,7 +41,7 @@ export default function PcSignalsWidget({ onOpen }) {
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 13 }}>
-          🚨 PC Signals {signals.length > 0 && (
+          PC Signals {signals.length > 0 && (
             <span style={{
               marginLeft: 6, padding: '0 7px', borderRadius: 9,
               background: '#b91c1c', color: '#fff', fontSize: 10,
@@ -57,7 +57,7 @@ export default function PcSignalsWidget({ onOpen }) {
         {loading && <div style={{ padding: 14, color: 'var(--text-muted)', fontSize: 12 }}>Scanning…</div>}
         {!loading && signals.length === 0 && !showTrends && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12, textAlign: 'center' }}>
-            ✓ No active signals.
+            No active signals.
           </div>
         )}
         {!loading && (showTrends ? trends : signals).map((s, i) => (

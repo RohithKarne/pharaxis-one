@@ -91,7 +91,7 @@ function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, s
             </button>
             <button disabled={busy || !answer || !canApprove} onClick={() => call('POST', '/send', 'Answer sent.')}
               title={canApprove ? 'Approves the answer and emails it to the person who asked' : 'Only a reviewer can approve and send'}
-              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
               Approve &amp; send
             </button>
             {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
@@ -161,7 +161,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
           <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>
           {m.ae_screen_answer === 'Yes' && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
-              ⚠ Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
+              Said someone became unwell — sent to the Safety Queue{m.ae_screen_detail ? `: ${m.ae_screen_detail}` : ''}
             </div>
           )}
           {m.ae_screen_answer === 'No' && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Said nobody became unwell.</div>}
@@ -192,7 +192,7 @@ function ConversationPanel({ clientId, submissionId, canApprove, canEdit, onChan
           </button>
           <button disabled={busy || !draft || !canApprove || draft.body !== body} onClick={() => call('POST', '/draft/send', 'Follow-up sent.')}
             title={!canApprove ? 'Only a reviewer can approve and send' : draft && draft.body !== body ? 'Save the draft first' : 'Approves the follow-up and emails it to the person who asked'}
-            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
+            style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && draft && draft.body === body ? 'var(--cp-primary)' : '#8FA6C4', color: '#fff', fontWeight: 600, cursor: canApprove && draft && draft.body === body ? 'pointer' : 'not-allowed' }}>
             Approve &amp; send follow-up
           </button>
           {draft?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {draft.drafted_by_name}</span>}
@@ -447,7 +447,7 @@ export default function SubmissionsPage() {
                       {s.replies_waiting > 0 && (
                         <span title="The person replied to our answer and is waiting for a follow-up"
                           style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
-                          ↩ REPLY RECEIVED
+                          Reply received
                         </span>
                       )}
                       {s.ae_task_status && (
@@ -462,7 +462,7 @@ export default function SubmissionsPage() {
                             color:      s.ae_task_status === 'open' ? '#B91C1C' : '#475569',
                           }}
                         >
-                          {s.ae_task_status === 'open' ? '⚠ SAFETY REVIEW' : '✓ REVIEWED'}
+                          {s.ae_task_status === 'open' ? 'SAFETY REVIEW' : 'REVIEWED'}
                         </span>
                       )}
                     </td>
@@ -506,7 +506,7 @@ export default function SubmissionsPage() {
                       {s.status === 'failed_sync' && canEdit && (
                         <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
                           style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
-                          ↻ Retry
+                          Retry
                         </button>
                       )}
                     </td>
@@ -538,7 +538,7 @@ export default function SubmissionsPage() {
                               ) : (
                                 <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
-                                  ⬇ {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
+                                  {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
                                 </a>
                               ))}
                             </div>

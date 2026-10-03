@@ -206,7 +206,7 @@ export default function ConsentBanner() {
                 {saving ? 'Saving…' : 'Save My Preferences'}
               </button>
               <button className="pp-consent-btn-link" onClick={() => setStep('banner')} disabled={saving}>
-                ← Back
+                Back
               </button>
             </div>
           </>

@@ -130,7 +130,6 @@ function AdminAccessDenied({ label = 'this admin screen' }) {
   return (
     <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 32 }}>
       <div style={{ maxWidth: 480, textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28 }}>
-        <div style={{ fontSize: 34, marginBottom: 10 }}>🚫</div>
         <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--text-primary)' }}>Access not available</h2>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>
           Your security group does not allow access to {label}. Ask an administrator to update Group Security.

@@ -50,11 +50,11 @@ export default function RichTextField({ value = {}, onChange, label, readOnly, h
             <Btn label="• List" onClick={() => cmd('insertUnorderedList')} />
             <Btn label="1. List" onClick={() => cmd('insertOrderedList')} />
             <Sep />
-            <Btn label="🔗" onClick={() => {
+            <Btn label="Link" onClick={() => {
               const url = prompt('Link URL?')
               if (url) cmd('createLink', url)
             }} />
-            <Btn label="✖ format" onClick={() => cmd('removeFormat')} />
+            <Btn label="Clear format" onClick={() => cmd('removeFormat')} />
           </div>
         )}
         <div

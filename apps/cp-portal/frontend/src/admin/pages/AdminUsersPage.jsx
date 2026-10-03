@@ -160,7 +160,7 @@ export default function AdminUsersPage() {
       ) : noAccess ? (
         <div className="cp-empty">Only an admin can see and manage staff accounts. Ask an admin if someone needs access or a different role.</div>
       ) : users.length === 0 ? (
-        <div className="cp-empty">No admin users yet. Add one to get started.</div>
+        <div className="cp-empty">No admin users.</div>
       ) : (
         <div className="cp-card">
           <table className="cp-table">

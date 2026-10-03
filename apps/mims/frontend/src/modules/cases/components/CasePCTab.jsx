@@ -359,7 +359,7 @@ export default function CasePCTab({
           {pcClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
         <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
-          🧪 {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
+          {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>
       {!canCreatePcVersion && (
@@ -368,7 +368,6 @@ export default function CasePCTab({
 
       {pcVersions.length === 0 ? (
         <div className="cf-empty-state">
-          <div className="cf-empty-icon" aria-hidden="true">📦</div>
           <h3 className="cf-empty-title">No PC versions yet</h3>
           <p className="cf-empty-msg">
             Create the first PC version to start the product-complaint investigation.
@@ -391,7 +390,7 @@ export default function CasePCTab({
                 onClick={() => { setActivePcVer(v); loadPCTab(v.id, activePcTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">🔒</span>}
+                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
@@ -437,7 +436,7 @@ export default function CasePCTab({
 
       {pcTxDrawer && (
         <div className="cf-tx-drawer">
-          <div className="cf-tx-drawer-title">New PC Routing → Quality Team</div>
+          <div className="cf-tx-drawer-title">New PC Routing to Quality Team</div>
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (Quality Team)</label>
@@ -479,7 +478,7 @@ export default function CasePCTab({
               {/* Stored as standard / high / urgent; the form offers Routine / Expedited / Urgent. */}
               <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine', high: 'Expedited', urgent: 'Urgent' })[tx.priority] || tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: <strong>{String(tx.due_date).slice(0, 10)}</strong></span>}
-              <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+              <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>
             {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}
             <div className="cf-tx-status-actions">

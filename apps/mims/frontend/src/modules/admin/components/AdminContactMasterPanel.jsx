@@ -142,8 +142,8 @@ export default function AdminContactMasterPanel({ H, flash }) {
                             setContactEditTarget(c)
                             setContactForm({ first_name: c.first_name || '', last_name: c.last_name || '', specialty: c.specialty || '', institution: c.institution || '', email: c.email || '', phone: c.phone || '', type: c.type || 'HCP', organization: c.organization || '', notes: c.notes || '', address: c.address || '', do_not_update_master: !!c.do_not_update_master })
                             setContactModal('edit')
-                          }}>✏ Edit</button>
-                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteContact(c)}>🗑</button>
+                          }}>Edit</button>
+                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteContact(c)}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -192,7 +192,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
             <input className="form-control" placeholder="Search name…" value={repSearch} onChange={e => setRepSearch(e.target.value)} style={{ maxWidth: 240 }} />
             <button className="btn btn-primary" onClick={() => loadCompanyReps(repSearch)}>Search</button>
             <label className="btn btn-outline" style={{ fontSize: 12, cursor: 'pointer', margin: 0 }}>
-              ⬆ Import CSV
+              Import CSV
               <input type="file" accept=".csv" style={{ display: 'none' }} onChange={async e => {
                 const file = e.target.files[0]; if (!file) return
                 const text = await file.text()
@@ -239,8 +239,8 @@ export default function AdminContactMasterPanel({ H, flash }) {
                             setRepEditTarget(r)
                             setRepForm({ name: r.name || '', title: r.title || '', territory: r.territory || '', email: r.email || '', phone: r.phone || '', organization: r.organization || '' })
                             setRepModal('edit')
-                          }}>✏ Edit</button>
-                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteRep(r)}>🗑</button>
+                          }}>Edit</button>
+                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deleteRep(r)}>Delete</button>
                         </div>
                       </td>
                     </tr>

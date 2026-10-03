@@ -1,7 +1,6 @@
 const COLORS = ['red', 'yellow', 'green', 'blue']
 const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
-const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 
 export default function InboxFilterBar({
   advFilters,
@@ -27,7 +26,7 @@ export default function InboxFilterBar({
     <>
       <div className="inbox-adv-filter-toggle">
         <button className={`inbox-sort-btn ${hasAdvFilters ? 'adv-active' : ''}`} onClick={() => setShowAdvFilters(a => !a)}>
-          Filters {hasAdvFilters ? '●' : (showAdvFilters ? '▾' : '▸')}
+          Filters {hasAdvFilters ? '(on)' : (showAdvFilters ? '▾' : '▸')}
         </button>
         {hasAdvFilters && (
           <button className="inbox-sort-btn" style={{ fontSize: 11 }} onClick={clearAllFilters}>
@@ -78,7 +77,7 @@ export default function InboxFilterBar({
             <select value={advFilters.priority}
               onChange={e => { setAdvFilters(f => ({ ...f, priority: e.target.value })); setPage(1) }}>
               <option value="">All Priorities</option>
-              {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_ICON[p]} {p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+              {PRIORITIES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
             </select>
             <select value={advFilters.readStatus}
               onChange={e => { setAdvFilters(f => ({ ...f, readStatus: e.target.value })); setPage(1) }}>

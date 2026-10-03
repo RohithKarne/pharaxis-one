@@ -374,7 +374,7 @@ export default function ClientDetailPage() {
                             {badge && (
                               <span className="ck-badge" style={BADGE_STYLES[badge.s] || {}}>{badge.label}</span>
                             )}
-                            <span className="ck-card-cta">{primary.cta} →</span>
+                            <span className="ck-card-cta">{primary.cta}</span>
                           </div>
                         </div>
                       )
@@ -398,7 +398,7 @@ export default function ClientDetailPage() {
                                 )}
                               </div>
                               <div className="ck-sub-label">{card.label}</div>
-                              <div className="ck-sub-cta">{card.cta} →</div>
+                              <div className="ck-sub-cta">{card.cta}</div>
                             </div>
                           )
                         })}
@@ -438,7 +438,6 @@ export default function ClientDetailPage() {
                   >
                     <span className="ck-issue-dot" />
                     <span className="ck-issue-text">{issue.text}</span>
-                    <span className="ck-issue-arrow">→</span>
                   </div>
                 ))}
               </div>
@@ -466,7 +465,7 @@ export default function ClientDetailPage() {
               style={{ fontSize: 12, marginTop: 12 }}
               onClick={() => navigate(`/admin/clients/${clientId}/audit`)}
             >
-              View full audit trail →
+              View full audit trail
             </button>
           </div>
 
@@ -485,7 +484,7 @@ export default function ClientDetailPage() {
             <div className="ck-checklist">
               {checklist.map((item, i) => (
                 <div key={i} className={`ck-check-item${item.done ? ' done' : ''}`} title={!item.done && item.hint ? item.hint : undefined}>
-                  <span className="ck-check-icon">{item.done ? '✓' : '○'}</span>
+                  <span className="ck-check-icon">{item.done ? 'Done' : 'To do'}</span>
                   <span className="ck-check-label">{item.label}</span>
                   {!item.done && item.path && (
                     <button
@@ -493,7 +492,7 @@ export default function ClientDetailPage() {
                       style={{ marginLeft: 'auto', fontSize: 11, whiteSpace: 'nowrap' }}
                       onClick={() => navigate(`/admin/clients/${clientId}/${item.path}`)}
                       title={item.hint}
-                    >Fix →</button>
+                    >Fix</button>
                   )}
                 </div>
               ))}

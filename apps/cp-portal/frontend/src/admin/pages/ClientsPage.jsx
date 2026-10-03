@@ -143,7 +143,7 @@ export default function ClientsPage() {
                 <td><code>{c.code}</code></td>
                 <td>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <a href={clientPortalUrl(c.code)} target="_blank" rel="noopener noreferrer" className="cp-link-btn" title={clientPortalUrl(c.code)}>Open ↗</a>
+                    <a href={clientPortalUrl(c.code)} target="_blank" rel="noopener noreferrer" className="cp-link-btn" title={clientPortalUrl(c.code)}>Open</a>
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => copyPortalUrl(c.code)}>
                       {copiedCode === c.code ? 'Copied!' : 'Copy'}
                     </button>

@@ -417,7 +417,7 @@ export default function CaseAETab({
           {aeClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
         <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)}>
-          🔬 {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
+          {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
       </div>
       {!canCreateAeVersion && (
@@ -426,7 +426,6 @@ export default function CaseAETab({
 
       {aeVersions.length === 0 ? (
         <div className="cf-empty-state">
-          <div className="cf-empty-icon" aria-hidden="true">🩺</div>
           <h3 className="cf-empty-title">No AE versions yet</h3>
           <p className="cf-empty-msg">
             Create the first AE version to begin clinical assessment.
@@ -449,7 +448,7 @@ export default function CaseAETab({
                 onClick={() => { setActiveAeVer(v); loadAETab(v.id, activeAeTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">🔒</span>}
+                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
@@ -496,7 +495,7 @@ export default function CaseAETab({
 
       {aeTxDrawer && (
         <div className="cf-tx-drawer">
-          <div className="cf-tx-drawer-title">New AE Transmission → PV Team</div>
+          <div className="cf-tx-drawer-title">New AE Transmission to PV Team</div>
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (PV Team)</label>
@@ -541,7 +540,7 @@ export default function CaseAETab({
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
               <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: {String(tx.due_date).slice(0, 10)}</span>}
-              <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+              <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>
             {tx.narrative && <div className="cf-tx-narrative">{tx.narrative}</div>}
             <div className="cf-tx-status-actions">

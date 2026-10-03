@@ -31,16 +31,16 @@ export default function TrialsAdminPage() {
       })
       const d = await res.json()
       if (res.ok) {
-        setMsg(editingId ? '✅ Changes saved.' : '✅ Clinical Trial published.')
+        setMsg(editingId ? 'Changes saved.' : 'Clinical Trial published.')
         setEditingId(null)
         setForm(EMPTY)
         const updated = await fetch(`/api/admin/trials/${clientId}`, { headers: adminHeaders() }).then(r => r.json())
         setTrials(updated.trials || [])
       } else {
-        setMsg(`❌ ${d.error || 'Failed to add trial.'}`)
+        setMsg(`✕ ${d.error || 'Failed to add trial.'}`)
       }
     } catch {
-      setMsg('❌ Error saving trial.')
+      setMsg('✕ Error saving trial.')
     }
   }
 
@@ -61,9 +61,9 @@ export default function TrialsAdminPage() {
     try {
       const res = await fetch(`/api/admin/trials/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
       // 404: someone else removed it already
-      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(`❌ ${d.error || `Could not delete (error ${res.status}).`}`); return }
+      if (!res.ok && res.status !== 404) { const d = await res.json().catch(() => ({})); setMsg(`✕ ${d.error || `Could not delete (error ${res.status}).`}`); return }
       setTrials(prev => prev.filter(t => t.id !== id))
-    } catch { setMsg('❌ Network error — please try again.') }
+    } catch { setMsg('✕ Network error — please try again.') }
   }
 
   return (
@@ -118,7 +118,7 @@ export default function TrialsAdminPage() {
             </select>
           </div>
           {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
-          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: 'var(--cp-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
             {editingId ? 'Save changes' : 'Publish Clinical Trial'}
           </button>
           {editingId && (
@@ -151,7 +151,7 @@ export default function TrialsAdminPage() {
                     <td style={{ padding: 8 }}>{t.status}</td>
                     <td style={{ padding: 8 }}>
                       <CanChange area="trials">
-                      <button onClick={() => startEdit(t)} style={{ color: '#6B3FA0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
+                      <button onClick={() => startEdit(t)} style={{ color: 'var(--cp-primary)', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
                       </CanChange>
                       <CanChange area="trials">
                       <button onClick={() => handleDelete(t.id)} style={{ color: '#DC2626', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>

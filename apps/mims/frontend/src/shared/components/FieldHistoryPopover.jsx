@@ -58,7 +58,7 @@ export default function FieldHistoryPopover({ entityType, entityId, field, label
           padding: 0, background: 'transparent', border: 'none', cursor: 'pointer',
           marginLeft: 4, fontSize: 12, color: 'var(--text-muted)',
         }}
-      >🕘</button>
+      >History</button>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 40,

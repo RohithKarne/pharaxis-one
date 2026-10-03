@@ -80,9 +80,9 @@ export default function RecentPinnedWidget({ onOpen, limit = 15 }) {
               </div>
               <button onClick={e => { e.stopPropagation(); togglePin(cid) }} style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                fontSize: 16, color: isPinned ? '#c08300' : 'var(--text-muted)',
+                fontSize: 11, color: isPinned ? '#c08300' : 'var(--text-muted)',
               }} title={isPinned ? 'Unpin' : 'Pin'}>
-                {isPinned ? '📌' : '📍'}
+                {isPinned ? 'Unpin' : 'Pin'}
               </button>
             </div>
           )

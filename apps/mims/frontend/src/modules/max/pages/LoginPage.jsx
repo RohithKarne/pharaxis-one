@@ -42,12 +42,6 @@ const MODULE_LOGIN_CONFIG = {
   },
 }
 
-const LOGIN_PROGRESS_STEPS = [
-  { key: 'identify', label: 'Identify' },
-  { key: 'authenticate', label: 'Authenticate' },
-  { key: 'verify', label: 'Verify' },
-]
-
 export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -127,20 +121,13 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   }
 
   const progressStep = twoFactor ? 3 : (loginStage === 'password' || loginStage === 'choice' ? 2 : 1)
-  const progressTitle = twoFactor
-    ? 'Complete secure verification'
+  const stepText = twoFactor
+    ? 'Enter the verification code.'
     : loginStage === 'choice'
-      ? 'Choose the right sign-in path'
+      ? 'Choose how to sign in.'
       : loginStage === 'password'
-        ? 'Enter password for this account'
-        : 'Identify your account first'
-  const progressMessage = twoFactor
-    ? 'Password check is complete. Finish verification to open your workspace.'
-    : loginStage === 'choice'
-      ? 'Your account supports multiple sign-in providers. Pick the approved route below.'
-      : loginStage === 'password'
-        ? `Continue as ${loginForm.email || 'this account'} and enter the password for ${modeConfig.title}.`
-        : `We will check the access path for ${modeConfig.title} before asking for a password or SSO verification.`
+        ? `Enter the password for ${loginForm.email || 'this account'}.`
+        : 'Enter your work email or username.'
 
   function findFallbackAdminDestination(data) {
     if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination
@@ -205,10 +192,6 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     const id = setInterval(ping, 10000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
-
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  })
 
   function resetAppLoginToEmail() {
     setLoginStage('email')
@@ -556,39 +539,10 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
   return (
     <div className="login-page login-page-product">
-      <section className="login-hero-panel" aria-label="MIMS product overview">
-        <div className="login-hero-kicker">Powered by Pharaxis</div>
-        <h1>Medical Information Management System</h1>
-        <p>
-          A controlled workspace for medical information intake, case operations,
-          audit visibility, and administration across regulated teams.
-        </p>
-        <div className="login-hero-grid">
-          <span className="login-hero-chip">Compliant case intake</span>
-          <span className="login-hero-chip">Admin governance</span>
-          <span className="login-hero-chip">Audit-ready activity</span>
-          <span className="login-hero-chip">Operational visibility</span>
-        </div>
-      </section>
       <div className="login-card">
         <div className="login-card-header">
-          <div className="login-brand-row">
-            <div className="app-name">MIMS</div>
-          </div>
-          <div className="app-tagline">
-            {modeConfig.title}
-          </div>
-          <div className="login-status-row">
-            <span>{today}</span>
-            <span style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: '#1f9d55', marginRight: 6 }} />
-              Frontend: On
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: backendOnline === null ? '#999' : (backendOnline ? '#1f9d55' : '#e01e5a'), marginRight: 6 }} />
-              Backend: {backendOnline === null ? 'Checking' : (backendOnline ? 'On' : 'Off')}
-            </span>
-          </div>
+          <div className="app-name">MIMS</div>
+          <div className="app-tagline">{modeConfig.title}</div>
         </div>
 
         <div className="login-card-body">
@@ -600,27 +554,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
             {modeConfig.message}
           </div>
 
-          <div className="login-progress-panel">
-            <div className="login-progress-header">
-              <div>
-                <div className="login-progress-kicker">Step {progressStep} of 3</div>
-                <div className="login-progress-title">{progressTitle}</div>
-              </div>
-              <div className="login-progress-target">{modeConfig.title}</div>
-            </div>
-            <div className="login-progress-copy">{progressMessage}</div>
-            <div className="login-progress-steps" aria-hidden="true">
-              {LOGIN_PROGRESS_STEPS.map((step, index) => {
-                const state = index + 1 < progressStep ? 'complete' : index + 1 === progressStep ? 'active' : 'idle'
-                return (
-                  <div key={step.key} className={`login-progress-step ${state}`}>
-                    <span>{index + 1}</span>
-                    <strong>{step.label}</strong>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <div className="login-step-line">Step {progressStep} of 3. {stepText}</div>
 
           <form onSubmit={handleLogin}>
               <div className="form-group">
@@ -693,7 +627,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       disabled={webauthnLoading || loading}
                       onClick={handleTouchIdLogin}
                     >
-                      {webauthnLoading ? 'Waiting for Touch ID…' : '⬡ Sign in with Touch ID'}
+                      {webauthnLoading ? 'Waiting for Touch ID…' : 'Sign in with Touch ID'}
                     </button>
                   )}
 
@@ -872,7 +806,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                   disabled={webauthnLoading || loading}
                   onClick={handleTouchIdLogin}
                 >
-                  {webauthnLoading ? 'Waiting for Touch ID…' : '⬡ Sign in with Touch ID'}
+                  {webauthnLoading ? 'Waiting for Touch ID…' : 'Sign in with Touch ID'}
                 </button>
               )}
 
@@ -963,6 +897,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
               </button>
             </div>
           )}
+        </div>
+        <div className="login-footnote">
+          Pharaxis · Server {backendOnline === null ? 'checking' : (backendOnline ? 'online' : 'not responding')}
         </div>
       </div>
     </div>

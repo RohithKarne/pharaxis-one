@@ -109,7 +109,7 @@ export default function DrugInfoPage() {
                 )}
                 {selected.contraindications && (
                   <div className="pp-drug-section pp-drug-warnings">
-                    <h4>⚠️ Contraindications</h4>
+                    <h4>Contraindications</h4>
                     <p>{selected.contraindications}</p>
                   </div>
                 )}
@@ -121,7 +121,7 @@ export default function DrugInfoPage() {
                 )}
                 {selected.prescribing_info_url && (
                   <a href={selected.prescribing_info_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-primary">
-                    View Full Prescribing Information →
+                    View Full Prescribing Information
                   </a>
                 )}
               </div>

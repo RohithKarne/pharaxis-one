@@ -213,7 +213,7 @@ export default function CompliancePage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
-        {saved && <div className="cp-success">✓ Compliance settings saved.{notice ? ` ${notice}` : ''}</div>}
+        {saved && <div className="cp-success">Compliance settings saved.{notice ? ` ${notice}` : ''}</div>}
         <div className="cp-form-actions">
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
         </div>
@@ -237,7 +237,7 @@ export default function CompliancePage() {
           </button>
           {triggerMsg && (
             <span style={{ fontSize: 13, fontWeight: 500, color: triggerMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
-              {triggerMsg.type === 'success' ? '✓ ' : '✗ '}{triggerMsg.text}
+              {triggerMsg.text}
             </span>
           )}
         </div>

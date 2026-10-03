@@ -40,7 +40,7 @@ export function SectionHeader({ title, desc, onExport, exportData, exportFile })
           <h2>{title}</h2>
           {desc && <p>{desc}</p>}
         </div>
-        {onExport && <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => exportCSV(exportData, exportFile)}>⬇ Export CSV</button>}
+        {onExport && <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => exportCSV(exportData, exportFile)}>Export CSV</button>}
       </div>
     </div>
   )

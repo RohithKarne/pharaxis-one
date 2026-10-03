@@ -176,13 +176,12 @@ export default function SafetyQueuePage() {
                   {mineOnly ? 'Show all' : 'Show mine'}
                 </button>
               )}
-              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
             </div>
           </div>
 
           {shown.length === 0 ? (
             <div className="cp-empty">
-              <div style={{ fontSize: 40 }}>🩺</div>
               <p>{tab !== 'open' ? 'Nothing closed yet.'
                 : mineOnly && tasks.length ? 'You are not holding any tasks.'
                 : 'No submissions are awaiting safety review.'}</p>

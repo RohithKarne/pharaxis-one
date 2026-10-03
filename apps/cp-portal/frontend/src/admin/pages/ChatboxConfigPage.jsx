@@ -128,7 +128,7 @@ export default function ChatboxConfigPage() {
         </div>
 
         {error && <div className="cp-error">{error}</div>}
-        {saved && <div className="cp-success">✓ Chatbox configuration saved.</div>}
+        {saved && <div className="cp-success">Chatbox configuration saved.</div>}
         <div className="cp-form-actions">
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Configuration'}</button>
         </div>

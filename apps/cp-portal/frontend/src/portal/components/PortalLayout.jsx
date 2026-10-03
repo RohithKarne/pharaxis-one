@@ -232,7 +232,6 @@ export default function PortalLayout({ children }) {
             <LocalClock />
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
-                <Icon name="send" size={16} />
                 {t('btn.submit_inquiry')}
               </button>
             )}
@@ -245,7 +244,7 @@ export default function PortalLayout({ children }) {
                   aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
                   onClick={() => setBellOpen(o => !o)}
                 >
-                  🔔
+                  Notifications
                   {unreadCount > 0 && (
                     <span className="pp-bell-badge">{unreadCount}</span>
                   )}
@@ -325,7 +324,7 @@ export default function PortalLayout({ children }) {
             ) : (
               <Link to={`${base}/login`} className="pp-btn pp-btn-outline">{t('btn.sign_in')}</Link>
             ))}
-            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
+            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>Menu</button>
           </div>
         </div>
       </header>
@@ -393,8 +392,8 @@ function SpecialtyPrompt({ clientCode }) {
   return (
     <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">
       <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
-        <h2>Personalize your experience</h2>
-        <p>What's your area of practice? We'll tailor content and recommendations to your specialty.</p>
+        <h2>Your area of practice</h2>
+        <p>Choose your specialty. It is saved to your profile.</p>
         <div className="pp-specialty-grid">
           {SPECIALTIES.map(s => (
             <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
@@ -510,7 +509,7 @@ function ChatboxWidget({ clientCode }) {
           <div className="pp-chat-safety">
             {unwell === 'sent' ? (
               <p className="pp-chat-safety-done" role="status">
-                ✓ Thank you. Our safety team will review this. You can also give full details on the{' '}
+                Thank you. Our safety team will review this. You can also give full details on the{' '}
                 <Link to={`/portal/${clientCode}/submit?type=adverse_event`} onClick={() => setOpen(false)}>side effect form</Link>.
                 {' '}<button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report something else</button>
               </p>

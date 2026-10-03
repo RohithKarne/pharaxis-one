@@ -57,7 +57,6 @@ export default function SavedItemsPage() {
     return (
       <div className="pp-docs-page">
         <div className="pp-empty-state">
-          <span style={{ fontSize: 32 }}>🔖</span>
           <p style={{ marginTop: 12, color: '#6B7280', fontSize: 15 }}>
             <Link to={`${base}/login`} className="pp-btn pp-btn-outline" style={{ marginLeft: 0 }}>Sign in</Link>
             {' '}to save items for quick access.
@@ -97,7 +96,6 @@ export default function SavedItemsPage() {
         <div className="pp-error-state">{error}</div>
       ) : tabItems.length === 0 ? (
         <div className="pp-empty-state">
-          <span style={{ fontSize: 32 }}>🔖</span>
           <p style={{ marginTop: 8 }}>No saved {tab} yet.</p>
         </div>
       ) : (
@@ -121,7 +119,7 @@ export default function SavedItemsPage() {
                     color: item.item_type === 'news' ? '#1D4ED8' : '#374151',
                     padding: '2px 8px', borderRadius: 99,
                   }}>
-                    {item.item_type === 'news' ? '📰 News' : '📁 Document'}
+                    {item.item_type === 'news' ? 'News' : 'Document'}
                   </span>
                   {item.withdrawn && (
                     <span style={{
@@ -150,14 +148,14 @@ export default function SavedItemsPage() {
                     to={`${base}/news/${item.item_id}`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item →
+                    Go to item
                   </Link>
                 ) : item.withdrawn ? null : (
                   <Link
                     to={`${base}/documents`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item →
+                    Go to item
                   </Link>
                 )}
                 <button
@@ -167,7 +165,7 @@ export default function SavedItemsPage() {
                   disabled={unsaving === item.id}
                   aria-label={`Remove ${item.title || item.detail?.title || 'item'} from saved items`}
                 >
-                  {unsaving === item.id ? '…' : '🔖 Unsave'}
+                  {unsaving === item.id ? '…' : 'Unsave'}
                 </button>
               </div>
             </div>

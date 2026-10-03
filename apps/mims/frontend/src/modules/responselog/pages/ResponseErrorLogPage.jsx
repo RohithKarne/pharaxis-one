@@ -124,9 +124,9 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
         <div className="rel-header">
           <div>
             <h1 className="rel-title">Response Error Log</h1>
-            <span className="rel-subtitle">API and email delivery errors on MI responses — each entry has a unique Log ID for traceability</span>
+            <span className="rel-subtitle">API and email delivery errors on MI responses. Each entry has its own log ID.</span>
           </div>
-          <button className="rel-refresh-btn" onClick={fetchEntries} disabled={loading}>⟳ Refresh</button>
+          <button className="rel-refresh-btn" onClick={fetchEntries} disabled={loading}>Refresh</button>
         </div>
 
         <div className="rel-stats">
@@ -139,7 +139,7 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
           <input className="rel-filter-input" placeholder="Filter by Case ID…" value={caseId} onChange={e => { setCaseId(e.target.value); setPage(1) }} />
           <input className="rel-filter-input" placeholder="Error type…" value={errorType} onChange={e => { setErrorType(e.target.value); setPage(1) }} />
           <input type="date" className="rel-filter-date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1) }} title="From date" />
-          <span style={{ color:'#94a3b8' }}>→</span>
+          <span style={{ color:'#475569' }}>to</span>
           <input type="date" className="rel-filter-date" value={toDate} onChange={e => { setToDate(e.target.value); setPage(1) }} title="To date" />
           {hasFilters && <button className="rel-clear-btn" onClick={clearFilters}>✕ Clear</button>}
         </div>
@@ -185,9 +185,9 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
 
         {!loading && totalPages > 1 && (
           <div className="rel-pagination">
-            <button className="rel-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+            <button className="rel-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
             <span className="rel-page-info">Page {page} of {totalPages} · {total} records</span>
-            <button className="rel-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+            <button className="rel-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
           </div>
         )}
       </div>

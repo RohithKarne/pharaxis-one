@@ -141,7 +141,6 @@ function ServiceLogTable() {
           </div>
         ) : logs.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', gap: 8 }}>
-            <div style={{ fontSize: 28 }}>📋</div>
             <div style={{ fontSize: 14 }}>No service log entries yet.</div>
             <div style={{ fontSize: 12 }}>Entries will appear here once services run.</div>
           </div>

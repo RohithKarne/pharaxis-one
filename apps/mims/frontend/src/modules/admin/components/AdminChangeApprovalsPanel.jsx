@@ -113,14 +113,14 @@ export default function AdminChangeApprovalsPanel({ H, flash }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid #ccc', paddingBottom: 10 }}>
         <button
           className="btn"
-          style={{ background: activeTab === 'pending' ? '#1d4ed8' : '#f3f4f6', color: activeTab === 'pending' ? '#fff' : '#000', border: 'none', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}
+          style={{ background: activeTab === 'pending' ? 'var(--primary)' : '#f3f4f6', color: activeTab === 'pending' ? '#fff' : '#000', border: 'none', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}
           onClick={() => setActiveTab('pending')}
         >
           Pending Approvals
         </button>
         <button
           className="btn"
-          style={{ background: activeTab === 'policy' ? '#1d4ed8' : '#f3f4f6', color: activeTab === 'policy' ? '#fff' : '#000', border: 'none', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}
+          style={{ background: activeTab === 'policy' ? 'var(--primary)' : '#f3f4f6', color: activeTab === 'policy' ? '#fff' : '#000', border: 'none', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}
           onClick={() => setActiveTab('policy')}
         >
           Configuration Policy
@@ -197,7 +197,7 @@ export default function AdminChangeApprovalsPanel({ H, flash }) {
               </label>
             ))}
           </div>
-          <button onClick={savePolicies} style={{ marginTop: 24, background: '#1d4ed8', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>Save Policies</button>
+          <button onClick={savePolicies} style={{ marginTop: 24, background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>Save Policies</button>
         </div>
       )}
     </div>

@@ -83,7 +83,6 @@ export default function DropzoneUpload({
           cursor: 'pointer', transition: 'all 0.15s ease-out',
         }}
       >
-        <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
           {label}
         </div>

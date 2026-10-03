@@ -225,7 +225,6 @@ export default function NotificationOverlay({ open, onClose }) {
           {!loading && error && <div className="mims-notif-error">{error}</div>}
           {!loading && !error && rows.length === 0 && (
             <div className="mims-notif-empty">
-              <div style={{ fontSize: 32, marginBottom: 10 }}>🔔</div>
               <div>No notifications yet.</div>
             </div>
           )}
@@ -251,7 +250,7 @@ export default function NotificationOverlay({ open, onClose }) {
                 <span>Delivery: {String(n.delivery_status || 'delivered')}</span>
               </div>
               <div className="mims-notif-actions">
-                {n.requires_acknowledgement && !n.acknowledged_at && (
+                {!!n.requires_acknowledgement && !n.acknowledged_at && (
                   <button
                     className="mims-notif-action-btn critical"
                     onClick={e => { e.stopPropagation(); acknowledge(n.id) }}
@@ -276,7 +275,7 @@ export default function NotificationOverlay({ open, onClose }) {
                     {retryingId === n.id ? 'Retrying…' : 'Retry delivery'}
                   </button>
                 )}
-                {n.link_url && <span className="mims-notif-linkhint">Open →</span>}
+                {n.link_url && <span className="mims-notif-linkhint">Open</span>}
               </div>
             </div>
           ))}

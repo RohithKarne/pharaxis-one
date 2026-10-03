@@ -1,0 +1,199 @@
+/* Classic look for the CP Portal admin console and public portal (2026-10-03).
+   Arial 13px, square corners, grey title bars, column-lined tables,
+   light list-style navigation. Loaded after index.css; selectors use a
+   :root prefix so they win without !important. !important is kept for
+   rules that must beat inline styles. */
+
+/* ─── Base ─────────────────────────────────────────────────── */
+:root body { line-height: 1.4; }
+
+/* ─── Sidebar ──────────────────────────────────────────────── */
+:root .cp-admin-sidebar { width: 210px; border-right: 1px solid #b9c2cd; }
+:root .cp-sidebar-brand { padding: 5px 12px; min-height: 40px; background: var(--cp-primary); border-bottom: 3px solid var(--cp-brand); }
+:root .cp-sidebar-brand svg { display: none; }
+:root .cp-brand-name { color: #fff; font-size: 14px; line-height: 1.2; }
+:root .cp-brand-small { display: block; color: #d5dde8; font-size: 11px; font-weight: normal; letter-spacing: 0; text-transform: none; }
+:root .cp-sidebar-nav { padding: 0; }
+:root .cp-nav-section-label { padding: 10px 12px 4px; font-size: 11px; color: #5a6675; letter-spacing: 0; }
+:root .cp-nav-item { border-radius: 0; margin: 0; padding: 6px 12px; border-bottom: 1px solid #d5dbe2; color: #1d3557; }
+:root .cp-nav-item:hover { background: #dde3ea; color: #000; }
+:root .cp-nav-item.active { background: #fff !important; color: #000 !important; font-weight: bold; border-left: 4px solid var(--cp-brand); padding-left: 8px; }
+:root .cp-nav-group-header { padding: 10px 12px 4px; color: #5a6675; }
+:root .cp-nav-group-label { font-size: 11px; text-transform: none; }
+:root .cp-sidebar-footer { border-top: 1px solid #b9c2cd; padding: 10px 12px; }
+:root .cp-admin-name { color: #1d3557; }
+:root .cp-logout-btn { background: #f5f6f7; border: 1px solid #a9b2bd; color: #222; }
+:root .cp-logout-btn:hover { background: #e9ecef; color: #000; }
+
+/* ─── Top bar ──────────────────────────────────────────────── */
+:root .cp-admin-topbar { height: 40px; padding: 0 12px; background: var(--cp-panel-head); box-shadow: none; }
+:root .cp-topbar-title { font-size: 15px; color: var(--cp-primary); }
+:root .cp-sidebar-toggle { height: 24px; border-radius: 2px; }
+:root .cp-client-chip { border-radius: 0; background: none; border: 0; padding: 0; }
+:root .cp-client-avatar { display: none; }
+:root .cp-brandbar { height: 0; }
+
+/* ─── Buttons ──────────────────────────────────────────────── */
+:root .cp-btn { border-radius: 2px; background: #f5f6f7; border: 1px solid #a9b2bd; color: #222; font-size: 12px; font-weight: normal; padding: 4px 10px; box-shadow: none; }
+:root .cp-btn:hover:not(:disabled) { background: #e9ecef; }
+:root .cp-btn-primary { background: var(--cp-primary); border-color: var(--cp-primary-dk); color: #fff; font-weight: bold; }
+:root .cp-btn-primary:hover:not(:disabled) { background: var(--cp-primary-dk); }
+:root .cp-btn-sm { padding: 2px 8px; font-size: 12px; }
+:root .cp-link-btn { color: #0645ad; text-decoration: underline; }
+
+/* ─── Fields ───────────────────────────────────────────────── */
+:root .cp-field input, :root .cp-field select, :root .cp-field textarea,
+:root .cp-search-input, :root .cp-select { border-radius: 0; border: 1px solid #a9b2bd; padding: 4px 6px; font-size: 13px; }
+:root .cp-field label { font-weight: bold; font-size: 12px; color: #333; }
+
+/* ─── Cards and panels ─────────────────────────────────────── */
+:root .cp-card, :root .cp-table-card, :root .oc-panel { border-radius: 0; box-shadow: none; border: 1px solid var(--cp-border); }
+:root .cp-card-title, :root .oc-panel-header { background: var(--cp-panel-head); border-bottom: 1px solid var(--cp-border); margin: 0; padding: 6px 10px; }
+:root .oc-panel-header h2, :root .cp-card-title { font-size: 13px; font-weight: bold; color: var(--cp-primary); }
+
+/* ─── Tables ───────────────────────────────────────────────── */
+:root .cp-table { border-collapse: collapse; font-size: 12px; }
+:root .cp-table th { background: var(--cp-panel-head); color: var(--cp-primary); text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: bold; padding: 5px 8px; border-right: 1px solid var(--cp-border); border-bottom: 1px solid var(--cp-border); }
+:root .cp-table td { padding: 4px 8px; border-right: 1px solid #e3e7ec; }
+:root .cp-table tbody tr:nth-child(even) { background: #f6f8fa; }
+:root .cp-table tbody tr:hover { background: #fff8e6; }
+
+/* ─── Badges as plain text ─────────────────────────────────── */
+:root .cp-badge, :root .cp-status-badge, :root .cp-type-badge, :root .oc-health-pill, :root .ck-badge { border-radius: 0; background: none; border: 0; padding: 0; font-size: 12px; font-weight: bold; }
+
+/* ─── Modals ───────────────────────────────────────────────── */
+:root .cp-modal { border-radius: 0; border: 1px solid #8a96a3; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+:root .cp-modal-header { background: var(--cp-panel-head); padding: 6px 10px; border-bottom: 1px solid var(--cp-border); }
+
+/* ─── Sign-in ──────────────────────────────────────────────── */
+:root .cp-login-page { background: #f3f4f6; align-items: flex-start; padding-top: 80px; }
+:root .cp-login-card { border-radius: 0; box-shadow: none; border: 1px solid #b9c2cd; padding: 0; width: 380px; }
+:root .cp-login-brand { background: var(--cp-primary); color: #fff; text-align: left; padding: 10px 14px; margin: 0; }
+:root .cp-login-brand h1 { font-size: 16px; color: #fff; margin: 0; }
+:root .cp-login-brand p { color: #d5dde8; margin: 0; }
+:root .cp-login-brand-row { justify-content: flex-end; margin: 0; }
+:root .cp-login-icon { display: none; }
+:root .cp-superadmin-switch { border-radius: 0; background: none; border: 0; color: #fff; text-decoration: underline; font-size: 11px; padding: 0; letter-spacing: 0; text-transform: none; }
+:root .cp-login-form { padding: 14px; }
+
+/* ─── Dashboard ────────────────────────────────────────────── */
+:root .oc-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
+:root .oc-panel { padding: 0; background: #fff; }
+:root .oc-dashboard-grid { gap: 10px; margin: 10px 0; }
+:root .oc-summary-table { width: 100%; }
+:root .oc-summary-value { text-align: right; font-weight: bold; width: 80px; }
+:root .oc-summary-value.tone-amber { color: #9a5b00; }
+:root .oc-summary-helper { color: var(--cp-text-muted); }
+:root .oc-empty-state { border: 0; border-radius: 0; min-height: 0; padding: 10px; color: var(--cp-text-muted); background: none; justify-content: flex-start; }
+:root .oc-work-list, :root .oc-readiness-list { gap: 0; }
+:root .oc-work-row, :root .oc-readiness-row { border-radius: 0; border: 0; border-bottom: 1px solid #e3e7ec; padding: 5px 10px; background: none; }
+:root .oc-work-row:hover, :root .oc-readiness-row:hover { background: #fff8e6; border-color: #e3e7ec; }
+:root .oc-work-action { color: #0645ad; text-decoration: underline; font-weight: normal; }
+:root .oc-progress-track { border-radius: 0; height: 6px; background: #e3e7ec; }
+:root .oc-progress-track span { background: var(--cp-primary); }
+:root .oc-client-table-panel .oc-panel-header { padding: 6px 10px; }
+
+/* ─── Client overview ─────────────────────────────────────── */
+:root .ck-hero { border-left-width: 1px; border-color: var(--cp-border); min-height: 0; margin-bottom: 10px; }
+:root .ck-hero-identity { padding: 8px 12px; gap: 4px; }
+:root .ck-hero-name { font-size: 18px; }
+:root .ck-hero-url-row { flex-wrap: wrap; gap: 4px 6px; }
+:root .ck-hero-url-label { text-transform: none; font-size: 11px; }
+:root .ck-hero-url-val { font-family: inherit; font-weight: normal; color: #0645ad; overflow-wrap: anywhere; }
+:root .ck-hero-url-row .cp-btn { margin-left: 0 !important; }
+:root .ck-stat { padding: 8px 12px; }
+:root .ck-stat-label { text-transform: none; font-size: 11px; letter-spacing: 0; }
+:root .ck-health-block { padding: 8px 12px; }
+:root .ck-health-ring { width: auto; height: auto; border-radius: 0; background: none !important; box-shadow: none !important; font-size: 22px; }
+:root .ck-health-sub { text-transform: none; }
+:root .ck-body { gap: 10px; }
+:root .ck-groups { gap: 10px; }
+:root .ck-group-hdr { background: var(--cp-panel-head); padding: 6px 10px; }
+:root .ck-group-hdr-icon, :root .ck-card-primary-icon, :root .ck-sub-icon { display: none; }
+:root .ck-group-hdr-label { font-size: 13px; color: var(--cp-primary); }
+:root .ck-group-body { padding: 8px 10px; gap: 8px; }
+:root .ck-card-primary { border: 1px solid var(--cp-border); background: #fff; padding: 8px 10px; }
+:root .ck-card-primary:hover { transform: none; background: #fff8e6; }
+:root .ck-card-primary-label { color: #0645ad; text-decoration: underline; font-size: 13px; }
+:root .ck-card-sub { padding: 8px 10px; min-height: 0; }
+:root .ck-card-sub:hover { transform: none; background: #fff8e6; box-shadow: none; }
+:root .ck-badge { background: none !important; border: 0 !important; padding: 0; font-size: 12px; }
+:root .ck-panel { gap: 10px; }
+:root .ck-panel-block { padding: 0; }
+:root .ck-panel-block > :not(.ck-panel-title) { margin: 8px 10px; }
+:root .ck-panel-title { background: var(--cp-panel-head); text-transform: none; font-size: 13px; color: var(--cp-primary); padding: 6px 10px; margin: 0; }
+:root .ck-panel-block--urgent { border-top: 1px solid var(--cp-border); padding-top: 0; }
+:root .ck-panel-block--urgent .ck-panel-title { color: #a30000; }
+:root .ck-issue-count { background: none; padding: 0; font-size: 12px; }
+
+/* ─── Public portal ────────────────────────────────────────
+   Colours come from the client's branding (--pp-*), never fixed here. */
+:root .pp-root { background: #fff; }
+:root .pp-header { border-top: 4px solid var(--pp-primary); border-bottom: 1px solid #c9ced6; }
+:root .pp-nav-link, :root .pp-nav-dropdown-btn { font-size: 13px; font-weight: normal; color: #333; }
+:root .pp-btn { font-weight: bold; }
+:root .pp-btn-outline { background: #f5f6f7; border: 1px solid #a9b2bd; }
+:root .pp-hero { background: #eef0f4; border-bottom: 1px solid #c9ced6; padding: 24px 0; }
+:root .pp-hero-title { font-size: 26px; font-weight: bold; color: #222; }
+:root .pp-hero-subtitle { font-size: 14px; color: #333; }
+:root .pp-hero-search-wrap { border: 1px solid #a9b2bd; background: #fff; }
+:root .pp-hero-search-btn { border-radius: 2px; }
+:root .pp-search-suggestions { margin-top: 8px; }
+:root .pp-search-suggestions button, :root .pp-search-suggestions a { border: 0; background: none; color: var(--pp-link); text-decoration: underline; padding: 0 4px; font-size: 13px; }
+:root .pp-safety-card, :root .pp-quick-links, :root .pp-top-task-card, :root .pp-feature-card,
+:root .pp-update-panel, :root .pp-safety-info-box { border: 1px solid #c9ced6; background: #fff; box-shadow: none; transform: none; }
+:root .pp-quick-links-title, :root .pp-update-panel-head { background: #dfe3ea; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #c9ced6; }
+:root .pp-update-panel-head h2 { font-size: 14px; }
+:root .pp-top-task-icon, :root .pp-feature-icon, :root .pp-safety-card-icon, :root .pp-feature-card .pp-feature-icon { display: none; }
+:root .pp-top-task-card, :root .pp-feature-card { min-height: 0; padding: 12px 14px; }
+:root .pp-top-task-card:hover, :root .pp-feature-card:hover { background: #fff8e6; }
+:root .pp-top-task-body h3, :root .pp-feature-title { font-size: 15px; color: var(--pp-link); text-decoration: underline; }
+:root .pp-feature-link, :root .pp-top-task-body > span, :root .pp-update-panel-head a { color: var(--pp-link); text-decoration: underline; font-weight: normal; }
+:root .pp-section-heading h2 { font-size: 16px; border-bottom: 2px solid var(--pp-primary); padding-bottom: 4px; width: 100%; }
+:root .pp-chip { border-radius: 0; }
+:root .pp-auth-card { border-radius: 0; box-shadow: none; border: 1px solid #b9c2cd; padding: 18px 20px; max-width: 420px; }
+:root .pp-field input, :root .pp-field textarea, :root .pp-field select { border-radius: 0; border-color: #a9b2bd; padding: 6px 8px; }
+:root .pp-cta-section { padding: 16px 0; }
+:root .pp-cta-card { background: #f5f6f7; border: 1px solid #c9ced6; color: #222; padding: 14px 18px; }
+:root .pp-cta-card h2, :root .pp-cta-card p { color: #222; }
+:root .pp-cta-card .pp-btn { color: var(--pp-btn-text); background: var(--pp-btn); }
+:root .pp-chat-fab { border-radius: 2px; width: 44px; height: 44px; }
+
+/* ─── Inline styles: square corners, no drop shadows ──────── */
+:root [style*="border-radius: 4px"], :root [style*="border-radius: 5px"], :root [style*="border-radius: 6px"],
+:root [style*="border-radius: 7px"], :root [style*="border-radius: 8px"], :root [style*="border-radius: 10px"],
+:root [style*="border-radius: 12px"], :root [style*="border-radius: 14px"], :root [style*="border-radius: 16px"],
+:root [style*="border-radius: 20px"], :root [style*="border-radius: 999px"], :root [style*="border-radius: 9999px"] { border-radius: 2px !important; }
+:root [style*="box-shadow"] { box-shadow: none !important; }
+
+/* ─── Summary lines (in place of rows of big-number tiles) ───── */
+:root .summary-line { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; border: 1px solid var(--cp-border); background: #fff; font-size: 12px; color: var(--cp-text-muted, #5b6573); }
+:root .summary-line > span { padding: 4px 12px; border-right: 1px solid var(--cp-border); }
+:root .summary-line b { color: var(--cp-text, #1d2733); font-size: 13px; }
+:root .cp-stats-row { display: flex !important; flex-wrap: wrap; gap: 0 !important; border: 1px solid var(--cp-border); background: #fff; }
+:root .cp-stat-card { display: flex !important; flex-direction: row !important; align-items: baseline; gap: 5px; flex: 0 0 auto !important; min-width: 0 !important;
+  padding: 4px 12px !important; border: 0 !important; border-right: 1px solid var(--cp-border) !important; background: none !important; box-shadow: none !important; text-align: left !important; }
+:root .cp-stat-label { order: 0; font-size: 12px !important; color: var(--cp-text-muted, #5b6573) !important; margin: 0 !important; text-transform: none !important; letter-spacing: 0 !important; }
+:root .cp-stat-label::after { content: ':'; }
+:root .cp-stat-value { order: 1; font-size: 13px !important; font-weight: bold !important; color: var(--cp-text, #1d2733) !important; line-height: 1.5 !important; }
+
+/* Client overview: the health score reads as a plain line, not a coloured ring */
+:root .ck-health-block { display: flex; align-items: baseline; gap: 5px; flex-direction: row-reverse; justify-content: flex-end; }
+:root .ck-health-ring { width: auto !important; height: auto !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; font-size: 13px !important; padding: 0 !important; }
+:root .ck-health-label { font-size: 12px; }
+:root .ck-health-sub { font-size: 12px; color: var(--cp-text-muted, #5b6573); }
+:root .ck-health-sub::after { content: ':'; }
+
+/* Big inline numbers and headings (22–36px) come down to Classic title size */
+:root :is([style*="font-size: 22px"], [style*="font-size: 24px"], [style*="font-size: 26px"], [style*="font-size: 28px"],
+  [style*="font-size: 30px"], [style*="font-size: 32px"], [style*="font-size: 34px"], [style*="font-size: 36px"]) { font-size: 16px !important; line-height: 1.3 !important; letter-spacing: 0 !important; }
+:root [style*="font-weight: 800"] { font-weight: bold !important; }
+
+/* Portal empty states are a line of text, without the large picture above it */
+:root .pp-empty-state > span:has(svg), :root .pp-ta-placeholder > span:has(svg) { display: none; }
+:root .pp-user-avatar { border-radius: 2px; }
+
+/* Setup checklist and section-access grid show words (Done / To do, Yes / No). */
+:root .ck-check-icon { width: 40px; text-align: left; font-size: 11px; }
+:root .cp-matrix-toggle { width: 40px; height: 22px; font-size: 12px; transition: none; }
+:root .pp-toast { animation: none; }

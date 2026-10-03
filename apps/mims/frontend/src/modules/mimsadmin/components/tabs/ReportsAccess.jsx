@@ -210,7 +210,7 @@ function OrgReportsPane({ orgs, H, onFlash, loading, selectedOrgId, onSelectedOr
 
       {selectedOrg && (
         <>
-          <span className="ma-ra-back-link" onClick={() => onSelectedOrgChange(null)}>← Back to tenants</span>
+          <span className="ma-ra-back-link" onClick={() => onSelectedOrgChange(null)}>Back to tenants</span>
           <div className="ma-ra-section-title">{selectedOrg.name} — Reports ({reports.filter(r => r.is_enabled).length} of {reports.length} enabled)</div>
           {busy && <div className="ma-ra-loading">Loading…</div>}
           {!busy && (
@@ -309,7 +309,7 @@ function OrgUsersPane({ orgs, H, onFlash, loading, selectedOrgId, onSelectedOrgC
 
       {selectedOrg && !selectedUser && (
         <>
-          <span className="ma-ra-back-link" onClick={() => { onSelectedOrgChange(null); setUsers([]) }}>← Back to tenants</span>
+          <span className="ma-ra-back-link" onClick={() => { onSelectedOrgChange(null); setUsers([]) }}>Back to tenants</span>
           <div className="ma-ra-section-title">{selectedOrg.name} — Users</div>
           {busy && <div className="ma-ra-loading">Loading users…</div>}
           {!busy && users.length === 0 && <div className="ma-ra-empty">No users in this tenant.</div>}
@@ -328,7 +328,7 @@ function OrgUsersPane({ orgs, H, onFlash, loading, selectedOrgId, onSelectedOrgC
 
       {selectedOrg && selectedUser && (
         <>
-          <span className="ma-ra-back-link" onClick={() => { setSelectedUser(null); setUserReports([]) }}>← Back to users</span>
+          <span className="ma-ra-back-link" onClick={() => { setSelectedUser(null); setUserReports([]) }}>Back to users</span>
           <div className="ma-ra-section-title">{selectedUser.name} ({selectedUser.email}) — Reports</div>
           {busy && <div className="ma-ra-loading">Loading…</div>}
           {!busy && (

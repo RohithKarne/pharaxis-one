@@ -26,9 +26,6 @@ export default function ToastContainer() {
     <div className="mims-toast-stack">
       {toasts.map(t => (
         <div key={t.id} className={`mims-toast mims-toast--${t.type}`}>
-          <span className="mims-toast-icon">
-            {t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : t.type === 'warn' ? '⚠' : 'ℹ'}
-          </span>
           <span className="mims-toast-msg">{t.msg}</span>
           {t.action && (
             <Link to={t.action.url} className="mims-toast-action" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}>

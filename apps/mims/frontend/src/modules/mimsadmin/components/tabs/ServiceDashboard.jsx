@@ -77,7 +77,7 @@ export default function ServiceDashboard() {
           disabled={loading}
           style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 12, cursor: loading ? 'default' : 'pointer', color: 'var(--text-primary)', opacity: loading ? 0.6 : 1 }}
         >
-          ⟳ Refresh
+          Refresh
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {services.length} service{services.length !== 1 ? 's' : ''} registered
@@ -90,7 +90,7 @@ export default function ServiceDashboard() {
       </div>
 
       {runtimeHealth && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+        <div className="summary-line" style={{ margin: '10px 20px' }}>
           {[
             { label: 'Runtime Status', value: String(runtimeHealth.status || 'unknown').toUpperCase() },
             { label: 'Active Orgs', value: runtimeHealth.summary?.active_orgs ?? 0 },
@@ -99,10 +99,7 @@ export default function ServiceDashboard() {
             { label: '5xx (24h)', value: runtimeHealth.summary?.server_5xx_24h ?? 0 },
             { label: 'Worker Alerts (24h)', value: runtimeHealth.summary?.worker_alerts_24h ?? 0 },
           ].map(card => (
-            <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{card.label}</div>
-              <div style={{ marginTop: 6, fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{card.value}</div>
-            </div>
+            <span key={card.label}>{card.label}: <b>{card.value}</b></span>
           ))}
         </div>
       )}
@@ -163,7 +160,6 @@ export default function ServiceDashboard() {
           </div>
         ) : services.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', gap: 8 }}>
-            <div style={{ fontSize: 28 }}>🖥️</div>
             <div style={{ fontSize: 14 }}>No services registered yet.</div>
           </div>
         ) : (
@@ -211,7 +207,7 @@ export default function ServiceDashboard() {
                     {/* Enabled */}
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
                       <span style={{ background: svc.enabled ? '#e6f4ee' : '#fde8ef', color: svc.enabled ? '#007a5a' : '#e01e5a', padding: '2px 10px', borderRadius: 12, fontWeight: 600, fontSize: 11 }}>
-                        {svc.enabled ? '✓ Enabled' : '✕ Disabled'}
+                        {svc.enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </td>
 
@@ -258,7 +254,7 @@ export default function ServiceDashboard() {
                             color: '#fff',
                           }}
                         >
-                          ⚙ Configure
+                          Configure
                         </button>
                       ) : (
                         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>

@@ -27,20 +27,17 @@ const AdminESignDashboardPanel = () => {
   }, []);
 
   if (loading) {
-    return <div className="p-4 bg-white rounded shadow text-gray-500">Loading Hash Chain Integrity...</div>;
+    return <div className="card"><div className="card-body" style={{ color: 'var(--text-muted)' }}>Loading hash chain integrity…</div></div>;
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-white rounded shadow text-red-600 border border-red-200">
-        <h3 className="text-lg font-bold mb-2">Hash Chain Verification Failed</h3>
-        <p>{error}</p>
-        <button 
-          onClick={fetchIntegrity}
-          className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded"
-        >
-          Retry
-        </button>
+      <div className="card">
+        <div className="card-header"><h3 style={{ margin: 0 }}>Hash Chain Verification Failed</h3></div>
+        <div className="card-body">
+          <p style={{ color: '#b91c1c', marginTop: 0 }}>{error}</p>
+          <button onClick={fetchIntegrity} className="btn btn-outline">Retry</button>
+        </div>
       </div>
     );
   }
@@ -48,91 +45,55 @@ const AdminESignDashboardPanel = () => {
   const { intact, totalEvents, headHash, lastSignatureAt, events = [] } = data;
 
   return (
-    <div className="bg-white rounded shadow border border-gray-200">
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-        <h2 className="text-xl font-bold text-gray-800">E-Signature Verification Dashboard</h2>
-        <button
-          onClick={fetchIntegrity}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded shadow-sm"
-        >
-          Verify Hash Chain Integrity
-        </button>
+    <div className="card">
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>E-Signature Verification Dashboard</h3>
+        <button onClick={fetchIntegrity} className="btn btn-primary">Verify Hash Chain Integrity</button>
       </div>
-      
-      <div className="p-6">
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="flex-1 p-4 rounded border bg-gray-50">
-            <p className="text-sm text-gray-500 uppercase tracking-wider mb-1">Status</p>
-            {intact ? (
-              <div className="flex items-center text-green-700 font-bold text-lg">
-                <span className="mr-2">✅</span>
-                Intact — every recorded signature matches the chain
-              </div>
-            ) : (
-              <div className="flex items-center text-red-600 font-bold text-lg">
-                <span className="mr-2">❌</span>
-                Chain Broken
-              </div>
-            )}
-          </div>
-          <div className="flex-1 p-4 rounded border bg-gray-50">
-            <p className="text-sm text-gray-500 uppercase tracking-wider mb-1">Total Events</p>
-            <p className="text-xl font-medium text-gray-800">{totalEvents}</p>
-          </div>
-          <div className="flex-1 p-4 rounded border bg-gray-50">
-            <p className="text-sm text-gray-500 uppercase tracking-wider mb-1">Last Signature</p>
-            <p className="text-xl font-medium text-gray-800">
-              {lastSignatureAt ? new Date(lastSignatureAt).toLocaleString() : 'N/A'}
-            </p>
-          </div>
+
+      <div className="card-body" style={{ display: 'grid', gap: 10 }}>
+        <div className="summary-line">
+          <span>Status: <b style={{ color: intact ? '#166534' : '#b91c1c' }}>{intact ? 'Intact (every recorded signature matches the chain)' : 'Chain broken'}</b></span>
+          <span>Total events: <b>{totalEvents}</b></span>
+          <span>Last signature: <b>{lastSignatureAt ? new Date(lastSignatureAt).toLocaleString() : 'N/A'}</b></span>
         </div>
-        
-        <div className="mb-6 p-4 rounded border bg-gray-50 overflow-hidden">
-          <p className="text-sm text-gray-500 uppercase tracking-wider mb-1">Head Hash (Latest)</p>
-          <p className="font-mono text-sm text-gray-700 truncate" title={headHash}>
-            {headHash || 'No signatures yet'}
-          </p>
+        <div style={{ fontSize: 12 }}>
+          Head hash (latest): <code title={headHash} style={{ wordBreak: 'break-all' }}>{headHash || 'No signatures yet'}</code>
         </div>
-        
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent E-Signature Events</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+
+        <h3 style={{ margin: '6px 0 0', fontSize: 14 }}>Recent E-Signature Events</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="admin-table" style={{ width: '100%' }}>
             <thead>
-              <tr className="bg-gray-100 text-gray-600 text-sm">
-                <th className="p-3 border-b">Case ID</th>
-                <th className="p-3 border-b">Signed By</th>
-                <th className="p-3 border-b">Action</th>
-                <th className="p-3 border-b">Meaning</th>
-                <th className="p-3 border-b">Auth Method</th>
-                <th className="p-3 border-b">Hash Chain (Snippet)</th>
-                <th className="p-3 border-b">Timestamp</th>
+              <tr>
+                <th>Case ID</th>
+                <th>Signed By</th>
+                <th>Action</th>
+                <th>Meaning</th>
+                <th>Auth Method</th>
+                <th>Hash Chain (Snippet)</th>
+                <th>Timestamp</th>
               </tr>
             </thead>
             <tbody>
               {events.slice().reverse().slice(0, 20).map(evt => (
-                <tr key={evt.id} className="border-b hover:bg-gray-50 text-sm">
-                  <td className="p-3 font-medium text-blue-600">#{evt.case_id}</td>
-                  <td className="p-3">{evt.signed_name}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                      {evt.transition}
-                    </span>
-                  </td>
-                  <td className="p-3 text-gray-600 truncate max-w-xs" title={evt.meaning}>
-                    {evt.meaning}
-                  </td>
-                  <td className="p-3">{evt.auth_method}</td>
-                  <td className="p-3 font-mono text-xs text-gray-500" title={evt.hash_chain}>
+                <tr key={evt.id}>
+                  <td>#{evt.case_id}</td>
+                  <td>{evt.signed_name}</td>
+                  <td>{evt.transition}</td>
+                  <td title={evt.meaning}>{evt.meaning}</td>
+                  <td>{evt.auth_method}</td>
+                  <td style={{ fontFamily: 'monospace' }} title={evt.hash_chain}>
                     {evt.hash_chain ? `${evt.hash_chain.substring(0, 16)}...` : 'N/A'}
                   </td>
-                  <td className="p-3 text-gray-600 whitespace-nowrap">
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     {evt.created_at ? new Date(evt.created_at).toLocaleString() : ''}
                   </td>
                 </tr>
               ))}
               {events.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="p-6 text-center text-gray-500">
+                  <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>
                     No e-signature events found.
                   </td>
                 </tr>

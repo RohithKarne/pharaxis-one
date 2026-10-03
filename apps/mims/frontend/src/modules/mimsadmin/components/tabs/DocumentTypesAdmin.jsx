@@ -147,7 +147,7 @@ export default function DocumentTypesAdmin() {
                     <tr key={t.id} style={{ borderTop: '1px solid var(--border)', opacity: t.is_active ? 1 : 0.5 }}>
                       <td style={td}><code>{t.code}</code></td>
                       <td style={td}><strong>{t.label}</strong></td>
-                      <td style={td}>{t.requires_pii_redaction ? '🔒 required' : '–'}</td>
+                      <td style={td}>{t.requires_pii_redaction ? 'required' : '–'}</td>
                       <td style={td}>{t.retention_days ? `${t.retention_days}d` : '–'}</td>
                       <td style={td}>{t.org_id == null ? 'Global' : 'Org'}</td>
                       <td style={{ ...td, textAlign: 'right' }}>

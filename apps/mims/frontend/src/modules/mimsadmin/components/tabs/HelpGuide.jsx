@@ -232,9 +232,9 @@ export default function HelpGuide() {
 
           {pages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, justifyContent: 'center' }}>
-              <button className="btn btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+              <button className="btn btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {pages} — {total} total</span>
-              <button className="btn btn-outline" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Next →</button>
+              <button className="btn btn-outline" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Next</button>
             </div>
           )}
         </>
@@ -247,7 +247,7 @@ export default function HelpGuide() {
               Stale Articles
               <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>not reviewed in 90+ days</span>
             </h3>
-            {stale.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No stale articles. ✅</div>}
+            {stale.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No stale articles.</div>}
             {stale.map(art => (
               <div key={art.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, background: '#fffbeb' }}>
                 <div>

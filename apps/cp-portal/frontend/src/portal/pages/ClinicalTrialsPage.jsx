@@ -39,7 +39,7 @@ export default function ClinicalTrialsPage() {
       </div>
 
       {loading ? <SkeletonCards count={3} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><span>🔬</span><p>No active clinical trials match your query.</p></div>
+        <div className="pp-empty-state"><p>No active clinical trials match your query.</p></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {filtered.map(trial => (

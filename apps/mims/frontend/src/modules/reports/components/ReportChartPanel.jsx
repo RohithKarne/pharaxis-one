@@ -40,9 +40,6 @@ export default function ReportChartPanel({ data }) {
         title="Click segment to drill down into cases"
       >
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: 'var(--primary)', fontSize: '32px', marginBottom: '8px' }}>
-            {chartType === 'bar' ? '📊' : chartType === 'pie' ? '🥧' : '📈'}
-          </div>
           <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             Interactive {chartType} chart visualization. <br/>
             Click any segment to drill-down into Case List.

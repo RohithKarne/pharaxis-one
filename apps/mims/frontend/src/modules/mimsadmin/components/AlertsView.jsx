@@ -355,11 +355,11 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
         </div>
         {eventsTotal > EVENTS_LIMIT && (
           <div style={{ padding: '10px 16px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
-            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset === 0} onClick={() => loadEvents(eventsOffset - EVENTS_LIMIT)}>← Prev</button>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset === 0} onClick={() => loadEvents(eventsOffset - EVENTS_LIMIT)}>Prev</button>
             <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
               {eventsOffset + 1}–{Math.min(eventsOffset + EVENTS_LIMIT, eventsTotal)} of {eventsTotal}
             </span>
-            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset + EVENTS_LIMIT >= eventsTotal} onClick={() => loadEvents(eventsOffset + EVENTS_LIMIT)}>Next →</button>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset + EVENTS_LIMIT >= eventsTotal} onClick={() => loadEvents(eventsOffset + EVENTS_LIMIT)}>Next</button>
           </div>
         )}
       </div>

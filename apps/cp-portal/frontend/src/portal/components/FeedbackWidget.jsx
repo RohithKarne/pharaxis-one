@@ -30,7 +30,7 @@ export default function FeedbackWidget() {
   }
 
   return (
-    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 999 }}>
+    <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 999 }}>
       {open && (
         <div style={{
           background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
@@ -43,7 +43,6 @@ export default function FeedbackWidget() {
 
           {status === 'done' ? (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🙏</div>
               <p style={{ margin: 0, fontSize: 14, color: '#374151', fontWeight: 500 }}>Thank you for your feedback!</p>
               <button className="pp-btn pp-btn-primary" style={{ marginTop: 16, fontSize: 13 }} onClick={reset}>Close</button>
             </div>
@@ -63,7 +62,7 @@ export default function FeedbackWidget() {
                       filter: (hovered || rating) >= n ? 'none' : 'grayscale(1) opacity(0.4)',
                     }}
                     aria-label={`${n} star`}
-                  >⭐</button>
+                  >★</button>
                 ))}
               </div>
               <textarea
@@ -92,15 +91,15 @@ export default function FeedbackWidget() {
         onClick={() => { if (open) reset(); else setOpen(true) }}
         style={{
           background: 'var(--pp-primary, #6B3FA0)', color: '#fff',
-          border: 'none', borderRadius: 50, width: 52, height: 52,
-          fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px rgba(107,63,160,0.4)',
+          border: 'none', borderRadius: 2, height: 30, padding: '0 12px',
+          fontSize: 13, fontWeight: 700, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'transform 0.15s',
         }}
         aria-label="Give feedback"
         title="Share feedback"
       >
-        💬
+        Feedback
       </button>
     </div>
   )

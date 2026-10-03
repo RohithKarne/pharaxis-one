@@ -255,70 +255,60 @@ export default function ViewData({ selectedItem = 'admin', onSelect }) {
   for (let i = start; i <= end; i++) pages.push(i)
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '250px minmax(0, 1fr)', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
-      <aside style={{ borderRight: '1px solid var(--border)', background: 'var(--surface)', padding: 18, overflow: 'auto' }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>System / View Data</div>
-        <h2 style={{ margin: '0 0 14px', fontSize: 18, color: 'var(--text-primary)' }}>Audit Trails</h2>
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Select audit trail</label>
-        <select value={activeView} onChange={e => selectView(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-primary)', marginBottom: 12 }}>
-          {VIEW_OPTIONS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
-        </select>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(0, 1fr)', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+      <aside style={{ borderRight: '1px solid var(--border)', background: 'var(--surface)', overflow: 'auto' }}>
+        <div className="card-header" style={{ fontWeight: 'bold', fontSize: 13 }}>Audit Trails</div>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {VIEW_OPTIONS.map(option => (
-            <button key={option.key} onClick={() => selectView(option.key)} style={{ textAlign: 'left', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 9, background: activeView === option.key ? '#eef2ff' : 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <div style={{ fontSize: 13, fontWeight: 800 }}>{option.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{option.description}</div>
-            </button>
+            <li key={option.key} style={{ borderBottom: '1px solid var(--border)', background: activeView === option.key ? '#fff8e6' : undefined }}>
+              <button
+                type="button"
+                onClick={() => selectView(option.key)}
+                title={option.description}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', fontWeight: activeView === option.key ? 'bold' : 'normal' }}
+              >
+                {option.label}
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       </aside>
 
       <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         {embeddedView ? (
           <>
-            <div style={{ padding: '16px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>View Data</div>
-                <h1 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{activeOption.label}</h1>
-                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>{activeOption.description}.</p>
-              </div>
-            </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
               {embeddedView}
             </div>
           </>
         ) : (
           <>
-        <div style={{ padding: '16px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>View Data</div>
-            <h1 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{activeOption.label}</h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>{activeOption.description}. Read-only audit data with full row details.</p>
+            <h1 style={{ margin: 0, fontSize: 15, color: 'var(--primary)' }}>{activeOption.label}</h1>
+            <p style={{ margin: '2px 0 0', color: 'var(--text-secondary)', fontSize: 12 }}>{activeOption.description}. Read-only.</p>
           </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px', background: 'var(--bg)', minWidth: 130 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Total Records</div>
-            <div style={{ fontSize: 22, color: 'var(--text-primary)', fontWeight: 800 }}>{meta.total || 0}</div>
-          </div>
+          <div style={{ fontSize: 12 }}>Total records: <b>{meta.total || 0}</b></div>
         </div>
 
         <div style={{ padding: '12px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="date" value={activeView === 'admin' ? adminFilter.from : loginFilter.from} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, from: e.target.value })) : setLoginFilter(f => ({ ...f, from: e.target.value }))} style={{ padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)' }} />
-          <input type="date" value={activeView === 'admin' ? adminFilter.to : loginFilter.to} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, to: e.target.value })) : setLoginFilter(f => ({ ...f, to: e.target.value }))} style={{ padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)' }} />
-          <input placeholder="User" value={activeView === 'admin' ? adminFilter.user : loginFilter.user} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, user: e.target.value })) : setLoginFilter(f => ({ ...f, user: e.target.value }))} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, minWidth: 150, background: 'var(--surface)' }} />
+          <input type="date" value={activeView === 'admin' ? adminFilter.from : loginFilter.from} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, from: e.target.value })) : setLoginFilter(f => ({ ...f, from: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
+          <input type="date" value={activeView === 'admin' ? adminFilter.to : loginFilter.to} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, to: e.target.value })) : setLoginFilter(f => ({ ...f, to: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
+          <input placeholder="User" value={activeView === 'admin' ? adminFilter.user : loginFilter.user} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, user: e.target.value })) : setLoginFilter(f => ({ ...f, user: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 150, background: 'var(--surface)' }} />
           {activeView === 'admin' ? (
-            <select value={adminFilter.action} onChange={e => setAdminFilter(f => ({ ...f, action: e.target.value }))} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)' }}>
+            <select value={adminFilter.action} onChange={e => setAdminFilter(f => ({ ...f, action: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
               <option value="">All Actions</option>
               {ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}
             </select>
           ) : (
-            <select value={loginFilter.status} onChange={e => setLoginFilter(f => ({ ...f, status: e.target.value }))} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)' }}>
+            <select value={loginFilter.status} onChange={e => setLoginFilter(f => ({ ...f, status: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
               <option value="">All Statuses</option>
               {LOGIN_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
             </select>
           )}
-          <input placeholder="Search" value={activeView === 'admin' ? adminFilter.search : loginFilter.search} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, search: e.target.value })) : setLoginFilter(f => ({ ...f, search: e.target.value }))} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, minWidth: 220, background: 'var(--surface)' }} />
-          <button onClick={refine} style={{ padding: '7px 18px', border: 'none', borderRadius: 7, background: 'var(--primary)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Refine</button>
-          <button onClick={resetFilters} style={{ padding: '7px 14px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>Reset</button>
+          <input placeholder="Search" value={activeView === 'admin' ? adminFilter.search : loginFilter.search} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, search: e.target.value })) : setLoginFilter(f => ({ ...f, search: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 220, background: 'var(--surface)' }} />
+          <button onClick={refine} style={{ padding: '7px 18px', border: 'none', borderRadius: 0, background: 'var(--primary)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Refine</button>
+          <button onClick={resetFilters} style={{ padding: '7px 14px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>Reset</button>
         </div>
 
         {error && <div style={{ margin: '12px 20px 0', padding: '10px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: 8, fontSize: 13 }}>{error}</div>}

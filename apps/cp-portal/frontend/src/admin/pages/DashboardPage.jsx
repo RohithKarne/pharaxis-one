@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
-import Icon from '../../shared/components/Icon'
 
 export default function DashboardPage() {
   const [clients, setClients] = useState([])
@@ -43,10 +42,10 @@ export default function DashboardPage() {
   }).format(new Date())
 
   const metricCards = [
-    { label: 'Active Clients', value: active.length, helper: `${inactive.length} inactive`, icon: 'building', tone: 'blue' },
-    { label: 'Open Submissions', value: totalSubs, helper: `${clientsWithSubs.length} client queues`, icon: 'inbox', tone: 'green' },
-    { label: 'Content Alerts', value: freshnessAlerts.length, helper: freshnessAlerts.length ? 'Action needed' : 'Clear', icon: 'shield', tone: freshnessAlerts.length ? 'amber' : 'green' },
-    { label: 'Launch Readiness', value: `${avgReadiness}%`, helper: `${readyClients.length} ready to launch`, icon: 'chart', tone: avgReadiness >= 75 ? 'green' : 'amber' },
+    { label: 'Active Clients', value: active.length, helper: `${inactive.length} inactive`, tone: 'blue' },
+    { label: 'Open Submissions', value: totalSubs, helper: `${clientsWithSubs.length} client queues`, tone: 'green' },
+    { label: 'Content Alerts', value: freshnessAlerts.length, helper: freshnessAlerts.length ? 'Action needed' : 'Clear', tone: freshnessAlerts.length ? 'amber' : 'green' },
+    { label: 'Launch Readiness', value: `${avgReadiness}%`, helper: `${readyClients.length} ready to launch`, tone: avgReadiness >= 75 ? 'green' : 'amber' },
   ]
 
   const priorityItems = freshnessAlerts.slice(0, 5)
@@ -60,52 +59,39 @@ export default function DashboardPage() {
 
   return (
     <AdminLayout title="Dashboard">
-      <div className="oc-hero">
-        <div>
-          <div className="oc-eyebrow">CP Portal Admin</div>
-          <h2>Operations Command Center</h2>
-          <p>Monitor client launch readiness, content health, and submission queues from one workspace.</p>
-        </div>
-        <div className="oc-hero-actions">
-          <span className="oc-refresh-label">Updated {updatedDate}</span>
-          <button className="cp-btn cp-btn-primary" onClick={() => navigate('/admin/clients')}>
-            Manage Clients
-          </button>
-        </div>
+      <div className="oc-toolbar">
+        <span className="oc-refresh-label">Updated {updatedDate}</span>
+        <button className="cp-btn cp-btn-primary" onClick={() => navigate('/admin/clients')}>
+          Manage Clients
+        </button>
       </div>
 
-      <div className="oc-metric-grid">
-        {metricCards.map(card => (
-          <div key={card.label} className={`oc-metric-card tone-${card.tone}`}>
-            <div className="oc-metric-icon"><Icon name={card.icon} size={20} /></div>
-            <div>
-              <div className="oc-metric-value">{card.value}</div>
-              <div className="oc-metric-label">{card.label}</div>
-              <div className="oc-metric-helper">{card.helper}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <section className="oc-panel">
+        <div className="oc-panel-header"><h2>Summary</h2></div>
+        <table className="cp-table oc-summary-table">
+          <tbody>
+            {metricCards.map(card => (
+              <tr key={card.label}>
+                <td>{card.label}</td>
+                <td className={`oc-summary-value tone-${card.tone}`}>{card.value}</td>
+                <td className="oc-summary-helper">{card.helper}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <div className="oc-dashboard-grid">
         <section className="oc-panel">
           <div className="oc-panel-header">
-            <div>
-              <h2>Priority Alerts</h2>
-              <p>Content and document items that need admin attention.</p>
-            </div>
-            <span className={`oc-count-pill${freshnessAlerts.length ? ' warning' : ''}`}>{freshnessAlerts.length}</span>
+            <h2>Priority Alerts ({freshnessAlerts.length})</h2>
           </div>
           {priorityItems.length === 0 ? (
-            <div className="oc-empty-state">
-              <Icon name="check" size={18} />
-              <span>No active content health alerts.</span>
-            </div>
+            <div className="oc-empty-state">No active content health alerts.</div>
           ) : (
             <div className="oc-work-list">
               {priorityItems.map((a, i) => (
                 <button key={`${a.clientId}-${a.type}-${i}`} className="oc-work-row" onClick={() => navigate(`/admin/clients/${a.clientId}`)}>
-                  <span className={`oc-work-icon ${a.type}`}><Icon name={a.type === 'news' ? 'news' : 'folder'} size={16} /></span>
                   <span className="oc-work-body">
                     <strong>{a.clientName}</strong>
                     <span>{a.msg}</span>
@@ -119,22 +105,14 @@ export default function DashboardPage() {
 
         <section className="oc-panel">
           <div className="oc-panel-header">
-            <div>
-              <h2>Open Submissions</h2>
-              <p>Client queues sorted by highest volume.</p>
-            </div>
-            <span className="oc-count-pill">{totalSubs}</span>
+            <h2>Open Submissions ({totalSubs})</h2>
           </div>
           {clientsWithSubs.length === 0 ? (
-            <div className="oc-empty-state">
-              <Icon name="inbox" size={18} />
-              <span>No open submissions.</span>
-            </div>
+            <div className="oc-empty-state">No open submissions.</div>
           ) : (
             <div className="oc-work-list">
               {clientsWithSubs.slice(0, 5).map(c => (
                 <button key={c.id} className="oc-work-row" onClick={() => navigate(`/admin/clients/${c.id}/submissions`)}>
-                  <span className="oc-work-icon"><Icon name="inbox" size={16} /></span>
                   <span className="oc-work-body">
                     <strong>{c.name}</strong>
                     <span>{c.code}</span>
@@ -148,17 +126,10 @@ export default function DashboardPage() {
 
         <section className="oc-panel">
           <div className="oc-panel-header">
-            <div>
-              <h2>Launch Readiness</h2>
-              <p>Clients closest to launch or needing setup work.</p>
-            </div>
-            <span className="oc-count-pill">{readyClients.length}/{clients.length}</span>
+            <h2>Launch Readiness ({readyClients.length} of {clients.length} ready)</h2>
           </div>
           {setupClients.length === 0 ? (
-            <div className="oc-empty-state">
-              <Icon name="check" size={18} />
-              <span>All active clients are ready.</span>
-            </div>
+            <div className="oc-empty-state">All active clients are ready.</div>
           ) : (
             <div className="oc-readiness-list">
               {setupClients.slice(0, 5).map(c => (
@@ -175,10 +146,7 @@ export default function DashboardPage() {
 
       <section className="oc-panel oc-client-table-panel">
         <div className="oc-panel-header">
-          <div>
-            <h2>Client Portfolio</h2>
-            <p>Operational table view for status, readiness, and queue health.</p>
-          </div>
+          <h2>Clients</h2>
           <button className="cp-btn cp-btn-outline" onClick={() => navigate('/admin/clients')}>
             Open Client Manager
           </button>
@@ -209,7 +177,6 @@ export default function DashboardPage() {
                   <tr key={c.id} className={!c.is_active ? 'row-inactive' : ''} onClick={() => navigate(`/admin/clients/${c.id}`)}>
                     <td>
                       <div className="oc-client-cell">
-                        <span className="oc-client-avatar">{c.name?.charAt(0)?.toUpperCase() || 'C'}</span>
                         <span>
                           <strong>{c.name}</strong>
                           <small>{c.code}</small>

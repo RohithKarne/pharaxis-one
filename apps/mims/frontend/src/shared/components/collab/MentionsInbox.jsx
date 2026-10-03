@@ -52,13 +52,13 @@ export default function MentionsInbox({ onOpen, limit = 25, unreadOnly = true })
           }}>{items.length}</span>
         )}</strong>
         <button onClick={load} style={{ background: 'transparent', border: 'none',
-          fontSize: 11, color: 'var(--accent,#1a4f9c)', cursor: 'pointer', fontWeight: 600 }}>↻</button>
+          fontSize: 11, color: 'var(--accent,#1a4f9c)', cursor: 'pointer', fontWeight: 600 }}>Refresh</button>
       </div>
       <div style={{ maxHeight: 320, overflowY: 'auto' }}>
         {loading && <div style={{ padding: 14, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>}
         {!loading && items.length === 0 && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12, textAlign: 'center' }}>
-            🎉 You're caught up.
+            You're caught up.
           </div>
         )}
         {!loading && items.map(m => (

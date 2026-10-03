@@ -41,7 +41,7 @@ export default function NewsDetailPage() {
 
   return (
     <div className="pp-article-page">
-      <button onClick={() => navigate(-1)} className="pp-back-btn">← Back to News</button>
+      <button onClick={() => navigate(-1)} className="pp-back-btn">Back to News</button>
 
       {post.category && <div className="pp-article-cat">{post.category}</div>}
       <h1 className="pp-article-title">{post.title}</h1>

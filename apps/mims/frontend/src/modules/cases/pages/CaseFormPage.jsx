@@ -121,7 +121,7 @@ export default function CaseFormPage() {
     <div className="cf-form-page">
 
       <div className="cf-form-header">
-        <button className="cf-back-btn" onClick={handleBackNavigation}>← Back</button>
+        <button className="cf-back-btn" onClick={handleBackNavigation}>Back</button>
         <div className="cf-form-header-info">
           <span className="cf-form-case-num">
             {caseData.case_number || <span className="cf-draft-badge">DRAFT</span>}
@@ -145,7 +145,7 @@ export default function CaseFormPage() {
               className="cf-action-screen-btn"
               onClick={() => navigate(`/cases/${id}/transmission`)}
             >
-              Transmission →
+              Transmission
             </button>
           )}
           {caseData.case_number && caseData.case_type === 'MI' && (
@@ -154,7 +154,7 @@ export default function CaseFormPage() {
               className="cf-action-screen-btn"
               onClick={() => navigate(`/cases/${id}/response`)}
             >
-              Response →
+              Response
             </button>
           )}
           <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving}>

@@ -254,7 +254,7 @@ export default function ModulesSection({ token }) {
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading modules…</p>
       ) : modules.length === 0 ? (
-        <div className="cm-empty"><div className="cm-empty-icon">🧩</div><p>No modular documents yet. Create your first module.</p></div>
+        <div className="cm-empty"><p>No modular documents yet. Create your first module.</p></div>
       ) : (
         <table className="cm-table">
           <thead>

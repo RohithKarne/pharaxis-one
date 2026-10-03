@@ -54,7 +54,7 @@ export default function EventsPage() {
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><span>📅</span><p>No {filter} events found.</p></div>
+        <div className="pp-empty-state"><p>No {filter} events found.</p></div>
       ) : (
         <div className="pp-event-list">
           {filtered.map(ev => {
@@ -71,13 +71,13 @@ export default function EventsPage() {
                 <h3 className="pp-event-title">{ev.title}</h3>
                 {ev.description && <p className="pp-event-desc">{ev.description}</p>}
                 <div className="pp-event-meta">
-                  {(ev.city || ev.country) && <span>📍 {[ev.venue, ev.city, ev.country].filter(Boolean).join(', ')}</span>}
-                  {ev.start_date && <span>🗓 {formatDate(ev.start_date)}</span>}
+                  {(ev.city || ev.country) && <span>{[ev.venue, ev.city, ev.country].filter(Boolean).join(', ')}</span>}
+                  {ev.start_date && <span>{formatDate(ev.start_date)}</span>}
                   {ev.event_type === 'webinar' && <span className="pp-virtual-tag">Virtual</span>}
                 </div>
                 {ev.registration_url && (
                   <a href={ev.registration_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-sm pp-btn-primary">
-                    Register →
+                    Register
                   </a>
                 )}
               </div>

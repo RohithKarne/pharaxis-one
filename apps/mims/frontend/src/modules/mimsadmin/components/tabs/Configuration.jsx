@@ -23,50 +23,42 @@ export default function Configuration({ selectedItem, onSelect }) {
   const TopicComponent = selectedItem ? TOPIC_COMPONENTS[selectedItem] : null
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
-      <div style={{ maxWidth: 1080, display: 'grid', gap: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>Configuration Workspace</h2>
-          <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>
-            Configuration topics for this organisation.
-          </div>
-        </div>
+    <div className="ma-page" style={{ flex: 1, overflow: 'auto' }}>
+      <div className="ma-page-header" style={{ marginBottom: 12 }}>
+        <h1>Configuration</h1>
+        <p>Configuration settings for this organisation.</p>
+      </div>
+      {selectedLabel && (
+        <p style={{ margin: '0 0 12px', fontSize: 12 }}>
+          Selected: <b>{selectedLabel}</b>
+        </p>
+      )}
 
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
-          <div style={{ fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Current Focus</div>
-          <div style={{ marginTop: 8, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {selectedLabel || 'Select a configuration topic'}
-          </div>
-
-        </div>
-
-        {TopicComponent && (
-          <Suspense fallback={<div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading…</div>}>
+      {TopicComponent && (
+        <div style={{ marginBottom: 12 }}>
+          <Suspense fallback={<div style={{ padding: 12, color: 'var(--text-muted)' }}>Loading…</div>}>
             <TopicComponent />
           </Suspense>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          {items.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => onSelect?.(item.value)}
-              style={{
-                textAlign: 'left',
-                border: selectedItem === item.value ? '1px solid var(--primary)' : '1px solid var(--border)',
-                background: selectedItem === item.value ? 'rgba(var(--primary-rgb, 79,70,229),0.08)' : '#fff',
-                borderRadius: 12,
-                padding: 16,
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.label}</div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{item.lineage.slice(0, -1).join(' / ') || 'Configuration'}</div>
-            </button>
-          ))}
         </div>
-      </div>
+      )}
+
+      <table className="admin-table">
+        <thead>
+          <tr><th>Topic</th><th>Group</th></tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.value} style={selectedItem === item.value ? { background: '#fff8e6' } : undefined}>
+              <td>
+                <button type="button" className="btn btn-link" onClick={() => onSelect?.(item.value)}>
+                  {item.label}
+                </button>
+              </td>
+              <td>{item.lineage.slice(0, -1).join(' / ') || 'Configuration'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

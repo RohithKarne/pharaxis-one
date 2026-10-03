@@ -48,7 +48,7 @@ export default function PageLoader() {
       <div style={{
         width: 56, height: 56,
         border: '5px solid rgba(107, 63, 160, 0.2)',
-        borderTopColor: '#6B3FA0',
+        borderTopColor: 'var(--cp-primary)',
         borderRadius: '50%',
         animation: 'pl-spin 0.75s linear infinite',
       }} />

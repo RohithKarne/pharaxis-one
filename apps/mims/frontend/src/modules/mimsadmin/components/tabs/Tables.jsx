@@ -14,58 +14,38 @@ export default function Tables({ selectedItem, onSelect }) {
   const items = flattenNav(TABLES_NAV)
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
-      <div style={{ maxWidth: 1080, display: 'grid', gap: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>Tables Workspace</h2>
-          <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>
-            General table maintenance is available directly below. Other table topics stay reachable from this catalog instead of dropping into a dead-end stub.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => onSelect?.('tbl-general')}
-            style={{
-              border: '1px solid var(--primary)',
-              background: 'rgba(var(--primary-rgb, 79,70,229),0.08)',
-              color: 'var(--primary)',
-              borderRadius: 999,
-              padding: '10px 16px',
-              cursor: 'pointer',
-              fontWeight: 700,
-            }}
-          >
-            Open General Table Manager
-          </button>
-          {selectedItem && (
-            <div style={{ alignSelf: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
-              Selected topic: <strong>{findTableLabel(selectedItem)}</strong>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          {items.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => onSelect?.(item.value)}
-              style={{
-                textAlign: 'left',
-                border: selectedItem === item.value ? '1px solid var(--primary)' : '1px solid var(--border)',
-                background: selectedItem === item.value ? 'rgba(var(--primary-rgb, 79,70,229),0.08)' : '#fff',
-                borderRadius: 12,
-                padding: 16,
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.label}</div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{item.lineage.slice(0, -1).join(' / ') || 'Tables'}</div>
-            </button>
-          ))}
-        </div>
+    <div className="ma-page" style={{ flex: 1, overflow: 'auto' }}>
+      <div className="ma-page-header" style={{ marginBottom: 12 }}>
+        <h1>Tables</h1>
+        <p>Pick a table to maintain. General Tables holds the picklists used on case forms.</p>
       </div>
+      <p style={{ margin: '0 0 12px' }}>
+        <button type="button" className="btn btn-primary" onClick={() => onSelect?.('tbl-general')}>
+          Open General Tables
+        </button>
+        {selectedItem && (
+          <span style={{ marginLeft: 12, fontSize: 12 }}>
+            Selected: <b>{findTableLabel(selectedItem)}</b>
+          </span>
+        )}
+      </p>
+      <table className="admin-table">
+        <thead>
+          <tr><th>Topic</th><th>Group</th></tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.value} style={selectedItem === item.value ? { background: '#fff8e6' } : undefined}>
+              <td>
+                <button type="button" className="btn btn-link" onClick={() => onSelect?.(item.value)}>
+                  {item.label}
+                </button>
+              </td>
+              <td>{item.lineage.slice(0, -1).join(' / ') || 'Tables'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

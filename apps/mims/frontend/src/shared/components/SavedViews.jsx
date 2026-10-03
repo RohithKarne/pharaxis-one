@@ -63,7 +63,7 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
         }}
         defaultValue=""
       >
-        <option value="">📁 Saved Views ({views.length})</option>
+        <option value="">Saved Views ({views.length})</option>
         {views.map(v => (
           <option key={v.id} value={v.id}>
             {v.is_default ? '★ ' : ''}{v.view_name}
@@ -74,7 +74,7 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
         style={{ padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 11, cursor: 'pointer' }}
         onClick={() => setShowSave(true)}
         title="Save current filter as a view"
-      >💾</button>
+      >Save view</button>
       {views.length > 0 && (
         <details style={{ position: 'relative' }}>
           <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}>⋮</summary>

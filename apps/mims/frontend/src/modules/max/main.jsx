@@ -18,6 +18,7 @@ import { initClientObservability } from '../../shared/observability/clientTeleme
 import { bootTheme } from '../../shared/utils/applyTheme'
 import '../../index.css'
 import '../../shared/styles/themes.css'
+import '../../shared/styles/classic.css'
 
 initClientObservability({ app: 'mims-max' })
 bootTheme() // fire-and-forget — applies cached theme instantly, syncs with server

@@ -175,7 +175,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
           margin: '0 0 14px', padding: 14, borderRadius: 8,
           background: 'var(--surface,#fff)', border: '1px solid var(--border)',
         }}>
-          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>📎 Case Attachments</div>
+          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Case Attachments</div>
           <DropzoneUpload entityType="case" entityId={id} onUploaded={() => setUploadKey(k => k + 1)} />
           <div style={{ marginTop: 12 }}>
             <AttachmentGallery entityType="case" entityId={id} reloadKey={uploadKey} />

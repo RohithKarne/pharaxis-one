@@ -54,28 +54,24 @@ export default function SlaCountdownBadge({ dueAt, slaDue, compact }) {
   let badgeClass = '';
   let statusText = '';
   let timeString = '';
-  let icon = '';
 
   if (isBreached) {
     badgeClass = 'cf-sla-badge-red';
     statusText = 'BREACHED';
     timeString = `(-${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m)`;
-    icon = '🚨';
   } else if (diffH <= 48) {
     badgeClass = 'cf-sla-badge-amber';
     statusText = compact ? '' : 'remaining';
     timeString = `${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`;
-    icon = '⚠️';
   } else {
     badgeClass = 'cf-sla-badge-green';
     statusText = compact ? '' : 'remaining';
     timeString = `${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`;
-    icon = '✓';
   }
 
   return (
     <span className={`cf-sla-badge ${badgeClass} ${compact ? 'compact' : ''}`}>
-      SLA {icon} {isBreached ? statusText : timeString} {isBreached ? timeString : statusText}
+      SLA {isBreached ? statusText : timeString} {isBreached ? timeString : statusText}
     </span>
   );
 }

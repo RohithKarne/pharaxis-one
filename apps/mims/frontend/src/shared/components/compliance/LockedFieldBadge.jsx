@@ -39,6 +39,6 @@ export default function LockedFieldBadge({ section, field, caseStatus, onLockCha
       marginLeft: 6, padding: '1px 6px', fontSize: 10, fontWeight: 700,
       borderRadius: 10, background: '#fff4d6', color: '#8a6a00',
       border: '1px solid #ffe082',
-    }}>🔒 {info.mode === 'admin_only' ? 'admin-only' : info.mode === 'frozen' ? 'frozen' : 'read-only'}</span>
+    }}>{info.mode === 'admin_only' ? 'admin-only' : info.mode === 'frozen' ? 'frozen' : 'read-only'}</span>
   )
 }

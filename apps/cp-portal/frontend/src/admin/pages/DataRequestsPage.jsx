@@ -59,11 +59,11 @@ export default function DataRequestsPage() {
         <>
           <div className="cp-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Requests {pending > 0 ? `· ${pending} pending` : ''}</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
           </div>
 
           {requests.length === 0 ? (
-            <div className="cp-empty"><div style={{ fontSize: 40 }}>🛡️</div><p>No data requests yet.</p></div>
+            <div className="cp-empty"><p>No data requests yet.</p></div>
           ) : (
             <table className="cp-table">
               <thead>

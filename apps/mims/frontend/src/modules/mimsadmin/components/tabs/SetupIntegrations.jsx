@@ -15,10 +15,10 @@ const INTEGRATION_SECTION_BY_SETUP_ITEM = {
 
 function Placeholder({ label }) {
   return (
-    <div style={{ maxWidth: 720, margin: '24px', background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 10, padding: 32, textAlign: 'center' }}>
+    <div style={{ maxWidth: 720, margin: '24px', background: 'var(--surface)', border: '1px solid var(--border)', padding: 16 }}>
       <h2 style={{ margin: '0 0 8px', fontSize: 17, color: 'var(--text-primary)' }}>{label}</h2>
       <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-        This integration is listed in the new Setup menu and will be enabled when its configuration panel is available.
+        There are no settings for this integration on this screen.
       </p>
     </div>
   )
@@ -40,9 +40,6 @@ export default function SetupIntegrations({ selectedItem }) {
     <div style={{ flex: 1, overflow: 'auto' }}>
       <div style={{ padding: '24px 32px 0' }}>
         <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-          Manage integration settings from MIMS Admin under System Setup.
-        </p>
         {msg.text && (
           <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`} style={{ display: 'block', marginTop: 12 }}>
             {msg.text}

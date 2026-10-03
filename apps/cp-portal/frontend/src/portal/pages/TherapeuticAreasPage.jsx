@@ -72,7 +72,7 @@ export default function TherapeuticAreasPage() {
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
         <h1>Therapeutic Areas</h1>
-        <p>Explore our scientific and medical focus areas.</p>
+        <p>Disease areas and treatment categories.</p>
       </div>
 
       {loading ? <SkeletonCards count={4} /> : areas.length === 0 ? (

@@ -124,7 +124,7 @@ export default function FieldActionsAdmin() {
                       style={{
                         ...ghostBtn, fontSize: 11, padding: '4px 10px',
                         opacity: selected.status === s ? 0.4 : 1, cursor: selected.status === s ? 'not-allowed' : 'pointer',
-                      }}>→ {s}</button>
+                      }}>Move to {s}</button>
                   ))}
                 </div>
               </div>

@@ -258,7 +258,7 @@ export default function FAQsSection({ token }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {selectedFaqIds.length > 0 && (
             <button className="cm-btn cm-btn-secondary" onClick={() => setShowBulkTag(true)}>
-              🏷 Bulk Tag ({selectedFaqIds.length})
+              Bulk Tag ({selectedFaqIds.length})
             </button>
           )}
           {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
@@ -298,7 +298,7 @@ export default function FAQsSection({ token }) {
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading FAQs…</p>
       ) : faqs.length === 0 ? (
-        <div className="cm-empty"><div className="cm-empty-icon">❓</div><p>No FAQs found. Create your first one!</p></div>
+        <div className="cm-empty"><p>No FAQs found.</p></div>
       ) : (
         <table className="cm-table">
           <thead>

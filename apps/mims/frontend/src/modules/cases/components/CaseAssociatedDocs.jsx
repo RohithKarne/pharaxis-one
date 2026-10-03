@@ -30,7 +30,6 @@ export default function CaseAssociatedDocs({ miTab, token }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {docs.map(d => (
         <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
-          <span style={{ fontSize: 16 }}>📎</span>
           <div style={{ flex: 1 }}>
             <span style={{ fontWeight: 500 }}>{d.name}</span>
             <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>{d.doc_id} · {d.relation_type} · v{d.version_major}.{d.version_minor}</span>

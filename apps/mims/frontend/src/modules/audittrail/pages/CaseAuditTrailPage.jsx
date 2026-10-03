@@ -132,7 +132,6 @@ function RightPanel({ caseItem, token }) {
     return (
       <div className="cat-right">
         <div className="cat-right-empty">
-          <div className="cat-right-empty-icon">📋</div>
           <div>Select a case to view its audit history</div>
         </div>
       </div>
@@ -204,9 +203,9 @@ export default function CaseAuditTrailPage({ embedded = false } = {}) {
         <div className="cat-top">
           <div>
             <h1 className="cat-title">Case Audit Trail</h1>
-            <span className="cat-subtitle">Field-level change history per case — click a case to view versioned audit log</span>
+            <span className="cat-subtitle">Field changes for each case. Select a case to see its history.</span>
           </div>
-          <button className="cat-refresh-btn" onClick={fetchCases} disabled={leftLoading}>⟳ Refresh</button>
+          <button className="cat-refresh-btn" onClick={fetchCases} disabled={leftLoading}>Refresh</button>
         </div>
 
         <div className="cat-panels">
@@ -249,9 +248,9 @@ export default function CaseAuditTrailPage({ embedded = false } = {}) {
             </div>
             {totalPages > 1 && (
               <div className="cat-left-pagination">
-                <button className="cat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+                <button className="cat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
                 <span className="cat-left-pg-info">{page} / {totalPages}</span>
-                <button className="cat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+                <button className="cat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
               </div>
             )}
           </div>

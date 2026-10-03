@@ -105,7 +105,6 @@ function RightPanel({ caseItem, token }) {
     return (
       <div className="tat-right">
         <div className="tat-right-empty">
-          <div className="tat-right-empty-icon">📡</div>
           <div>Select a case to view its transmission history</div>
         </div>
       </div>
@@ -175,9 +174,9 @@ export default function TransmissionAuditTrailPage({ embedded = false } = {}) {
         <div className="tat-top">
           <div>
             <h1 className="tat-title">Transmission Audit Trail</h1>
-            <span className="tat-subtitle">Outbound transmission log per case — click a case to view all transmissions</span>
+            <span className="tat-subtitle">Transmissions for each case. Select a case to see them.</span>
           </div>
-          <button className="tat-refresh-btn" onClick={fetchCases} disabled={leftLoading}>⟳ Refresh</button>
+          <button className="tat-refresh-btn" onClick={fetchCases} disabled={leftLoading}>Refresh</button>
         </div>
 
         <div className="tat-panels">
@@ -219,9 +218,9 @@ export default function TransmissionAuditTrailPage({ embedded = false } = {}) {
             </div>
             {totalPages > 1 && (
               <div className="tat-left-pagination">
-                <button className="tat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+                <button className="tat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
                 <span className="tat-left-pg-info">{page} / {totalPages}</span>
-                <button className="tat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+                <button className="tat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
               </div>
             )}
           </div>

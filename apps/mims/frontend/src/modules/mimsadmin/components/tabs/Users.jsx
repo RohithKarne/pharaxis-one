@@ -213,8 +213,8 @@ export default function Users() {
                 showFlash('CSV downloaded.')
               } catch { showFlash('Network error.', 'error') }
             }}
-          >⬇ Export CSV</button>
-          <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>⇪ Bulk Add</button>
+          >Export CSV</button>
+          <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>Bulk Add</button>
           <button className="ma-usr-btn-add" onClick={openCreate}>+ Add User</button>
         </div>
       </div>
@@ -266,7 +266,7 @@ export default function Users() {
                 </td>
                 <td style={{ fontSize: 12, color: isExpired(u.password_expires_at) ? 'var(--error, #c00)' : 'var(--text-muted)' }}>
                   {fmtDate(u.password_expires_at)}
-                  {isExpired(u.password_expires_at) && ' ⚠'}
+                  {isExpired(u.password_expires_at) && ' (expired)'}
                 </td>
                 <td onClick={e => e.stopPropagation()}>
                   <AuditChip
@@ -517,7 +517,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
               {t.label}
               {((t.key === 'general' && (errors.user_id || errors.name || errors.security_group_id || errors.email)) ||
                 (t.key === 'tenants' && errors.tenant_ids)) && (
-                <span style={{ color: 'var(--error,#c00)', marginLeft: 5 }}>●</span>
+                <span style={{ color: 'var(--error,#c00)', marginLeft: 5 }}>*</span>
               )}
             </div>
           ))}

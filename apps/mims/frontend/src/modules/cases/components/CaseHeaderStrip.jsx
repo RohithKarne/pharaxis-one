@@ -129,7 +129,7 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
           </>
         )}
         <button type="button" className="cf-strip-audit-link" onClick={() => setAuditOpen(true)}>
-          Audit trail ↗
+          Audit trail
         </button>
       </div>
 

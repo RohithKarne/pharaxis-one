@@ -121,7 +121,6 @@ export default function PortalHomePage() {
       path:  'submit',
       action: 'Start request',
       tone: 'primary',
-      subChips: ['⚡ Quick AE Report', '❓ Product Inquiry', '📋 Complaint Form'],
     },
     {
       key:   'document_library',
@@ -131,7 +130,6 @@ export default function PortalHomePage() {
       path:  'documents',
       action: 'Browse documents',
       tone: 'teal',
-      subChips: ['📄 Prescribing Info (SmPC)', '🔬 Clinical Papers', '💡 Patient Leaflets'],
     },
     {
       key:   'find_msl',
@@ -141,7 +139,6 @@ export default function PortalHomePage() {
       path:  'find-msl',
       action: 'Find an MSL',
       tone: 'primary',
-      subChips: ['🟢 Available Today', '📅 Book 1-on-1', '💬 Medical Discussion'],
     },
   ].filter(c => isFeatureEnabled(c.key))
 
@@ -150,7 +147,7 @@ export default function PortalHomePage() {
       key:   'therapeutic_areas',
       icon:  'beaker',
       title: 'Therapeutic Areas',
-      desc:  'Explore our focus areas across diseases and treatment categories.',
+      desc:  'Information by disease area and treatment category.',
       path:  'therapeutic-areas',
     },
     {
@@ -177,26 +174,8 @@ export default function PortalHomePage() {
         { id: 'medical-literature', title: 'Request Medical Literature' },
       ]
 
-  const trustItems = [
-    {
-      icon: 'shield',
-      title: 'Safety information, front and centre',
-      desc: 'Current safety alerts and prescribing details are always one click away, so you can check risk information first.',
-    },
-    {
-      icon: 'check',
-      title: 'Reviewed and approved',
-      desc: 'Every document and answer is vetted by our medical affairs team before it reaches you.',
-    },
-    {
-      icon: 'users',
-      title: 'Relevant to your practice',
-      desc: 'Content and recommendations are tailored to your specialty, so you find what matters faster.',
-    },
-  ]
-
-  const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
-  const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'
+  const heroTitle    = portalConfig?.welcome_title || 'Medical Information'
+  const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Ask a question about our products, report a side effect, or find approved documents.'
 
   const formatEventDate = (str) => (str ? formatLongDate(str) : '')
 
@@ -215,7 +194,6 @@ export default function PortalHomePage() {
       <section className="pp-hero">
         <div className="pp-hero-inner">
           <div className="pp-hero-copy">
-            <span className="pp-hero-kicker">Medical affairs support</span>
             <h1 className="pp-hero-title">{heroTitle}</h1>
             <p className="pp-hero-subtitle">{heroSubtitle}</p>
             <div className="pp-hero-search-wrap">
@@ -258,19 +236,12 @@ export default function PortalHomePage() {
                 <button key={term} type="button" onClick={() => runSearch(term)}>{term}</button>
               ))}
             </div>
-            <div className="pp-quick-filter-pills" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-              <button type="button" onClick={() => navigate(`${base}/documents`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
-                📁 Prescribing Info
-              </button>
-              <button type="button" onClick={() => navigate(`${base}/submit`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
-                ⚠️ AE Report
-              </button>
-              <button type="button" onClick={() => navigate(`${base}/find-msl`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
-                👨‍⚕️ Find MSL
-              </button>
-              <button type="button" onClick={() => navigate(`${base}/drug-info`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
-                💊 Product Catalog
-              </button>
+            <div className="pp-search-suggestions pp-hero-shortcuts" aria-label="Shortcuts">
+              <span>Go to:</span>
+              <Link to={`${base}/documents`}>Prescribing information</Link>
+              <Link to={`${base}/submit`}>Report a side effect</Link>
+              <Link to={`${base}/find-msl`}>Find an MSL</Link>
+              <Link to={`${base}/drug-info`}>Product catalogue</Link>
             </div>
           </div>
           <aside className="pp-hero-panel" aria-label="Portal shortcuts">
@@ -301,27 +272,10 @@ export default function PortalHomePage() {
         </div>
       </section>
 
-      <section className="pp-trust-section">
-        <div className="pp-container">
-          <div className="pp-trust-grid">
-            {trustItems.map(item => (
-              <div key={item.title} className="pp-trust-item">
-                <span className="pp-trust-icon"><Icon name={item.icon} size={20} /></span>
-                <span>
-                  <h3>{item.title}</h3>
-                  <p>{item.desc}</p>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="pp-top-tasks-section">
         <div className="pp-container">
           <div className="pp-section-heading">
-            <h2>What can we help you with today?</h2>
-            <p>Start with the most common medical information tasks.</p>
+            <h2>Common requests</h2>
           </div>
           <div className="pp-top-task-grid">
             {topTasks.map(card => (
@@ -330,16 +284,7 @@ export default function PortalHomePage() {
                 <div className="pp-top-task-body">
                   <h3>{card.title}</h3>
                   <p>{card.desc}</p>
-                  {card.subChips && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 10px' }}>
-                      {card.subChips.map((chip, idx) => (
-                        <span key={idx} style={{ background: '#F3F4F6', color: '#4B5563', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 12 }}>
-                          {chip}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <span>{card.action} <span aria-hidden="true">→</span></span>
+                  <span>{card.action}</span>
                 </div>
               </Link>
             ))}
@@ -354,11 +299,8 @@ export default function PortalHomePage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: forYouNews.length || forYouDocs.length ? 20 : 0 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1A1A2E' }}>
-                  Welcome back, {user.first_name}!
+                  Signed in as {user.first_name}
                 </h2>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
-                  Here's what's relevant for you today.
-                </p>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
                 <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>My activity</Link>
@@ -407,8 +349,7 @@ export default function PortalHomePage() {
         <section className="pp-features-section">
           <div className="pp-container">
             <div className="pp-section-heading compact">
-              <h2>Explore more resources</h2>
-              <p>Move quickly into product, science, and support areas.</p>
+              <h2>More information</h2>
             </div>
             <div className="pp-feature-grid">
               {secondaryTasks.map(card => (
@@ -416,7 +357,7 @@ export default function PortalHomePage() {
                   <div className="pp-feature-icon"><Icon name={card.icon} size={24} /></div>
                   <h3 className="pp-feature-title">{card.title}</h3>
                   <p className="pp-feature-desc">{card.desc}</p>
-                  <span className="pp-feature-link">Open <span aria-hidden="true">→</span></span>
+                  <span className="pp-feature-link">Open</span>
                 </Link>
               ))}
             </div>

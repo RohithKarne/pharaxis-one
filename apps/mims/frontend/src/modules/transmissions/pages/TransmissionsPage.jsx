@@ -122,7 +122,7 @@ export default function TransmissionsPage() {
             <span className="tx-subtitle">Outbound case transmissions to external systems</span>
           </div>
           <button className="tx-refresh-btn" onClick={() => { logScreenEvent(token, 'REFRESH', {}); fetchEntries() }} disabled={loading}>
-            {loading ? '⟳ Loading…' : '⟳ Refresh'}
+            {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
@@ -134,12 +134,15 @@ export default function TransmissionsPage() {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
+          <span className="tx-date-sep">System</span>
           <select className="tx-filter-select" value={system} onChange={e => { setSystem(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { target_system: e.target.value }) }}>
             {TARGET_SYSTEMS.map(s => <option key={s}>{s}</option>)}
           </select>
+          <span className="tx-date-sep">Status</span>
           <select className="tx-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { status: e.target.value }) }}>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
+          <span className="tx-date-sep">From</span>
           <input
             type="date"
             className="tx-filter-date"
@@ -147,7 +150,7 @@ export default function TransmissionsPage() {
             onChange={e => { setFromDate(e.target.value); setPage(1) }}
             title="From date"
           />
-          <span className="tx-date-sep">→</span>
+          <span className="tx-date-sep">to</span>
           <input
             type="date"
             className="tx-filter-date"
@@ -268,7 +271,7 @@ export default function TransmissionsPage() {
               disabled={page === 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
             >
-              ← Prev
+              Prev
             </button>
             <span className="tx-page-info">Page {page} of {totalPages}</span>
             <button
@@ -276,7 +279,7 @@ export default function TransmissionsPage() {
               disabled={page >= totalPages}
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             >
-              Next →
+              Next
             </button>
           </div>
         )}

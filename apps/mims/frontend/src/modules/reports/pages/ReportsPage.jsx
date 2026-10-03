@@ -846,81 +846,75 @@ export default function ReportsPage() {
 
 
   function renderOverview() {
+    const links = [
+      { title: 'Report Library', desc: 'Discover approved reports and run trusted outputs.', section: 'reports' },
+      { title: 'Dashboard Library', desc: 'Saved operational and leadership surfaces.', section: 'dashboards' },
+      { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !isManager },
+      { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !isManager },
+    ].filter((item) => !item.hidden)
     return (
-      <div style={{ display: 'grid', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
-          {[
-            { label: 'Active Reports', value: summary.total_reports, hint: 'Approved library and custom definitions' },
-            { label: 'Dashboards', value: summary.total_dashboards, hint: 'Saved decision surfaces' },
-            { label: 'Schedulers', value: summary.total_schedules, hint: 'Active delivery jobs' },
-            { label: 'Failed Runs (7d)', value: summary.failed_runs_last_7_days, hint: 'Recent runs needing attention' },
-          ].map((item) => (
-            <div key={item.label} style={cardStyle()}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>{item.label}</div>
-              <div style={{ marginTop: 10, fontSize: 34, fontWeight: 800, color: 'var(--text-primary)' }}>{item.value}</div>
-              <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>{item.hint}</div>
-            </div>
-          ))}
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div className="card">
+          <div className="card-header"><h3>Summary</h3></div>
+          <table className="admin-table mims-queue-table">
+            <tbody>
+              {[
+                { label: 'Active reports', value: summary.total_reports, hint: 'Approved library and custom definitions' },
+                { label: 'Dashboards', value: summary.total_dashboards, hint: 'Saved decision surfaces' },
+                { label: 'Schedulers', value: summary.total_schedules, hint: 'Active delivery jobs' },
+                { label: 'Failed runs (7 days)', value: summary.failed_runs_last_7_days, hint: 'Recent runs needing attention' },
+              ].map((item) => (
+                <tr key={item.label}>
+                  <td><strong>{item.label}</strong><div className="text-muted">{item.hint}</div></td>
+                  <td className="num">{item.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 18 }}>
-          <div style={cardStyle()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800 }}>Reporting Workspace</div>
-                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-                  Report library, dashboards, schedules and run history.
-                </div>
-              </div>
-              <button onClick={() => pushSection('reports')} style={pillButtonStyle(true)}>Open Report Library</button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, alignItems: 'start' }}>
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>Reporting Workspace</h3>
+              <button className="btn btn-outline" onClick={() => pushSection('reports')}>Open Report Library</button>
             </div>
-            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-              {[
-                { title: 'Report Library', desc: 'Discover approved reports and run trusted outputs.', section: 'reports' },
-                { title: 'Dashboard Library', desc: 'Saved operational and leadership surfaces.', section: 'dashboards' },
-                { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !isManager },
-                { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !isManager },
-              ].filter((item) => !item.hidden).map((item) => (
-                <button
-                  key={item.title}
-                  onClick={() => pushSection(item.section)}
-                  style={{
-                    textAlign: 'left',
-                    border: '1px solid var(--border)',
-                    background: '#fff',
-                    borderRadius: 12,
-                    padding: 16,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{item.title}</div>
-                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>{item.desc}</div>
-                </button>
-              ))}
-            </div>
+            <table className="admin-table mims-module-list">
+              <tbody>
+                {links.map((item) => (
+                  <tr key={item.title}>
+                    <td><a href="#" onClick={(e) => { e.preventDefault(); pushSection(item.section) }}>{item.title}</a></td>
+                    <td>{item.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Recent Run Activity</div>
-            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Latest manual and scheduled activity across the reporting module.</div>
-            <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-              {historyRuns.slice(0, 6).map((run) => (
-                <div key={run.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fafafa' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                    <div style={{ fontWeight: 700 }}>{run.report_name}</div>
-                    <span style={{ ...badgeStyle(run.status), borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>
-                      {String(run.status || 'unknown').toUpperCase()}
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                    {run.target_type || 'report'} • {run.run_mode} • {run.row_count} rows
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{formatDateTime(run.created_at)}</div>
-                  {run.error_message && <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{run.error_message}</div>}
-                </div>
-              ))}
-              {!historyRuns.length && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No runs recorded yet.</div>}
-            </div>
+          <div className="card">
+            <div className="card-header"><h3>Recent Run Activity</h3></div>
+            <table className="admin-table">
+              <thead>
+                <tr><th>Report</th><th>Type</th><th>Rows</th><th>Run</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {historyRuns.slice(0, 6).map((run) => (
+                  <tr key={run.id}>
+                    <td>
+                      {run.report_name}
+                      {run.error_message && <div style={{ fontSize: 12, color: '#b91c1c' }}>{run.error_message}</div>}
+                    </td>
+                    <td>{run.target_type || 'report'}, {run.run_mode}</td>
+                    <td>{run.row_count}</td>
+                    <td>{formatDateTime(run.created_at)}</td>
+                    <td style={{ color: badgeStyle(run.status).color, fontWeight: 700 }}>{String(run.status || 'unknown')}</td>
+                  </tr>
+                ))}
+                {!historyRuns.length && (
+                  <tr><td colSpan={5} className="text-muted">No runs recorded yet.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

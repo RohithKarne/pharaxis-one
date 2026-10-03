@@ -178,7 +178,7 @@ export default function FolderManager({ show, onClose, token }) {
         {loading ? (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>Loading folders…</p>
         ) : folders.length === 0 ? (
-          <div className="cm-empty"><div className="cm-empty-icon">📁</div><p>No folders yet. Create one above.</p></div>
+          <div className="cm-empty"><p>No folders yet. Create one above.</p></div>
         ) : (
           <table className="cm-table">
             <thead>
@@ -200,7 +200,7 @@ export default function FolderManager({ show, onClose, token }) {
                   <td>
                     <div className="cm-action-btns">
                       <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openEdit(f)}>Edit</button>
-                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setPermFolder(f); loadPermissions(f.id) }}>🔒 Permissions</button>
+                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setPermFolder(f); loadPermissions(f.id) }}>Permissions</button>
                     </div>
                   </td>
                 </tr>

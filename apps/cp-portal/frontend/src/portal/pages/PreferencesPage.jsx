@@ -4,10 +4,10 @@ import usePageTitle from '../hooks/usePageTitle'
 import { useToast } from '../../shared/components/Toast'
 
 const NOTIF_TYPES = [
-  { key: 'news',      icon: '📰', label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
-  { key: 'documents', icon: '📁', label: 'Documents',             desc: 'Notify me when new documents are added to the library.' },
-  { key: 'safety',    icon: '⚠️', label: 'Safety Alerts',         desc: 'Notify me when safety alerts are issued.' },
-  { key: 'digest',    icon: '✉️', label: 'Weekly Digest Email',   desc: 'Email me a weekly summary of new content.' },
+  { key: 'news',      label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
+  { key: 'documents', label: 'Documents',             desc: 'Notify me when new documents are added to the library.' },
+  { key: 'safety',    label: 'Safety Alerts',         desc: 'Notify me when safety alerts are issued.' },
+  { key: 'digest',    label: 'Weekly Digest Email',   desc: 'Email me a weekly summary of new content.' },
 ]
 
 export default function PreferencesPage() {
@@ -59,7 +59,7 @@ export default function PreferencesPage() {
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {NOTIF_TYPES.map(({ key, icon, label, desc }) => (
+        {NOTIF_TYPES.map(({ key, label, desc }) => (
           <div
             key={key}
             onClick={() => setPrefs(p => ({ ...p, [key]: !p[key] }))}
@@ -70,7 +70,6 @@ export default function PreferencesPage() {
               transition: 'border-color 0.15s',
             }}
           >
-            <span style={{ fontSize: 22 }}>{icon}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E' }}>{label}</div>
               <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{desc}</div>
@@ -99,7 +98,7 @@ export default function PreferencesPage() {
           {saving ? 'Saving…' : 'Save Preferences'}
         </button>
         {saved && (
-          <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ Saved</span>
+          <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>Saved</span>
         )}
         {saveError && (
           <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{saveError}</span>

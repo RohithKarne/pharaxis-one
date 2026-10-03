@@ -200,7 +200,6 @@ function RightPanel({ entityItem, token }) {
     return (
       <div className="cmat-right">
         <div className="cmat-right-empty">
-          <div className="cmat-right-empty-icon">📁</div>
           <div>Select a CM entity to view its change history</div>
         </div>
       </div>
@@ -291,9 +290,9 @@ function AdminActivityPanel({ token }) {
       </div>
       {totalPages > 1 && (
         <div className="cmat-left-pagination" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0' }}>
-          <button className="cmat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+          <button className="cmat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
           <span className="cmat-left-pg-info">{page} / {totalPages}</span>
-          <button className="cmat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+          <button className="cmat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
         </div>
       )}
     </div>
@@ -343,7 +342,7 @@ export default function CMAuditTrailPage({ embedded = false } = {}) {
             <h1 className="cmat-title">Audit Trail</h1>
             <span className="cmat-subtitle">Change history for CM and Admin configurations</span>
           </div>
-          <button className="cmat-refresh-btn" onClick={() => activeTab === 'cm' ? fetchEntities() : window.dispatchEvent(new Event('refresh-admin-audit'))} disabled={leftLoading}>⟳ Refresh</button>
+          <button className="cmat-refresh-btn" onClick={() => activeTab === 'cm' ? fetchEntities() : window.dispatchEvent(new Event('refresh-admin-audit'))} disabled={leftLoading}>Refresh</button>
         </div>
         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '0 24px', gap: '24px' }}>
           <button 
@@ -405,9 +404,9 @@ export default function CMAuditTrailPage({ embedded = false } = {}) {
               </div>
               {totalPages > 1 && (
                 <div className="cmat-left-pagination">
-                  <button className="cmat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+                  <button className="cmat-left-pg-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
                   <span className="cmat-left-pg-info">{page} / {totalPages}</span>
-                  <button className="cmat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+                  <button className="cmat-left-pg-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
                 </div>
               )}
             </div>

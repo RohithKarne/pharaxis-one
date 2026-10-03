@@ -130,24 +130,24 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
           {userOpen && (
             <div className="mims-dropdown">
               <div className="mims-dropdown-item" onClick={() => { setUserOpen(false) }}>
-                👤 My Profile
+                My Profile
               </div>
               <div className="mims-dropdown-item" onClick={() => {
                 setUserOpen(false)
                 navigate('/session-management')
               }}>
-                ⏱ Session Management
+                Session Management
               </div>
               <div className="mims-dropdown-item" onClick={() => {
                 setUserOpen(false)
                 setPasswordOpen(true)
                 setPasswordMsg({ type: '', text: '' })
               }}>
-                🔑 Change Password
+                Change Password
               </div>
               <div className="mims-dropdown-divider" />
               <div className="mims-dropdown-item mims-dropdown-logout" onClick={() => { setUserOpen(false); handleLogout() }}>
-                🚪 Sign Out
+                Sign Out
               </div>
             </div>
           )}
@@ -187,12 +187,12 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
 
         {/* Bell — notification overlay */}
         <button type="button" className="mims-icon-btn" title="Notifications" aria-label="Notifications" onClick={onBellClick}>
-          <span aria-hidden="true">🔔</span>
+          Notifications
         </button>
 
         {/* Help */}
         <button type="button" className="mims-icon-btn" title="Help" aria-label="Help" onClick={onHelpClick}>
-          <span aria-hidden="true">❓</span>
+          Help
         </button>
 
         {/* Settings gear retired — old admin console removed.

@@ -25,8 +25,8 @@ export default function AdminMirIntPanel({ config, setConfig, status, H }) {
     try {
       const r = await httpFetch('/api/admin/integrations/mir/test-connection', { method: 'POST', headers: H })
       const d = await r.json()
-      setTestResult(d.success ? '✓ MIR connection verified' : '✗ ' + (d.error || 'Connection failed'))
-    } catch { setTestResult('✗ Connection failed — check endpoint and credentials') }
+      setTestResult(d.success ? 'MIR connection verified' : (d.error || 'Connection failed'))
+    } catch { setTestResult('Connection failed. Please check endpoint and credentials.') }
     finally { setTestLoading(false) }
   }
 
@@ -111,7 +111,7 @@ export default function AdminMirIntPanel({ config, setConfig, status, H }) {
       <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save Settings'}</button>
         <button className="btn btn-secondary" disabled={testLoading} onClick={testConnection}>{testLoading ? 'Testing…' : 'Test Connection'}</button>
-        {testResult && <span style={{ fontSize: 13, color: testResult.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
+        {testResult && <span style={{ fontSize: 13, color: testResult.endsWith('connection verified') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
       </div>
 
       <div style={{ marginTop: 32 }}>

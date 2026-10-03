@@ -194,7 +194,7 @@ export default function ProfilePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingProfile}>
             {savingProfile ? 'Saving…' : 'Save Changes'}
           </button>
-          {profileMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ {profileMsg}</span>}
+          {profileMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{profileMsg}</span>}
           {profileErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{profileErr}</span>}
         </div>
       </form>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={savingPwd}>
             {savingPwd ? 'Updating…' : 'Update Password'}
           </button>
-          {pwdMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ {pwdMsg}</span>}
+          {pwdMsg && <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>{pwdMsg}</span>}
           {pwdErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
         </div>
       </form>
@@ -239,7 +239,7 @@ export default function ProfilePage() {
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" className="pp-btn pp-btn-outline" onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Preparing…' : '⬇ Download my data'}
+            {exporting ? 'Preparing…' : 'Download my data'}
           </button>
           <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
             onClick={() => setShowDelete(true)}>

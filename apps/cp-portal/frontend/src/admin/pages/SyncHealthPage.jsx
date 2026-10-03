@@ -94,31 +94,25 @@ export default function SyncHealthPage() {
 
   return (
     <AdminLayout title="Sync Health">
-      <p className="cp-page-desc">Live health of the MIMS integration — submission sync status and failed syncs with one-click retry.</p>
+      <p className="cp-page-desc">Portal submissions sent to MIMS. Failed ones can be retried from here.</p>
 
       {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
       {loading ? <div className="cp-loading">Loading…</div> : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <div className="summary-line" style={{ marginBottom: 16 }}>
             {STATUS_TILES.map(t => (
-              <div key={t.key} className="cp-card" style={{ padding: 16, borderLeft: `4px solid ${t.tone}` }}>
-                <div style={{ fontSize: 26, fontWeight: 700 }}>{counts[t.key] || 0}</div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>{t.label}</div>
-              </div>
+              <span key={t.key}>{t.label}: <b>{counts[t.key] || 0}</b></span>
             ))}
-            <div className="cp-card" style={{ padding: 16, borderLeft: '4px solid #0f172a' }}>
-              <div style={{ fontSize: 26, fontWeight: 700 }}>{total}</div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Total Submissions</div>
-            </div>
+            <span>Total submissions: <b>{total}</b></span>
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2>Failed Syncs {failures.length > 0 ? `(${failures.length})` : ''}</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>↻ Refresh</button>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={load}>Refresh</button>
           </div>
 
           {failures.length === 0 ? (
-            <div className="cp-empty"><div style={{ fontSize: 40 }}>✅</div><p>No failed syncs. Integration is healthy.</p></div>
+            <div className="cp-empty"><p>No failed syncs. Integration is healthy.</p></div>
           ) : (
             <table className="cp-table">
               <thead>
@@ -135,17 +129,17 @@ export default function SyncHealthPage() {
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
-                          🔍 Inspect
+                          Inspect
                         </button>
                         <CanChange area="submissions">
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
-                          {retrying === f.id ? 'Retrying…' : '↻ Retry'}
+                          {retrying === f.id ? 'Retrying…' : 'Retry'}
                         </button>
                         </CanChange>
                       </div>
                       {retryResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: retryResult[f.id].status === 'synced' ? '#16a34a' : '#dc2626' }}>
-                          {retryResult[f.id].status === 'synced' ? `✓ Synced → case ${retryResult[f.id].external_ref}` : `✗ ${retryResult[f.id].error || retryResult[f.id].status || 'failed'}`}
+                          {retryResult[f.id].status === 'synced' ? `Synced to case ${retryResult[f.id].external_ref}` : `Failed: ${retryResult[f.id].error || retryResult[f.id].status || 'failed'}`}
                         </div>
                       )}
                     </td>
@@ -177,12 +171,12 @@ export default function SyncHealthPage() {
                     <td>
                       {canChange('submissions') && (
                         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFile(f.id)} disabled={retrying === `file-${f.id}`}>
-                          {retrying === `file-${f.id}` ? 'Sending…' : '↻ Send again'}
+                          {retrying === `file-${f.id}` ? 'Sending…' : 'Send again'}
                         </button>
                       )}
                       {fileResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: fileResult[f.id].status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
-                          {fileResult[f.id].status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${fileResult[f.id].error || 'failed'}`}
+                          {fileResult[f.id].status === 'forwarded' ? 'On the MIMS case' : `Failed: ${fileResult[f.id].error || 'not sent'}`}
                         </div>
                       )}
                     </td>
@@ -215,12 +209,12 @@ export default function SyncHealthPage() {
                       <td>
                         {canChange('submissions') && (
                           <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retryFollowUp(f.id)} disabled={retrying === `fu-${f.id}`}>
-                            {retrying === `fu-${f.id}` ? 'Sending…' : '↻ Send again'}
+                            {retrying === `fu-${f.id}` ? 'Sending…' : 'Send again'}
                           </button>
                         )}
                         {result && (
                           <div style={{ fontSize: 12, marginTop: 4, color: result.status === 'forwarded' ? '#16a34a' : '#dc2626' }}>
-                            {result.status === 'forwarded' ? '✓ On the MIMS case' : `✗ ${result.error || 'failed'}`}
+                            {result.status === 'forwarded' ? 'On the MIMS case' : `Failed: ${result.error || 'not sent'}`}
                           </div>
                         )}
                       </td>

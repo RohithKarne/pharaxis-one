@@ -10,7 +10,6 @@ export default function AccessEndedPage() {
         background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
         padding: '40px 48px', textAlign: 'center', maxWidth: 440
       }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
           Your access has ended.
         </div>
