@@ -253,7 +253,7 @@ export default function BrowseSection({ token }) {
                         )}
                       </div>
                     )}
-                    {selectedItem.file_path && (
+                    {(selectedItem.has_file || selectedItem.file_path) && (
                       <div style={{ marginTop: 20 }}>
                         <a href={`/api/cm/documents/${selectedItem.id}/download`} target="_blank" rel="noreferrer"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary)', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>

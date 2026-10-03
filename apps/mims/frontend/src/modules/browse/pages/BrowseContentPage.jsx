@@ -52,7 +52,7 @@ function DetailSidebar({ doc, token, onClose }) {
   useEffect(() => { setActiveTab('details') }, [doc])
 
   const hasHtml    = !!(doc?.content_html || doc?.assembled_html)
-  const hasFile    = !!(doc?.file_path && doc?.file_mime)
+  const hasFile    = !!((doc?.has_file || doc?.file_path) && doc?.file_mime)
   const isPdf      = hasFile && (doc?.file_mime || '').includes('pdf')
   const isImage    = hasFile && (doc?.file_mime || '').startsWith('image/')
   const canPreview = hasHtml || isPdf || isImage

@@ -175,6 +175,15 @@ async function getScopedDocument(req, documentId) {
   return rows[0] || null;
 }
 
+// MIPM-185: a document goes to the browser without its server file path —
+// replies carried the absolute location on the server's disk. The screen only
+// needs to know whether a file exists.
+function publicDoc(d) {
+  if (!d) return d;
+  const { file_path, ...rest } = d;
+  return { ...rest, has_file: !!file_path };
+}
+
 // MIPM-184: people without Content Management (agents) read only published
 // documents. The Browse Content page listed Draft, Under Review and Approved
 // documents next to published ones, and any of them could be opened and downloaded.
@@ -299,7 +308,7 @@ router.get('/documents', authenticate, async (req, res) => {
     query += ` ORDER BY d.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
     const [documents] = await pool.execute(query, params);
-    res.json({ documents, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ documents: documents.map(publicDoc), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list CM documents');
     res.status(500).json({ error: 'Server error.' });
@@ -405,7 +414,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     await conn.commit();
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_document', result.insertId, { doc_id: docId, name, folder_id });
     const [[created]] = await pool.execute('SELECT * FROM cm_documents WHERE id = ?', [result.insertId]);
-    res.status(201).json({ message: 'Document created.', id: result.insertId, document: created });
+    res.status(201).json({ message: 'Document created.', id: result.insertId, document: publicDoc(created) });
   } catch (err) {
     await conn.rollback();
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create CM document');
@@ -440,7 +449,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
     }
     query += ` ORDER BY relevance DESC LIMIT 50`;
     const [rows] = await pool.execute(query, params);
-    res.json({ documents: rows });
+    res.json({ documents: rows.map(publicDoc) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -503,7 +512,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
       }
     }
 
-    res.json({ document: { ...doc, assembled_html }, versions });
+    res.json({ document: publicDoc({ ...doc, assembled_html }), versions });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document');
     res.status(500).json({ error: 'Server error.' });
