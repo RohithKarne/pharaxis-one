@@ -517,7 +517,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
               {t.label}
               {((t.key === 'general' && (errors.user_id || errors.name || errors.security_group_id || errors.email)) ||
                 (t.key === 'tenants' && errors.tenant_ids)) && (
-                <span style={{ color: 'var(--error,#c00)', marginLeft: 5 }}>●</span>
+                <span style={{ color: 'var(--error,#c00)', marginLeft: 5 }}>*</span>
               )}
             </div>
           ))}

@@ -410,7 +410,7 @@ export default function DPPRPage({ embedded = false } = {}) {
           <div className="dp-card-header">
             <span className="dp-card-title">Execution History ({logTotal})</span>
             <button className="dp-btn-secondary" style={{ fontSize:12, padding:'6px 12px' }}
-              onClick={() => fetchLog(logPage)}>↺ Refresh</button>
+              onClick={() => fetchLog(logPage)}>Refresh</button>
           </div>
           {execLog.length === 0 ? (
             <div className="dp-empty">No execution history yet. {scheduleOn ? 'Rules run daily at 02:00 UTC or use ' : 'Use '}<strong>Run Now</strong>.</div>

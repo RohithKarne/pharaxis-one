@@ -26,8 +26,8 @@ export default function AdminContentIntPanel({ config, setConfig, status, H }) {
     try {
       const r = await httpFetch('/api/admin/integrations/vault/test-connection', { method: 'POST', headers: H })
       const d = await r.json()
-      setTestResult(d.success ? '✓ Vault connection verified' : '✗ ' + (d.error || 'Connection failed'))
-    } catch { setTestResult('✗ Connection failed — check credentials and vault domain') }
+      setTestResult(d.success ? 'Vault connection verified' : (d.error || 'Connection failed'))
+    } catch { setTestResult('Connection failed. Please check credentials and vault domain.') }
     finally { setTestLoading(false) }
   }
 
@@ -51,7 +51,7 @@ export default function AdminContentIntPanel({ config, setConfig, status, H }) {
       </>)}
       <div style={{ marginBottom: 16 }}>
         <button className="btn btn-secondary" disabled={testLoading} onClick={testConnection}>{testLoading ? 'Testing…' : 'Test Connection'}</button>
-        {testResult && <span style={{ marginLeft: 12, fontSize: 13, color: testResult.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
+        {testResult && <span style={{ marginLeft: 12, fontSize: 13, color: testResult.endsWith('connection verified') ? 'var(--success)' : 'var(--warning)' }}>{testResult}</span>}
       </div>
 
       <IntegrationSectionHeader title="Sync Settings" />

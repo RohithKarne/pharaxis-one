@@ -311,7 +311,7 @@ export function ImpactPreviewModal({ panel, onClose }) {
             </div>
           )}
           {(data.warnings || []).length > 0 && data.warnings.map((w, i) => (
-            <div key={i} style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, color: '#78350f', marginBottom: 6, lineHeight: 1.5 }}>⚠ {w}</div>
+            <div key={i} style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, color: '#78350f', marginBottom: 6, lineHeight: 1.5 }}>{w}</div>
           ))}
           {data.affected_cases === 0 && (data.warnings || []).length === 0 && (
             <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#15803d' }}>
@@ -627,13 +627,13 @@ export default function AdminWorkflowPanel({ H, flash }) {
                   <input type="checkbox" checked={wfRuleForm.require_comment} onChange={e => setWfRuleForm(f => ({ ...f, require_comment: e.target.checked }))} /> Require Comment
                 </label>
               </div>
-              {wfRuleMsg && <p style={{ marginBottom: 10, fontSize: 13, color: wfRuleMsg.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{wfRuleMsg}</p>}
+              {wfRuleMsg && <p style={{ marginBottom: 10, fontSize: 13, color: wfRuleMsg === 'Rule added.' ? 'var(--success)' : 'var(--warning)' }}>{wfRuleMsg}</p>}
               <button className="btn btn-primary" disabled={!wfRuleForm.from_state_id || !wfRuleForm.to_state_id} onClick={async () => {
                 setWfRuleMsg('')
                 const r = await httpFetch('/api/admin/workflow-rules', { method: 'POST', headers: H, body: JSON.stringify({ from_state_id: parseInt(wfRuleForm.from_state_id, 10), to_state_id: parseInt(wfRuleForm.to_state_id, 10), require_password: wfRuleForm.require_password, require_checklist: wfRuleForm.require_checklist, require_comment: wfRuleForm.require_comment }) })
                 const d = await r.json()
                 if (r.ok) {
-                  setWfRuleMsg('✓ Rule added.')
+                  setWfRuleMsg('Rule added.')
                   setWfRuleForm({ from_state_id: '', to_state_id: '', require_password: false, require_checklist: false, require_comment: false })
                   const list = await httpFetch('/api/admin/workflow-rules', { headers: H }).then(x => x.json()).catch(() => ({ rules: [] }))
                   setWfRules(list.rules || [])

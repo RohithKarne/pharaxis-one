@@ -198,7 +198,7 @@ export default function AdminCaseImportPanel({ H }) {
             ))}
           </tbody>
         </table>
-        {importUploadMsg && <p style={{ marginBottom: 12, fontSize: 13, color: importUploadMsg.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{importUploadMsg}</p>}
+        {importUploadMsg && <p style={{ marginBottom: 12, fontSize: 13, color: importUploadMsg.startsWith('Import job started') ? 'var(--success)' : 'var(--warning)' }}>{importUploadMsg}</p>}
         <button className="btn btn-primary" disabled={!importFile || importUploading} style={{ opacity: (!importFile || importUploading) ? 0.6 : 1 }} onClick={async () => {
           if (!importFile) return
           setImportUploading(true)
@@ -209,7 +209,7 @@ export default function AdminCaseImportPanel({ H }) {
             const res = await httpFetch('/api/admin/cases/import/upload', { method: 'POST', headers: { Authorization: H.Authorization }, body: fd })
             const d = await res.json()
             if (res.ok) {
-              setImportUploadMsg(`✓ Import job started — Job ID: ${d.jobId || d.id || 'queued'}. Check Import Job History to track progress.`)
+              setImportUploadMsg(`Import job started. Job ID: ${d.jobId || d.id || 'queued'}. Progress shows under Import Job History.`)
               setImportFile(null)
               document.getElementById('case-import-file-input').value = ''
             } else {
@@ -250,7 +250,7 @@ export default function AdminCaseImportPanel({ H }) {
                       const r = rec.reconciliation
                       return (
                         <span style={{ color: r.balanced ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                          {r.balanced ? '✓ Balanced' : `✗ ${r.status.replace(/_/g, ' ')}`}
+                          {r.balanced ? 'Balanced' : r.status.replace(/_/g, ' ')}
                           <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}>
                             {r.rows_received} received · {r.rows_claimed_imported} claimed · {r.rows_present_in_database} in database
                             {r.discrepancy !== 0 ? ` · discrepancy ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy}` : ''}

@@ -13,18 +13,18 @@ import { httpFetch } from '../api/httpFetch.js'
 
 const TYPE_COLORS = {
   audit:           { bg: '#dbeafe', fg: '#1e40af', icon: 'A' },
-  case_audit:      { bg: '#dcfce7', fg: '#166534', icon: '✓' },
+  case_audit:      { bg: '#dcfce7', fg: '#166534', icon: 'CS' },
   field_change:    { bg: '#fef3c7', fg: '#92400e', icon: 'F' },
   esign:           { bg: '#ede9fe', fg: '#5b21b6', icon: 'S' },
   comment:         { bg: '#e0f2fe', fg: '#075985', icon: 'C' },
   mention:         { bg: '#fce7f3', fg: '#9d174d', icon: '@' },
-  state_enter:     { bg: '#f1f5f9', fg: '#475569', icon: '→' },
+  state_enter:     { bg: '#f1f5f9', fg: '#475569', icon: 'ST' },
   icsr_initiated:  { bg: '#fef9c3', fg: '#854d0e', icon: 'I' },
-  ack1:            { bg: '#dcfce7', fg: '#15803d', icon: '①' },
-  ack2:            { bg: '#dcfce7', fg: '#15803d', icon: '②' },
-  ack3:            { bg: '#dcfce7', fg: '#15803d', icon: '③' },
+  ack1:            { bg: '#dcfce7', fg: '#15803d', icon: 'A1' },
+  ack2:            { bg: '#dcfce7', fg: '#15803d', icon: 'A2' },
+  ack3:            { bg: '#dcfce7', fg: '#15803d', icon: 'A3' },
   transmission:    { bg: '#fee2e2', fg: '#991b1b', icon: 'T' },
-  field_action:    { bg: '#fee2e2', fg: '#7a1313', icon: '⚠' },
+  field_action:    { bg: '#fee2e2', fg: '#7a1313', icon: 'FA' },
   capa:            { bg: '#fde68a', fg: '#78350f', icon: 'CA' },
 }
 

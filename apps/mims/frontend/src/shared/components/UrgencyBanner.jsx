@@ -66,9 +66,6 @@ export default function UrgencyBanner({
       borderLeft: `4px solid ${c.icon}`, borderRadius: 6,
       color: c.text, fontSize: 13,
     }}>
-      <span style={{ fontSize: 18 }}>
-        {resolvedSeverity === 'critical' ? '⚠' : resolvedSeverity === 'warning' ? '!' : 'ⓘ'}
-      </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700 }}>{dueLabel}</div>
         {message && <div style={{ marginTop: 2, fontSize: 12 }}>{message}</div>}

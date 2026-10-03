@@ -26,7 +26,7 @@ export default function InboxFilterBar({
     <>
       <div className="inbox-adv-filter-toggle">
         <button className={`inbox-sort-btn ${hasAdvFilters ? 'adv-active' : ''}`} onClick={() => setShowAdvFilters(a => !a)}>
-          Filters {hasAdvFilters ? '●' : (showAdvFilters ? '▾' : '▸')}
+          Filters {hasAdvFilters ? '(on)' : (showAdvFilters ? '▾' : '▸')}
         </button>
         {hasAdvFilters && (
           <button className="inbox-sort-btn" style={{ fontSize: 11 }} onClick={clearAllFilters}>

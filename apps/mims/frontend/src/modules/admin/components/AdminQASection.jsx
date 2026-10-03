@@ -367,7 +367,7 @@ function QARulesPanel() {
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
           Configure which QA rules apply for your organisation. Toggle rules on/off. Thresholds are adjustable.
         </p>
-        <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={resetRules}>↺ Reset to Defaults</button>
+        <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={resetRules}>Reset to Defaults</button>
       </div>
       {msg && <div style={{ marginBottom: 12, fontSize: 13, color: msg.includes('Failed') ? '#991b1b' : '#065f46' }}>{msg}</div>}
       {loading ? (

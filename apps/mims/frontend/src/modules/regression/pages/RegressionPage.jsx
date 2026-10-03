@@ -48,7 +48,7 @@ function StatusBadge({ pass, error }) {
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
-function OverviewTab({ report, running, onRun }) {
+function OverviewTab({ report, running }) {
   if (running) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', gap: 16 }}>
@@ -62,13 +62,9 @@ function OverviewTab({ report, running, onRun }) {
 
   if (!report) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No Test Run Yet</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>Click "Run Full Suite" to execute all regression tests and see the health of the app.</p>
-        <button onClick={onRun} style={{ padding: '10px 28px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
-          Run Full Suite
-        </button>
-      </div>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+        No run yet. Use Run Full Suite above to check the APIs, the database and the main features.
+      </p>
     )
   }
 
@@ -256,7 +252,7 @@ function DbTablesTab({ token }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
         <div style={{ padding: '8px 16px', background: health.status === 'ok' ? '#f0fdf4' : '#fef2f2', border: '1px solid', borderColor: health.status === 'ok' ? '#86efac' : '#fca5a5', borderRadius: 8, fontSize: 13, fontWeight: 600, color: health.status === 'ok' ? '#16a34a' : '#dc2626' }}>
-          {health.status === 'ok' ? `✓ DB Connected — ${health.table_count} tables` : `✕ DB Error: ${health.error}`}
+          {health.status === 'ok' ? `Database connected, ${health.table_count} tables` : `Database error: ${health.error}`}
         </div>
         <input
           style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, width: 240, background: 'var(--surface)', color: 'var(--text-primary)' }}
@@ -465,11 +461,11 @@ export default function RegressionPage({ embedded = false } = {}) {
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+        <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', background: 'var(--panel-head)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h2 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Regression Testing Suite</h2>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 'bold', color: 'var(--primary)' }}>Regression Testing Suite</h2>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
                 Checks the APIs, the database schema and the main features.
                 {lastRunAt && <span style={{ marginLeft: 8 }}>Last run: {lastRunAt.toLocaleTimeString()}</span>}
               </p>
@@ -479,7 +475,7 @@ export default function RegressionPage({ embedded = false } = {}) {
               <button
                 onClick={runSuite}
                 disabled={running}
-                style={{ padding: '10px 24px', background: running ? 'var(--border)' : 'var(--primary)', color: running ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 8, cursor: running ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}
+                style={{ padding: '3px 12px', background: running ? 'var(--border)' : 'var(--primary)', color: running ? 'var(--text-muted)' : '#fff', border: '1px solid var(--primary)', borderRadius: 2, cursor: running ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 'bold' }}
               >
                 {running ? 'Running…' : 'Run Full Suite'}
               </button>
@@ -489,18 +485,18 @@ export default function RegressionPage({ embedded = false } = {}) {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', background: 'var(--surface)', flexShrink: 0, padding: '0 24px' }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', background: 'var(--surface)', flexShrink: 0, padding: '0 10px' }}>
           {TABS.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${activeTab === tab.key ? 'var(--primary)' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', fontSize: 13, fontWeight: activeTab === tab.key ? 700 : 500, color: activeTab === tab.key ? 'var(--primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              style={{ padding: '6px 14px', background: 'none', border: 'none', borderBottom: `2px solid ${activeTab === tab.key ? 'var(--primary)' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', fontSize: 13, fontWeight: activeTab === tab.key ? 700 : 500, color: activeTab === tab.key ? 'var(--primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
               {tab.label}
             </button>
           ))}
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-          {activeTab === 'overview' && <OverviewTab report={report} running={running} onRun={runSuite} />}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          {activeTab === 'overview' && <OverviewTab report={report} running={running} />}
           {activeTab === 'api' && <ApiCatalogTab token={token} />}
           {activeTab === 'db' && <DbTablesTab token={token} />}
           {activeTab === 'history' && <HistoryTab token={token} />}

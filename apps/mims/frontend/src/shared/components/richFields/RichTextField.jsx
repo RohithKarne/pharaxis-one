@@ -54,7 +54,7 @@ export default function RichTextField({ value = {}, onChange, label, readOnly, h
               const url = prompt('Link URL?')
               if (url) cmd('createLink', url)
             }} />
-            <Btn label="✖ format" onClick={() => cmd('removeFormat')} />
+            <Btn label="Clear format" onClick={() => cmd('removeFormat')} />
           </div>
         )}
         <div

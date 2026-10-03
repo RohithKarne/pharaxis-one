@@ -120,7 +120,7 @@ export default function ImageAnnotator({
           <input type="color" value={color} onChange={e => setColor(e.target.value)}
             style={{ width: 28, height: 24, padding: 0, border: '1px solid var(--border)' }} />
           <span style={{ flex: 1 }} />
-          <button onClick={undo}    style={ghost}>↶ Undo</button>
+          <button onClick={undo}    style={ghost}>Undo</button>
           <button onClick={clearAll} style={ghost}>Clear</button>
         </div>
       )}

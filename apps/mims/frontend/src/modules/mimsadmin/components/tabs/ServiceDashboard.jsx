@@ -207,7 +207,7 @@ export default function ServiceDashboard() {
                     {/* Enabled */}
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
                       <span style={{ background: svc.enabled ? '#e6f4ee' : '#fde8ef', color: svc.enabled ? '#007a5a' : '#e01e5a', padding: '2px 10px', borderRadius: 12, fontWeight: 600, fontSize: 11 }}>
-                        {svc.enabled ? '✓ Enabled' : '✕ Disabled'}
+                        {svc.enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </td>
 

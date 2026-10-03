@@ -52,7 +52,7 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
             <button key={m} className={`cm-btn cm-btn-sm ${mode === m ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
               style={{ textTransform: 'capitalize', opacity: saving ? 0.6 : 1 }}
               onClick={() => toggleMode(m)} disabled={saving}>
-              {m === 'sequential' ? 'Seq' : '⇉ Par'}
+              {m === 'sequential' ? 'Sequential' : 'Parallel'}
             </button>
           ))}
         </div>

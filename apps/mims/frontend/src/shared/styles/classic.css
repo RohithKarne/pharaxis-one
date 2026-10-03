@@ -362,9 +362,21 @@
 
 /* MIMS Admin content: one control height and plain table headers on every section. */
 :root .mims-admin-tab-content :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]), select) {
-  min-height: 0; height: 26px; padding: 2px 6px; font-size: 12px; border-radius: 0;
+  min-height: 0; height: 26px; padding-top: 2px !important; padding-bottom: 2px !important; font-size: 12px; border-radius: 0;
 }
 :root .mims-admin-tab-content table th {
   text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: bold; color: var(--text-primary); background: var(--panel-head);
 }
 :root .mims-admin-tab-content table td { padding-top: 4px; padding-bottom: 4px; }
+
+/* Browse Content: grey title bar, plain count, short filter controls. */
+:root .bc-header { background: var(--panel-head); border: 1px solid var(--border); border-radius: 0; padding: 6px 10px; align-items: center; }
+:root .bc-title { font-size: 15px; font-weight: bold; letter-spacing: 0; color: var(--primary); }
+:root .bc-subtitle { font-size: 12px; color: var(--text-secondary); }
+:root .bc-total-badge { min-height: 0; padding: 0; background: none; border: 0; color: var(--text-secondary); font-size: 12px; font-weight: normal; }
+:root .bc-filters { background: #fff; border: 1px solid var(--border); border-radius: 0; padding: 6px 10px; gap: 6px; }
+:root .bc-search, :root .bc-filter-select { min-height: 0; height: 26px; padding: 2px 6px; border: 1px solid #a9b2bd; border-radius: 0; background: #fff; font-size: 12px; }
+:root .bc-clear-btn { min-height: 0; padding: 2px 10px; font-size: 12px; background: #f3f4f6; color: var(--text-primary); border: 1px solid #a9b2bd; border-radius: 2px; }
+
+/* Toasts: a plain message box, no slide-in. */
+:root .mims-toast { animation: none; padding: 6px 10px; font-size: 12px; min-width: 240px; }
