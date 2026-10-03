@@ -45,7 +45,8 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
       <td style={{ fontWeight: 500 }}>{r.document_name}</td>
       <td>{r.title}</td>
       <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
-      <td><StatusBadge status={r.my_status || 'Ongoing'} /></td>
+      {/* The list returns the reviewer's own decision as reviewer_status; my_status is never set (MIPM-178). */}
+      <td><StatusBadge status={r.reviewer_status || r.my_status || 'Ongoing'} /></td>
       <td>
         <div style={{ display: 'flex', gap: 4 }}>
           {['sequential', 'parallel'].map(m => (

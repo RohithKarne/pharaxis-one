@@ -64,7 +64,7 @@ router.get('/reviews', authenticate, async (req, res) => {
     const scope = reviewOrgFilter(req);
     const [reviews] = await pool.execute(
       `SELECT r.*, cr.status AS reviewer_status, cr.reason AS reviewer_reason, cr.reviewed_at,
-              u.name AS created_by_name
+              u.name AS created_by_name, COALESCE(d.name, f.question) AS document_name
        FROM cm_reviews r
        JOIN cm_reviewers cr ON r.id = cr.review_id
        LEFT JOIN users u ON r.created_by = u.id
@@ -150,7 +150,10 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
     );
     if (!reviewer) return res.status(404).json({ error: 'You are not a reviewer for this review.' });
 
-    const validStatuses = ['Ongoing', 'Approved', 'Rejected', 'Withdrawn'];
+    // MIPM-178: the decisions the reviewer's dialog offers. The route accepted only
+    // Approved/Withdrawn besides Ongoing/Rejected, so Accepted, Accepted with
+    // Changes and Declined were refused and a reviewer could only reject.
+    const validStatuses = ['Ongoing', 'Accepted', 'Accepted with Changes', 'Declined', 'Rejected', 'Approved', 'Withdrawn'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
     }
