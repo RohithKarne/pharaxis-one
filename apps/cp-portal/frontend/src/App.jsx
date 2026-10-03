@@ -83,9 +83,15 @@ const TrainingAdminPage       = lazy(() => import('./admin/pages/TrainingAdminPa
 
 // CPPM-133: the dashboard and the client list are the platform admin's. A client's
 // own staff, who cannot read them, go to their client instead.
+// CPPM-129: reviewers start on Inbox, safety reviewers on the Safety Queue. A
+// sign-in sent to a particular page still goes there (LoginPage's returnTo).
+const CLIENT_HOME = { reviewer: 'submissions', safety_reviewer: 'safety-queue' }
 function PlatformOnly({ children }) {
   const { admin } = useAdminAuth()
-  if (admin?.clientId) return <Navigate to={`/admin/clients/${admin.clientId}`} replace />
+  if (admin?.clientId) {
+    const home = CLIENT_HOME[admin.role]
+    return <Navigate to={`/admin/clients/${admin.clientId}${home ? '/' + home : ''}`} replace />
+  }
   return children
 }
 
