@@ -904,6 +904,10 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
     if (Number(req.user.userId) === Number(doc.created_by)) {
       return res.status(403).json({ error: 'The author of a document cannot approve it. An independent reviewer is required.' });
     }
+    // MIPM-179: approval waits for the review — an open review still has reviewers deciding.
+    const [[openReview]] = await pool.execute(
+      "SELECT id FROM cm_reviews WHERE doc_type = 'document' AND doc_id = ? AND status = 'Open' LIMIT 1", [id]);
+    if (openReview) return res.status(409).json({ error: 'The review of this document is still open. Approve it once every reviewer has decided.' });
 
     const match = await verifyEsignPassword(req.user.userId, password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });

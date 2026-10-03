@@ -59,7 +59,9 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
         </div>
       </td>
       <td>
-        <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
+        {r.status === 'Open'
+          ? <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
+          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Review closed</span>}
       </td>
     </tr>
   )
