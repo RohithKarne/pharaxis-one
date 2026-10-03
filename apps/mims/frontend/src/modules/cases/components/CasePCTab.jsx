@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
+import TransmissionSignModal from './TransmissionSignModal'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
@@ -336,13 +337,20 @@ export default function CasePCTab({
     finally { setPcTxSaving(false) }
   }
 
-  async function updatePcTxStatus(txId, status) {
+  // Closed and moving back out need an e-signature (MIPM-164); the sign
+  // box calls back here with it and shows any refusal itself.
+  const PC_TX_SIGNED = ['Closed']
+  const [pcTxSign, setPcTxSign] = useState(null)
+  async function updatePcTxStatus(txId, status, sign = null) {
+    const current = pcTransmissions.find(t => t.id === txId)?.status
+    if (!sign && (PC_TX_SIGNED.includes(status) || PC_TX_SIGNED.includes(current))) { setPcTxSign({ txId, status }); return '' }
     try {
-      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status, ...sign }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTransmissions(prev => prev.map(t => t.id === txId ? data : t))
-    } catch (err) { toast.error(err.message) }
+      return ''
+    } catch (err) { if (sign) return err.message; toast.error(err.message); return err.message }
   }
 
   return (
@@ -467,6 +475,16 @@ export default function CasePCTab({
         </div>
       )}
 
+      <TransmissionSignModal
+        key={pcTxSign ? `${pcTxSign.txId}-${pcTxSign.status}` : 'none'}
+        target={pcTxSign}
+        onCancel={() => setPcTxSign(null)}
+        onConfirm={async (password, reason) => {
+          const msg = await updatePcTxStatus(pcTxSign.txId, pcTxSign.status, { password, reason })
+          if (!msg) setPcTxSign(null)
+          return msg
+        }}
+      />
       <div className="cf-tx-tracker">
         <div className="cf-tx-tracker-title">PC Quality Routing Tracker</div>
         {pcTxLoading && <div className="cf-empty-msg">Loading routings…</div>}

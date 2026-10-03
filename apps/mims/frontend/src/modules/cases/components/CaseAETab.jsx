@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
+import TransmissionSignModal from './TransmissionSignModal'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
@@ -394,13 +395,20 @@ export default function CaseAETab({
     finally { setAeTxSaving(false) }
   }
 
-  async function updateAeTxStatus(txId, status) {
+  // Accepted/Closed and moving back out need an e-signature (MIPM-164); the sign
+  // box calls back here with it and shows any refusal itself.
+  const AE_TX_SIGNED = ['Accepted', 'Closed']
+  const [aeTxSign, setAeTxSign] = useState(null)
+  async function updateAeTxStatus(txId, status, sign = null) {
+    const current = aeTransmissions.find(t => t.id === txId)?.status
+    if (!sign && (AE_TX_SIGNED.includes(status) || AE_TX_SIGNED.includes(current))) { setAeTxSign({ txId, status }); return '' }
     try {
-      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status, ...sign }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTransmissions(prev => prev.map(t => t.id === txId ? data : t))
-    } catch (err) { toast.error(err.message) }
+      return ''
+    } catch (err) { if (sign) return err.message; toast.error(err.message); return err.message }
   }
 
   return (
@@ -530,6 +538,16 @@ export default function CaseAETab({
         </div>
       )}
 
+      <TransmissionSignModal
+        key={aeTxSign ? `${aeTxSign.txId}-${aeTxSign.status}` : 'none'}
+        target={aeTxSign}
+        onCancel={() => setAeTxSign(null)}
+        onConfirm={async (password, reason) => {
+          const msg = await updateAeTxStatus(aeTxSign.txId, aeTxSign.status, { password, reason })
+          if (!msg) setAeTxSign(null)
+          return msg
+        }}
+      />
       <div className="cf-tx-tracker">
         <div className="cf-tx-tracker-title">AE Transmission Tracker</div>
         {aeTxLoading && <div className="cf-empty-msg">Loading transmissions…</div>}
