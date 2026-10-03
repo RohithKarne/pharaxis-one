@@ -7,6 +7,14 @@
 
 const express = require('express');
 const router  = express.Router();
+const cache = require('../../utils/cache');
+// CPPM-121: the portal keeps its settings for 20 seconds (CP-22). A successful write
+// here changes what the portal offers — a page switched on or off, or a trial or
+// training module that decides whether its page shows — so the copy is cleared at once.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) cache.invalidate('config:'); });
+  next();
+});
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const log = require('../../utils/logger');
