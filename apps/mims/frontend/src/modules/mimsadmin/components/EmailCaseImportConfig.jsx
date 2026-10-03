@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
+import { useAdminTenant } from '../utils/AdminTenantContext'
 
 /**
  * EmailCaseImportConfig — admin configuration for Email Case Import (MIMS-40).
@@ -26,6 +27,11 @@ const TARGETS = {
 }
 
 export default function EmailCaseImportConfig() {
+  // A platform admin belongs to no organisation, so every call names the tenant
+  // chosen in MIMS Admin; a tenant admin's own organisation is used by the server
+  // whatever is sent (MIPM-146).
+  const { tenantId } = useAdminTenant()
+  const q = tenantId ? `?org_id=${encodeURIComponent(tenantId)}` : ''
   const [config, setConfig] = useState(null)
   const [mailboxes, setMailboxes] = useState([])
   const [fields, setFields] = useState([])
@@ -40,16 +46,16 @@ export default function EmailCaseImportConfig() {
     setTimeout(() => setBanner(null), 4000)
   }
 
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tenantId) load() }, [tenantId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)
     try {
       const [cfgRes, mbRes, fRes, mRes] = await Promise.all([
-        guardedFetch(`${API}/config`),
-        guardedFetch(`${API}/mailboxes`),
-        guardedFetch(`${API}/intake-fields`),
-        guardedFetch(`${API}/metrics`),
+        guardedFetch(`${API}/config${q}`),
+        guardedFetch(`${API}/mailboxes${q}`),
+        guardedFetch(`${API}/intake-fields${q}`),
+        guardedFetch(`${API}/metrics${q}`),
       ])
       if (cfgRes.ok) setConfig(await cfgRes.json())
       if (mbRes.ok) setMailboxes(await mbRes.json())
@@ -65,7 +71,7 @@ export default function EmailCaseImportConfig() {
   async function saveConfig(patch) {
     setSaving(true)
     try {
-      const res = await guardedFetch(`${API}/config`, {
+      const res = await guardedFetch(`${API}/config${q}`, {
         method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ ...config, ...patch }),
       })
       const data = await res.json()
@@ -80,7 +86,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function toggleMailbox(mb) {
-    const res = await guardedFetch(`${API}/mailboxes/${mb.id}`, {
+    const res = await guardedFetch(`${API}/mailboxes/${mb.id}${q}`, {
       method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ is_case_intake: !mb.is_case_intake }),
     })
     const data = await res.json()
@@ -90,7 +96,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function addField() {
-    const res = await guardedFetch(`${API}/intake-fields`, {
+    const res = await guardedFetch(`${API}/intake-fields${q}`, {
       method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ...newField, is_required: newField.is_required ? 1 : 0 }),
     })
     const data = await res.json()
@@ -101,7 +107,7 @@ export default function EmailCaseImportConfig() {
   }
 
   async function updateField(f, patch) {
-    const res = await guardedFetch(`${API}/intake-fields/${f.id}`, {
+    const res = await guardedFetch(`${API}/intake-fields/${f.id}${q}`, {
       method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ ...f, ...patch }),
     })
     const data = await res.json()
@@ -111,7 +117,7 @@ export default function EmailCaseImportConfig() {
 
   async function deleteField(f) {
     if (!window.confirm(`Remove intake field "${f.label}"?`)) return
-    const res = await guardedFetch(`${API}/intake-fields/${f.id}`, { method: 'DELETE' })
+    const res = await guardedFetch(`${API}/intake-fields/${f.id}${q}`, { method: 'DELETE' })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to remove field.', 'error')
     setFields((rows) => rows.filter((r) => r.id !== f.id))
