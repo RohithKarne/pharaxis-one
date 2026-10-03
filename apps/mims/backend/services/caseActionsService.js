@@ -186,13 +186,16 @@ async function _runStep({ orgId, caseId, userId, userName, action, args }) {
       // be run by a macro.
       const current = await _caseRow(orgId, caseId);
       const [[state]] = await pool.execute(
-        `SELECT id, name FROM workflow_states
+        `SELECT id, name, is_closed FROM workflow_states
           WHERE (id = ? OR LOWER(name) = LOWER(?)) AND is_active = 1 AND (org_id = ? OR org_id IS NULL)
           ORDER BY org_id IS NULL LIMIT 1`,
         [Number(args.to_status) || 0, String(args.to_status || ''), orgId]
       );
       if (!state) throw new Error(`Unknown status "${args.to_status}".`);
       if (Number(state.id) === Number(current.status_id)) return { status_id: state.id };
+      // MIPM-168: closing and reopening carry their own permission and signature
+      // rules on the case screen; a macro skipped them, so it does neither.
+      if (Number(state.is_closed) === 1) throw new Error('A macro cannot close a case — close it on the case screen.');
       const check = await checkTransitionAllowed(orgId, current.status_id, state.id);
       if (!check.allowed) throw new Error(check.reason || 'Transition not allowed.');
       const [[needs]] = await pool.execute(

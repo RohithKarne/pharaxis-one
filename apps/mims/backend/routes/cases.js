@@ -1837,6 +1837,11 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
           return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }
+        // MIPM-168: reopening undoes a close, so it needs case.reopen; it checked
+        // nothing, and an agent could reopen a case a reviewer had just closed.
+        if (isReopen && !(await userHasActivityPrivilege(req.user, 'case.reopen'))) {
+          return res.status(403).json({ error: 'You do not have permission to reopen cases.' });
+        }
         const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
         if (isClose) {
           const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
