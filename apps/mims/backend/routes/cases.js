@@ -1295,6 +1295,8 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       throw err;
     }
     const caseId = result.insertId;
+    // MIPM-159: the case's creation is the first line of its audit trail.
+    await writeCaseAudit(caseId, req.user.userId, req.user.email, 'CASE_CREATED', 'case_type', null, `${case_type || '—'} via ${intake_channel}`, conn);
     if (ownerId) {
       await writeCaseAudit(caseId, req.user.userId, req.user.email, 'REASSIGNED', 'case_owner_id', null, ownerId, conn);
     }

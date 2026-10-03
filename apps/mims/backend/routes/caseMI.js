@@ -15,6 +15,22 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { writeCaseAudit } = require('../services/caseHelpers');
+
+// MIPM-159: an MI component's question, product and answer are part of the case
+// record, so every change is written to the case audit trail (old and new value),
+// needs the same case.update permission as the case, and stops once the case is
+// closed. None of this happened: changes left no trace, PUT and DELETE checked
+// organisation membership only, and a closed case's MI could still be edited.
+const MI_AUDIT_FIELDS = ['mi_category', 'subcategory', 'product_id', 'question_summary', 'detailed_question',
+  'response_required_by', 'response_provided', 'response_date', 'response_channel', 'status', 'literature_reference'];
+const auditValue = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v === null || v === undefined ? '' : String(v)));
+
+async function caseClosed(caseId) {
+  const [[row]] = await pool.execute(
+    'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [caseId]);
+  return Number(row?.is_closed) === 1;
+}
 const { MI_CORE_FIELDS, missingRequiredCore } = require('../services/requiredFields');
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
@@ -67,6 +83,9 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (await caseClosed(req.params.id)) {
+      return res.status(409).json({ error: 'This case is closed. Reopen it (change its status) before editing case fields.' });
+    }
     const {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,
@@ -99,6 +118,7 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
     const [[row]] = await pool.execute(
       'SELECT * FROM case_mi WHERE id = ?', [result.insertId]
     );
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_ADDED', `MI ${tabIndex}`, null, question_summary || '(no question yet)');
     res.status(201).json(row);
   } catch (err) {
     console.error('POST case MI error:', err);
@@ -123,6 +143,12 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
       [req.params.miId]
     );
     if (!currentMi) return res.status(404).json({ error: 'MI tab not found' });
+    if (!await verifyCaseOrg(currentMi.case_id, req, 'case.update')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (await caseClosed(currentMi.case_id)) {
+      return res.status(409).json({ error: 'This case is closed. Reopen it (change its status) before editing case fields.' });
+    }
     if (isTerminalMiStatus(currentMi.status)) {
       return res.status(409).json({ error: 'This MI response is closed and cannot be modified.' });
     }
@@ -175,6 +201,13 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
     const [[row]] = await pool.execute(
       'SELECT * FROM case_mi WHERE id = ?', [req.params.miId]
     );
+    for (const field of MI_AUDIT_FIELDS) {
+      const before = auditValue(currentMi[field]);
+      const after = auditValue(row[field]);
+      if (before !== after) {
+        await writeCaseAudit(currentMi.case_id, req.user.userId, req.user.email, 'MI_UPDATED', `MI ${currentMi.tab_index}: ${field}`, before || null, after || null);
+      }
+    }
     res.json(row);
   } catch (err) {
     console.error('PUT case MI error:', err);
@@ -188,11 +221,19 @@ router.delete('/cases/mi/:miId', authenticate, async (req, res) => {
     if (!await verifyMiOrg(req.params.miId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const [[currentMi]] = await pool.execute('SELECT status FROM case_mi WHERE id = ?', [req.params.miId]);
-    if (currentMi && isTerminalMiStatus(currentMi.status)) {
+    const [[currentMi]] = await pool.execute('SELECT case_id, tab_index, status, question_summary FROM case_mi WHERE id = ?', [req.params.miId]);
+    if (!currentMi) return res.status(404).json({ error: 'MI tab not found' });
+    if (!await verifyCaseOrg(currentMi.case_id, req, 'case.update')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (await caseClosed(currentMi.case_id)) {
+      return res.status(409).json({ error: 'This case is closed. Reopen it (change its status) before editing case fields.' });
+    }
+    if (isTerminalMiStatus(currentMi.status)) {
       return res.status(409).json({ error: 'A closed MI response cannot be deleted.' });
     }
     await pool.execute('DELETE FROM case_mi WHERE id = ?', [req.params.miId]);
+    await writeCaseAudit(currentMi.case_id, req.user.userId, req.user.email, 'MI_DELETED', `MI ${currentMi.tab_index}`, currentMi.question_summary || '(no question)', null);
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE case MI error:', err);
