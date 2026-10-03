@@ -52,9 +52,10 @@ export default function SubmitPage() {
       .then(r => r.json())
       .then(d => {
         setFormFields(d.fields || [])
-        // Restore an auto-saved draft for this form type, if any.
+        // Restore an auto-saved draft for this form type, if any. CPPM-84: kept in
+        // sessionStorage, so it lasts only while this tab is open, and Sign Out wipes it.
         let draft = {}
-        try { draft = JSON.parse(localStorage.getItem(`cp_draft_${clientCode}_${selectedType}`) || '{}') } catch { draft = {} }
+        try { draft = JSON.parse(sessionStorage.getItem(`cp_draft_${clientCode}_${selectedType}`) || '{}') } catch { draft = {} }
         setFormValues(draft && typeof draft === 'object' ? draft : {})
         setFieldErrors({})
       })
@@ -62,15 +63,15 @@ export default function SubmitPage() {
       .finally(() => setFieldsLoading(false))
   }, [selectedType, clientCode])
 
-  // Auto-save the in-progress form to localStorage so nothing is lost on refresh/navigation.
+  // Auto-save the in-progress form for this tab so nothing is lost on refresh/navigation.
   useEffect(() => {
     if (!selectedType) return
     const key = `cp_draft_${clientCode}_${selectedType}`
-    if (Object.keys(formValues).length > 0) localStorage.setItem(key, JSON.stringify(formValues))
+    if (Object.keys(formValues).length > 0) sessionStorage.setItem(key, JSON.stringify(formValues))
   }, [formValues, selectedType, clientCode])
 
   function clearDraft() {
-    if (selectedType) localStorage.removeItem(`cp_draft_${clientCode}_${selectedType}`)
+    if (selectedType) sessionStorage.removeItem(`cp_draft_${clientCode}_${selectedType}`)
   }
 
   // A field may declare show_when: { field, equals } and is only rendered when
@@ -202,7 +203,7 @@ export default function SubmitPage() {
 
           {Object.keys(formValues).length > 0 && (
             <div style={{ padding: '10px 14px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.85rem' }}>
-              <span><strong>Draft Auto-Saved</strong> — Your in-progress form entries are saved locally.</span>
+              <span><strong>Draft Auto-Saved</strong> — Your entries are kept while this tab is open. Signing out clears them.</span>
               <button type="button" onClick={() => { clearDraft(); setFormValues({}) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
             </div>
           )}
