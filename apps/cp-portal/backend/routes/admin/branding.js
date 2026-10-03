@@ -169,8 +169,8 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
         footer_bg='#1A1A2E', footer_text='#9CA3AF',
         button_bg='#6B3FA0', button_text='#FFFFFF',
         link_color='#6B3FA0', border_color='#E5E7EB',
-        font_family='Inter, sans-serif', heading_font='Inter, sans-serif',
-        base_font_size='14px', border_radius='8px',
+        font_family='Arial, Helvetica, sans-serif', heading_font='Arial, Helvetica, sans-serif',
+        base_font_size='14px', border_radius='2px',
         header_style='solid', show_powered_by=1,
         updated_at=NOW()
       WHERE client_id = ?
