@@ -343,6 +343,7 @@ async function getContentSnapshot(orgId, contentType, contentId) {
          d.expiry_date,
          d.name,
          d.content_html,
+         d.standard_response_text,
          d.search_tags,
          d.usage_instructions,
          d.regulatory_ref,
@@ -367,7 +368,9 @@ async function getContentSnapshot(orgId, contentType, contentId) {
     );
     if (!rows[0]) return null;
     const row = rows[0];
-    const combined = [row.name, row.content_html, row.search_tags, row.usage_instructions, row.regulatory_ref].filter(Boolean).join(' ');
+    // MIPM-182: the standard response text is an uploaded document's own words; it
+    // was left out, so an uploaded SRD could not reach the minimum and never published.
+    const combined = [row.name, row.content_html, row.standard_response_text, row.search_tags, row.usage_instructions, row.regulatory_ref].filter(Boolean).join(' ');
     return {
       content_type: 'document',
       content_id: row.id,
