@@ -458,7 +458,8 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
                         </div>
                       </td>
                       <td style={{ minWidth: 140 }}>{d.folder_name || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{d.version || '1.0'}</td>
+                      {/* MIPM-177: documents carry version_major/version_minor; there is no `version`, so every row read 1.0. */}
+                      <td style={{ textAlign: 'center' }}>{d.version_major ?? 1}.{d.version_minor ?? 0}</td>
                       <td><StatusBadge status={d.status} /></td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{d.checked_out_by_name || '—'}</td>
                       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—'}</td>
