@@ -204,3 +204,5 @@
 
 /* A list that could not load reads as an error, not as an empty list. */
 :root .pp-load-error p { color: #b91c1c; font-weight: bold; }
+/* The header is white in Classic: the Notifications button takes the header's dark text, not white. */
+:root .pp-bell-btn { color: var(--pp-text); }

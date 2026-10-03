@@ -62,7 +62,12 @@ export default function PreferencesPage() {
         {NOTIF_TYPES.map(({ key, label, desc }) => (
           <div
             key={key}
+            role="switch"
+            aria-checked={!!prefs[key]}
+            aria-label={label}
+            tabIndex={0}
             onClick={() => setPrefs(p => ({ ...p, [key]: !p[key] }))}
+            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setPrefs(p => ({ ...p, [key]: !p[key] })) } }}
             style={{
               display: 'flex', alignItems: 'center', gap: 16,
               background: '#fff', border: `2px solid ${prefs[key] ? 'var(--pp-primary, #6B3FA0)' : '#E5E7EB'}`,
