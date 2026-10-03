@@ -238,10 +238,11 @@ export default function PortalHomePage() {
             </div>
             <div className="pp-search-suggestions pp-hero-shortcuts" aria-label="Shortcuts">
               <span>Go to:</span>
-              <Link to={`${base}/documents`}>Prescribing information</Link>
-              <Link to={`${base}/submit`}>Report a side effect</Link>
-              <Link to={`${base}/find-msl`}>Find an MSL</Link>
-              <Link to={`${base}/drug-info`}>Product catalogue</Link>
+              {/* CPPM-93: only the pages this client has switched on. */}
+              {isFeatureEnabled('document_library') && <Link to={`${base}/documents`}>Prescribing information</Link>}
+              {isFeatureEnabled('adverse_event') && <Link to={`${base}/submit?type=adverse_event`}>Report a side effect</Link>}
+              {isFeatureEnabled('find_msl') && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
+              {isFeatureEnabled('drug_info') && <Link to={`${base}/drug-info`}>Product catalogue</Link>}
             </div>
           </div>
           <aside className="pp-hero-panel" aria-label="Portal shortcuts">
