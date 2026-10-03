@@ -325,9 +325,10 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
+          {/* Every organisation's exceptions: platform admins only, as on the server (MIPM-151). */}
           <Route path="/exceptions" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              <ModuleAccessGuard moduleKey="platform_admin_console">
                 <ExceptionLogsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
