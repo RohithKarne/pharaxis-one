@@ -241,7 +241,7 @@ export default function Users() {
               <tr><td colSpan={9} className="ma-usr-empty">Loading users…</td></tr>
             )}
             {!loading && loadError && (
-              <tr><td colSpan={9} className="ma-usr-empty" role="alert">{loadError} <button className="ma-usr-edit-btn" onClick={() => loadUsers()}>Try again</button></td></tr>
+              <tr><td colSpan={9} className="ma-usr-empty mims-load-error" role="alert">{loadError} <button className="ma-usr-edit-btn" onClick={() => loadUsers()}>Try again</button></td></tr>
             )}
             {!loading && !loadError && filtered.length === 0 && (
               <tr><td colSpan={9} className="ma-usr-empty">No users found.</td></tr>

@@ -112,15 +112,15 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
               onChange={e => setName(e.target.value)}
               style={{ width: '100%', padding: 8, border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, marginBottom: 10 }}
             />
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, marginBottom: 12 }}>
+            <label className="mims-check-row" style={{ marginBottom: 12 }}>
               <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
               Set as my default view for this screen
             </label>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, marginBottom: 12 }}>
+            <label className="mims-check-row" style={{ marginBottom: 12 }}>
               <input type="checkbox" checked={isShared} onChange={e => setIsShared(e.target.checked)} />
               Share with my organisation (only you can change it)
             </label>
-            {saveError && <div role="alert" style={{ color: 'var(--error, #b91c1c)', fontSize: 12, marginBottom: 10 }}>{saveError}</div>}
+            {saveError && <div role="alert" className="mims-form-error">{saveError}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => setShowSave(false)} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
               <button onClick={save} disabled={saving || !name.trim()} style={{ padding: '7px 14px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: (saving || !name.trim()) ? 0.5 : 1 }}>

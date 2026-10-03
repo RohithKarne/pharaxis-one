@@ -398,3 +398,10 @@
 :root .mims-skip-link { position: absolute; left: 8px; top: -40px; z-index: 10000; background: #fff; color: var(--primary); border: 2px solid var(--primary); padding: 4px 10px; font-size: 13px; font-weight: bold; }
 :root .mims-skip-link:focus { top: 8px; }
 :root #mims-main:focus { outline: none; }
+
+/* Shared Classic pieces for new screens, so they stop writing their own inline styles:
+   a list that could not load (with Try again), a checkbox with its words, a form error. */
+:root .mims-load-error, :root .mims-load-error p { color: #b91c1c; }
+:root .mims-load-error button { margin-left: 8px; }
+:root .mims-check-row { display: flex; flex-direction: row; gap: 6px; align-items: center; font-size: 12px; }
+:root .mims-form-error { color: #b91c1c; font-size: 12px; margin-bottom: 10px; }

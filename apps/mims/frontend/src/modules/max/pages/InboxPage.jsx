@@ -1709,7 +1709,7 @@ export default function InboxPage() {
                   placeholder="For example: Safety queue overdue"
                 />
               </div>
-              <label className="compose-field" style={{ display: 'flex', gap: 6, alignItems: 'center', flexDirection: 'row' }}>
+              <label className="compose-field mims-check-row">
                 <input type="checkbox" checked={shareView} onChange={e => setShareView(e.target.checked)} />
                 Share with my organisation (others can use it; only you can change it)
               </label>

@@ -413,7 +413,7 @@ export default function DocumentsSection({ token, user }) {
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
           ) : loadError ? (
-            <div className="cm-empty" role="alert"><p>{loadError}</p><button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => loadDocs()}>Try again</button></div>
+            <div className="cm-empty mims-load-error" role="alert"><p>{loadError}</p><button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => loadDocs()}>Try again</button></div>
           ) : docs.length === 0 ? (
             <div className="cm-empty"><p>No documents found.</p></div>
           ) : (
