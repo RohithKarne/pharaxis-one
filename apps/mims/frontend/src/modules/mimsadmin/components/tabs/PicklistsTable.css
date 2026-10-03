@@ -18,15 +18,15 @@
   background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .ma-pt-filter { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
-.ma-pt-filter label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.ma-pt-filter label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0; }
 .ma-pt-select, .ma-pt-input {
-  padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 2px;
   font-size: 13px; background: var(--surface); color: var(--text-primary); min-width: 160px;
 }
 .ma-pt-select:focus, .ma-pt-input:focus { outline: none; border-color: var(--accent); }
 .ma-pt-spacer  { flex: 1; }
 .ma-pt-add-btn {
-  padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 6px;
+  padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 2px;
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .ma-pt-add-btn:hover { opacity: 0.88; }
@@ -36,12 +36,12 @@
 
 /* ── Table ── */
 .ma-pt-table-wrap {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 2px; overflow: auto;
 }
 .ma-pt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ma-pt-table th {
   padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0; color: var(--text-muted);
   border-bottom: 1px solid var(--border); background: var(--surface-alt, #f9f9fb);
 }
 .ma-pt-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -51,7 +51,7 @@
 .ma-pt-meta-cell  { font-size: 11px; color: var(--text-muted); }
 
 .ma-pt-pill {
-  display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  display: inline-block; padding: 2px 9px; border-radius: 2px; font-size: 11px; font-weight: 600;
 }
 .ma-pt-pill-active   { background: #e6f9ee; color: #1a7a3f; }
 .ma-pt-pill-inactive { background: #fff3e0; color: #c25700; }
@@ -62,7 +62,7 @@
 .ma-pt-toggle input { opacity: 0; width: 0; height: 0; }
 .ma-pt-toggle .slider {
   position: absolute; cursor: pointer; inset: 0;
-  background: #ccd1da; border-radius: 18px; transition: .15s;
+  background: #ccd1da; border-radius: 2px; transition: .15s;
 }
 .ma-pt-toggle .slider::before {
   position: absolute; content: ""; height: 12px; width: 12px;
@@ -72,7 +72,7 @@
 .ma-pt-toggle input:checked + .slider::before { transform: translateX(18px); }
 
 .ma-pt-action-btn {
-  padding: 4px 10px; font-size: 12px; border-radius: 5px; cursor: pointer;
+  padding: 4px 10px; font-size: 12px; border-radius: 2px; cursor: pointer;
   background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
 }
 .ma-pt-action-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -81,11 +81,11 @@
 .ma-pt-drag-cell:active { cursor: grabbing; }
 .ma-pt-bulkbar {
   margin: 10px 28px 0 28px; padding: 9px 12px; border: 1px solid var(--border);
-  border-radius: 8px; background: var(--surface-alt, #f8fafc); display: flex; align-items: center;
+  border-radius: 2px; background: var(--surface-alt, #f8fafc); display: flex; align-items: center;
   gap: 10px; color: var(--text-secondary); font-size: 13px;
 }
 .ma-pt-bulkbar button {
-  padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 2px;
   background: var(--surface); color: var(--text-secondary); cursor: pointer; font-size: 12px; font-weight: 600;
 }
 .ma-pt-bulkbar button:hover { border-color: var(--accent); color: var(--accent); }
@@ -100,8 +100,8 @@
   z-index: 1000; display: flex; align-items: center; justify-content: center;
 }
 .ma-pt-modal {
-  background: var(--surface); border-radius: 12px; width: 520px; max-width: 96vw; max-height: 88vh;
-  display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,.22); overflow: hidden;
+  background: var(--surface); border-radius: 2px; width: 520px; max-width: 96vw; max-height: 88vh;
+  display: flex; flex-direction: column; box-shadow: none; overflow: hidden;
 }
 .ma-pt-modal-wide { width: 760px; }
 .ma-pt-modal-header {
@@ -118,17 +118,17 @@
   display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--border);
 }
 .ma-pt-tabs button {
-  padding: 6px 11px; border: 1px solid var(--border); border-radius: 999px;
+  padding: 6px 11px; border: 1px solid var(--border); border-radius: 2px;
   background: var(--surface); color: var(--text-secondary); cursor: pointer; font-size: 12px; font-weight: 700;
 }
 .ma-pt-tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ma-pt-code-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .ma-pt-info-total {
-  padding: 10px 12px; border-radius: 8px; background: var(--surface-alt, #f8fafc);
+  padding: 10px 12px; border-radius: 2px; background: var(--surface-alt, #f8fafc);
   border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
 }
 .ma-pt-json-diff {
-  margin: 6px 0 0; padding: 8px; border-radius: 6px; background: #0f172a; color: #dbeafe;
+  margin: 6px 0 0; padding: 8px; border-radius: 2px; background: #0f172a; color: #dbeafe;
   font-size: 11px; max-width: 420px; overflow: auto;
 }
 .ma-pt-modal-footer {
@@ -137,11 +137,11 @@
 }
 .ma-pt-btn-cancel {
   padding: 7px 16px; background: transparent; border: 1px solid var(--border);
-  border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary);
+  border-radius: 2px; font-size: 13px; cursor: pointer; color: var(--text-secondary);
 }
 .ma-pt-btn-save {
   padding: 7px 18px; background: var(--accent); color: #fff; border: none;
-  border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border-radius: 2px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .ma-pt-btn-save:disabled { opacity: .55; cursor: not-allowed; }
 .ma-pt-err-msg { color: var(--error, #c00); font-size: 12px; }

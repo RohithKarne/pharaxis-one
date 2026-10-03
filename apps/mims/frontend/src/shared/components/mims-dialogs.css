@@ -17,10 +17,10 @@
   min-width: 280px;
   max-width: 420px;
   padding: 11px 14px;
-  border-radius: 8px;
+  border-radius: 2px;
   font-size: 13px;
   font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+  box-shadow: none;
   pointer-events: all;
   animation: mims-toast-in 0.18s ease;
 }
@@ -63,8 +63,8 @@
 
 .mims-confirm-modal {
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border-radius: 2px;
+  box-shadow: none;
   padding: 28px 28px 20px;
   min-width: 320px;
   max-width: 460px;
@@ -93,7 +93,7 @@
 
 .mims-confirm-btn {
   padding: 8px 20px;
-  border-radius: 7px;
+  border-radius: 2px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;

@@ -33,7 +33,7 @@
 }
 .ma-ra-org-search {
   margin: 4px 12px 10px 12px; width: calc(100% - 24px); padding: 7px 10px;
-  border: 1px solid var(--border); border-radius: 6px; font-size: 12px;
+  border: 1px solid var(--border); border-radius: 2px; font-size: 12px;
   background: var(--surface); color: var(--text-primary);
 }
 .ma-ra-org-item {
@@ -54,7 +54,7 @@
   gap: 10px;
 }
 .ma-ra-report-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 2px;
   padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   transition: border-color .15s;
 }
@@ -66,7 +66,7 @@
 .ma-ra-toggle input { opacity: 0; width: 0; height: 0; }
 .ma-ra-toggle .slider {
   position: absolute; cursor: pointer; inset: 0;
-  background: #ccd1da; border-radius: 22px; transition: .15s;
+  background: #ccd1da; border-radius: 2px; transition: .15s;
 }
 .ma-ra-toggle .slider::before {
   position: absolute; content: ""; height: 14px; width: 14px;
@@ -78,7 +78,7 @@
 /* ── User row ── */
 .ma-ra-user-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 2px; margin-bottom: 8px;
   cursor: pointer; background: var(--surface);
 }
 .ma-ra-user-row:hover  { border-color: var(--accent); }
@@ -87,7 +87,7 @@
 .ma-ra-user-name { font-weight: 600; color: var(--text-primary); font-size: 13px; }
 .ma-ra-user-meta { font-size: 11px; color: var(--text-muted); }
 .ma-ra-user-pill {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+  font-size: 11px; padding: 2px 8px; border-radius: 2px; font-weight: 600;
   background: #e6f9ee; color: #1a7a3f;
 }
 
@@ -99,16 +99,16 @@
 }
 .ma-ra-table th {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .04em; color: var(--text-muted);
+  letter-spacing: 0; color: var(--text-muted);
 }
 .ma-ra-status-pill {
-  display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;
 }
 .ma-ra-status-pending  { background: #fff3cd; color: #855a00; }
 .ma-ra-status-approved { background: #e6f9ee; color: #1a7a3f; }
 .ma-ra-status-rejected { background: #fdecea; color: #b91c1c; }
 .ma-ra-req-btn {
-  padding: 4px 12px; font-size: 12px; border-radius: 5px; font-weight: 600;
+  padding: 4px 12px; font-size: 12px; border-radius: 2px; font-weight: 600;
   cursor: pointer; border: 1px solid var(--border); background: var(--surface);
   color: var(--text-primary);
 }
@@ -119,7 +119,7 @@
 /* ── Misc ── */
 .ma-ra-loading { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .ma-ra-section-title {
-  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0;
   color: var(--text-secondary); margin-bottom: 12px;
 }
 .ma-ra-back-link {

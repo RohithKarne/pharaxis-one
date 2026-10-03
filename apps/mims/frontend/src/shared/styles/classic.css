@@ -1,0 +1,243 @@
+/* ============================================================
+   MIMS — Classic look (2026-10-03)
+   Square corners, grey title bars, thin borders, no soft shadows,
+   Arial, dense tables. Loaded last from main.jsx.
+
+   Screen stylesheets (cases.css and the rest) are lazy-loaded after this
+   file, so selectors here carry a :root prefix to outrank them.
+   !important is used only where a screen sets the value inline.
+   ============================================================ */
+
+/* ─── Base ─────────────────────────────────────────────────── */
+:root body, :root #root { font-size: 13px; line-height: 1.4; -webkit-font-smoothing: auto; }
+:root h1, :root h2, :root h3, :root h4 { letter-spacing: 0; }
+
+/* ─── Header ───────────────────────────────────────────────── */
+:root .mims-header { height: 40px; background: var(--primary); border-bottom: 3px solid var(--accent); box-shadow: none; }
+:root .mims-logo-text { font-size: 17px; letter-spacing: 0; }
+:root .mims-header-date { font-size: 12px; }
+:root .mims-user-avatar { border-radius: 2px; }
+
+/* ─── Left navigation ──────────────────────────────────────── */
+:root .mims-sidenav { width: 200px; background: #e9edf2; border-right: 1px solid var(--border); }
+:root .mims-sidenav.collapsed { width: 52px; }
+:root .mims-sidenav-toggle { color: #5a6675; font-size: 12px; padding: 7px 12px; }
+:root .mims-sidenav-section { color: #5a6675; font-size: 11px; letter-spacing: 0; padding: 10px 12px 4px; }
+:root .mims-sidenav-divider { background: #d5dbe2; }
+:root .mims-sidenav-item {
+  color: var(--primary); border-radius: 0; margin: 0; padding: 7px 12px; min-height: 0;
+  font-size: 13px; border-bottom: 1px solid #d5dbe2; border-left: 4px solid transparent;
+}
+:root .mims-sidenav-item:hover { background: #dde3ea; color: #000; }
+:root .mims-sidenav-item.active { background: #fff; color: #000; font-weight: bold; border-left-color: var(--accent); box-shadow: none; }
+:root .mims-sidenav-item.active::before, :root .mims-sidenav-item.active::after { display: none; }
+:root .mims-sidenav-icon svg { width: 15px; height: 15px; }
+:root .mims-sidenav-new-case { border-radius: 0; }
+
+/* ─── Page background ──────────────────────────────────────── */
+:root .mims-page-body,
+:root .mims-page-body.admin-page-body,
+:root .mims-page-body.mims-inbox-page-body { background: var(--bg); }
+
+/* ─── Buttons ──────────────────────────────────────────────── */
+:root .btn, :root .cm-btn, :root .cf-save-btn, :root .cf-cancel-btn, :root .cf-add-btn,
+:root .cf-back-btn, :root .inbox-toolbar-btn, :root .cf-cases-scope-btn, :root .cf-cases-view-btn,
+:root .cf-cases-preset-btn, :root .cf-new-case-btn {
+  border-radius: 2px; font-size: 12px; font-weight: normal; padding: 4px 11px; line-height: 1.4;
+  letter-spacing: 0; box-shadow: none; text-transform: none; height: auto; min-height: 0;
+  background: #f5f6f7; color: #222; border: 1px solid #a9b2bd;
+}
+:root .btn:hover, :root .cm-btn:hover, :root .cf-cancel-btn:hover, :root .cf-back-btn:hover,
+:root .inbox-toolbar-btn:hover, :root .cf-cases-scope-btn:hover, :root .cf-cases-view-btn:hover,
+:root .cf-cases-preset-btn:hover { background: #e6e9ed; box-shadow: none; }
+:root .btn-primary, :root .cm-btn-primary, :root .cf-save-btn, :root .cf-new-case-btn, :root .cf-add-btn {
+  background: var(--primary); color: #fff; border-color: var(--primary-dark); font-weight: bold;
+}
+:root .btn-primary:hover, :root .cm-btn-primary:hover, :root .cf-save-btn:hover,
+:root .cf-new-case-btn:hover, :root .cf-add-btn:hover { background: var(--primary-dark); box-shadow: none; }
+:root .btn-danger, :root .cm-btn-danger { background: #fff; color: var(--danger); border-color: #d9a3a8; }
+:root .btn-block { width: 100%; padding: 6px 11px; font-size: 13px; }
+:root .btn-link { background: none; border: none; color: var(--info); text-decoration: underline; padding: 0; }
+:root .cm-btn-sm, :root .btn-sm { padding: 2px 8px; font-size: 11px; }
+:root .mims-new-case-btn, :root .mims-sidenav-new-case { border-radius: 2px; box-shadow: none; }
+
+/* ─── Form fields ──────────────────────────────────────────── */
+:root .form-control, :root .cm-form-input, :root .cm-form-select, :root .cm-form-textarea,
+:root .form-input, :root .cf-modal-select, :root .cf-cases-search, :root .cf-query-input,
+:root .cf-query-select, :root .cf-query-date {
+  border-radius: 0; border: 1px solid #a9b2bd; padding: 4px 6px; font-size: 13px; box-shadow: none; background: #fff;
+}
+:root .form-control:focus, :root .cm-form-input:focus, :root .cm-form-select:focus,
+:root .cm-form-textarea:focus, :root .form-input:focus, :root .cf-cases-search:focus {
+  border-color: var(--info); box-shadow: none; outline: 1px solid var(--info); outline-offset: 0;
+}
+:root .form-group { margin-bottom: 10px; }
+:root .form-group label, :root .cm-form-label, :root .cf-modal-label { font-size: 12px; font-weight: bold; margin-bottom: 3px; text-transform: none; letter-spacing: 0; }
+
+/* ─── Panels (cards) ───────────────────────────────────────── */
+:root .card { border-radius: 0; box-shadow: none; border: 1px solid var(--border); }
+:root .card-header { background: var(--panel-head); padding: 6px 10px; border-bottom: 1px solid var(--border); }
+:root .card-header h3, :root .card-header h2 { font-size: 13px; font-weight: bold; color: var(--primary); }
+:root .card-body { padding: 10px; }
+:root .alert { border-radius: 0; font-size: 12px; padding: 7px 10px; }
+
+/* ─── Tables ───────────────────────────────────────────────── */
+:root .admin-table, :root .cm-table, :root .cf-cases-table { border-radius: 0; box-shadow: none; font-size: 12px; border-collapse: collapse; }
+:root .admin-table thead tr, :root .cm-table thead tr, :root .cf-cases-table thead tr { background: var(--panel-head); }
+:root .admin-table th, :root .cm-table th, :root .cf-cases-table th {
+  font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--primary); font-weight: bold;
+  padding: 5px 8px; border-right: 1px solid #c3cbd5; border-bottom: 1px solid var(--border); background: var(--panel-head);
+}
+:root .admin-table td, :root .cm-table td, :root .cf-cases-table td { padding: 4px 8px; border-right: 1px solid #e3e7ec; }
+:root .admin-table tbody tr:nth-child(even), :root .cm-table tbody tr:nth-child(even),
+:root .cf-cases-table tbody tr:nth-child(even) { background: #f6f8fa; }
+:root .admin-table tbody tr:hover, :root .cm-table tbody tr:hover, :root .cf-cases-row:hover { background: #fff8e6; }
+
+/* Small labels inside tables read as plain text, not pills */
+:root .cf-type-badge, :root .cf-form-type-badge { border-radius: 0; background: none !important; color: #222; padding: 0; font-weight: bold; font-size: 12px; letter-spacing: 0; }
+:root .cf-draft-badge { border-radius: 0; background: none; color: #777; padding: 0; font-style: italic; font-weight: normal; font-size: 12px; letter-spacing: 0; text-transform: none; }
+:root .cf-primary-badge { border-radius: 0; font-size: 11px; padding: 0 4px; }
+:root .cf-open-btn { background: none; border: none; color: var(--info); text-decoration: underline; padding: 0; font-size: 12px; }
+
+/* ─── Modals ───────────────────────────────────────────────── */
+:root .cm-modal, :root .mims-modal, :root .confirm-modal { border-radius: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+:root .cm-modal-title { font-size: 14px; }
+
+/* ─── Sign-in page ─────────────────────────────────────────── */
+:root .login-page.login-page-product {
+  background: var(--bg); display: flex; align-items: flex-start; justify-content: center;
+  padding: 80px 16px 40px; min-height: 100vh;
+}
+:root .login-page-product .login-card {
+  width: 100%; max-width: 380px; border-radius: 0; box-shadow: none; border: 1px solid var(--border); background: #fff;
+}
+:root .login-page-product .login-card-header { background: var(--primary); border-radius: 0; padding: 8px 12px; text-align: left; }
+:root .login-page-product .login-card-header::before, :root .login-page-product .login-card-header::after { display: none; }
+:root .login-page-product .app-name { font-size: 15px; letter-spacing: 0; }
+:root .login-page-product .app-tagline { font-size: 12px; margin: 0; }
+:root .login-page-product .login-card-body { padding: 14px 16px 16px; }
+:root .login-footnote { margin-top: 10px; font-size: 11px; color: var(--text-muted); text-align: center; }
+:root .login-step-line { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+
+/* ─── Overview page ────────────────────────────────────────── */
+:root .mims-page-titlebar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  background: var(--panel-head); border: 1px solid var(--border); padding: 6px 10px; margin-bottom: 10px;
+}
+:root .mims-page-titlebar h1 { font-size: 15px; font-weight: bold; color: var(--primary); margin: 0; }
+:root .mims-page-titlebar .mims-page-titlebar-sub { font-size: 12px; color: var(--text-secondary); margin-left: 8px; font-weight: normal; }
+:root .mims-page-titlebar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+:root .mims-home-wrap { padding: 12px; }
+:root .mims-queue-table { width: 100%; }
+:root .mims-queue-table td.num { text-align: right; font-weight: bold; width: 70px; font-variant-numeric: tabular-nums; }
+:root .mims-module-list { width: 100%; }
+:root .mims-module-list td:first-child { width: 220px; white-space: nowrap; }
+:root .mims-module-list a { color: var(--info); text-decoration: underline; font-weight: bold; }
+
+/* ─── Case list ────────────────────────────────────────────── */
+:root .cf-cases-page { padding: 12px; gap: 10px; background: transparent; }
+:root .cf-cases-header { border: 1px solid var(--border); border-radius: 0; padding: 0; background: #fff; box-shadow: none; margin: 0; }
+:root .cf-cases-title-row { background: var(--panel-head); border-bottom: 1px solid var(--border); padding: 6px 10px; margin: 0; }
+:root .cf-cases-title { font-size: 15px; font-weight: bold; color: var(--primary); }
+:root .cf-cases-tabs { padding: 8px 10px 0; border-bottom: 1px solid var(--border); gap: 2px; margin: 0; }
+:root .cf-cases-tab {
+  border: 1px solid var(--border); border-bottom: none; border-radius: 2px 2px 0 0; background: #eef1f4;
+  padding: 4px 14px; color: #333; font-size: 12px; margin-bottom: -1px; font-weight: normal;
+}
+:root .cf-cases-tab.active { background: #fff; color: #000; font-weight: bold; border-top: 2px solid var(--accent); border-bottom: 1px solid #fff; }
+:root .cf-cases-search-row, :root .cf-cases-quick-presets, :root .cf-cases-saved-views { padding-left: 10px; padding-right: 10px; }
+:root .cf-cases-search-row { padding-top: 8px; }
+:root .cf-cases-saved-views { padding-bottom: 8px; }
+:root .cf-cases-scope-btn.active { background: var(--panel-head); font-weight: bold; }
+:root .cf-cases-saved-label { font-size: 11px; color: #555; letter-spacing: 0; text-transform: none; }
+:root .cf-cases-body { padding: 0; border: 1px solid var(--border); border-radius: 0; background: #fff; box-shadow: none; }
+:root .cf-cases-table { border: none; }
+:root .cf-th-filter-select { border-radius: 0; font-size: 11px; height: 20px; }
+
+/* ─── Case screen ──────────────────────────────────────────── */
+:root .cf-form-header { border-radius: 0; box-shadow: none; border: 1px solid var(--border); background: var(--panel-head); padding: 6px 10px; margin: 0; }
+:root .cf-header-strip { border-radius: 0; box-shadow: none; border: 1px solid var(--border); border-top: none; background: #fff; font-size: 12px; margin: 0; }
+:root .cf-wizard-container { border-radius: 0; box-shadow: none; border: 1px solid var(--border); }
+:root .cf-contact-card { border-radius: 0; box-shadow: none; background: #fff; }
+:root .cf-remove-btn { border-radius: 2px; }
+
+/* ─── Admin console tabs ───────────────────────────────────── */
+:root .mims-admin-topnav { border-radius: 0; box-shadow: none; margin: 0; background: var(--panel-head); border-bottom: 1px solid var(--border); }
+:root .mims-admin-tab { color: #333; font-size: 12px; border-radius: 0; }
+:root .mims-admin-tab.active { background: #fff; color: #000; font-weight: bold; box-shadow: inset 0 2px 0 var(--accent); }
+
+/* ─── Reports workspace navigation ─────────────────────────── */
+:root .workspace-page--reports { align-content: start; gap: 10px; padding: 10px; }
+:root .workspace-nav-board { border-radius: 0; box-shadow: none; padding: 0; gap: 0; align-items: stretch; background: var(--panel-head); border: 1px solid var(--border); }
+:root .workspace-nav-group { display: flex; align-items: center; gap: 0; min-width: 0; border-right: 1px solid var(--border); }
+:root .workspace-nav-group-title { padding: 0 8px 0 10px; font-size: 11px; font-weight: normal; color: var(--text-muted); text-transform: none; }
+:root .workspace-nav-group-items { display: flex; gap: 0; }
+:root .workspace-nav-button { border: 0; border-left: 1px solid var(--border); border-radius: 0; box-shadow: none; background: transparent; padding: 6px 12px; font-size: 12px; font-weight: normal; }
+:root .workspace-nav-button.active { background: #fff; font-weight: bold; box-shadow: inset 0 2px 0 var(--accent); }
+
+/* ─── Inbox header ─────────────────────────────────────────── */
+:root .inbox-hero { border-radius: 0; box-shadow: none; background: var(--panel-head); border: 1px solid var(--border); color: var(--text-primary); padding: 6px 10px; }
+:root .inbox-hero-kicker, :root .inbox-hero-description { display: none; }
+:root .inbox-hero-title { font-size: 15px; color: var(--primary); }
+:root .inbox-hero-metric { border-radius: 0; background: #fff; border: 1px solid var(--border); box-shadow: none; }
+:root .inbox-hero-metric-value, :root .inbox-hero-metric-label { color: var(--text-primary); }
+
+/* ─── Flat backgrounds (replaces the gradient washes) ──────── */
+:root .mims-header { background: var(--primary); }
+:root .mims-content-area,
+:root .mims-page-body--workspace,
+:root .mims-page-body.mims-ops-page-body,
+:root .mims-page-body.mims-home-page-body,
+:root .mims-page-body.mims-session-page-body,
+:root .mims-page-body.mims-inbox-page-body,
+:root .mims-page-body--admin,
+:root .mims-page-body.mims-admin-page-body { background: var(--bg); }
+:root .btn { min-height: 0; letter-spacing: 0; }
+:root .btn-outline { background: #f5f6f7; backdrop-filter: none; }
+:root .card-header { padding: 6px 10px; }
+:root .cf-cases-search { width: min(100%, 340px); min-height: 0; height: 26px; border-radius: 0; }
+:root .cf-cases-scope-btn, :root .cf-cases-view-btn, :root .cf-cases-view-chip { min-height: 0; border-radius: 2px; }
+:root .cf-cases-table thead th { background: var(--panel-head); }
+:root .cf-cases-table tbody tr:hover td { background: #fff8e6; }
+:root .cf-open-btn { min-height: 0; height: auto; line-height: 1.4; }
+
+/* ─── Inline styles ────────────────────────────────────────────
+   About 700 elements set their corners inline (4px to 24px) and 69 set a
+   shadow inline. These two rules square and flatten them all in one place.
+   Pills (999px) become square too. Circles (50%) are left alone, so
+   avatars and spinners keep their shape. */
+:root [style*="border-radius: 4px"],
+:root [style*="border-radius: 5px"],
+:root [style*="border-radius: 6px"],
+:root [style*="border-radius: 7px"],
+:root [style*="border-radius: 8px"],
+:root [style*="border-radius: 9px"],
+:root [style*="border-radius: 10px"],
+:root [style*="border-radius: 11px"],
+:root [style*="border-radius: 12px"],
+:root [style*="border-radius: 13px"],
+:root [style*="border-radius: 14px"],
+:root [style*="border-radius: 16px"],
+:root [style*="border-radius: 18px"],
+:root [style*="border-radius: 20px"],
+:root [style*="border-radius: 22px"],
+:root [style*="border-radius: 24px"],
+:root [style*="border-radius: 999px"],
+:root [style*="border-radius: 9999px"] { border-radius: 2px !important; }
+:root [style*="box-shadow"] { box-shadow: none !important; }
+
+/* Dialogs keep one plain drop shadow so they stand off the page */
+:root .cm-modal, :root .mims-modal, :root .confirm-modal, :root .tel-modal, :root .rl-modal,
+:root .rel-modal, :root .ma-usr-modal, :root [class$="-modal"] { box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+
+/* Header text links (Notifications, Help) in place of icon buttons. */
+:root .mims-icon-btn { width: auto; height: 24px; padding: 0 8px; font-size: 12px; text-decoration: underline; color: #fff; }
+
+/* ─── Notifications panel ──────────────────────────────────── */
+:root .mims-notif-panel { width: 440px; border-left: 1px solid #8a96a3; }
+:root .mims-notif-header { flex-wrap: wrap; padding: 6px 10px; gap: 6px; background: var(--panel-head); }
+:root .mims-notif-header-titlewrap { flex: 1 1 100%; gap: 0; }
+:root .mims-notif-title { font-size: 14px; color: var(--primary); margin-right: 10px; }
+:root .mims-notif-unread-pill, :root .mims-notif-ack-pill { background: none; padding: 0 10px 0 0; font-weight: normal; color: var(--text-secondary); }
+:root .mims-notif-header-actions { margin-left: auto; }
+:root .mims-notif-markall { white-space: nowrap; font-weight: normal; }
