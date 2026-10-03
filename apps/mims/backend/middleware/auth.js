@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
 const { hasGlobalAdminScope, isAdminUser, normalizeRole } = require('../utils/adminScope');
+const { getUserModules } = require('../utils/userModules');
 
 function createAuthError(message, code, status = 401, shouldLogout = status === 401) {
   const err = new Error(message);
@@ -355,7 +356,7 @@ async function requireAccessNotExpired(req, res, next) {
 /**
  * requireModule(moduleKey) — the admin's module grant, enforced on the server.
  * Same rule as the browser's ModuleAccessGuard: platform admins pass; everyone
- * else needs a user_module_permissions row for the module. Module grants were
+ * else needs the module from their role's defaults or a personal grant. Module grants were
  * checked only in the browser, so any signed-in user could call e.g. the report
  * APIs directly (T11 / M-69). Use after authenticate.
  */
@@ -363,11 +364,9 @@ function requireModule(moduleKey) {
   return async (req, res, next) => {
     try {
       if (hasGlobalAdminScope(req.user)) return next();
-      const [[row]] = await pool.execute(
-        'SELECT 1 AS ok FROM user_module_permissions WHERE user_id = ? AND module = ? AND can_access = 1 LIMIT 1',
-        [req.user?.userId, moduleKey]
-      );
-      if (row) return next();
+      // Same resolver as sign-in: role defaults, then personal rows (MIPM-134).
+      const modules = await getUserModules(req.user?.userId);
+      if (modules.includes(moduleKey)) return next();
       return res.status(403).json({
         error: 'You do not have access to this module.',
         error_code: 'MODULE_FORBIDDEN',

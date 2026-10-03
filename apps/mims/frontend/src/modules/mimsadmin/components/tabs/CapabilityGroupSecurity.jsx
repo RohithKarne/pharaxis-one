@@ -25,6 +25,7 @@ export default function CapabilityGroupSecurity() {
   const [groups, setGroups] = useState([])
   const [catalog, setCatalog] = useState([])
   const [templates, setTemplates] = useState([])
+  const [createRole, setCreateRole] = useState('agent')
   const [sodRules, setSodRules] = useState([])
   const [activeGroupId, setActiveGroupId] = useState(null)
   const [selected, setSelected] = useState(new Set())
@@ -153,6 +154,7 @@ export default function CapabilityGroupSecurity() {
     setCreateName('')
     setCreateDesc('')
     setCreateTemplateId('')
+    setCreateRole('agent')
     setShowCreate(true)
   }
 
@@ -163,7 +165,8 @@ export default function CapabilityGroupSecurity() {
     try {
       const res = await httpFetch('/api/admin/security-groups', {
         method: 'POST', headers: H,
-        body: JSON.stringify({ name, description: createDesc.trim() || null, org_id: tenantId || null }),
+        // The role members get when added to this group on Add / Edit Users (MIPM-134).
+        body: JSON.stringify({ name, description: createDesc.trim() || null, org_id: tenantId || null, privileges: { role: createRole } }),
       })
       const data = await res.json()
       if (!res.ok) return flash(data.error || 'Create failed.', 'error')
@@ -420,7 +423,11 @@ export default function CapabilityGroupSecurity() {
             {templates.length > 0 && (
               <>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Start from template</label>
-                <select className="form-control" value={createTemplateId} onChange={e => setCreateTemplateId(e.target.value)}
+                <select className="form-control" value={createTemplateId} onChange={e => {
+                  setCreateTemplateId(e.target.value)
+                  const t = templates.find(x => String(x.id ?? x.name) === e.target.value)
+                  if (t?.role) setCreateRole(t.role)
+                }}
                   style={{ width: '100%', marginBottom: 4 }}>
                   <option value="">Empty group (no capabilities)</option>
                   {templates.map(t => <option key={t.id ?? t.name} value={String(t.id ?? t.name)}>{t.name}</option>)}
@@ -428,6 +435,16 @@ export default function CapabilityGroupSecurity() {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>Capabilities can be edited after creation.</div>
               </>
             )}
+
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Role for members<span style={{ color: 'var(--danger,#c0392b)' }}> *</span></label>
+            <select className="form-control" value={createRole} onChange={e => setCreateRole(e.target.value)}
+              style={{ width: '100%', marginBottom: 4 }}>
+              <option value="agent">Agent</option>
+              <option value="reviewer">Reviewer</option>
+              <option value="content_manager">Content Manager</option>
+              <option value="admin">Administrator</option>
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>Anyone added to this group on Add / Edit Users gets this role.</div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
               <button className="btn btn-secondary" onClick={() => setShowCreate(false)} disabled={creating}>Cancel</button>

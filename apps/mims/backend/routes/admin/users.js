@@ -215,6 +215,27 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 // Roles a non-global (tenant) admin may never assign. (H-02 / H-13)
 const ELEVATED_ROLES = new Set(['platform_admin']);
 
+// The security group chosen on Add / Edit Users is a real membership, so the
+// group's privileges apply and the Groups screen counts the person (MIPM-134).
+// Changing the group moves that one membership; groups given elsewhere stay.
+// The role a security group carries (privileges.role), or null when it has none.
+async function readGroupRole(conn, groupId) {
+  const [[sg]] = await conn.execute('SELECT privileges FROM security_groups WHERE id = ? LIMIT 1', [groupId]);
+  try {
+    const priv = typeof sg?.privileges === 'string' ? JSON.parse(sg.privileges) : sg?.privileges;
+    return priv?.role || null;
+  } catch { return null; }
+}
+
+async function setFormGroupMembership(conn, userId, newGroupId, oldGroupId = null) {
+  if (oldGroupId && Number(oldGroupId) !== Number(newGroupId)) {
+    await conn.execute('DELETE FROM security_group_users WHERE group_id = ? AND user_id = ?', [oldGroupId, userId]);
+  }
+  if (newGroupId) {
+    await conn.execute('INSERT IGNORE INTO security_group_users (group_id, user_id) VALUES (?, ?)', [newGroupId, userId]);
+  }
+}
+
 // Org ids the caller may assign users to. Returns null for global admins (unrestricted);
 // otherwise the set of orgs the caller is an active member of. (H-03)
 async function callerAssignableOrgIds(req) {
@@ -340,6 +361,7 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
         [newUserId, orgId, roleAtOrg]
       );
     }
+    await setFormGroupMembership(conn, newUserId, security_group_id);
 
     await conn.commit();
 
@@ -455,6 +477,7 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
           [insert.insertId, orgId, row.roleAtOrg]
         );
       }
+      await setFormGroupMembership(conn, insert.insertId, row.security_group_id);
       created.push({ id: insert.insertId, user_id: row.user_id, email: row.email });
     }
 
@@ -479,7 +502,7 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
 // ── PUT /api/admin/users/:id — update user fields ─────────────────────────────
 router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const {
-    user_id, name, email, initials, role,
+    user_id, name, email, initials, role: bodyRole,
     security_group_id, network_user_id, department,
     is_active, is_disabled, is_primary_ref,
     access_admin_site, case_admin,
@@ -491,8 +514,8 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[existing]] = await pool.execute(
       canTouchPlatformAdmin
-        ? 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ?'
-        : 'SELECT id, role, is_active, is_disabled FROM users WHERE id = ? AND role != ?',
+        ? 'SELECT id, role, is_active, is_disabled, security_group_id FROM users WHERE id = ?'
+        : 'SELECT id, role, is_active, is_disabled, security_group_id FROM users WHERE id = ? AND role != ?',
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
@@ -514,6 +537,11 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       );
       if (!inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
     }
+
+    // MIPM-134: moving someone to another security group gives them that group's role,
+    // as creating them in it does (H-13).
+    const groupChanged = security_group_id != null && Number(security_group_id) !== Number(existing.security_group_id);
+    const role = (groupChanged && await readGroupRole(pool, security_group_id)) || bodyRole;
 
     // H-02: a non-global admin may not elevate a user to a platform-admin role.
     if (role != null && !hasGlobalAdminScope(req.user) && ELEVATED_ROLES.has(String(role))) {
@@ -588,6 +616,10 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
           req.params.id,
         ]
       );
+      if (groupChanged) {
+        await setFormGroupMembership(conn, req.params.id, security_group_id, existing.security_group_id);
+        await conn.execute('UPDATE user_org_access SET role_at_org = ? WHERE user_id = ?', [role, req.params.id]);
+      }
 
       // MIPM-35: record why and when on the way off; on the way back, clear it and give
       // back the organisation access the switch-off ended.

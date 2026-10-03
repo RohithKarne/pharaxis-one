@@ -37,6 +37,7 @@ const {
 } = require('../services/ssoService');
 const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
+const { getUserModules } = require('../utils/userModules');
 const { sessionCacheInvalidate, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE } = require('../middleware/auth');
 const { logger } = require('../services/logger');
 
@@ -335,14 +336,6 @@ function parseMethodList(value) {
     .split(',')
     .map(v => v.trim())
     .filter(Boolean);
-}
-
-async function getUserModules(userId) {
-  const [rows] = await pool.execute(
-    'SELECT module FROM user_module_permissions WHERE user_id = ? AND can_access = 1',
-    [userId]
-  );
-  return rows.map(r => r.module);
 }
 
 async function resolveUserRuntimePrivileges(user) {
