@@ -99,10 +99,30 @@ export default function ToastNotificationListener() {
       }
     };
 
-    fetchNotifications(); // Initial fetch
-    pollInterval = setInterval(fetchNotifications, 15000); // 15 seconds
+    // A hidden tab shows no toasts, so it does not poll. Coming back checks once
+    // at once, then every 15 seconds again; anything that arrived meanwhile is
+    // still unread and not yet seen, so it toasts on that first check.
+    const startPolling = () => {
+      if (pollInterval) return;
+      fetchNotifications();
+      pollInterval = setInterval(fetchNotifications, 15000); // 15 seconds
+    };
+    const stopPolling = () => {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) stopPolling();
+      else startPolling();
+    };
 
-    return () => clearInterval(pollInterval);
+    if (!document.hidden) startPolling();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [mounted]);
 
   return null; // Headless component

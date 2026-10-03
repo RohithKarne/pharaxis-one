@@ -350,6 +350,34 @@ async function withTxn(fn) {
   }
 }
 
+// ── Case list columns ─────────────────────────────────────────────────────────
+
+// The three form-schema snapshots are LONGTEXT copies of the case form, read only
+// by the single-case schema endpoints. Listing them with `c.*` sorted and sent
+// about 25 KB per row for up to 500 rows, none of it shown in a list.
+const CASE_LIST_EXCLUDED_COLUMNS = Object.freeze([
+  'field_schema_snapshot', 'reporter_schema_snapshot', 'patient_schema_snapshot',
+]);
+let caseListColumnsCache = null;
+
+// Every `cases` column except the snapshots, as `alias.col, ...`, in table order.
+// Read from the live schema so a column added by a later migration is listed too.
+async function getCaseListColumns(tableAlias = 'c') {
+  if (!caseListColumnsCache) {
+    const [rows] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.columns
+       WHERE table_schema = DATABASE()
+         AND table_name = 'cases'
+       ORDER BY ORDINAL_POSITION`
+    );
+    caseListColumnsCache = rows
+      .map((row) => row.COLUMN_NAME)
+      .filter((name) => !CASE_LIST_EXCLUDED_COLUMNS.includes(name));
+  }
+  return caseListColumnsCache.map((name) => `${tableAlias}.\`${name}\``).join(', ');
+}
+
 // ── Org isolation ─────────────────────────────────────────────────────────────
 
 function buildCaseOwnershipClause(tableAlias = 'c') {
@@ -660,6 +688,8 @@ module.exports = {
   normalizePcTransmissionPriority,
   // Search
   buildGlobalCaseSearchClause,
+  // Case list columns
+  getCaseListColumns,
   // Transactions
   withTxn,
   // DB write helpers
