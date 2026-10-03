@@ -573,10 +573,9 @@ export default function InboxPage() {
 
   async function createCaseFromInquiry() {
     if (!selected) return
-    if (!siteId) {
-      setCaseFlow(prev => ({ ...prev, actionError: 'No active site assigned. Contact admin.' }))
-      return
-    }
+    // No site check: users no longer pick a site, and the server uses the
+    // organisation's primary site when none is sent — as New Case does. Users made
+    // from Add / Edit Users have no site, so every email-to-case stopped here (MIPM-155).
     setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
     try {
       // S19-P1: carry inquiry context into case — pre-fill description + internal notes
@@ -588,7 +587,7 @@ export default function InboxPage() {
         method: 'POST',
         headers: AUTH_H,
         body: JSON.stringify({
-          site_id: siteId,
+          site_id: siteId || undefined,
           case_type: caseFlow.caseType,
           intake_channel: 'email',
           date_received: toDateOnly(selected.received_at),
