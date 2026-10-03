@@ -12,6 +12,10 @@ const { platformSmtpConfigError } = require('../../utils/mailSecurity');
 
 const router = express.Router();
 const adminTwoFactorAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
+// The platform SMTP sends every organisation's 2FA codes and password-reset email,
+// so only a platform admin reads, changes or tests it (MIPM-143). A tenant admin
+// could set it — including the From address — for every client.
+const platformConfigAuth = [authenticate, requireRole('platform_admin')];
 
 function parseIntSafe(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -101,7 +105,7 @@ router.put('/two-factor/orgs/:id', ...adminTwoFactorAuth, async (req, res) => {
 });
 
 // GET /api/admin/two-factor/config
-router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
+router.get('/two-factor/config', ...platformConfigAuth, async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, row) => {
@@ -121,7 +125,7 @@ router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
 });
 
 // PUT /api/admin/two-factor/config
-router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
+router.put('/two-factor/config', ...platformConfigAuth, async (req, res) => {
   try {
     const {
       platform_admin_session_timeout_minutes,
@@ -199,7 +203,7 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
 });
 
 // POST /api/admin/two-factor/config/test-email
-router.post('/two-factor/config/test-email', ...adminTwoFactorAuth, async (req, res) => {
+router.post('/two-factor/config/test-email', ...platformConfigAuth, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const currentConfig = rows.reduce((acc, row) => {
