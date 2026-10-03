@@ -265,6 +265,9 @@ export default function CaseAETab({
   }
 
   async function loadAETab(versionId, tabKey) {
+    // Drugs is the case's drug list and loads itself; there is no version route
+    // for it, so asking for one only produced a 404 each time (MIPM-165).
+    if (tabKey === 'drugs') return
     setAeTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
