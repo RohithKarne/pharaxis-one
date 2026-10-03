@@ -53,6 +53,7 @@ export const SYSTEM_NAV = [
           // Phase 3 — the real per-field configuration surface. Drives the case
           // form's labels, required flags, visibility and order from field_setup.
           { label: 'Case Form Fields',                 value: 'sys-setup-case-fields'     },
+          { label: 'Case Numbering',                   value: 'sys-setup-case-numbering'  },
           { label: 'Customize Forms',                  value: 'sys-setup-customize-forms' },
           { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields'    },
           { label: 'Validation Rules',                 value: 'sys-setup-validation'      },

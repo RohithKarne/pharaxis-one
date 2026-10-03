@@ -30,6 +30,7 @@ const SetupAlerts = lazy(() => import('./SetupAlerts'))
 const SetupAuthPolicy = lazy(() => import('./SetupAuthPolicy'))
 const SetupChangeApprovals = lazy(() => import('./SetupChangeApprovals'))
 const SetupEmailAccounts = lazy(() => import('./SetupEmailAccounts'))
+const SetupCaseNumbering = lazy(() => import('./SetupCaseNumbering'))
 const SetupIntegrations = lazy(() => import('./SetupIntegrations'))
 const SetupWorkflowEngine = lazy(() => import('./SetupWorkflowEngine'))
 const SetupTwoFactor = lazy(() => import('./SetupTwoFactor'))
@@ -74,6 +75,7 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-ai-config' ? <AiConfig />
     : selectedItem === 'sys-setup-developer-api' ? <DeveloperApiAdmin />
     : selectedItem === 'sys-setup-email-accounts' ? <SetupEmailAccounts />
+    : selectedItem === 'sys-setup-case-numbering' ? <SetupCaseNumbering />
     : selectedItem === 'sys-setup-change-approvals' ? <SetupChangeApprovals />
     : selectedItem === 'sys-setup-feature-flags' ? <FeatureFlags />
     : selectedItem === 'sys-setup-smart-fields' ? <SmartFields />

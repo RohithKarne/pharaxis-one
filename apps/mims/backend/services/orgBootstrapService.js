@@ -171,7 +171,7 @@ async function ensureCaseNumberConfigs(conn, orgId) {
     await conn.execute(
       `INSERT INTO case_number_config (org_id, case_type, prefix, \`separator\`, include_year, include_month, seq_length, current_seq, is_locked)
        VALUES (?, ?, ?, '-', 0, 0, 5, 0, 0)
-       ON DUPLICATE KEY UPDATE prefix = VALUES(prefix)`,
+       ON DUPLICATE KEY UPDATE id = id`, // adds a missing type, never resets an admin's format (MIPM-138)
       [orgId, caseType, caseType]
     );
   }
