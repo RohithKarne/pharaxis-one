@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AdminAuthProvider, useAdminAuth } from './admin/context/AdminAuthContext'
 import IdleTimeout from './shared/components/IdleTimeout'
@@ -8,75 +9,75 @@ const ADMIN_IDLE_MINUTES  = 15
 const PORTAL_IDLE_MINUTES = 30
 
 // Admin pages
-import AdminLoginPage       from './admin/pages/LoginPage'
-import AdminDashboard       from './admin/pages/DashboardPage'
-import ClientsPage          from './admin/pages/ClientsPage'
-import ClientDetailPage     from './admin/pages/ClientDetailPage'
-import BrandingPage         from './admin/pages/BrandingPage'
-import FeaturesPage         from './admin/pages/FeaturesPage'
-import ContentPage          from './admin/pages/ContentPage'
-import FormsPage            from './admin/pages/FormsPage'
-import MSLPage              from './admin/pages/MSLPage'
-import IntegrationPage      from './admin/pages/IntegrationPage'
-import SyncHealthPage       from './admin/pages/SyncHealthPage'
-import DataRequestsPage     from './admin/pages/DataRequestsPage'
-import SsoConfigPage        from './admin/pages/SsoConfigPage'
-import PortalUsersPage      from './admin/pages/PortalUsersPage'
-import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
-import ChatRecordsPage      from './admin/pages/ChatRecordsPage'
-import GatePage             from './admin/pages/GatePage'
-import SafetyAdminPage      from './admin/pages/SafetyPage'
-import NewsAdminPage        from './admin/pages/NewsPage'
-import DocumentsAdminPage   from './admin/pages/DocumentsPage'
-import CompliancePage       from './admin/pages/CompliancePage'
-import AuditTrailPage       from './admin/pages/AuditTrailPage'
-import SubmissionsPage      from './admin/pages/SubmissionsPage'
-import SafetyQueuePage      from './admin/pages/SafetyQueuePage'
-import AdminUsersPage      from './admin/pages/AdminUsersPage'
-import ReviewQueuePage     from './admin/pages/ReviewQueuePage'
+const AdminLoginPage       = lazy(() => import('./admin/pages/LoginPage'))
+const AdminDashboard       = lazy(() => import('./admin/pages/DashboardPage'))
+const ClientsPage          = lazy(() => import('./admin/pages/ClientsPage'))
+const ClientDetailPage     = lazy(() => import('./admin/pages/ClientDetailPage'))
+const BrandingPage         = lazy(() => import('./admin/pages/BrandingPage'))
+const FeaturesPage         = lazy(() => import('./admin/pages/FeaturesPage'))
+const ContentPage          = lazy(() => import('./admin/pages/ContentPage'))
+const FormsPage            = lazy(() => import('./admin/pages/FormsPage'))
+const MSLPage              = lazy(() => import('./admin/pages/MSLPage'))
+const IntegrationPage      = lazy(() => import('./admin/pages/IntegrationPage'))
+const SyncHealthPage       = lazy(() => import('./admin/pages/SyncHealthPage'))
+const DataRequestsPage     = lazy(() => import('./admin/pages/DataRequestsPage'))
+const SsoConfigPage        = lazy(() => import('./admin/pages/SsoConfigPage'))
+const PortalUsersPage      = lazy(() => import('./admin/pages/PortalUsersPage'))
+const ChatboxConfigPage    = lazy(() => import('./admin/pages/ChatboxConfigPage'))
+const ChatRecordsPage      = lazy(() => import('./admin/pages/ChatRecordsPage'))
+const GatePage             = lazy(() => import('./admin/pages/GatePage'))
+const SafetyAdminPage      = lazy(() => import('./admin/pages/SafetyPage'))
+const NewsAdminPage        = lazy(() => import('./admin/pages/NewsPage'))
+const DocumentsAdminPage   = lazy(() => import('./admin/pages/DocumentsPage'))
+const CompliancePage       = lazy(() => import('./admin/pages/CompliancePage'))
+const AuditTrailPage       = lazy(() => import('./admin/pages/AuditTrailPage'))
+const SubmissionsPage      = lazy(() => import('./admin/pages/SubmissionsPage'))
+const SafetyQueuePage      = lazy(() => import('./admin/pages/SafetyQueuePage'))
+const AdminUsersPage      = lazy(() => import('./admin/pages/AdminUsersPage'))
+const ReviewQueuePage     = lazy(() => import('./admin/pages/ReviewQueuePage'))
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
 import { usePortal }            from './portal/context/PortalContext'
 import PortalLayout             from './portal/components/PortalLayout'
-import PortalHomePage           from './portal/pages/PortalHomePage'
-import PortalLoginPage          from './portal/pages/LoginPage'
-import SubmitPage               from './portal/pages/SubmitPage'
-import TherapeuticAreasPage     from './portal/pages/TherapeuticAreasPage'
-import EventsPage               from './portal/pages/EventsPage'
-import ResourcesPage            from './portal/pages/ResourcesPage'
-import DrugInfoPage             from './portal/pages/DrugInfoPage'
-import FindMSLPage              from './portal/pages/FindMSLPage'
-import MySubmissionsPage        from './portal/pages/MySubmissionsPage'
-import ContactPage              from './portal/pages/ContactPage'
-import PortalNotFoundPage       from './portal/pages/PortalNotFoundPage'
-import PortalUnavailablePage   from './portal/pages/PortalUnavailablePage'
-import SafetyPortalPage         from './portal/pages/SafetyPage'
-import NewsPortalPage           from './portal/pages/NewsPage'
-import NewsDetailPage           from './portal/pages/NewsDetailPage'
-import DocumentsPortalPage      from './portal/pages/DocumentsPage'
-import SavedItemsPage           from './portal/pages/SavedItemsPage'
-import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
-import SsoCompletePage           from './portal/pages/SsoCompletePage'
-import PreferencesPage         from './portal/pages/PreferencesPage'
-import SearchResultsPage        from './portal/pages/SearchResultsPage'
-import MyActivityPage           from './portal/pages/MyActivityPage'
-import ProfilePage              from './portal/pages/ProfilePage'
-import ForgotPasswordPage       from './portal/pages/ForgotPasswordPage'
-import ResetPasswordPage        from './portal/pages/ResetPasswordPage'
+const PortalHomePage           = lazy(() => import('./portal/pages/PortalHomePage'))
+const PortalLoginPage          = lazy(() => import('./portal/pages/LoginPage'))
+const SubmitPage               = lazy(() => import('./portal/pages/SubmitPage'))
+const TherapeuticAreasPage     = lazy(() => import('./portal/pages/TherapeuticAreasPage'))
+const EventsPage               = lazy(() => import('./portal/pages/EventsPage'))
+const ResourcesPage            = lazy(() => import('./portal/pages/ResourcesPage'))
+const DrugInfoPage             = lazy(() => import('./portal/pages/DrugInfoPage'))
+const FindMSLPage              = lazy(() => import('./portal/pages/FindMSLPage'))
+const MySubmissionsPage        = lazy(() => import('./portal/pages/MySubmissionsPage'))
+const ContactPage              = lazy(() => import('./portal/pages/ContactPage'))
+const PortalNotFoundPage       = lazy(() => import('./portal/pages/PortalNotFoundPage'))
+const PortalUnavailablePage   = lazy(() => import('./portal/pages/PortalUnavailablePage'))
+const SafetyPortalPage         = lazy(() => import('./portal/pages/SafetyPage'))
+const NewsPortalPage           = lazy(() => import('./portal/pages/NewsPage'))
+const NewsDetailPage           = lazy(() => import('./portal/pages/NewsDetailPage'))
+const DocumentsPortalPage      = lazy(() => import('./portal/pages/DocumentsPage'))
+const SavedItemsPage           = lazy(() => import('./portal/pages/SavedItemsPage'))
+const VerifyEmailPage          = lazy(() => import('./portal/pages/VerifyEmailPage'))
+const SsoCompletePage           = lazy(() => import('./portal/pages/SsoCompletePage'))
+const PreferencesPage         = lazy(() => import('./portal/pages/PreferencesPage'))
+const SearchResultsPage        = lazy(() => import('./portal/pages/SearchResultsPage'))
+const MyActivityPage           = lazy(() => import('./portal/pages/MyActivityPage'))
+const ProfilePage              = lazy(() => import('./portal/pages/ProfilePage'))
+const ForgotPasswordPage       = lazy(() => import('./portal/pages/ForgotPasswordPage'))
+const ResetPasswordPage        = lazy(() => import('./portal/pages/ResetPasswordPage'))
 import { ToastProvider }        from './shared/components/Toast'
-import AnalyticsPage            from './admin/pages/AnalyticsPage'
-import FeedbackPage             from './admin/pages/FeedbackPage'
-import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
-import FAQAdminPage            from './admin/pages/FAQPage'
-import FAQPortalPage           from './portal/pages/FAQPage'
+const AnalyticsPage            = lazy(() => import('./admin/pages/AnalyticsPage'))
+const FeedbackPage             = lazy(() => import('./admin/pages/FeedbackPage'))
+const EmailSettingsPage        = lazy(() => import('./admin/pages/EmailSettingsPage'))
+const FAQAdminPage            = lazy(() => import('./admin/pages/FAQPage'))
+const FAQPortalPage           = lazy(() => import('./portal/pages/FAQPage'))
 
-import ClinicalTrialsPage      from './portal/pages/ClinicalTrialsPage'
-import TrainingPage            from './portal/pages/TrainingPage'
-import TrainingModulePage      from './portal/pages/TrainingModulePage'
+const ClinicalTrialsPage      = lazy(() => import('./portal/pages/ClinicalTrialsPage'))
+const TrainingPage            = lazy(() => import('./portal/pages/TrainingPage'))
+const TrainingModulePage      = lazy(() => import('./portal/pages/TrainingModulePage'))
 
-import TrialsAdminPage         from './admin/pages/TrialsAdminPage'
-import TrainingAdminPage       from './admin/pages/TrainingAdminPage'
+const TrialsAdminPage         = lazy(() => import('./admin/pages/TrialsAdminPage'))
+const TrainingAdminPage       = lazy(() => import('./admin/pages/TrainingAdminPage'))
 
 function AdminGuard({ children }) {
   const { admin, authLoading, signOut } = useAdminAuth()
@@ -127,6 +128,7 @@ function PortalRoutes() {
       <PortalConfigGate>
       <PortalIdleTimeout />
       <PortalLayout>
+        <Suspense fallback={<div className="pp-loading">Loading…</div>}>
         <Routes>
           <Route index                    element={<PortalHomePage />} />
           <Route path="login"             element={<PortalLoginPage />} />
@@ -157,6 +159,7 @@ function PortalRoutes() {
           <Route path="training/:moduleId" element={<PortalAuthGuard><TrainingModulePage /></PortalAuthGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
+        </Suspense>
       </PortalLayout>
       </PortalConfigGate>
       </ToastProvider>
@@ -167,6 +170,8 @@ function PortalRoutes() {
 export default function App() {
   return (
     <AdminAuthProvider>
+      {/* Pages load on demand, so a portal visitor never downloads the admin console. */}
+      <Suspense fallback={<div className="cp-loading">Loading…</div>}>
       <Routes>
         {/* Admin Console */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -210,6 +215,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
+      </Suspense>
     </AdminAuthProvider>
   )
 }
