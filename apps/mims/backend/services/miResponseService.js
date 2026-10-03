@@ -145,7 +145,8 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     }
   }
 
-  // Resolve documents
+  // Resolve documents. MIPM-186: only published documents go out — this read
+  // 'Approved', so published documents were refused and unreleased ones were sent.
   const selectedDocumentIds = uniquePositiveInts(payload.selected_document_ids || payload.document_ids || []);
   const selectedModuleIds   = uniquePositiveInts(payload.selected_module_ids   || payload.module_ids   || []);
 
@@ -158,7 +159,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
               d.send_as_pdf, d.selected_modules
          FROM cm_documents d INNER JOIN cm_folders f ON f.id = d.folder_id
         WHERE d.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)
-          AND d.status = 'Approved'
+          AND d.status = 'Published'
           AND (d.expiry_date     IS NULL OR d.expiry_date     >= CURDATE())
           AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())`,
       [...selectedDocumentIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
@@ -173,7 +174,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       const found   = new Set(rows.map((d) => d.id));
       const blocked = selectedDocumentIds.filter((id) => !found.has(id));
       const error = new Error(
-        `Document(s) ${blocked.join(', ')} are not available to send. A document must be Approved, past its activation date and not expired.`
+        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date and not expired.`
       );
       error.statusCode = 400;
       throw error;

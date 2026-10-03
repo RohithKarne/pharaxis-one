@@ -2255,7 +2255,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
               d.send_as_pdf, d.selected_modules
          FROM cm_documents d
          INNER JOIN cm_folders f ON f.id = d.folder_id
-        WHERE d.status IN ('Published','Approved')
+        WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
         ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
@@ -2475,7 +2475,7 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
     }
     const row = await getMiResponseRow(req.params.id, result.insertId);
     res.status(201).json(row);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
 router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (req, res) => {
