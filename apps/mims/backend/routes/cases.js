@@ -2821,7 +2821,19 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'In Review', 'Accepted', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
-    if (status && ['Accepted', 'Closed'].includes(status)) {
+    const [[existingTx]] = await pool.execute(
+      'SELECT due_date, status FROM case_ae_transmissions WHERE id = ? AND case_id = ?',
+      [req.params.txId, req.params.id]
+    );
+    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
+    // MIPM-163: setting a PV hand-off to Accepted or Closed, or moving it back out, is a
+    // sign-off: it needs transmission.approve as well as the e-signature, so the
+    // agent who routed it cannot sign it off. Moving back out was not signed at all.
+    const SIGNED = ['Accepted', 'Closed'];
+    if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
+      if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to accept or close a PV hand-off.' });
+      }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();
       if (!password || !reason) {
@@ -2836,11 +2848,6 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
         reason,
       });
     }
-    const [[existingTx]] = await pool.execute(
-      'SELECT due_date FROM case_ae_transmissions WHERE id = ? AND case_id = ?',
-      [req.params.txId, req.params.id]
-    );
-    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
     const nextStatus = status || null;
     await pool.execute(
       `UPDATE case_ae_transmissions
@@ -2932,7 +2939,19 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'Under Investigation', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
-    if (status === 'Closed') {
+    const [[existingTx]] = await pool.execute(
+      'SELECT due_date, status FROM case_pc_transmissions WHERE id = ? AND case_id = ?',
+      [req.params.txId, req.params.id]
+    );
+    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
+    // MIPM-163: setting a PV hand-off to Closed, or moving it back out, is a
+    // sign-off: it needs transmission.approve as well as the e-signature, so the
+    // agent who routed it cannot sign it off. Moving back out was not signed at all.
+    const SIGNED = ['Closed'];
+    if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
+      if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to close a PV hand-off.' });
+      }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();
       if (!password || !reason) {
@@ -2947,11 +2966,6 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
         reason,
       });
     }
-    const [[existingTx]] = await pool.execute(
-      'SELECT due_date FROM case_pc_transmissions WHERE id = ? AND case_id = ?',
-      [req.params.txId, req.params.id]
-    );
-    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
     const nextStatus = status || null;
     await pool.execute(
       `UPDATE case_pc_transmissions
