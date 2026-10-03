@@ -7,7 +7,8 @@ import Icon from '../../shared/components/Icon'
 import AskAboutThis from '../components/AskAboutThis'
 import { formatLongDate, formatDateTime } from '../../shared/utils/datetime'
 
-const SEVERITIES = ['critical', 'warning', 'informational']
+// CPPM-119: every severity the admin console can set, plus 'warning' from older alerts.
+const SEVERITIES = ['critical', 'high', 'medium', 'warning', 'informational']
 
 export default function SafetyPage() {
   const { clientCode, portalHeaders, language, user } = usePortal()
