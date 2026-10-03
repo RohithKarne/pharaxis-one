@@ -62,6 +62,7 @@ const CLIENT_SECTIONS = [
   { key: 'reports', label: 'Reports', icon: 'chart', tabs: [
     { path: 'analytics',     label: 'Analytics' },
     { path: 'audit',         label: 'Audit Trail' },
+    { path: 'safety-confirmations', label: 'Safety Confirmations' }, // CPPM-127: for reading, so no area
     { path: 'compliance',    label: 'Compliance', area: 'compliance' },
   ] },
 ]
@@ -93,6 +94,7 @@ const SEGMENT_TITLES = {
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',
+  'safety-confirmations': 'Safety Confirmations',
   trials:         'Clinical Trials', // CPPM-125
   training:       'CME & Training',
   sso:            'Single Sign-On',

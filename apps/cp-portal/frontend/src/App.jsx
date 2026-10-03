@@ -33,6 +33,7 @@ const CompliancePage       = lazy(() => import('./admin/pages/CompliancePage'))
 const AuditTrailPage       = lazy(() => import('./admin/pages/AuditTrailPage'))
 const SubmissionsPage      = lazy(() => import('./admin/pages/SubmissionsPage'))
 const SafetyQueuePage      = lazy(() => import('./admin/pages/SafetyQueuePage'))
+const SafetyConfirmationsPage = lazy(() => import('./admin/pages/SafetyConfirmationsPage')) // CPPM-127
 const AdminUsersPage      = lazy(() => import('./admin/pages/AdminUsersPage'))
 const ReviewQueuePage     = lazy(() => import('./admin/pages/ReviewQueuePage'))
 
@@ -216,6 +217,7 @@ function AdminRoutes() {
         <Route path="/admin/audit" element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/safety-queue" element={<AdminGuard><SafetyQueuePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/safety-confirmations" element={<AdminGuard><SafetyConfirmationsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/feedback"     element={<AdminGuard><FeedbackPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/admin-users"  element={<AdminGuard><AdminUsersPage /></AdminGuard>} />
