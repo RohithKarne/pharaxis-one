@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
@@ -12,6 +12,10 @@ export default function PortalUsersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [userType, setUserType] = useState('')
+  // CPPM-113: '' = everyone, 'requested' / 'declined' = access requests. The alert
+  // email links here with ?access=requested.
+  const [urlParams] = useSearchParams()
+  const [access, setAccess] = useState(['requested', 'declined'].includes(urlParams.get('access')) ? urlParams.get('access') : '')
 
   const [editUser, setEditUser]         = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -21,13 +25,14 @@ export default function PortalUsersPage() {
   const [selectedIds, setSelectedIds]   = useState([])
   const [showBulkAdd, setShowBulkAdd]   = useState(false)
 
-  useEffect(() => { load() }, [clientId, userType])
+  useEffect(() => { load() }, [clientId, userType, access])
 
   async function load() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (userType) params.set('user_type', userType)
+      if (access) params.set('access', access)
       if (search) params.set('search', search)
       const res = await fetch(`/api/admin/users/${clientId}?${params}`, { headers: adminHeaders() })
       if (!res.ok) throw new Error('Failed to load users.')
@@ -37,6 +42,19 @@ export default function PortalUsersPage() {
       setMsg({ type: 'error', text: e.message })
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function decideAccess(u, decision) {
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/${u.id}/${decision}-access`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setMsg({ type: 'error', text: d.error || `Could not ${decision} the request (error ${res.status}).` }); return }
+      setMsg({ type: 'success', text: `${u.first_name} ${u.last_name}: ${d.message}` })
+      load()
+    } catch {
+      setMsg({ type: 'error', text: 'Network error — please try again.' })
     }
   }
 
@@ -130,6 +148,11 @@ export default function PortalUsersPage() {
         <input className="cp-search-input" placeholder="Search name or email…" value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
+        <select value={access} onChange={e => setAccess(e.target.value)} aria-label="Show access requests">
+          <option value="">All users</option>
+          <option value="requested">Requested</option>
+          <option value="declined">Declined</option>
+        </select>
         <select value={userType} onChange={e => setUserType(e.target.value)}>
           <option value="">All Types</option>
           <option value="hcp">HCP</option>
@@ -234,7 +257,9 @@ export default function PortalUsersPage() {
                   <td>{u.country || '—'}</td>
                   <td>{u.is_verified ? 'Verified' : 'Not verified'}</td>
                   <td>
-                    <span className={`cp-status-badge ${u.is_active ? 'cp-status-active' : 'cp-status-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                    {u.access_status === 'requested' ? <span className="cp-status-badge cp-status-inactive">Requested {u.access_requested_at?.slice(0, 10)}</span>
+                      : u.access_status === 'declined' ? <span className="cp-status-badge cp-status-inactive">Declined</span>
+                      : <span className={`cp-status-badge ${u.is_active ? 'cp-status-active' : 'cp-status-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>}
                     {u.locked_until && (
                       <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 4 }}>
                         Sign-in locked until {new Date(u.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -244,6 +269,12 @@ export default function PortalUsersPage() {
                   <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                   <td>{u.created_at?.slice(0, 10)}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
+                    {u.access_status === 'requested' ? (
+                      <CanChange area="users">
+                      <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => decideAccess(u, 'approve')}>Approve</button>
+                      <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => decideAccess(u, 'decline')}>Decline</button>
+                      </CanChange>
+                    ) : u.access_status === 'declined' ? null : (<>
                     <CanChange area="users">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
                     </CanChange>
@@ -251,6 +282,7 @@ export default function PortalUsersPage() {
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
                     </CanChange>
                     {u.locked_until && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
+                    </>)}
                   </td>
                 </tr>
               ))}
