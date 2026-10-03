@@ -12,87 +12,79 @@ const NAV_ITEMS = [
   { to: '/admin/audit',            label: 'Platform Audit Trail', icon: 'clipboard', exact: true, superadminOnly: true },
 ]
 
-// ── #1 Grouped + collapsible client nav ───────────────────────────────────
-const CLIENT_NAV_GROUPS = (id) => [
-  {
-    key: 'overview',
-    label: null, // no header — always visible
-    items: [
-      { to: `/admin/clients/${id}`, label: 'Overview', icon: 'clipboard', exact: true },
-    ],
-  },
-  {
-    key: 'experience',
-    label: 'Branding & Experience',
-    items: [
-      { to: `/admin/clients/${id}/branding`,  label: 'Branding',   icon: 'palette' },
-      { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: 'sliders' },
-      { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: 'gate' },
-      { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: 'message' },
-      { to: `/admin/clients/${id}/chat-records`, label: 'Chat Conversations', icon: 'message' },
-    ],
-  },
-  {
-    key: 'content',
-    label: 'Content',
-    items: [
-      { to: `/admin/clients/${id}/content`,      label: 'Content',       icon: 'file' },
-      { to: `/admin/clients/${id}/news`,         label: 'News',          icon: 'news' },
-      { to: `/admin/clients/${id}/safety`,       label: 'Safety Alerts', icon: 'shield' },
-      { to: `/admin/clients/${id}/documents`,    label: 'Documents',     icon: 'folder' },
-      { to: `/admin/clients/${id}/trials`,       label: 'Clinical Trials', icon: 'beaker' },
-      { to: `/admin/clients/${id}/training`,     label: 'CME & Training',  icon: 'book' },
-      { to: `/admin/clients/${id}/msls`,         label: 'MSL Directory', icon: 'users' },
-      { to: `/admin/clients/${id}/faq`,          label: 'FAQ',           icon: 'help' },
-      { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: 'search', badge: 'review' },
-    ],
-  },
-  {
-    key: 'compliance',
-    label: 'Compliance & Forms',
-    items: [
-      { to: `/admin/clients/${id}/compliance`,     label: 'Compliance',     icon: 'lock' },
-      { to: `/admin/clients/${id}/forms`,          label: 'Forms',          icon: 'form' },
-      { to: `/admin/clients/${id}/email-settings`, label: 'Email Settings', icon: 'mail' },
-    ],
-  },
-  {
-    key: 'operations',
-    label: 'Operations',
-    items: [
-      { to: `/admin/clients/${id}/users`,        label: 'Portal Users', icon: 'users' },
-      { to: `/admin/clients/${id}/submissions`,  label: 'Submissions',  icon: 'inbox' },
-      { to: `/admin/clients/${id}/safety-queue`, label: 'Safety Queue', icon: 'shield', badge: 'safety' },
-      { to: `/admin/clients/${id}/integration`,  label: 'Integration',  icon: 'link' },
-      { to: `/admin/clients/${id}/sync-health`,  label: 'Sync Health',  icon: 'chart' },
-      { to: `/admin/clients/${id}/audit`,        label: 'Audit Trail',    icon: 'list' },
-      { to: `/admin/clients/${id}/data-requests`, label: 'Data Requests', icon: 'shield' },
-      { to: `/admin/clients/${id}/analytics`,   label: 'Analytics',      icon: 'chart' },
-      { to: `/admin/clients/${id}/feedback`,    label: 'Feedback',       icon: 'message' },
-      { to: `/admin/clients/${id}/admin-users`, label: 'Admin Users',    icon: 'key' },
-    ],
-  },
+// CPPM-123: seven main screens. The sidebar lists the screens; each screen's
+// sub-screens show as tabs along the top. Every sub-screen keeps its own address
+// (`path` after /admin/clients/:id/), so old links still land on the right tab.
+//
+// CPPM-124: `area` is the write area in middleware/adminWritePolicy.js. A tab
+// shows only to roles that may change it; with no area (Overview, Analytics,
+// Audit Trail: screens for reading) everyone sees it. Sync Health's one action,
+// retry, is a submissions change, so it follows the submissions area.
+const CLIENT_SECTIONS = [
+  { key: 'overview', label: 'Overview', icon: 'clipboard', tabs: [
+    { path: '',              label: 'Overview' },
+  ] },
+  { key: 'inbox', label: 'Inbox', icon: 'inbox', tabs: [
+    { path: 'submissions',   label: 'Submissions', area: 'submissions' },
+    { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety', area: 'ae-review' },
+    { path: 'review-queue',  label: 'Review Queue', badge: 'review', area: 'review-queue' },
+    { path: 'feedback',      label: 'Feedback', area: 'feedback' },
+    { path: 'chat-records',  label: 'Chat Conversations', area: 'chat-records' },
+    { path: 'data-requests', label: 'Data Requests', area: 'data-requests' },
+  ] },
+  { key: 'content', label: 'Content', icon: 'file', tabs: [
+    { path: 'content',       label: 'Library', area: 'content' },
+    { path: 'news',          label: 'News', area: 'news' },
+    { path: 'documents',     label: 'Documents', area: 'documents' },
+    { path: 'safety',        label: 'Safety Alerts', area: 'safety' },
+    { path: 'trials',        label: 'Clinical Trials', area: 'trials' },
+    { path: 'training',      label: 'CME & Training', area: 'training' },
+    { path: 'msls',          label: 'MSL Directory', area: 'msls' },
+    { path: 'faq',           label: 'FAQ', area: 'faq' },
+  ] },
+  { key: 'setup', label: 'Portal setup', icon: 'sliders', tabs: [
+    { path: 'branding',      label: 'Branding', area: 'branding' },
+    { path: 'features',      label: 'Features', area: 'features' },
+    { path: 'gate',          label: 'User Gate', area: 'gate' },
+    { path: 'forms',         label: 'Forms', area: 'forms' },
+    { path: 'email-settings', label: 'Email Settings', area: 'email-config' },
+    { path: 'chatbox',       label: 'Chatbox AI', area: 'chatbox' },
+  ] },
+  { key: 'people', label: 'People', icon: 'users', tabs: [
+    { path: 'users',         label: 'Portal Users', area: 'users' },
+    { path: 'admin-users',   label: 'Admin Users', area: 'admin-users' },
+  ] },
+  { key: 'connections', label: 'Connections', icon: 'link', tabs: [
+    { path: 'integration',   label: 'Integration', area: 'integration' },
+    { path: 'sync-health',   label: 'Sync Health', area: 'submissions' },
+    { path: 'sso',           label: 'Single Sign-On', area: 'sso' },
+  ] },
+  { key: 'reports', label: 'Reports', icon: 'chart', tabs: [
+    { path: 'analytics',     label: 'Analytics' },
+    { path: 'audit',         label: 'Audit Trail' },
+    { path: 'compliance',    label: 'Compliance', area: 'compliance' },
+  ] },
 ]
 
 const SEGMENT_TITLES = {
   branding:       'Branding',
-  content:        'Content',
+  content:        'Library',
   news:           'News',
-  safety:         'Safety',
+  safety:         'Safety Alerts', // CPPM-123: one name, same as the tab
   documents:      'Documents',
   forms:          'Forms',
   features:       'Features',
-  gate:           'Access Gate',
+  gate:           'User Gate',
   integration:    'Integration',
   'sync-health':  'Sync Health',
   'data-requests': 'Data Requests',
-  chatbox:        'Chatbox',
+  chatbox:        'Chatbox AI',
   'chat-records': 'Chat Conversations',
   compliance:     'Compliance',
   users:          'Portal Users',
   submissions:    'Submissions',
   'safety-queue': 'Safety Queue',
-  msls:           'MSL Management',
+  msls:           'MSL Directory',
   clients:        'Clients',
   audit:          'Audit Trail',
   'admin-users':  'Admin Users',
@@ -101,6 +93,9 @@ const SEGMENT_TITLES = {
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',
+  trials:         'Clinical Trials', // CPPM-125
+  training:       'CME & Training',
+  sso:            'Single Sign-On',
 }
 
 function deriveTitle(pathname) {
@@ -112,22 +107,26 @@ function deriveTitle(pathname) {
 }
 
 export default function AdminLayout({ children }) {
-  const { admin, signOut } = useAdminAuth()
+  const { admin, signOut, hasRole, canChange } = useAdminAuth()
   const navigate  = useNavigate()
   const { clientId } = useParams()
   const location  = useLocation()
   const pageTitle = deriveTitle(location.pathname)
+  // CPPM-123: which main screen and tab the address belongs to.
+  const currentPath = clientId ? (location.pathname.split('/')[4] || '') : null
+  const currentSection = CLIENT_SECTIONS.find(sec => sec.tabs.some(t => t.path === currentPath))
+  // CPPM-124: a viewer may change nothing but is meant to look at everything.
+  // The tab you are on always shows, even if your role cannot change it.
+  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
+  const sections = CLIENT_SECTIONS
+    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
+    .filter(sec => sec.tabs.length > 0)
+  const shownSection = sections.find(sec => sec.key === currentSection?.key)
+  const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
-    return saved !== null ? saved === 'true' : false
-  })
-
-  // ── #1 Collapsible sidebar groups — default all open ────────────────────
-  const [openGroups, setOpenGroups] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('cp_nav_groups')
-      return saved ? JSON.parse(saved) : { experience: true, content: true, compliance: true, operations: true }
-    } catch { return { experience: true, content: true, compliance: true, operations: true } }
+    // CPPM-126: on a phone the full sidebar leaves the page too little room.
+    return saved !== null ? saved === 'true' : window.innerWidth < 768
   })
 
   // Sidebar badge counts, keyed by the `badge` name on each nav item.
@@ -185,17 +184,8 @@ export default function AdminLayout({ children }) {
 
   function handleLogout() {
     sessionStorage.removeItem('cp_sidebar_compact')
-    sessionStorage.removeItem('cp_nav_groups')
     signOut()
     navigate('/admin/login')
-  }
-
-  function toggleGroup(key) {
-    setOpenGroups(g => {
-      const next = { ...g, [key]: !g[key] }
-      sessionStorage.setItem('cp_nav_groups', JSON.stringify(next))
-      return next
-    })
   }
 
   return (
@@ -254,51 +244,26 @@ export default function AdminLayout({ children }) {
 
           {clientId && (
             <div className="cp-client-nav-groups">
-              {CLIENT_NAV_GROUPS(clientId).map(group => (
-                <div key={group.key}>
-                  {/* Groups with a label are collapsible */}
-                  {group.label ? (
-                    <button
-                      className="cp-nav-group-header"
-                      onClick={() => toggleGroup(group.key)}
-                    >
-                      <span className="cp-nav-group-label">{group.label}</span>
-                      <span className="cp-nav-group-toggle">
-                        {openGroups[group.key] ? '▾' : '▸'}
+              <div style={{ marginTop: 12 }} />
+              {sections.map(sec => {
+                const count = sec.tabs.reduce((n, t) => n + (t.badge ? badges[t.badge] : 0), 0)
+                const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] : 0), 0)
+                return (
+                  <NavLink
+                    key={sec.key} to={tabUrl(sec.tabs[0])} end
+                    title={sec.label}
+                    className={`cp-nav-item${sec.key === currentSection?.key ? ' active' : ''}`}
+                  >
+                    <span className="cp-nav-icon"><Icon name={sec.icon} size={17} /></span>
+                    <span className="cp-nav-text">{sec.label}</span>
+                    {count > 0 && (
+                      <span className="cp-nav-badge">
+                        {mine > 0 && !sidebarCompact ? `${mine} yours · ${count}` : count}
                       </span>
-                    </button>
-                  ) : (
-                    <div style={{ marginTop: 12 }} />
-                  )}
-
-                  {(group.label ? (sidebarCompact ? true : openGroups[group.key]) : true) && (
-                    <div className={group.label ? 'cp-nav-group-items' : ''}>
-                      {group.items.map(item => (
-                        <NavLink
-                          key={item.to} to={item.to} end={item.exact}
-                          title={item.label}
-                          className={({ isActive }) => `cp-nav-item${isActive ? ' active' : ''}`}
-                        >
-                          <span className="cp-nav-icon"><Icon name={item.icon} size={17} /></span>
-                          <span className="cp-nav-text">{item.label}</span>
-                          {item.badge && badges[item.badge] > 0 && (
-                            <span style={{
-                              marginLeft: 'auto', background: '#DC2626', color: '#fff',
-                              borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700,
-                            }}>
-                              {item.badge === 'safety' && badges.safetyMine > 0 && !sidebarCompact
-                                ? `${badges.safetyMine} yours · ${badges.safety} open`
-                                : item.badge === 'review' && badges.reviewMine > 0 && !sidebarCompact
-                                  ? `${badges.reviewMine} yours · ${badges.review} to review`
-                                  : badges[item.badge]}
-                            </span>
-                          )}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </NavLink>
+                )
+              })}
             </div>
           )}
         </nav>
@@ -351,6 +316,27 @@ export default function AdminLayout({ children }) {
             <div role="note" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
               Your role is view-only. You can look at everything here, but changes will not be saved. Ask an admin if you need to make changes.
             </div>
+          )}
+          {shownSection && shownSection.tabs.length > 1 && (
+            <nav className="cp-subnav" aria-label={shownSection.label}>
+              {shownSection.tabs.map(t => (
+                <NavLink
+                  key={t.path} to={tabUrl(t)} end
+                  className={`cp-subnav-tab${t.path === currentPath ? ' active' : ''}`}
+                >
+                  {t.label}
+                  {t.badge && badges[t.badge] > 0 && (
+                    <span className="cp-nav-badge">
+                      {t.badge === 'safety' && badges.safetyMine > 0
+                        ? `${badges.safetyMine} yours · ${badges.safety} open`
+                        : t.badge === 'review' && badges.reviewMine > 0
+                          ? `${badges.reviewMine} yours · ${badges.review} to review`
+                          : badges[t.badge]}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
           )}
           {children}
         </div>

@@ -1186,6 +1186,25 @@ body { background: var(--cp-bg); }
 .cp-tab:hover { color: var(--cp-text); }
 .cp-tab.active { color: var(--cp-primary); border-bottom-color: var(--cp-primary); font-weight: 700; }
 
+/* CPPM-123: a main screen's sub-screens, above the page. Pills, so they read
+   differently from a page's own tabs underneath. Scrolls sideways on a phone. */
+.cp-subnav {
+  display: flex; gap: 4px; margin-bottom: 16px; padding: 4px;
+  background: #F1F5F9; border-radius: 8px; overflow-x: auto; scrollbar-width: thin;
+}
+.cp-subnav-tab {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;
+  padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  color: #475569; text-decoration: none; transition: background 0.15s, color 0.15s;
+}
+.cp-subnav-tab:hover { background: #E2E8F0; color: var(--cp-text); }
+.cp-subnav-tab.active { background: #fff; color: var(--cp-primary); font-weight: 700; box-shadow: 0 1px 2px rgba(15,23,42,.12); }
+.cp-nav-badge {
+  margin-left: auto; background: #DC2626; color: #fff;
+  border-radius: 10px; padding: 1px 6px; font-size: 11px; font-weight: 700;
+}
+.cp-subnav-tab .cp-nav-badge { margin-left: 0; }
+
 /* ── Toggle Switch ────────────────────────────────────────────── */
 
 .cp-toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }

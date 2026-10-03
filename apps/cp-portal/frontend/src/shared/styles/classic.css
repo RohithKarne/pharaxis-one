@@ -19,6 +19,12 @@
 :root .cp-nav-item:hover { background: #dde3ea; color: #000; }
 :root .cp-nav-item.active { background: #fff !important; color: #000 !important; font-weight: bold; border-left: 4px solid var(--cp-brand); padding-left: 8px; }
 :root .cp-nav-group-header { padding: 10px 12px 4px; color: #5a6675; }
+/* CPPM-126: the collapsed (icon-only) sidebar. The 210px width above outranked
+   the collapsed width, so collapsing hid the labels but kept the full width. */
+:root .cp-admin-sidebar.compact { width: 64px; }
+:root .cp-admin-sidebar.compact .cp-nav-item { position: relative; justify-content: center; padding: 8px 6px; }
+:root .cp-admin-sidebar.compact .cp-nav-item.active { padding-left: 2px; }
+:root .cp-admin-sidebar.compact .cp-nav-badge { position: absolute; top: 2px; right: 4px; padding: 0 4px; font-size: 10px; }
 :root .cp-nav-group-label { font-size: 11px; text-transform: none; }
 :root .cp-sidebar-footer { border-top: 1px solid #b9c2cd; padding: 10px 12px; }
 :root .cp-admin-name { color: #1d3557; }
