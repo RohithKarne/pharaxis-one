@@ -3378,6 +3378,7 @@ retires it.
 |------|-----------|--------------|
 | 2026-03-27 | Bala | Initial creation — full snapshot as of 2026-03-22 stable release |
 | 2026-07-15 | Bala | CP↔MIMS integration SHIPPED and browser-verified (approved by Rohith). Outbound sync to MIMS `POST /api/v1/cases` (OAuth client-credentials with auto-refresh — `services/mimsAuth.js`), idempotent on CP reference, attachments forwarded, close-sync poller auto-closes CP inquiries, retry poller (incl. stale `pending_sync`), audit trail. Admin: Integration page gained an OAuth auth type + per-form-type Field Mapping builder (`cp_field_mapping`, dot-path targets); new Sync Health dashboard page (`/admin/clients/:id/sync-health`). Secrets encrypted at rest; provisioning scripts must load `.env` (see `docs/lessons.md` L-011). |
+| 2026-10-03 | Saad | Doctor Review release merged in PR #709 (CPPM-84–95, CPPM-106–117, CPPM-119, CPPM-121, CPPM-122). Fixes: forms, drafts, submissions and feature switches. Doctors gain: check-your-answers before sending, request access, "I have read this" on high and critical safety letters, notifications that open the exact item, "For you" on Home, an event page with Register and Add to calendar. Admins gain: approve or decline access requests, therapeutic-area tags on news, documents and events, on/off switches for Clinical Trials and Training. Migrations 0039–0042, folded into the baseline. Not yet done: the revalidation flag and a tagged release. |
 
 ---
 
@@ -3752,6 +3753,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-05-12 | Bala | Section 15 expanded — Local vs UAT app purpose, audience, data, workflow fully documented so any team member can understand the difference without verbal explanation. |
 | 2026-05-20 | Varun | Local MIMS UAT environment retired and removed from repo/machine. No PM2 `mims-uat`, port `4001`, or `pharaxis_mims_uat` database should be assumed active. |
 | 2026-07-15 | Bala | CP Portal↔MIMS integration LIVE (approved by Rohith, browser-verified). API platform: `POST /oauth/token` (client credentials, 1h tokens — CP auto-refreshes), `POST/GET /api/v1/cases`, `POST /api/v1/cases/:id/attachments`; case writes now populate the UI-read structures (`case_contacts`, versioned `case_ae_*`/`case_pc_*`, `case_mi`); idempotent on CP reference (= `case_number`). Fixes shipped: tokenIssuer scope double-parse (mysql2 JSON column, sibling of the apiKeyAuth bug); infinite `/api/auth/me`+security-groups fetch loop in AuthContext (root cause of "Too many authentication requests" lockouts); ProtectedRoute now waits for cookie-session restore instead of bouncing to /login on refresh; auth rate limiter no longer counts successful requests; dev `JWT_SECRET` fixed in `.env` (sessions survive nodemon restarts); `FeatureFlagsProvider` mounted in Max app — it never was, so ALL `cf.*` tenant flags rendered OFF app-wide. `cf.theme6_documents` enabled for Novartis (org 1): Case Attachments workspace now visible (Communications → Attachments). |
+| 2026-10-03 | Saad | Two stale lines corrected. *Git push*: enabled since 2026-07-27, always through a pull request, never to `main`. *Section 15*: nothing is deployed; MIMS runs on the local copy only. |
 
 ---
 
@@ -4549,7 +4551,7 @@ Non-negotiable. Ignoring causes bugs.
 | Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Wired into `POST /api/admin/orgs`. For orgs created before Sprint 10, run `backfill-existing-orgs.js` once. |
 | form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Platform Admin has orgId=null; org resolved inline: `platform_admin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
-| Git push | Disabled since Sprint 3. Never run `git push` or `gh` commands. |
+| Git push | Enabled again since 2026-07-27. Push a branch and open a pull request; never push to `main`. Confirm with Rohith before pushing anything of substance (§31, §38). |
 | New case org_id | Always from JWT (`req.user.orgId`) — never from request body. |
 | Platform Admin role | Since 2026-09-23 a platform admin may make another user a platform admin from the admin console (see *Platform admin recovery* below); nobody else can. Never add hardcoded role resets to `db.js` init. |
 | Site names | Unique per org. `UNIQUE KEY uq_site_org_name (org_id, name)`. Pre-validate in API with 409 before INSERT. |
@@ -4601,7 +4603,7 @@ Local MIMS UAT has been retired.
 Current assumption:
 
 - local development uses the normal dev environment
-- production/live access uses the deployed `/mims/` app
+- nothing is deployed: MIMS, like CP Portal, runs on the local copy only (§38.12)
 - no PM2 `mims-uat`, no port `4001`, and no `pharaxis_mims_uat` database should be expected on this machine
 
 The in-app **UAT & QA** admin features remain product features. Only the separate local UAT runtime was removed.
