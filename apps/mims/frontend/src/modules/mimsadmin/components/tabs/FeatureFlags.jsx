@@ -135,7 +135,7 @@ export default function FeatureFlags() {
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>Feature Flags</h1>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-              Wave 0 foundation. Every theme in the case-form roadmap ships behind a flag — enable per tenant for gradual rollout.
+              Turn case-form features on or off for each organisation.
             </div>
           </div>
           {flash && (
@@ -162,7 +162,7 @@ export default function FeatureFlags() {
                 letterSpacing: 0.4, textTransform: 'uppercase',
                 color: 'var(--text-muted)', background: 'var(--surface, #fff)',
                 borderBottom: '1px solid var(--border)',
-              }}>Wave {wave}</div>
+              }}>{/^\d+$/.test(String(wave)) ? `Release ${wave}` : wave}</div>
               {items.map(f => (
                 <div
                   key={f.id}
@@ -226,8 +226,8 @@ export default function FeatureFlags() {
                     background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6,
                     color: '#8a6a00',
                   }}>
-                    <strong>Strict mode:</strong> theme keeps both legacy and new code paths until QA-approved.
-                    Disabling the flag falls back to legacy behavior cleanly.
+                    <strong>Strict mode:</strong> the previous behaviour is kept alongside this feature.
+                    Turning the flag off returns the organisation to the previous behaviour.
                   </div>
                 ) : null}
               </div>

@@ -123,9 +123,8 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
             </h2>
           </div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '32px 28px', textAlign: 'center' }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Under Development</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              Configuration for <strong>{findSystemLabel(selectedItem)}</strong> is coming soon.
+              There are no settings for <strong>{findSystemLabel(selectedItem)}</strong> on this screen.
             </div>
           </div>
         </div>

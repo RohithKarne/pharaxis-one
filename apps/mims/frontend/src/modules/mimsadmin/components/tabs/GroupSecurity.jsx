@@ -351,7 +351,7 @@ export default function GroupSecurity() {
               <label className="ma-gs-field">
                 <span>Tables General Tables</span>
                 <select value={form.details.general_table} onChange={e => setDetail('general_table', e.target.value)}>
-                  <option value="">{optionLabel('', 'General tables values coming soon')}</option>
+                  <option value="">{optionLabel('', 'Select general table')}</option>
                   {options.general_tables.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>
