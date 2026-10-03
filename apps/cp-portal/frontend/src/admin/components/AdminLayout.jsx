@@ -28,6 +28,7 @@ const CLIENT_SECTIONS = [
     { path: 'submissions',   label: 'Submissions', area: 'submissions' },
     { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety', area: 'ae-review' },
     { path: 'review-queue',  label: 'Review Queue', badge: 'review', area: 'review-queue' },
+    { path: 'access-requests', label: 'Access Requests', badge: 'access', area: 'users' }, // CPPM-128
     { path: 'feedback',      label: 'Feedback', area: 'feedback' },
     { path: 'chat-records',  label: 'Chat Conversations', area: 'chat-records' },
     { path: 'data-requests', label: 'Data Requests', area: 'data-requests' },
@@ -94,6 +95,7 @@ const SEGMENT_TITLES = {
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',
+  'access-requests': 'Access Requests',
   'safety-confirmations': 'Safety Confirmations',
   trials:         'Clinical Trials', // CPPM-125
   training:       'CME & Training',
@@ -135,7 +137,8 @@ export default function AdminLayout({ children }) {
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
   //   safetyMine — CPPM-6: how many of those the signed-in person holds
-  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0 })
+  //   access — CPPM-128: doctors waiting for access
+  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0, access: 0 })
   // CPPM-6: a page says when it changed a count (a task taken, handed over or
   // closed), so the sidebar does not wait for the next page change to catch up.
   const [badgeTick, setBadgeTick] = useState(0)
@@ -152,9 +155,11 @@ export default function AdminLayout({ children }) {
     Promise.all([
       get(`/api/admin/review-queue/${clientId}/count`),
       get(`/api/admin/ae-review/${clientId}/count`),
-    ]).then(([review, safety]) => setBadges({
+      get(`/api/admin/users/${clientId}/access-requests/count`),
+    ]).then(([review, safety, access]) => setBadges({
       review: review?.count || 0, safety: safety?.count || 0, safetyMine: safety?.mine || 0,
       reviewMine: review?.mine || 0, // CPPM-61
+      access: access?.count || 0,
     }))
   }, [clientId, location.pathname, badgeTick])
 
@@ -249,7 +254,7 @@ export default function AdminLayout({ children }) {
               <div style={{ marginTop: 12 }} />
               {sections.map(sec => {
                 const count = sec.tabs.reduce((n, t) => n + (t.badge ? badges[t.badge] : 0), 0)
-                const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] : 0), 0)
+                const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] || 0 : 0), 0)
                 return (
                   <NavLink
                     key={sec.key} to={tabUrl(sec.tabs[0])} end

@@ -315,6 +315,18 @@ router.post('/:clientId/:userId/unlock', authenticateAdmin, async (req, res) => 
   }
 });
 
+// GET /api/admin/users/:clientId/access-requests/count — CPPM-128: the Inbox count
+// of doctors waiting for access.
+router.get('/:clientId/access-requests/count', async (req, res) => {
+  try {
+    const [[{ n }]] = await pool.execute(`SELECT COUNT(*) AS n FROM cp_portal_users WHERE client_id = ? AND access_status = 'requested'`, [req.params.clientId]);
+    res.json({ count: Number(n) });
+  } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'GET /:clientId/access-requests/count', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
   try {
     const { user_type, search, access } = req.query;

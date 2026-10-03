@@ -206,6 +206,7 @@ function AdminRoutes() {
         <Route path="/admin/clients/:clientId/data-requests" element={<AdminGuard><DataRequestsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/access-requests" element={<AdminGuard><PortalUsersPage requestsOnly /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chat-records" element={<AdminGuard><ChatRecordsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/gate"       element={<AdminGuard><GatePage /></AdminGuard>} />
