@@ -303,8 +303,8 @@ export default function PortalHomePage() {
                 </h2>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
-                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none' }}>My activity</Link>
-                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none' }}>Notification preferences</Link>
+                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>My activity</Link>
+                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>Notification preferences</Link>
               </div>
             </div>
 
