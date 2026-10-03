@@ -261,7 +261,8 @@ export default function FAQsSection({ token }) {
               Bulk Tag ({selectedFaqIds.length})
             </button>
           )}
-          {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
+          {/* MIPM-189: creating an FAQ needs content.faq.manage, not content.author — the button always failed for content managers. */}
+          {hasCapability('content.faq.manage') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
         </div>
       </div>
       {showBulkTag && (
