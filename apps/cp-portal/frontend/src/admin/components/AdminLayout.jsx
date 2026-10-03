@@ -113,7 +113,8 @@ export default function AdminLayout({ children }) {
   const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
-    return saved !== null ? saved === 'true' : false
+    // CPPM-126: on a phone the full sidebar leaves the page too little room.
+    return saved !== null ? saved === 'true' : window.innerWidth < 768
   })
 
   // Sidebar badge counts, keyed by the `badge` name on each nav item.
