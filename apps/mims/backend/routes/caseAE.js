@@ -34,6 +34,13 @@ router.post('/cases/ae/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { auditChanges, versionCase } = require('../services/componentAudit');
+
+// MIPM-169: every AE change goes to the case audit trail, field by field.
+async function audit(req, versionId, section, before, after, action = 'AE_UPDATED') {
+  const v = await versionCase('ae', versionId);
+  if (v) await auditChanges(v.case_id, req, action, `AE v${v.version_number} ${section}`, before, after);
+}
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -208,6 +215,7 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
     }
 
     await conn.commit();
+    await auditChanges(req.params.id, req, 'AE_VERSION_CREATED', `AE v${nextNum}`, null, { status: 'open' });
 
     const [[newVersion]] = await pool.execute(
       'SELECT * FROM case_ae_versions WHERE id = ?', [result.insertId]
@@ -229,6 +237,7 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
       return res.status(403).json({ error: 'Access denied' });
     }
     await guardLocked(req.params.versionId, req);
+    const [[beforeVersion]] = await pool.execute('SELECT status FROM case_ae_versions WHERE id = ?', [req.params.versionId]);
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
     // L-05: normalise and validate against a known set so an arbitrary status can't
@@ -254,6 +263,7 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
     const [[v]] = await pool.execute(
       'SELECT * FROM case_ae_versions WHERE id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'version', beforeVersion, { status: v.status });
     res.json(v);
   } catch (err) {
     console.error('PUT AE version status error:', err);
@@ -277,6 +287,7 @@ router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_general WHERE version_id = ?', [req.params.versionId]);
     const {
       report_type,
       ae_status,
@@ -303,6 +314,7 @@ router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_general WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'general', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -350,13 +362,15 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_events WHERE id = ?', [result.insertId]
     );
+    await audit(req, req.params.versionId, `events #${row.id}`, null, row, 'AE_ROW_ADDED');
     res.status(201).json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
   try {
-    await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
+    const owned = await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       is_serious, is_death, is_life_threatening, is_hospitalization,
@@ -412,14 +426,17 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
       ]
     );
     const [[updated]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
+    await audit(req, owned.version_id, `events #${req.params.eventId}`, before, updated);
     res.json(updated);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.delete('/cases/ae/events/:eventId', authenticate, async (req, res) => {
   try {
-    await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
+    const owned = await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
+    const [[gone]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
     await pool.execute('DELETE FROM case_ae_events WHERE id = ?', [req.params.eventId]);
+    await audit(req, owned.version_id, `events #${req.params.eventId}`, gone, null, 'AE_ROW_REMOVED');
     res.json({ success: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -440,6 +457,7 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]);
     const {
       patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm,
       ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
@@ -462,6 +480,7 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'patient-info', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -489,14 +508,17 @@ router.post('/cases/ae/versions/:versionId/lab-results', authenticate, async (re
       [req.params.versionId, lab_name || null, test_name || null, result || null, unit || null, normal_range || null, test_date || null]
     );
     const [[row]] = await pool.execute('SELECT * FROM case_ae_lab_results WHERE id = ?', [ins.insertId]);
+    await audit(req, req.params.versionId, `lab-results #${row.id}`, null, row, 'AE_ROW_ADDED');
     res.status(201).json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.delete('/cases/ae/lab-results/:labId', authenticate, async (req, res) => {
   try {
-    await ensureAeChildAccess('case_ae_lab_results', req.params.labId, req, { requireUnlocked: true });
+    const owned = await ensureAeChildAccess('case_ae_lab_results', req.params.labId, req, { requireUnlocked: true });
+    const [[gone]] = await pool.execute('SELECT * FROM case_ae_lab_results WHERE id = ?', [req.params.labId]);
     await pool.execute('DELETE FROM case_ae_lab_results WHERE id = ?', [req.params.labId]);
+    await audit(req, owned.version_id, `lab-results #${req.params.labId}`, gone, null, 'AE_ROW_REMOVED');
     res.json({ success: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -517,6 +539,7 @@ router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_lab_notes WHERE version_id = ?', [req.params.versionId]);
     const { notes, 'lab-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_lab_notes (version_id, notes) VALUES (?, ?)
@@ -526,6 +549,7 @@ router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_lab_notes WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'lab-notes', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -553,14 +577,17 @@ router.post('/cases/ae/versions/:versionId/medical-history', authenticate, async
       [req.params.versionId, condition_name || null, start_date || null, end_date || null, is_ongoing ? 1 : 0, notes || null]
     );
     const [[row]] = await pool.execute('SELECT * FROM case_ae_medical_history WHERE id = ?', [ins.insertId]);
+    await audit(req, req.params.versionId, `medical-history #${row.id}`, null, row, 'AE_ROW_ADDED');
     res.status(201).json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.delete('/cases/ae/medical-history/:mhId', authenticate, async (req, res) => {
   try {
-    await ensureAeChildAccess('case_ae_medical_history', req.params.mhId, req, { requireUnlocked: true });
+    const owned = await ensureAeChildAccess('case_ae_medical_history', req.params.mhId, req, { requireUnlocked: true });
+    const [[gone]] = await pool.execute('SELECT * FROM case_ae_medical_history WHERE id = ?', [req.params.mhId]);
     await pool.execute('DELETE FROM case_ae_medical_history WHERE id = ?', [req.params.mhId]);
+    await audit(req, owned.version_id, `medical-history #${req.params.mhId}`, gone, null, 'AE_ROW_REMOVED');
     res.json({ success: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -581,6 +608,7 @@ router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_medical_notes WHERE version_id = ?', [req.params.versionId]);
     const { notes, 'medical-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_medical_notes (version_id, notes) VALUES (?, ?)
@@ -590,6 +618,7 @@ router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_medical_notes WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'medical-notes', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -635,14 +664,17 @@ router.post('/cases/ae/versions/:versionId/product-info', authenticate, async (r
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_product_info WHERE id = ?', [ins.insertId]
     );
+    await audit(req, req.params.versionId, `product-info #${row.id}`, null, row, 'AE_ROW_ADDED');
     res.status(201).json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.delete('/cases/ae/product-info/:piId', authenticate, async (req, res) => {
   try {
-    await ensureAeChildAccess('case_ae_product_info', req.params.piId, req, { requireUnlocked: true });
+    const owned = await ensureAeChildAccess('case_ae_product_info', req.params.piId, req, { requireUnlocked: true });
+    const [[gone]] = await pool.execute('SELECT * FROM case_ae_product_info WHERE id = ?', [req.params.piId]);
     await pool.execute('DELETE FROM case_ae_product_info WHERE id = ?', [req.params.piId]);
+    await audit(req, owned.version_id, `product-info #${req.params.piId}`, gone, null, 'AE_ROW_REMOVED');
     res.json({ success: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -664,6 +696,7 @@ router.put('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_ae_flex_fields WHERE version_id = ?', [req.params.versionId]);
     const { ae_flex_1, ae_flex_2, ae_flex_3 } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_flex_fields (version_id, ae_flex_1, ae_flex_2, ae_flex_3)
@@ -675,6 +708,7 @@ router.put('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (
       'SELECT * FROM case_ae_flex_fields WHERE version_id = ?',
       [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'ae-flex-fields', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });

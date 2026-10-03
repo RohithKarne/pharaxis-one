@@ -69,6 +69,7 @@ const {
 } = require('../services/miResponseService');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
+const { auditChanges } = require('../services/componentAudit');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -2815,6 +2816,9 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       product_group_id: productGroup.product_group_id,
     }, 'ae_transmission', String(result.insertId)).catch(() => {});
     const row = await getAeTransmissionRow(req.params.id, result.insertId);
+    // MIPM-169: the hand-off and each status change go to the case audit trail.
+    await auditChanges(req.params.id, req, 'AE_HANDOFF_CREATED', `PV hand-off #${result.insertId}`, null,
+      { assigned_to: row?.assignee_name || row?.assigned_name, priority: row?.priority, due_date: row?.due_date, status: row?.status });
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2871,6 +2875,11 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
       }, 'ae_transmission', String(req.params.txId)).catch(() => {});
     }
     const row = await getAeTransmissionRow(req.params.id, req.params.txId);
+    if (nextStatus && nextStatus !== existingTx.status) {
+      const signedReason = SIGNED.includes(nextStatus) || SIGNED.includes(existingTx.status) ? String(req.body?.reason || '').trim() : '';
+      await auditChanges(req.params.id, req, 'AE_HANDOFF_STATUS', `PV hand-off #${req.params.txId}`,
+        { status: existingTx.status }, { status: nextStatus, ...(signedReason ? { 'e-signature reason': signedReason } : {}) });
+    }
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2933,6 +2942,9 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       product_group_id: productGroup.product_group_id,
     }, 'pc_transmission', String(result.insertId)).catch(() => {});
     const row = await getPcTransmissionRow(req.params.id, result.insertId);
+    // MIPM-169: the hand-off and each status change go to the case audit trail.
+    await auditChanges(req.params.id, req, 'PC_HANDOFF_CREATED', `Quality routing #${result.insertId}`, null,
+      { assigned_to: row?.assignee_name || row?.assigned_name, priority: row?.priority, due_date: row?.due_date, status: row?.status });
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2989,6 +3001,11 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
       }, 'pc_transmission', String(req.params.txId)).catch(() => {});
     }
     const row = await getPcTransmissionRow(req.params.id, req.params.txId);
+    if (nextStatus && nextStatus !== existingTx.status) {
+      const signedReason = SIGNED.includes(nextStatus) || SIGNED.includes(existingTx.status) ? String(req.body?.reason || '').trim() : '';
+      await auditChanges(req.params.id, req, 'PC_HANDOFF_STATUS', `Quality routing #${req.params.txId}`,
+        { status: existingTx.status }, { status: nextStatus, ...(signedReason ? { 'e-signature reason': signedReason } : {}) });
+    }
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

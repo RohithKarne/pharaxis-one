@@ -25,6 +25,13 @@ router.put('/cases/pc/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('pc', 'case_pc_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { auditChanges, versionCase } = require('../services/componentAudit');
+
+// MIPM-169: every PC change goes to the case audit trail, field by field.
+async function audit(req, versionId, section, before, after, action = 'PC_UPDATED') {
+  const v = await versionCase('pc', versionId);
+  if (v) await auditChanges(v.case_id, req, action, `PC v${v.version_number} ${section}`, before, after);
+}
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -157,6 +164,7 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
     }
 
     await conn.commit();
+    await auditChanges(req.params.id, req, 'PC_VERSION_CREATED', `PC v${nextNum}`, null, { status: 'open' });
 
     const [[newVersion]] = await pool.execute(
       'SELECT * FROM case_pc_versions WHERE id = ?', [result.insertId]
@@ -178,6 +186,7 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
       return res.status(403).json({ error: 'Access denied' });
     }
     await guardLocked(req.params.versionId, req);
+    const [[beforeVersion]] = await pool.execute('SELECT status FROM case_pc_versions WHERE id = ?', [req.params.versionId]);
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
     // L-05: normalise and validate against a known set so an arbitrary status can't
@@ -203,6 +212,7 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
     const [[v]] = await pool.execute(
       'SELECT * FROM case_pc_versions WHERE id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'version', beforeVersion, { status: v.status });
     res.json(v);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -223,6 +233,7 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]);
     const {
       complaint_description, pc_status, pc_category, pc_classification,
       date_of_complaint, date_received, severity, root_cause,
@@ -249,6 +260,7 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'general', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -269,6 +281,7 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]);
     const {
       patient_name, date_of_birth, age, age_unit, sex, weight_kg,
       therapy_start_date, therapy_end_date, indication, injury_experienced,
@@ -292,6 +305,7 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'patient-info', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -316,6 +330,7 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_product_info WHERE version_id = ?', [req.params.versionId]);
     const {
       product_id, product_name, product_type, product_category, lot_number,
       expiry_date, manufacturing_date, pack_size, quantity_available,
@@ -339,6 +354,7 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_product_info WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'product-info', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -359,6 +375,7 @@ router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_return_retrieval WHERE version_id = ?', [req.params.versionId]);
     const { return_requested, return_date, return_address, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes, notes_return } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_return_retrieval
@@ -377,6 +394,7 @@ router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_return_retrieval WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'return-retrieval', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -397,6 +415,7 @@ router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_replacement WHERE version_id = ?', [req.params.versionId]);
     const { replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes, notes_replacement } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_replacement
@@ -416,6 +435,7 @@ router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_replacement WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'replacement', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -436,6 +456,7 @@ router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_refund_credit WHERE version_id = ?', [req.params.versionId]);
     const { refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, credit_note_number, notes, notes_refund } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_refund_credit
@@ -455,6 +476,7 @@ router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_refund_credit WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'refund-credit', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -475,6 +497,7 @@ router.put('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId, req);
+    const [[before]] = await pool.execute('SELECT * FROM case_pc_flex_fields WHERE version_id = ?', [req.params.versionId]);
     const { pc_flex_1, pc_flex_2, pc_flex_3 } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_flex_fields (version_id, pc_flex_1, pc_flex_2, pc_flex_3)
@@ -488,6 +511,7 @@ router.put('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_flex_fields WHERE version_id = ?', [req.params.versionId]
     );
+    await audit(req, req.params.versionId, 'pc-flex-fields', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
