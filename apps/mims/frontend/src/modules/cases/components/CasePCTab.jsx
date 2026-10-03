@@ -478,6 +478,7 @@ export default function CasePCTab({
       <TransmissionSignModal
         key={pcTxSign ? `${pcTxSign.txId}-${pcTxSign.status}` : 'none'}
         target={pcTxSign}
+        what="Quality routing"
         onCancel={() => setPcTxSign(null)}
         onConfirm={async (password, reason) => {
           const msg = await updatePcTxStatus(pcTxSign.txId, pcTxSign.status, { password, reason })

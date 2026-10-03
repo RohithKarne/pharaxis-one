@@ -2832,7 +2832,7 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
     const SIGNED = ['Accepted', 'Closed'];
     if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
       if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
-        return res.status(403).json({ error: 'You do not have permission to accept or close a PV hand-off.' });
+        return res.status(403).json({ error: 'You do not have permission to accept, close or reopen a PV hand-off.' });
       }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();
@@ -2950,7 +2950,7 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
     const SIGNED = ['Closed'];
     if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
       if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
-        return res.status(403).json({ error: 'You do not have permission to close a PV hand-off.' });
+        return res.status(403).json({ error: 'You do not have permission to close or reopen a Quality routing.' });
       }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();

@@ -4,7 +4,7 @@ import { useState } from 'react'
 // closed (or moved back out), but the tracker sent the status alone, so those
 // buttons always failed. This box collects the password and reason, in the same
 // style as the MI response sign-off.
-export default function TransmissionSignModal({ target, onCancel, onConfirm }) {
+export default function TransmissionSignModal({ target, onCancel, onConfirm, what = 'PV hand-off' }) {
   const [password, setPassword] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
@@ -23,7 +23,7 @@ export default function TransmissionSignModal({ target, onCancel, onConfirm }) {
     <div className="cf-corr-compose-overlay" onClick={() => !saving && onCancel()}>
       <div className="cf-esign-modal" onClick={e => e.stopPropagation()}>
         <div className="cf-corr-compose-header">
-          <div className="cf-corr-compose-title">Electronic Signature - PV hand-off to {target.status}</div>
+          <div className="cf-corr-compose-title">Electronic Signature - {what} to {target.status}</div>
           <button className="cf-corr-modal-close" onClick={() => !saving && onCancel()}>x</button>
         </div>
         <div className="cf-corr-compose-body">
