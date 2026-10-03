@@ -80,7 +80,8 @@ export default function FormsPage() {
   async function handleAdd(e) {
     e.preventDefault(); setSaving(true); setError('')
     const options = optionsInput.split('\n').map(s => s.trim()).filter(Boolean)
-    const payload = { ...newField, form_type: formType, field_options: options.length ? JSON.stringify(options) : undefined }
+    // CPPM-95: send the list itself; the server stores it once.
+    const payload = { ...newField, form_type: formType, field_options: options.length ? options : undefined }
     try {
       const res = await fetch(`/api/admin/forms/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(payload) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not add field (error ${res.status}).`); return }

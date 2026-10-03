@@ -40,7 +40,10 @@ async function loadFormFields(clientId, formType) {
   // "not configured" and nothing can be submitted. Injecting into it would
   // render a form consisting only of the screening question.
   if (rows.length === 0) return { fields: rows, defaultTemplate: false };
-  return { fields: withAeScreening(rows, formType), defaultTemplate: false };
+  // CPPM-95: one shape for the portal — newline-separated choices — however the
+  // row stored them (a JSON list, or a list the old form builder encoded twice).
+  const fields = rows.map(r => (r.options ? { ...r, options: optionList(r.options).join('\n') } : r));
+  return { fields: withAeScreening(fields, formType), defaultTemplate: false };
 }
 
 // The choices a select, radio or multiselect field offers. Stored as a JSON array,
