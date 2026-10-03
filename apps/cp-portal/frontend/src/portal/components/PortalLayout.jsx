@@ -133,19 +133,41 @@ export default function PortalLayout({ children }) {
     return () => clearInterval(interval)
   }, [])
 
+  // CPPM-115: new notifications appear without a reload — the list is read again every
+  // 3 minutes while the tab is in view, and as soon as the doctor comes back to it.
+  const NOTIF_REFRESH_MS = 3 * 60 * 1000
   useEffect(() => {
     if (!user || !clientCode) return
+    let live = true
     async function loadNotifications() {
+      if (document.visibilityState === 'hidden') return
       try {
         const res = await fetch(`/api/portal/notifications?clientCode=${clientCode}`)
+        if (!res.ok) return
         const d = await res.json()
         const list = d.notifications || []
+        if (!live) return
         setNotifications(list.slice(0, 10))
         setUnreadCount(list.filter(n => !n.is_read).length)
-      } catch { /* silently fail */ }
+      } catch { /* the next refresh tries again */ }
     }
     loadNotifications()
+    const timer = setInterval(loadNotifications, NOTIF_REFRESH_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') loadNotifications() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { live = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
   }, [user, clientCode])
+
+  // CPPM-115: clicking a notification marks that one read — not the others — and
+  // opens the exact item it is about.
+  function openNotification(n, href) {
+    if (!n.is_read && n.id) {
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: 1 } : x))
+      setUnreadCount(c => Math.max(0, c - 1))
+      fetch(`/api/portal/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' } }).catch(() => {})
+    }
+    if (href) { setBellOpen(false); navigate(href) }
+  }
 
   async function markAllRead() {
     try {
@@ -291,15 +313,17 @@ export default function PortalLayout({ children }) {
                       <div role="list">
                         {notifications.map((n, i) => {
                           const href = n.type === 'news' ? `${base}/news/${n.item_id}`
-                                     : n.type === 'document' ? `${base}/documents`
-                                     : n.type === 'safety' ? `${base}/safety`
+                                     : n.type === 'document' ? `${base}/documents?doc=${n.item_id}`
+                                     : n.type === 'safety' ? `${base}/safety#alert-${n.item_id}`
                                      : null
                           return (
                             <div
                               key={n.id || i}
                               role="listitem"
                               className={`pp-notif-item${!n.is_read ? ' unread' : ''}${href ? ' pp-notif-item-clickable' : ''}`}
-                              onClick={() => { if (href) { setBellOpen(false); navigate(href) } }}
+                              onClick={() => openNotification(n, href)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotification(n, href) } }}
+                              tabIndex={0}
                               style={{ cursor: href ? 'pointer' : 'default' }}
                             >
                               <span style={{ color: '#2563EB', lineHeight: 1 }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
+import { useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
@@ -53,6 +54,14 @@ export default function SafetyPage() {
     } catch { setAckError('Network error — please try again.') } finally { setAckBusy(null) }
   }
 
+  // CPPM-115: a notification links here with #alert-<id>; bring that letter into view.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash.startsWith('#alert-') || !alerts.length) return
+    const el = document.getElementById(hash.slice(1))
+    if (el) { el.scrollIntoView({ block: 'start' }); el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }) }
+  }, [hash, alerts])
+
   const active   = alerts.filter(a => a.status === 'active')
   const resolved = alerts.filter(a => a.status === 'resolved')
   const shown    = sevFilter === 'all' ? active : active.filter(a => (a.severity || '').toLowerCase() === sevFilter)
@@ -69,7 +78,7 @@ export default function SafetyPage() {
 
   function AlertCard({ alert, isResolved }) {
     return (
-      <div className={`pp-alert-card severity-${alert.severity}${isResolved ? ' resolved' : ''}`}>
+      <div id={`alert-${alert.id}`} className={`pp-alert-card severity-${alert.severity}${isResolved ? ' resolved' : ''}`}>
         <div className="pp-alert-header">
           <SeverityBadge severity={alert.severity} />
           {isResolved && <span className="pp-severity-badge resolved">Resolved</span>}
