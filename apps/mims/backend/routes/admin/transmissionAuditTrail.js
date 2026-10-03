@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireModule } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function hasPlatformAdminScope(req) {
@@ -39,7 +39,9 @@ async function hasCaseAccess(req, caseId) {
 }
 
 // GET /api/admin/transmission-audit-trail/cases-summary — cases with outbound transmissions
-router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+// The Transmissions page is for everyone with the Transmissions module, agents
+// included; rows stay limited to the caller's organisation (MIPM-150).
+router.get('/transmission-audit-trail/cases-summary', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { search, page = 1, limit = 50 } = req.query;
     const lim    = Math.max(1, parseInt(limit, 10) || 50);
@@ -76,7 +78,9 @@ router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole(
 });
 
 // GET /api/admin/transmission-audit-trail — list transmissions with filters
-router.get('/transmission-audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+// The Transmissions page is for everyone with the Transmissions module, agents
+// included; rows stay limited to the caller's organisation (MIPM-150).
+router.get('/transmission-audit-trail', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { case_id, target_system, status, from_date, to_date, q, page = 1, limit = 100 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -210,6 +214,9 @@ router.post('/transmission-screen-audit', authenticate, async (req, res) => {
   try {
     const { action, context } = req.body;
     if (!action) return res.status(400).json({ error: 'action is required.' });
+    // These rows belong to an organisation; a platform admin has none and every
+    // view failed with a 500 (MIPM-150). Their requests are in the admin audit.
+    if (req.user.orgId == null) return res.status(204).end();
     await pool.execute(
       `INSERT INTO transmission_screen_audit (org_id, user_id, user_name, action, context)
        VALUES (?, ?, ?, ?, ?)`,
