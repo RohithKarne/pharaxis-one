@@ -181,6 +181,18 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
              intake.is_disability ? 1 : 0, intake.is_congenital_anomaly ? 1 : 0, intake.is_other_medically_important ? 1 : 0]
           );
         }
+        // The patient captured at intake too (MIPM-160): it was kept on the case
+        // but the version's AE Patient Info tab started empty.
+        const [[patient]] = await conn.execute(
+          'SELECT initials, age, age_unit, gender, weight_kg FROM case_patient WHERE case_id = ? ORDER BY id DESC LIMIT 1',
+          [req.params.id]
+        );
+        if (patient && (patient.initials || patient.age != null || patient.gender || patient.weight_kg != null)) {
+          await conn.execute(
+            `INSERT INTO case_ae_patient_info (version_id, patient_initials, age, age_unit, sex, weight_kg) VALUES (?, ?, ?, ?, ?, ?)`,
+            [result.insertId, patient.initials || null, patient.age ?? null, patient.age_unit || null, patient.gender || null, patient.weight_kg ?? null]
+          );
+        }
         if (intake.suspect_drug_name || intake.batch_lot_number) {
           await conn.execute(
             `INSERT INTO case_ae_product_info (version_id, product_name, batch_lot_number, dose, route_of_admin, is_suspect) VALUES (?, ?, ?, ?, ?, 1)`,
