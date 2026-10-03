@@ -4,6 +4,7 @@ const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
+const { sessionKey } = require('../utils/sessionKey');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -102,7 +103,7 @@ router.get('/sessions', authenticate, async (req, res) => {
 
     const sessions = rows.map((row) => ({
       id: row.id,
-      is_current: !!token && row.token === token,
+      is_current: !!token && row.token === sessionKey(token),
       created_at: row.created_at,
       expires_at: row.expires_at_text,
       is_expired: isExpired(row.expires_at),
@@ -142,11 +143,11 @@ router.post('/sessions/revoke-others', authenticate, async (req, res) => {
 
     const [others] = await pool.execute(
       'SELECT token FROM sessions WHERE user_id = ? AND token <> ?',
-      [req.user.userId, token]
+      [req.user.userId, sessionKey(token)]
     );
     const [result] = await pool.execute(
       'DELETE FROM sessions WHERE user_id = ? AND token <> ?',
-      [req.user.userId, token]
+      [req.user.userId, sessionKey(token)]
     );
     // Evict the cached copies too, or a revoked token is honoured until the cache expires.
     await Promise.all(others.map((row) => sessionCacheInvalidate(row.token)));
@@ -181,7 +182,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
 
     return res.json({
       success: !!result?.affectedRows,
-      revokedCurrent: !!token && row.token === token,
+      revokedCurrent: !!token && row.token === sessionKey(token),
     });
   } catch (err) {
     logger.error({ err, user_id: req.user?.userId, route: '/api/auth/sessions/:id/revoke' }, 'Failed to revoke selected session');
@@ -199,8 +200,8 @@ router.post('/logout', authenticateAllowingPasswordReset, async (req, res) => {
     [req.user.userId]
   );
   if (token) {
-    await pool.execute('DELETE FROM sessions WHERE token = ?', [token]).catch(() => {});
-    await sessionCacheInvalidate(token); // immediately revoke Redis session cache
+    await pool.execute('DELETE FROM sessions WHERE token = ?', [sessionKey(token)]).catch(() => {});
+    await sessionCacheInvalidate(sessionKey(token)); // immediately revoke Redis session cache
   }
   logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
   res.clearCookie('mims_token', { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });

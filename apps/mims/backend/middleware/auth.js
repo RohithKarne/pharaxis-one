@@ -4,6 +4,7 @@ const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
+const { sessionKey } = require('../utils/sessionKey');
 const { hasGlobalAdminScope, isAdminUser, normalizeRole } = require('../utils/adminScope');
 const { getUserModules } = require('../utils/userModules');
 
@@ -80,7 +81,9 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
 
   // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
   // Cache miss / Redis down → falls through to DB check transparently.
-  const cached = await sessionCacheGet(token);
+  // MIPM-172: sessions and the cache are keyed by the token's fingerprint.
+  const key = sessionKey(token);
+  const cached = await sessionCacheGet(key);
   if (cached) {
     // Re-verify JWT signature even on cache hit (catches key rotation edge cases)
     try {
@@ -114,7 +117,7 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
 
     const [[sessionRow]] = await pool.execute(
       'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
-      [token]
+      [key]
     );
 
     if (sessionRow) {
@@ -148,7 +151,7 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   };
 
   // Populate cache for subsequent requests
-  await sessionCacheSet(token, result);
+  await sessionCacheSet(key, result);
   return refusePendingPasswordReset(result, allowPasswordReset);
 }
 

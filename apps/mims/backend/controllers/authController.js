@@ -39,6 +39,7 @@ const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
 const { getUserModules } = require('../utils/userModules');
 const { sessionCacheInvalidate, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE } = require('../middleware/auth');
+const { sessionKey } = require('../utils/sessionKey');
 const { logger } = require('../services/logger');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
@@ -190,9 +191,10 @@ async function trackSessionToken(userId, token) {
   try {
     const decoded = jwt.decode(token) || {};
     const expiresAt = toMysqlDateTimeFromUnix(decoded.exp) || '2099-12-31 23:59:59';
+    // MIPM-172: the fingerprint is stored, not the token.
     await pool.execute(
-      'INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), expires_at = VALUES(expires_at), created_at = NOW()',
-      [userId, token, expiresAt]
+      'INSERT INTO sessions (user_id, org_id, role, token, expires_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), expires_at = VALUES(expires_at), created_at = NOW()',
+      [userId, Number(decoded.orgId) || null, decoded.role || null, sessionKey(token), expiresAt]
     );
   } catch (_) {
     // Session tracking must never block login flow.
