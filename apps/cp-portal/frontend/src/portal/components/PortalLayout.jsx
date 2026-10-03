@@ -369,10 +369,22 @@ export default function PortalLayout({ children }) {
 
 const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
 
+// CPPM-89: "Skip for now" is remembered for 30 days on this browser, per person,
+// instead of only until the next page load.
+const SKIP_DAYS = 30
+function skipKey(clientCode, userId) { return `cp_specialty_skip_${clientCode}_${userId}` }
+function skippedRecently(clientCode, userId) {
+  try { return Date.now() - Number(localStorage.getItem(skipKey(clientCode, userId)) || 0) < SKIP_DAYS * 864e5 } catch { return false }
+}
+
 function SpecialtyPrompt({ clientCode }) {
-  const { portalHeaders } = usePortal()
-  const [dismissed, setDismissed] = useState(false)
+  const { portalHeaders, user } = usePortal()
+  const [dismissed, setDismissed] = useState(() => skippedRecently(clientCode, user?.id))
   const [saving, setSaving] = useState(false)
+  function skip() {
+    try { localStorage.setItem(skipKey(clientCode, user?.id), String(Date.now())) } catch { /* private window: skip for this page only */ }
+    setDismissed(true)
+  }
   if (dismissed) return null
   async function pick(specialty) {
     setSaving(true)
@@ -390,7 +402,7 @@ function SpecialtyPrompt({ clientCode }) {
     }
   }
   return (
-    <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">
+    <div className="pp-pdf-overlay" onClick={skip} role="dialog" aria-modal="true" aria-label="Choose your specialty">
       <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
         <h2>Your area of practice</h2>
         <p>Choose your specialty. It is saved to your profile.</p>
@@ -399,7 +411,7 @@ function SpecialtyPrompt({ clientCode }) {
             <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
           ))}
         </div>
-        <button type="button" className="pp-specialty-skip" onClick={() => setDismissed(true)}>Skip for now</button>
+        <button type="button" className="pp-specialty-skip" onClick={skip}>Skip for now</button>
       </div>
     </div>
   )
