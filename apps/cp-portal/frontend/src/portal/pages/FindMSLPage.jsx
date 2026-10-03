@@ -4,6 +4,7 @@ import { SkeletonCards } from '../../shared/components/Skeleton'
 import { formatDateTime } from '../../shared/utils/datetime'
 import { useToast } from '../../shared/components/Toast'
 import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
+import { buildIcs, downloadIcs } from '../../shared/utils/ics'
 
 const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
 
@@ -74,28 +75,18 @@ export default function FindMSLPage() {
     setBookingBusy(false)
   }
 
+  // CPPM-90: the file carries the chosen slot (or the preferred day), says
+  // "Requested" and is tentative — nothing is confirmed until the MSL replies —
+  // and has no location, because we do not know one.
   function downloadIcsCalendar(msl, form) {
-    const title = `MSL Medical Discussion — ${msl.name}`
-    const desc = `Meeting request with ${msl.name} (${msl.specialty || 'Medical Affairs'}). Topic: ${form.topic || 'Medical Inquiry'}`
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Pharaxis Medical Affairs//CP Portal//EN
-BEGIN:VEVENT
-SUMMARY:${title}
-DESCRIPTION:${desc}
-LOCATION:Virtual / Microsoft Teams
-STATUS:CONFIRMED
-END:VEVENT
-END:VCALENDAR`
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `msl-meeting-${msl.name.toLowerCase().replace(/\s+/g, '-')}.ics`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const slot = availableSlots.find(s => String(s.id) === String(selectedSlot))
+    const ics = buildIcs({
+      title: `Requested: MSL meeting with ${msl.name}`,
+      description: `Meeting requested with ${msl.name} (${msl.specialty || 'Medical Affairs'}). Topic: ${form.topic || 'Medical question'}. Not confirmed yet — the MSL will reply with a time.`,
+      ...(slot ? { start: slot.starts_at, end: slot.ends_at || undefined } : form.preferred_date ? { date: form.preferred_date } : {}),
+      status: 'TENTATIVE',
+    })
+    downloadIcs(`msl-meeting-${msl.name.toLowerCase().replace(/\s+/g, '-')}.ics`, ics)
   }
 
   return (
