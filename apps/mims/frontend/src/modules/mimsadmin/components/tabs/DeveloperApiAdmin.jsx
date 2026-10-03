@@ -18,6 +18,9 @@ export default function DeveloperApiAdmin() {
   async function load() {
     const res = await httpFetch('/api/admin/api-clients', { headers })
     const d = await res.json().catch(() => ({}))
+    // The API platform is off unless the server sets ENABLE_API_PLATFORM; its routes
+    // then do not exist and the page said only "API route not found" (MIPM-147).
+    if (res.status === 404) { setError('API connections are switched off on this MIMS server. A platform administrator turns them on in the server settings (ENABLE_API_PLATFORM).'); return }
     if (!res.ok) { setError(d.error || 'Could not load API connections.'); return }
     setError(''); setData(d)
   }
