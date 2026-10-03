@@ -971,11 +971,9 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     try {
       await conn.beginTransaction();
 
-      // Archive any previously published version of the same document in the same folder
-      await conn.execute(
-        "UPDATE cm_documents SET status = 'Archived', updated_at = NOW() WHERE folder_id = ? AND doc_type = ? AND status = 'Published' AND id != ?",
-        [doc.folder_id, doc.doc_type, id]
-      );
+      // MIPM-183: no archive sweep. A document's versions live in its own row, so the
+      // old "archive the previous published version" step archived every OTHER
+      // published document of the same type in the folder.
 
       await conn.execute(
         "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
@@ -1305,10 +1303,6 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
         const conn = await pool.getConnection();
         try {
           await conn.beginTransaction();
-          await conn.execute(
-            "UPDATE cm_documents SET status = 'Archived', updated_at = NOW() WHERE folder_id = ? AND doc_type = ? AND status = 'Published' AND id != ?",
-            [doc.folder_id, doc.doc_type, docId]
-          );
           await conn.execute(
             "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
             [newMajor, req.user.userId, req.user.userId, docId]
