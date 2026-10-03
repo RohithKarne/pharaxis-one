@@ -43,7 +43,8 @@ export default function FindMSLPage() {
     setBookingMSL(msl)
     setBookingForm({
       ...EMPTY_BOOKING,
-      requester_name:  user?.full_name || user?.name || '',
+      // CPPM-88: the account holds first and last name, not a full name.
+      requester_name:  [user?.first_name, user?.last_name].filter(Boolean).join(' '),
       requester_email: user?.email || '',
     })
     setBookingError('')

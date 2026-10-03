@@ -26,7 +26,7 @@ export function optionList(raw) {
 }
 
 export default function SubmitPage() {
-  const { clientCode, portalHeaders, isFeatureEnabled, portalConfig } = usePortal()
+  const { clientCode, portalHeaders, isFeatureEnabled, portalConfig, user } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
   const [params] = useSearchParams()
   // ?type=adverse_event (e.g. from the Contact page) opens that form directly.
@@ -41,6 +41,9 @@ export default function SubmitPage() {
   const [fieldsLoading, setFieldsLoading] = useState(false)
   const [attachments, setAttachments]   = useState([])
   const [attachError, setAttachError]   = useState('')
+  // CPPM-88: true once the person has typed or restored something of their own, so
+  // the "draft saved" note never appears for details we filled in for them.
+  const [dirty, setDirty]               = useState(false)
 
   const ATTACH_MAX = 10 * 1024 * 1024
   // CPPM-12: legacy .doc is no longer accepted — macros cannot be separated out of it.
@@ -71,19 +74,32 @@ export default function SubmitPage() {
         // sessionStorage, so it lasts only while this tab is open, and Sign Out wipes it.
         let draft = {}
         try { draft = JSON.parse(sessionStorage.getItem(`cp_draft_${clientCode}_${selectedType}`) || '{}') } catch { draft = {} }
-        setFormValues(draft && typeof draft === 'object' ? draft : {})
+        draft = draft && typeof draft === 'object' ? draft : {}
+        setDirty(Object.keys(draft).length > 0)
+        // CPPM-88: a signed-in person is not asked to type their own name and email.
+        // Only empty answers are filled, and they can still change them.
+        const keys = new Set((d.fields || []).map(f => f.field_key))
+        const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ')
+        const mine = {
+          first_name: user?.first_name, last_name: user?.last_name, email: user?.email,
+          reporter_name: fullName, reporter_email: user?.email, name: fullName, full_name: fullName,
+          reporter_contact: user?.email,
+        }
+        const filled = { ...draft }
+        for (const [k, v] of Object.entries(mine)) if (keys.has(k) && v && !filled[k]) filled[k] = v
+        setFormValues(filled)
         setFieldErrors({})
       })
       .catch(() => {})
       .finally(() => setFieldsLoading(false))
-  }, [selectedType, clientCode])
+  }, [selectedType, clientCode, user?.id])
 
   // Auto-save the in-progress form for this tab so nothing is lost on refresh/navigation.
   useEffect(() => {
-    if (!selectedType) return
+    if (!selectedType || !dirty) return
     const key = `cp_draft_${clientCode}_${selectedType}`
     if (Object.keys(formValues).length > 0) sessionStorage.setItem(key, JSON.stringify(formValues))
-  }, [formValues, selectedType, clientCode])
+  }, [formValues, selectedType, clientCode, dirty])
 
   function clearDraft() {
     if (selectedType) sessionStorage.removeItem(`cp_draft_${clientCode}_${selectedType}`)
@@ -100,6 +116,7 @@ export default function SubmitPage() {
   }
 
   function handleFieldChange(key, value) {
+    setDirty(true)
     setFormValues(v => {
       const next = { ...v, [key]: value }
       // Clear anything this change has just hidden. Otherwise a visitor who
@@ -220,10 +237,10 @@ export default function SubmitPage() {
 
           {error && <div className="pp-error-msg">{error}</div>}
 
-          {Object.keys(formValues).length > 0 && (
+          {dirty && Object.keys(formValues).length > 0 && (
             <div style={{ padding: '10px 14px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.85rem' }}>
               <span><strong>Draft Auto-Saved</strong> — Your entries are kept while this tab is open. Signing out clears them.</span>
-              <button type="button" onClick={() => { clearDraft(); setFormValues({}) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
+              <button type="button" onClick={() => { clearDraft(); setFormValues({}); setDirty(false) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
             </div>
           )}
 
