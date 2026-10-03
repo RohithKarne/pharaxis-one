@@ -111,13 +111,17 @@ async function getOrganisationRow(conn, orgId) {
 
 async function ensureGlobalWorkflowStates(conn) {
   for (const name of BASELINE_WORKFLOW_STATES) {
+    // "Closed" carries the closes-the-case marker (migration 140). On a new database
+    // these states are created after that migration ran, so it was never set and a
+    // Closed case was treated as open: no close permission check, no close password,
+    // still editable (MIPM-158).
     await conn.execute(
-      `INSERT INTO workflow_states (name, org_id, is_active)
-       SELECT ?, NULL, 1
+      `INSERT INTO workflow_states (name, org_id, is_active, is_closed)
+       SELECT ?, NULL, 1, ?
        WHERE NOT EXISTS (
          SELECT 1 FROM workflow_states WHERE name = ? LIMIT 1
        )`,
-      [name, name]
+      [name, name === 'Closed' ? 1 : 0, name]
     );
   }
 }
