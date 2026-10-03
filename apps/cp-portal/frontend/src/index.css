@@ -133,6 +133,22 @@ body { background: var(--cp-bg); }
 }
 .cp-topbar-title { font-size: 18px; font-weight: 700; color: var(--cp-text); }
 
+/* CPPM-131: "Go to…" quick search in the top bar */
+.cp-quick-search { position: relative; margin-left: 16px; }
+.cp-quick-search input { width: 220px; height: 28px; padding: 0 8px; font-size: 13px; border: 1px solid var(--cp-border); border-radius: 2px; background: #fff; }
+.cp-quick-search-list {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; min-width: 280px; margin: 0; padding: 4px 0;
+  list-style: none; background: #fff; border: 1px solid var(--cp-border); box-shadow: 0 4px 12px rgba(15,23,42,.12);
+}
+.cp-quick-search-list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.cp-quick-search-list li.active, .cp-quick-search-list li:hover { background: #EFF6FF; }
+.cp-quick-search-where { color: #4B5563; font-size: 12px; }
+.cp-quick-search-empty { color: #4B5563; cursor: default !important; }
+@media (max-width: 640px) {
+  .cp-quick-search { margin-left: 8px; }
+  .cp-quick-search input { width: 110px; }
+}
+
 .cp-sidebar-toggle {
   height: 30px;
   min-width: 34px;
