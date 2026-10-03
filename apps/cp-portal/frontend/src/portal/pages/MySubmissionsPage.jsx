@@ -33,13 +33,17 @@ export default function MySubmissionsPage() {
   const [subs, setSubs]   = useState([])
   const [screening, setScreening] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   // CPPM-4: this endpoint returns the same list plus each request's history.
   // CPPM-63: and the conversation after the answer, and the screening question for a reply.
   function load() {
+    setLoadError(false)
+    // A failed load must not read as "you have no requests".
     return fetch(`/api/portal/submit/${clientCode}/submissions`, { headers: portalHeaders() })
-      .then(r => r.json()).then(d => { setSubs(d.submissions || []); setScreening(d.reply_screening || []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then(d => { setSubs(d.submissions || []); setScreening(d.reply_screening || []); setLoading(false) })
+      .catch(() => { setLoadError(true); setLoading(false) })
   }
   useEffect(() => {
     if (!user) { navigate(`/portal/${clientCode}/login`); return }
@@ -81,7 +85,12 @@ export default function MySubmissionsPage() {
         )}
       </div>
 
-      {loading ? <SkeletonCards count={4} /> : subs.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : loadError ? (
+        <div className="pp-empty-state" role="alert">
+          <p>We could not load your requests just now. Please try again.</p>
+          <button type="button" className="pp-btn pp-btn-primary" onClick={() => { setLoading(true); load() }}>Try again</button>
+        </div>
+      ) : subs.length === 0 ? (
         <div className="pp-empty-state">
           <span><Icon name="inbox" size={40} /></span>
           <p>You haven't submitted any requests yet.</p>

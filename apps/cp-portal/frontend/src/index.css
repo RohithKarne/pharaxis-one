@@ -2996,3 +2996,8 @@ textarea:focus-visible {
 .cp-bulk-result { text-align: center; padding: 24px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .cp-bulk-result-count { font-size: 40px; font-weight: 700; color: var(--cp-primary); line-height: 1; }
 .cp-bulk-result p { font-size: 13px; color: var(--cp-text-muted); margin: 0; }
+
+/* One shared notice when the server cannot be reached or fails (AdminAuthContext). */
+.cp-fail-notice { position: fixed; top: 12px; right: 12px; z-index: 10000; max-width: 440px; display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: #fef2f2; border: 1px solid #b91c1c; color: #991b1b; font-size: 13px; }
+.cp-fail-notice span { flex: 1; }
+.cp-fail-notice button { background: none; border: 1px solid currentColor; color: inherit; font: inherit; font-weight: 600; padding: 2px 8px; cursor: pointer; }
