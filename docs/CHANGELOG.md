@@ -61,7 +61,7 @@ integration consuming `/api/v1/content/documents` (behaviour changed 200 → 501
 
 ### MIMS — end-to-end walk fixes (MIPM-132 to MIPM-221, branch `claude/jolly-euler-fm0j12`)
 
-**Revalidation impact:** Full — *proposed by engineering, 2026-10-04; not final until Saad confirms.*
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-10-04; Rohith approved the same day, with Varun's after-the-fact read of the idle sign-out, module approval and signature, hand-off sign-off, group-rights and FAQ check-in changes.*
 **Why:** audit trail, electronic signatures, access rules and record locks changed for AE / PC cases and content.
 
 **Revalidate:** AE and PC case capture and closure, PV / Quality hand-offs, MI response sending,
@@ -76,6 +76,7 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Records added by migration: 151 to 158 (version locks, session fingerprint and last use, reviewer content access, template evidence status, contact field step, MI categories, content-usage backfill)
 - Follow-up (no Jira, epic MIPM-131): FAQ check-in always goes to Pending (the no-approval option could never publish); module version moves on change and publication; archived modules open read-only; AE event edits no longer fail on empty coded fields; a security group created through the API now grants the rights it lists; reviewers and agents no longer see buttons or filters they cannot use
 - Migrations 159 (link earlier AE products to the dictionary, open versions only) and 160 (remove logo files no organisation uses)
+- Rohith's decisions of 4 Oct 2026 (epic MIPM-131): a security group shows the rights built into its members' role as locked — a group only adds rights (MIPM-192); sequential review — reviewers decide one after another in a chosen order, each told when it is their turn, a rejection closes the review at once (MIPM-204, migration 162); with Drug Roles on, an AE case shows Drugs and hides Product Info unless it already holds rows; Pharaxis support staff open a client's cases only while that client's admin has granted time-boxed support access, each grant, revocation and case opened being recorded (migration 161, new screen System › Security › Support Access); the unreachable admin Sites panel is deleted
 
 ---
 

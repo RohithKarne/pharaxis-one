@@ -829,6 +829,9 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
     if (!title || !planned_end_date) {
       return res.status(400).json({ error: 'title and planned_end_date are required.' });
     }
+    // MIPM-204: parallel (everyone at once) or sequential (one after another, in
+    // the order chosen; the next reviewer is told once the one before decides).
+    const reviewMode = req.body.review_mode === 'sequential' ? 'sequential' : 'parallel';
 
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
@@ -863,16 +866,16 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
       await conn.beginTransaction();
 
       const [reviewResult] = await conn.execute(
-        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, is_non_amendable, description, status, created_by)
-         VALUES (?, 'document', ?, ?, ?, ?, 'Open', ?)`,
-        [id, title, planned_end_date, is_non_amendable ? 1 : 0, description || null, req.user.userId]
+        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, is_non_amendable, description, status, created_by, review_mode)
+         VALUES (?, 'document', ?, ?, ?, ?, 'Open', ?, ?)`,
+        [id, title, planned_end_date, is_non_amendable ? 1 : 0, description || null, req.user.userId, reviewMode]
       );
 
       if (Array.isArray(reviewer_ids) && reviewer_ids.length > 0) {
-        for (const uid of reviewer_ids) {
+        for (const [index, uid] of reviewer_ids.entries()) {
           await conn.execute(
-            'INSERT IGNORE INTO cm_reviewers (review_id, user_id, status) VALUES (?, ?, ?)',
-            [reviewResult.insertId, uid, 'Ongoing']
+            'INSERT IGNORE INTO cm_reviewers (review_id, user_id, status, sort_order) VALUES (?, ?, ?, ?)',
+            [reviewResult.insertId, uid, 'Ongoing', index + 1]
           );
         }
       }
@@ -883,9 +886,10 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
       );
 
       await conn.commit();
-      await audit(req.user.userId, req.user.email, 'INITIATE_REVIEW', 'cm_document', Number(id), { review_id: reviewResult.insertId, title });
+      await audit(req.user.userId, req.user.email, 'INITIATE_REVIEW', 'cm_document', Number(id), { review_id: reviewResult.insertId, title, review_mode: reviewMode });
       // MIPM-176: reviewers were never told a review was waiting for them.
-      for (const uid of reviewer_ids) {
+      // Sequential: only the first is told now; reviews.js tells each next one.
+      for (const uid of (reviewMode === 'sequential' ? reviewer_ids.slice(0, 1) : reviewer_ids)) {
         await createNotification(Number(uid), {
           category: 'content_review',
           title: `Content review assigned — ${doc.name}`,

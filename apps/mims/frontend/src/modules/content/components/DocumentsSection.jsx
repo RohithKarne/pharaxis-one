@@ -16,22 +16,28 @@ const DEFAULT_FILTERS = {
   include_expired: false,
 }
 
-// The Sequential / Parallel switch was here, on every reviewer's task row. Nothing
-// reads the mode — reviewers have no order, so both behaved alike — and any
-// reviewer could flip it for the whole review. Removed until sequential review is
-// built (MIPM-203).
+// The Sequential / Parallel switch that sat here on every reviewer's task row was
+// removed (MIPM-203): the mode is chosen when the review starts. In a sequential
+// review the row says whose turn it is instead of offering a button the server
+// would refuse (MIPM-204).
 function ReviewRow({ r, onOpen }) {
+  const sequential = r.review_mode === 'sequential'
   return (
     <tr>
       <td style={{ fontWeight: 500 }}>{r.document_name}</td>
-      <td>{r.title}</td>
+      <td>
+        {r.title}
+        {sequential && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>· in order{r.sort_order ? `, you are ${r.sort_order}.` : ''}</span>}
+      </td>
       <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
       {/* The list returns the reviewer's own decision as reviewer_status; my_status is never set (MIPM-178). */}
       <td><StatusBadge status={r.reviewer_status || r.my_status || 'Ongoing'} /></td>
       <td>
-        {r.status === 'Open'
-          ? <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
-          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Review closed</span>}
+        {r.status !== 'Open'
+          ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Review closed</span>
+          : r.is_my_turn === false
+            ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Waiting for {r.waiting_on_name || 'the reviewer before you'}</span>
+            : <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>}
       </td>
     </tr>
   )

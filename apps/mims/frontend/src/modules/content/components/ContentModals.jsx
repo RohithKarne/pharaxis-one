@@ -24,7 +24,9 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [users, setUsers] = useState([])
   const [usersLoaded, setUsersLoaded] = useState(false)
-  const [form, setForm] = useState({ title: '', planned_end_date: '', non_amendable: false, reviewers: [], description: '' })
+  // MIPM-204: review_mode — parallel (everyone at once) or sequential (one after
+  // another, in the order the reviewers are listed).
+  const [form, setForm] = useState({ title: '', planned_end_date: '', non_amendable: false, reviewers: [], description: '', review_mode: 'parallel' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -42,6 +44,17 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
     }))
   }
 
+  function moveReviewer(id, delta) {
+    setForm(p => {
+      const list = [...p.reviewers]
+      const i = list.indexOf(id)
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= list.length) return p
+      ;[list[i], list[j]] = [list[j], list[i]]
+      return { ...p, reviewers: list }
+    })
+  }
+
   async function handleSubmit() {
     if (!form.title.trim()) return toast.warn('Review title is required.')
     if (!form.planned_end_date) return toast.warn('Planned end date is required.')
@@ -53,7 +66,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
         // attached no reviewer and dropped Non-Amendable (MIPM-174).
         method: 'POST', headers: authHeaders, body: JSON.stringify({
           title: form.title, planned_end_date: form.planned_end_date, description: form.description,
-          reviewer_ids: form.reviewers, is_non_amendable: form.non_amendable,
+          reviewer_ids: form.reviewers, is_non_amendable: form.non_amendable, review_mode: form.review_mode,
         })
       })
       if (res.ok) { onDone(); onClose() }
@@ -81,14 +94,48 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
           </label>
         </div>
         <div className="cm-form-group">
+          <label className="cm-form-label">How reviewers decide</label>
+          <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="radio" name="review_mode" checked={form.review_mode === 'parallel'} onChange={() => setForm(p => ({ ...p, review_mode: 'parallel' }))} />
+              All at once
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="radio" name="review_mode" checked={form.review_mode === 'sequential'} onChange={() => setForm(p => ({ ...p, review_mode: 'sequential' }))} />
+              One after another, in order
+            </label>
+          </div>
+          {form.review_mode === 'sequential' && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+              Only the first reviewer is asked now; each next one is told when the one before decides. A rejection closes the review at once.
+            </p>
+          )}
+        </div>
+        <div className="cm-form-group">
           <label className="cm-form-label">Reviewers <span className="required">*</span></label>
           <div style={{ border: '1px solid var(--border)', borderRadius: 6, maxHeight: 160, overflowY: 'auto', padding: 8 }}>
-            {users.length === 0 ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{usersLoaded ? 'No one in this organisation can review content yet.' : 'Loading users…'}</p> : users.map(u => (
-              <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 14 }}>
-                <input type="checkbox" checked={form.reviewers.includes(u.id)} onChange={() => toggleReviewer(u.id)} />
-                {u.name} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>({u.email})</span>
-              </label>
-            ))}
+            {users.length === 0 ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{usersLoaded ? 'No one in this organisation can review content yet.' : 'Loading users…'}</p> : (form.review_mode === 'sequential'
+              // In order: the chosen reviewers first, in their order, then the rest.
+              ? [...users].sort((a, b) => {
+                const pa = form.reviewers.indexOf(a.id); const pb = form.reviewers.indexOf(b.id)
+                return (pa < 0 ? Infinity : pa) - (pb < 0 ? Infinity : pb)
+              })
+              : users).map(u => {
+              const position = form.reviewers.indexOf(u.id)
+              return (
+                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 14 }}>
+                  <input type="checkbox" checked={position >= 0} onChange={() => toggleReviewer(u.id)} />
+                  {form.review_mode === 'sequential' && position >= 0 && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                      <strong style={{ minWidth: 18, textAlign: 'center' }}>{position + 1}.</strong>
+                      <button type="button" className="cm-btn cm-btn-secondary cm-btn-sm" title="Earlier" disabled={position === 0} onClick={e => { e.preventDefault(); moveReviewer(u.id, -1) }}>↑</button>
+                      <button type="button" className="cm-btn cm-btn-secondary cm-btn-sm" title="Later" disabled={position === form.reviewers.length - 1} onClick={e => { e.preventDefault(); moveReviewer(u.id, 1) }}>↓</button>
+                    </span>
+                  )}
+                  {u.name} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>({u.email})</span>
+                </label>
+              )
+            })}
           </div>
         </div>
         <div className="cm-form-group">
