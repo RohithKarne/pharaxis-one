@@ -185,7 +185,7 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave, caseClosed = false,
+  saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -515,7 +515,7 @@ export default function CaseAETab({
               <label>Assign To (PV Team)</label>
               <select value={aeTxForm.assigned_to_id} onChange={e => setAeTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
                 <option value="">— Select Assignee —</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {handoffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
             <div className="cf-form-field">

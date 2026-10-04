@@ -11,6 +11,7 @@ const { authenticate, requireRole, requireCapability, requireModule } = require(
 const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const {
   FIRST_TOUCH_SLA_HOURS,
   RESPONSE_SLA_HOURS,
@@ -686,6 +687,7 @@ router.get('/users', authenticate, async (req, res) => {
   try {
     const requestedOrgId = parsePositiveInt(req.query?.org_id);
     let rows;
+    let rowsOrgId = requestedOrgId;
     if (hasGlobalAdminScope(req.user)) {
       if (requestedOrgId) {
         [rows] = await pool.execute(
@@ -705,6 +707,7 @@ router.get('/users', authenticate, async (req, res) => {
       const { requestedOrgId: scopedOrgId, orgIds } = await resolveInboxScope(req, requestedOrgId);
       const targetOrgId = scopedOrgId || Number(req.user.orgId || orgIds[0] || 0);
       if (!targetOrgId) return res.json({ users: [] });
+      rowsOrgId = targetOrgId;
       [rows] = await pool.execute(
         `SELECT DISTINCT u.id, u.name, u.email, u.role
          FROM users u
@@ -713,6 +716,16 @@ router.get('/users', authenticate, async (req, res) => {
          ORDER BY u.name ASC`,
         [targetOrgId]
       );
+    }
+    // MIPM-212: ?can=transmission.approve keeps only people who can accept or
+    // close a PV / Quality hand-off — the hand-off pickers listed everyone,
+    // content managers included. Rights come from role, group or personal grant.
+    if (req.query?.can === 'transmission.approve') {
+      const allowed = [];
+      for (const u of rows) {
+        if (await userHasActivityPrivilege({ userId: u.id, role: u.role, orgId: rowsOrgId }, 'transmission.approve')) allowed.push(u);
+      }
+      rows = allowed;
     }
     res.json({ users: rows });
   } catch (err) {

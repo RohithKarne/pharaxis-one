@@ -28,7 +28,7 @@ export default function CaseFormPage() {
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
-    statuses, users, formConfig,
+    statuses, users, handoffUsers, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
@@ -273,6 +273,7 @@ export default function CaseFormPage() {
                 <CaseAETab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
                   caseClosed={caseClosed}
+                  handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
                   formConfig={formConfig}
@@ -287,6 +288,7 @@ export default function CaseFormPage() {
                 <CasePCTab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
                   caseClosed={caseClosed}
+                  handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
                   formConfig={formConfig}

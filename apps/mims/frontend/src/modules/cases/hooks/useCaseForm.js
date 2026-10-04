@@ -16,6 +16,8 @@ export default function useCaseForm(id, token) {
   const [savedMsg,       setSavedMsg]       = useState('')
   const [statuses,       setStatuses]       = useState([])
   const [users,          setUsers]          = useState([])
+  // People who can accept or close a PV / Quality hand-off (MIPM-212).
+  const [handoffUsers,   setHandoffUsers]   = useState([])
   const [formConfig,     setFormConfig]     = useState(null)
   const [infoForm,       setInfoForm]       = useState({
     status_id: '', case_owner_id: '', priority: 'normal',
@@ -57,8 +59,11 @@ export default function useCaseForm(id, token) {
       const [c, s] = await Promise.all([cRes.json(), sRes.json()])
       // Owners and PV assignees are the case's own org's active users — a list
       // every case user may read, not the admin-only user list.
-      const uRes = await httpFetch(`${API}/inbox/users?org_id=${encodeURIComponent(c.org_id || '')}`, { headers })
-      const u = await uRes.json()
+      const [uRes, hRes] = await Promise.all([
+        httpFetch(`${API}/inbox/users?org_id=${encodeURIComponent(c.org_id || '')}`, { headers }),
+        httpFetch(`${API}/inbox/users?org_id=${encodeURIComponent(c.org_id || '')}&can=transmission.approve`, { headers }),
+      ])
+      const [u, h] = await Promise.all([uRes.json(), hRes.json()])
       setCaseData(c)
       setInfoForm({
         status_id:      c.status_id      ? String(c.status_id)      : '',
@@ -74,6 +79,7 @@ export default function useCaseForm(id, token) {
       })
       setStatuses(Array.isArray(s?.states) ? s.states : [])
       setUsers(Array.isArray(u?.users) ? u.users : [])
+      setHandoffUsers(Array.isArray(h?.users) ? h.users : [])
       setReassignForm(prev => ({ ...prev, new_owner_id: c.case_owner_id ? String(c.case_owner_id) : '' }))
       restoreDraftIfNewer(c)
     } catch (err) {
@@ -378,7 +384,7 @@ export default function useCaseForm(id, token) {
 
   return {
     caseData, setCaseData, loading, saving, savedMsg, setSavedMsg,
-    statuses, users, formConfig,
+    statuses, users, handoffUsers, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving,

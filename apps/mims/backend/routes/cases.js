@@ -2783,6 +2783,12 @@ router.get('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/ae-transmissions — create AE transmission (route to PV)
+// MIPM-212: a hand-off goes to someone who can accept or close it.
+async function canTakeHandoff(userId, role, caseId) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  return userHasActivityPrivilege({ userId, role, orgId: c?.org_id }, 'transmission.approve');
+}
+
 // A new PV or Quality hand-off is a change to the case, and a closed case takes no
 // changes until it is reopened (MIPM-209). Hand-offs already started keep their
 // own status flow, so PV and Quality can still accept or close them.
@@ -2807,8 +2813,11 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
     const clock = await computeAeHandoffClock(req.params.id);
     const priority = stricterAePriority(requestedPriority, clock.priority);
 
-    const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
+    const [[assignee]] = await pool.execute('SELECT name, email, role FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
+    if (!(await canTakeHandoff(assignedTo, assignee.role, req.params.id))) {
+      return res.status(400).json({ error: 'This person cannot accept or close hand-offs. Choose someone with that right.' });
+    }
 
     // Due date: the case's clock (from the awareness date) when the case sets the
     // priority; otherwise the requested priority counted from today. An explicit
@@ -2939,8 +2948,11 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
     const resolution_notes = req.body?.resolution_notes || req.body?.notes || null;
     if (!assignedTo) return res.status(400).json({ error: 'assigned_to is required.' });
 
-    const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
+    const [[assignee]] = await pool.execute('SELECT name, email, role FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
+    if (!(await canTakeHandoff(assignedTo, assignee.role, req.params.id))) {
+      return res.status(400).json({ error: 'This person cannot accept or close hand-offs. Choose someone with that right.' });
+    }
 
     const dueDate = calculatePcDueDate(priority, due_date || null);
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
