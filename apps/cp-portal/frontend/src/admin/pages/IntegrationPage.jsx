@@ -136,6 +136,7 @@ export default function IntegrationPage() {
   const [testResult, setTestResult]     = useState({})
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => { load() }, [clientId])
 
@@ -153,6 +154,9 @@ export default function IntegrationPage() {
       const res = await fetch(`/api/admin/integration/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not add integration (error ${res.status}).`); return }
       setShowAdd(false); setForm({ system_name: 'MIMS', api_base_url: '', api_key: '', api_secret: '', auth_type: 'oauth', mims_case_url_base: '' })
+      // CP walk 2026-10-04: a new integration is stored off, so say so — before, the
+      // modal just closed and the card read Inactive with no word about pressing Enable.
+      setNotice('Integration saved. It is off until you press Enable, so nothing is sent to it yet.')
       load()
     } catch {
       setError('Network error — please try again.')
@@ -162,7 +166,7 @@ export default function IntegrationPage() {
   }
 
   async function toggleActive(id, current) {
-    setError('')
+    setError(''); setNotice('')
     try {
       const res = await fetch(`/api/admin/integration/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not update integration (error ${res.status}).`); return }
@@ -243,6 +247,7 @@ export default function IntegrationPage() {
       )}
 
       {error && !showAdd && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {notice && <div className="cp-success" role="status" style={{ marginBottom: 12 }}>{notice}</div>}
 
       {loading ? <div className="cp-loading">Loading…</div> : integrations.length === 0 ? (
         <div className="cp-empty"><p>No integrations configured.</p></div>
