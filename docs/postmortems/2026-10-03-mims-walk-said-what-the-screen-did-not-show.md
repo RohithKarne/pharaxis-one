@@ -40,3 +40,11 @@ defaults, personal grants).** Until then the sentence starts with "I expect".
 ## Ticket
 
 MIPM-192: a security group can only add rights, never remove them (decision for Rohith).
+
+## Addendum — 4th Oct 2026: a fourth one
+
+**Said:** "Saving a product family with an empty name gives no message" (in the list of open items given to Rohith).
+
+**True:** the browser does say "Please fill out this field". It is the browser's own bubble, which never appears in the page's text, and the script read only the page's text. Checking it properly found a real defect next to it — a name of only spaces was saved — now MIPM-199.
+
+**Same mechanism, same rule:** the script's text output was read as the screen. Before saying a screen shows no message, look at the screenshot and at the field's own validation message.
