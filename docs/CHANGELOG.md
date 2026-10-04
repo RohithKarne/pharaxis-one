@@ -117,6 +117,9 @@ the ones a validation plan should name.
 - Area 3, Branding: the logo help text names the accepted formats (PNG, JPG, GIF, WebP); SVG was listed but refused — `frontend/src/admin/pages/BrandingPage.jsx`
 - Area 3, Forms: adding a field with a key already on that form says so instead of "Server error." — `backend/routes/admin/forms.js`
 - Area 3, Chatbox: the portal's chat widget hides when "Enable chatbox on portal" is off; before, only the welcome text went — `frontend/src/portal/components/PortalLayout.jsx`
+- Area 4, Library: a therapeutic area, drug, event or resource cannot be created or renamed to a blank name; Deactivate asks first — `backend/routes/admin/content.js`, `frontend/src/admin/pages/ContentPage.jsx`
+- Area 4, FAQ: an item cannot have a blank question or answer — `backend/routes/admin/faq.js`
+- Area 4, MSL Directory: a removed MSL shows Reactivate instead of a second Remove — `frontend/src/admin/pages/MSLPage.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
