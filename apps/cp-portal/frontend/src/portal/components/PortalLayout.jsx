@@ -405,7 +405,9 @@ export default function PortalLayout({ children }) {
         </div>
       </footer>
 
-      {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
+      {/* The admin's "Enable chatbox on portal" switch arrives as portalConfig.chatbox (null when off);
+          until the CP walk of 4 Oct 2026 only the feature flag was read, so the widget showed with the switch off. */}
+      {isFeatureEnabled('chatbox') && portalConfig?.chatbox && <ChatboxWidget clientCode={clientCode} />}
       {!loading && showGate && <UserTypeGate />}
       {!loading && !showGate && user && !user.specialty && <SpecialtyPrompt clientCode={clientCode} />}
       {!loading && <ConsentBanner />}
