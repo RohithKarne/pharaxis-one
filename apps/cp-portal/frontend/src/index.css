@@ -2468,7 +2468,6 @@ body { background: var(--cp-bg); }
 .cp-gate-type-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .cp-gate-type-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--cp-bg); border: 1px solid var(--cp-border); border-radius: 2px; transition: opacity 0.15s; }
 .cp-gate-type-disabled { opacity: 0.5; }
-.cp-gate-type-icon { font-size: 24px; min-width: 32px; text-align: center; }
 .cp-gate-type-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .cp-gate-type-label-input { border: none; border-bottom: 1px dashed var(--cp-border); background: transparent; font-size: 14px; font-weight: 600; color: var(--cp-text); padding: 2px 4px; outline: none; width: 100%; }
 .cp-gate-type-label-input:focus { border-bottom-color: var(--cp-primary); }
@@ -2482,7 +2481,6 @@ body { background: var(--cp-bg); }
 .cp-access-matrix th, .cp-access-matrix td { padding: 10px 12px; border: 1px solid var(--cp-border); text-align: center; vertical-align: middle; }
 .cp-matrix-feature-col { text-align: left; min-width: 160px; background: var(--cp-surface); font-weight: 600; }
 .cp-matrix-type-col { min-width: 90px; background: var(--cp-surface); }
-.cp-matrix-type-icon { display: block; font-size: 18px; }
 .cp-matrix-type-label { display: block; font-size: 11px; font-weight: 600; color: var(--cp-text-muted); margin-top: 2px; }
 .cp-matrix-feature-name { text-align: left; font-weight: 500; color: var(--cp-text); }
 .cp-matrix-cell { padding: 6px !important; }

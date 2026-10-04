@@ -155,7 +155,6 @@ export default function GatePage() {
           <div className="cp-gate-type-list">
             {userTypes.map(t => (
               <div key={t.id} className={`cp-gate-type-row ${!t.is_enabled ? 'cp-gate-type-disabled' : ''}`}>
-                <div className="cp-gate-type-icon">{t.icon}</div>
                 <div className="cp-gate-type-body">
                   <input
                     className="cp-gate-type-label-input"
@@ -195,7 +194,6 @@ export default function GatePage() {
                   <th className="cp-matrix-feature-col">Feature</th>
                   {enabledTypes.map(t => (
                     <th key={t.type_key} className="cp-matrix-type-col">
-                      <span className="cp-matrix-type-icon">{t.icon}</span>
                       <span className="cp-matrix-type-label">{t.label.split(' ')[0]}</span>
                     </th>
                   ))}
