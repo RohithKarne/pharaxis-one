@@ -232,10 +232,16 @@ export default function FAQsSection({ token }) {
   function getFaqActions(faq) {
     const s = faq.status
     const btns = []
+    // MIPM-216: Check In sat on Draft rows, where the server always refuses it
+    // ("not checked out"), and a checked-out FAQ showed only View and Clone, so
+    // it could never be checked back in. Check In now belongs to CheckedOut,
+    // as for documents; the server still lets only the holder check in.
     if (s === 'Draft') {
       btns.push(<button key="e" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>Edit</button>)
       btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(faq)}>Check Out</button>)
-      btns.push(<button key="ci" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInFaq(faq)}>Check In</button>)
+    } else if (s === 'CheckedOut') {
+      btns.push(<button key="e" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>Edit</button>)
+      btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInFaq(faq)}>Check In</button>)
     } else if (s === 'Pending') {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
       if (hasCapability('content.approve')) btns.push(<button key="ap" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleApprove(faq)}>Approve</button>)
@@ -261,7 +267,8 @@ export default function FAQsSection({ token }) {
               Bulk Tag ({selectedFaqIds.length})
             </button>
           )}
-          {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
+          {/* MIPM-189: creating an FAQ needs content.faq.manage, not content.author — the button always failed for content managers. */}
+          {hasCapability('content.faq.manage') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
         </div>
       </div>
       {showBulkTag && (

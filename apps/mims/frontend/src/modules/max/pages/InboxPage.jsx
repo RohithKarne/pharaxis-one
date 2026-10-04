@@ -564,7 +564,12 @@ export default function InboxPage() {
     const name = (match ? match[1] : '').replace(/^["']|["']$/g, '').trim()
     if (!name && !email.includes('@')) return undefined
     const parts = name.split(/\s+/).filter(Boolean)
+    // A leading title goes to the prefix, spelled as the Prefix picklist spells it,
+    // so "Dr Priya Shah" is not saved with first name "Dr Priya" (MIPM-195).
+    const title = parts.length > 1 && /^(mr|ms|mrs|dr|prof)\.?$/i.exec(parts[0])
+    if (title) parts.shift()
     return {
+      prefix: title ? title[1][0].toUpperCase() + title[1].slice(1).toLowerCase() : '',
       first_name: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
       last_name: parts.length > 1 ? parts[parts.length - 1] : '',
       email: email.includes('@') ? email : '',
@@ -573,10 +578,9 @@ export default function InboxPage() {
 
   async function createCaseFromInquiry() {
     if (!selected) return
-    if (!siteId) {
-      setCaseFlow(prev => ({ ...prev, actionError: 'No active site assigned. Contact admin.' }))
-      return
-    }
+    // No site check: users no longer pick a site, and the server uses the
+    // organisation's primary site when none is sent — as New Case does. Users made
+    // from Add / Edit Users have no site, so every email-to-case stopped here (MIPM-155).
     setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
     try {
       // S19-P1: carry inquiry context into case — pre-fill description + internal notes
@@ -588,7 +592,7 @@ export default function InboxPage() {
         method: 'POST',
         headers: AUTH_H,
         body: JSON.stringify({
-          site_id: siteId,
+          site_id: siteId || undefined,
           case_type: caseFlow.caseType,
           intake_channel: 'email',
           date_received: toDateOnly(selected.received_at),

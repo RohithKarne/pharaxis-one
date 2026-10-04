@@ -121,3 +121,17 @@
 **What:** Building CPPM-115, engineering told Rohith that no doctor had ever seen a notification, because the bell's server code reads a field the sign-in token does not carry, and filed CPPM-118. The sign-in check copies that field in on every request; nothing was broken. Caught minutes later, before any code changed. Postmortem: `docs/postmortems/2026-10-03-filed-a-defect-the-bell-never-had.md`.
 **Why:** The value was judged missing at the place it is read, and the one step between (the middleware that runs on every request) was skipped. Third case of the L-014 / L-015 pattern.
 **Rule:** Before calling something broken, follow the value back to the place that sets it, middleware included. Until that place is read, the sentence starts with "I expect".
+
+---
+
+## L-017 — One state, many spellings (2026-10-03)
+**What:** In the MIMS walk, five features failed because two places named the same state differently. The review dialog sent `reviewers`, and the server read `reviewer_ids`. Reviewers chose "Accepted", and the server knew "Approved". Responses required documents to be "Approved" while publishing made them "Published". Templates had to be "Active", a state they never reach. Each side looked right on its own. (MIPM-174, 178, 186, 190.)
+**Why:** A screen and its server rule were changed or written at different times, and each was checked alone. No one ran the full path through the screen.
+**Rule:** When a feature moves through states, list every place that names them (screen options, the server's allowed list, the rules that read them) and check they agree. Verify by doing the whole path on screen: create, review, approve, publish, use. A step that is only possible by API is a missing step.
+
+---
+
+## L-018 — Check what is actually running before trusting a result (2026-10-03)
+**What:** A server killed abruptly at 19:25 left two background workers alive. For three hours they ran old code against the same mail queue, and one of them failed an MI email. The defect was real (MIPM-187), but it also meant some earlier results came partly from stale code.
+**Why:** The restart script stopped the server only, and the workers did not notice their parent had gone.
+**Rule:** After restarting a service, list the running processes (`ps -eo pid,ppid,lstart,args`) and confirm there is exactly one of each, all started at the restart. Child processes must exit when their parent does.

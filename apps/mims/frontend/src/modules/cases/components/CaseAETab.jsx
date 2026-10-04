@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
+import TransmissionSignModal from './TransmissionSignModal'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -184,7 +186,7 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave,
+  saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -215,15 +217,34 @@ export default function CaseAETab({
 
   useEffect(() => { loadAEVersions(); loadAeTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLocked = (ver) => ver && ver.is_locked === 1
+  // A closed case is read-only whatever its versions say (MIPM-208).
+  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
+  // MIPM-213: "Drugs" (suspect / co-suspect / concomitant roles) is the opt-in
+  // PV — Drug Roles feature, but it showed on every AE case beside Product Info,
+  // so drugs were entered twice. It shows when the feature is on, or when the
+  // case already has drugs in it (never hide recorded data).
+  const drugRolesOn = useFeatureFlag('cf.pv_drug_roles')
+  const [hasDrugRows, setHasDrugRows] = useState(false)
+  useEffect(() => {
+    if (drugRolesOn) return
+    httpFetch(`${API}/cases/${id}/drugs`, { headers })
+      .then(r => (r.ok ? r.json() : { rows: [] }))
+      .then(d => setHasDrugRows((d.rows || []).length > 0))
+      .catch(() => {})
+  }, [id, drugRolesOn]) // eslint-disable-line react-hooks/exhaustive-deps
+  const aeTabs = useMemo(
+    () => AE_TABS.filter(t => t.key !== 'drugs' || drugRolesOn || hasDrugRows),
+    [drugRolesOn, hasDrugRows],
+  )
+
   const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
-  const canCreateAeVersion = !latestAeVersion || isClosed(latestAeVersion)
+  const canCreateAeVersion = !caseClosed && (!latestAeVersion || isClosed(latestAeVersion))
   const aeCompletionByTab = useMemo(() => {
     const versionId = activeAeVer?.id
     if (!versionId) return {}
     return Object.fromEntries(
-      AE_TABS.map(tab => {
+      aeTabs.map(tab => {
         const def = AE_COMPLETION_DEFS[tab.key]
         if (!def) return [tab.key, null]
         const payload = aeTabData[`${versionId}_${tab.key}`]
@@ -234,7 +255,7 @@ export default function CaseAETab({
         return [tab.key, summary]
       }),
     )
-  }, [activeAeVer?.id, aeTabData, getFieldConfig])
+  }, [activeAeVer?.id, aeTabData, getFieldConfig, aeTabs])
 
   useEffect(() => {
     const versionId = activeAeVer?.id
@@ -264,6 +285,9 @@ export default function CaseAETab({
   }
 
   async function loadAETab(versionId, tabKey) {
+    // Drugs is the case's drug list and loads itself; there is no version route
+    // for it, so asking for one only produced a 404 each time (MIPM-165).
+    if (tabKey === 'drugs') return
     setAeTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
@@ -321,8 +345,8 @@ export default function CaseAETab({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to close version')
-      setAeVersions(prev => prev.map(v => v.id === activeAeVer.id ? { ...v, status: data.status || 'Closed' } : v))
-      setActiveAeVer(prev => (prev ? { ...prev, status: data.status || 'Closed' } : prev))
+      setAeVersions(prev => prev.map(v => v.id === activeAeVer.id ? { ...v, status: data.status || 'Closed', is_locked: data.is_locked } : v))
+      setActiveAeVer(prev => (prev ? { ...prev, status: data.status || 'Closed', is_locked: data.is_locked } : prev))
       setSavedMsg('AE version closed'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) {
       toast.error(err.message)
@@ -394,13 +418,20 @@ export default function CaseAETab({
     finally { setAeTxSaving(false) }
   }
 
-  async function updateAeTxStatus(txId, status) {
+  // Accepted/Closed and moving back out need an e-signature (MIPM-164); the sign
+  // box calls back here with it and shows any refusal itself.
+  const AE_TX_SIGNED = ['Accepted', 'Closed']
+  const [aeTxSign, setAeTxSign] = useState(null)
+  async function updateAeTxStatus(txId, status, sign = null) {
+    const current = aeTransmissions.find(t => t.id === txId)?.status
+    if (!sign && (AE_TX_SIGNED.includes(status) || AE_TX_SIGNED.includes(current))) { setAeTxSign({ txId, status }); return '' }
     try {
-      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status, ...sign }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTransmissions(prev => prev.map(t => t.id === txId ? data : t))
-    } catch (err) { toast.error(err.message) }
+      return ''
+    } catch (err) { if (sign) return err.message; toast.error(err.message); return err.message }
   }
 
   return (
@@ -416,11 +447,11 @@ export default function CaseAETab({
         >
           {aeClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)}>
+        <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
       </div>
-      {!canCreateAeVersion && (
+      {!canCreateAeVersion && !caseClosed && (
         <div className="cf-inline-note">Close the current AE version before creating a new version.</div>
       )}
 
@@ -448,19 +479,21 @@ export default function CaseAETab({
                 onClick={() => { setActiveAeVer(v); loadAETab(v.id, activeAeTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
+                {!!v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
           </div>
 
           {isLocked(activeAeVer) && (
-            <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
+            <div className="cf-locked-notice">{caseClosed
+              ? 'This case is closed (read-only). Reopen the case to make changes.'
+              : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
 
           <div className="cf-case-workspace cf-ae-workspace">
             <StickySectionNav
-              sections={AE_TABS.map(t => ({
+              sections={aeTabs.map(t => ({
                 id: t.key,
                 label: t.label,
                 count: aeCompletionByTab[t.key]?.count,
@@ -501,7 +534,7 @@ export default function CaseAETab({
               <label>Assign To (PV Team)</label>
               <select value={aeTxForm.assigned_to_id} onChange={e => setAeTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
                 <option value="">— Select Assignee —</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {handoffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
             <div className="cf-form-field">
@@ -530,6 +563,16 @@ export default function CaseAETab({
         </div>
       )}
 
+      <TransmissionSignModal
+        key={aeTxSign ? `${aeTxSign.txId}-${aeTxSign.status}` : 'none'}
+        target={aeTxSign}
+        onCancel={() => setAeTxSign(null)}
+        onConfirm={async (password, reason) => {
+          const msg = await updateAeTxStatus(aeTxSign.txId, aeTxSign.status, { password, reason })
+          if (!msg) setAeTxSign(null)
+          return msg
+        }}
+      />
       <div className="cf-tx-tracker">
         <div className="cf-tx-tracker-title">AE Transmission Tracker</div>
         {aeTxLoading && <div className="cf-empty-msg">Loading transmissions…</div>}
@@ -538,7 +581,7 @@ export default function CaseAETab({
           <div key={tx.id} className="cf-tx-card">
             <div className="cf-tx-card-top">
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
-              <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+              <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine (30 days)', '15-day-expedited': 'Expedited (15 days)', '7-day-expedited': 'Urgent (7 days)' })[tx.priority] || tx.priority}</strong></span>
               {tx.due_date && <span className="cf-tx-meta">Due: {String(tx.due_date).slice(0, 10)}</span>}
               <span className="cf-tx-meta">Assigned to {tx.assignee_name || 'nobody'}</span>
             </div>

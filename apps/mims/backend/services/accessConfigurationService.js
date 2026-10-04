@@ -214,6 +214,8 @@ async function setGroupPrivileges({ groupId, privilegeKeys, userId, orgId = null
       );
     }
     const legacyPrivileges = keys.reduce((acc, key) => { acc[key] = true; return acc; }, {});
+    // Keep the role the group gives its members (MIPM-134); rewriting the keys used to drop it.
+    if (before.group.privileges?.role) legacyPrivileges.role = before.group.privileges.role;
     await conn.execute(
       'UPDATE security_groups SET privileges = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
       [toJson(legacyPrivileges, {}), userId || null, groupId]
@@ -253,7 +255,7 @@ async function seedAccessTemplates(orgId, userId) {
         `INSERT INTO security_groups
            (name, description, privileges, org_id, created_by, group_type, template_key, is_template, requires_approval)
          VALUES (?, ?, ?, ?, ?, 'medinquirer_user', ?, 1, ?)`,
-        [`${template.name} - Org ${orgId}`, template.description, toJson({}, {}), orgId, userId || null, template.key, template.privileges.some((key) => key.includes('approve') || key.includes('unmask') || key.includes('manage')) ? 1 : 0]
+        [`${template.name} - Org ${orgId}`, template.description, toJson({ role: template.role }), orgId, userId || null, template.key, template.privileges.some((key) => key.includes('approve') || key.includes('unmask') || key.includes('manage')) ? 1 : 0]
       );
       groupId = result.insertId;
     }

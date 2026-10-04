@@ -69,6 +69,7 @@ const {
 } = require('../services/miResponseService');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
+const { auditChanges } = require('../services/componentAudit');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -610,8 +611,8 @@ router.get('/cases/workflow-states', authenticate, requireScopedCapability('case
     const orgId = hasGlobalAdminScope(req.user) ? null : Number(req.user.orgId);
     const [states] = await pool.execute(
       orgId
-        ? 'SELECT id, name, is_active, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
-        : 'SELECT id, name, is_active, org_id FROM workflow_states ORDER BY name',
+        ? 'SELECT id, name, is_active, is_closed, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
+        : 'SELECT id, name, is_active, is_closed, org_id FROM workflow_states ORDER BY name',
       orgId ? [orgId] : []
     );
     res.json({ states });
@@ -1193,6 +1194,10 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       // CF-E1: Dynamic fields [{field_id, field_value}]
       dynamic_fields,
       assign_to_me,
+      // MIPM-156: the inbox sends the email's text and sender; both were dropped,
+      // so a case made from an email started blank.
+      description,
+      internal_notes,
     } = req.body;
     const ownerId = assign_to_me === true ? req.user.userId : null;
 
@@ -1273,9 +1278,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id, description, internal_notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId, description || null, internal_notes || null]
       );
     } catch (err) {
       // MIPM-21: a reference that is already taken is refused and the caller told.
@@ -1291,6 +1296,8 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       throw err;
     }
     const caseId = result.insertId;
+    // MIPM-159: the case's creation is the first line of its audit trail.
+    await writeCaseAudit(caseId, req.user.userId, req.user.email, 'CASE_CREATED', 'case_type', null, `${case_type || '—'} via ${intake_channel}`, conn);
     if (ownerId) {
       await writeCaseAudit(caseId, req.user.userId, req.user.email, 'REASSIGNED', 'case_owner_id', null, ownerId, conn);
     }
@@ -1311,9 +1318,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       if (reporter.first_name || reporter.last_name) {
         await conn.execute(
           `INSERT INTO case_contacts
-             (case_id, contact_role, is_primary, first_name, last_name, reporter_type, institution, country, phone, email)
-           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?)`,
-          [caseId, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
+             (case_id, contact_role, is_primary, prefix, first_name, last_name, reporter_type, institution, country, phone, email)
+           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [caseId, reporter.prefix || null, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
            reporter.organisation || null, reporter.country || null, reporter.phone || null, reporter.email || null]
         );
       }
@@ -1831,6 +1838,11 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
           return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }
+        // MIPM-168: reopening undoes a close, so it needs case.reopen; it checked
+        // nothing, and an agent could reopen a case a reviewer had just closed.
+        if (isReopen && !(await userHasActivityPrivilege(req.user, 'case.reopen'))) {
+          return res.status(403).json({ error: 'You do not have permission to reopen cases.' });
+        }
         const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
         if (isClose) {
           const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
@@ -2243,7 +2255,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
               d.send_as_pdf, d.selected_modules
          FROM cm_documents d
          INNER JOIN cm_folders f ON f.id = d.folder_id
-        WHERE d.status IN ('Published','Approved')
+        WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
         ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
@@ -2463,7 +2475,7 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
     }
     const row = await getMiResponseRow(req.params.id, result.insertId);
     res.status(201).json(row);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
 router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (req, res) => {
@@ -2617,9 +2629,27 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
       );
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
+      // MIPM-171: the signature and its reason belong on the case trail too — they
+      // were only in the system log, so the case's E-signatures view was empty.
+      if (['APPROVED', 'SENT'].includes(responseStatus)) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_ESIGN', `MI response ${responseStatus}: e-signature reason`, null, reason, conn);
+      }
       // Bridge row 8: an answer going out is a change to the case, so a connected
       // portal's change list picks it up and shows the person their answer.
       if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
+      // MIPM-188: what went out is recorded against each enclosed document and
+      // module, so its Usage view shows where it was used. Nothing wrote usage before.
+      if (responseStatus === 'SENT') {
+        const [[sent]] = await conn.execute('SELECT selected_documents, selected_modules FROM case_mi_responses WHERE id = ?', [req.params.responseId]);
+        const ids = (raw) => { try { const v = typeof raw === 'string' ? JSON.parse(raw) : raw; return (Array.isArray(v) ? v : []).map((x) => Number(x?.id ?? x)).filter(Boolean); } catch (_) { return []; } };
+        for (const [type, list] of [['document', ids(sent?.selected_documents)], ['module', ids(sent?.selected_modules)]]) {
+          for (const contentId of list) {
+            await conn.execute(
+              'INSERT INTO cm_content_usage (content_type, content_id, case_id, response_id, used_by) VALUES (?, ?, ?, ?, ?)',
+              [type, contentId, req.params.id, req.params.responseId, req.user.userId]);
+          }
+        }
+      }
       await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
         case_id: Number(req.params.id),
         from_status: existing.response_status,
@@ -2753,9 +2783,25 @@ router.get('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/ae-transmissions — create AE transmission (route to PV)
+// MIPM-212: a hand-off goes to someone who can accept or close it.
+async function canTakeHandoff(userId, role, caseId) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  return userHasActivityPrivilege({ userId, role, orgId: c?.org_id }, 'transmission.approve');
+}
+
+// A new PV or Quality hand-off is a change to the case, and a closed case takes no
+// changes until it is reopened (MIPM-209). Hand-offs already started keep their
+// own status flow, so PV and Quality can still accept or close them.
+async function caseIsClosed(caseId) {
+  const [[row]] = await pool.execute(
+    'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [caseId]);
+  return Number(row?.is_closed) === 1;
+}
+
 router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const requestedPriority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;
@@ -2767,8 +2813,11 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
     const clock = await computeAeHandoffClock(req.params.id);
     const priority = stricterAePriority(requestedPriority, clock.priority);
 
-    const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
+    const [[assignee]] = await pool.execute('SELECT name, email, role FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
+    if (!(await canTakeHandoff(assignedTo, assignee.role, req.params.id))) {
+      return res.status(400).json({ error: 'This person cannot accept or close hand-offs. Choose someone with that right.' });
+    }
 
     // Due date: the case's clock (from the awareness date) when the case sets the
     // priority; otherwise the requested priority counted from today. An explicit
@@ -2804,6 +2853,9 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       product_group_id: productGroup.product_group_id,
     }, 'ae_transmission', String(result.insertId)).catch(() => {});
     const row = await getAeTransmissionRow(req.params.id, result.insertId);
+    // MIPM-169: the hand-off and each status change go to the case audit trail.
+    await auditChanges(req.params.id, req, 'AE_HANDOFF_CREATED', `PV hand-off #${result.insertId}`, null,
+      { assigned_to: row?.assignee_name || row?.assigned_name, priority: row?.priority, due_date: row?.due_date, status: row?.status });
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2815,7 +2867,19 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'In Review', 'Accepted', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
-    if (status && ['Accepted', 'Closed'].includes(status)) {
+    const [[existingTx]] = await pool.execute(
+      'SELECT due_date, status FROM case_ae_transmissions WHERE id = ? AND case_id = ?',
+      [req.params.txId, req.params.id]
+    );
+    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
+    // MIPM-163: setting a PV hand-off to Accepted or Closed, or moving it back out, is a
+    // sign-off: it needs transmission.approve as well as the e-signature, so the
+    // agent who routed it cannot sign it off. Moving back out was not signed at all.
+    const SIGNED = ['Accepted', 'Closed'];
+    if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
+      if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to accept, close or reopen a PV hand-off.' });
+      }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();
       if (!password || !reason) {
@@ -2830,11 +2894,6 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
         reason,
       });
     }
-    const [[existingTx]] = await pool.execute(
-      'SELECT due_date FROM case_ae_transmissions WHERE id = ? AND case_id = ?',
-      [req.params.txId, req.params.id]
-    );
-    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
     const nextStatus = status || null;
     await pool.execute(
       `UPDATE case_ae_transmissions
@@ -2853,6 +2912,11 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
       }, 'ae_transmission', String(req.params.txId)).catch(() => {});
     }
     const row = await getAeTransmissionRow(req.params.id, req.params.txId);
+    if (nextStatus && nextStatus !== existingTx.status) {
+      const signedReason = SIGNED.includes(nextStatus) || SIGNED.includes(existingTx.status) ? String(req.body?.reason || '').trim() : '';
+      await auditChanges(req.params.id, req, 'AE_HANDOFF_STATUS', `PV hand-off #${req.params.txId}`,
+        { status: existingTx.status }, { status: nextStatus, ...(signedReason ? { 'e-signature reason': signedReason } : {}) });
+    }
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2877,14 +2941,18 @@ router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
 router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const priority = normalizePcTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;
     const resolution_notes = req.body?.resolution_notes || req.body?.notes || null;
     if (!assignedTo) return res.status(400).json({ error: 'assigned_to is required.' });
 
-    const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
+    const [[assignee]] = await pool.execute('SELECT name, email, role FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
+    if (!(await canTakeHandoff(assignedTo, assignee.role, req.params.id))) {
+      return res.status(400).json({ error: 'This person cannot accept or close hand-offs. Choose someone with that right.' });
+    }
 
     const dueDate = calculatePcDueDate(priority, due_date || null);
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
@@ -2915,6 +2983,9 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       product_group_id: productGroup.product_group_id,
     }, 'pc_transmission', String(result.insertId)).catch(() => {});
     const row = await getPcTransmissionRow(req.params.id, result.insertId);
+    // MIPM-169: the hand-off and each status change go to the case audit trail.
+    await auditChanges(req.params.id, req, 'PC_HANDOFF_CREATED', `Quality routing #${result.insertId}`, null,
+      { assigned_to: row?.assignee_name || row?.assigned_name, priority: row?.priority, due_date: row?.due_date, status: row?.status });
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2926,7 +2997,19 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'Under Investigation', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
-    if (status === 'Closed') {
+    const [[existingTx]] = await pool.execute(
+      'SELECT due_date, status FROM case_pc_transmissions WHERE id = ? AND case_id = ?',
+      [req.params.txId, req.params.id]
+    );
+    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
+    // MIPM-163: setting a PV hand-off to Closed, or moving it back out, is a
+    // sign-off: it needs transmission.approve as well as the e-signature, so the
+    // agent who routed it cannot sign it off. Moving back out was not signed at all.
+    const SIGNED = ['Closed'];
+    if (status && status !== existingTx.status && (SIGNED.includes(status) || SIGNED.includes(existingTx.status))) {
+      if (!(await userHasActivityPrivilege(req.user, 'transmission.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to close or reopen a Quality routing.' });
+      }
       const password = String(req.body?.password || '');
       const reason = String(req.body?.reason || '').trim();
       if (!password || !reason) {
@@ -2941,11 +3024,6 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
         reason,
       });
     }
-    const [[existingTx]] = await pool.execute(
-      'SELECT due_date FROM case_pc_transmissions WHERE id = ? AND case_id = ?',
-      [req.params.txId, req.params.id]
-    );
-    if (!existingTx) return res.status(404).json({ error: 'Transmission not found.' });
     const nextStatus = status || null;
     await pool.execute(
       `UPDATE case_pc_transmissions
@@ -2964,6 +3042,11 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
       }, 'pc_transmission', String(req.params.txId)).catch(() => {});
     }
     const row = await getPcTransmissionRow(req.params.id, req.params.txId);
+    if (nextStatus && nextStatus !== existingTx.status) {
+      const signedReason = SIGNED.includes(nextStatus) || SIGNED.includes(existingTx.status) ? String(req.body?.reason || '').trim() : '';
+      await auditChanges(req.params.id, req, 'PC_HANDOFF_STATUS', `Quality routing #${req.params.txId}`,
+        { status: existingTx.status }, { status: nextStatus, ...(signedReason ? { 'e-signature reason': signedReason } : {}) });
+    }
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -111,13 +111,17 @@ async function getOrganisationRow(conn, orgId) {
 
 async function ensureGlobalWorkflowStates(conn) {
   for (const name of BASELINE_WORKFLOW_STATES) {
+    // "Closed" carries the closes-the-case marker (migration 140). On a new database
+    // these states are created after that migration ran, so it was never set and a
+    // Closed case was treated as open: no close permission check, no close password,
+    // still editable (MIPM-158).
     await conn.execute(
-      `INSERT INTO workflow_states (name, org_id, is_active)
-       SELECT ?, NULL, 1
+      `INSERT INTO workflow_states (name, org_id, is_active, is_closed)
+       SELECT ?, NULL, 1, ?
        WHERE NOT EXISTS (
          SELECT 1 FROM workflow_states WHERE name = ? LIMIT 1
        )`,
-      [name, name]
+      [name, name === 'Closed' ? 1 : 0, name]
     );
   }
 }
@@ -171,7 +175,7 @@ async function ensureCaseNumberConfigs(conn, orgId) {
     await conn.execute(
       `INSERT INTO case_number_config (org_id, case_type, prefix, \`separator\`, include_year, include_month, seq_length, current_seq, is_locked)
        VALUES (?, ?, ?, '-', 0, 0, 5, 0, 0)
-       ON DUPLICATE KEY UPDATE prefix = VALUES(prefix)`,
+       ON DUPLICATE KEY UPDATE id = id`, // adds a missing type, never resets an admin's format (MIPM-138)
       [orgId, caseType, caseType]
     );
   }
@@ -558,7 +562,7 @@ async function getPlatformReadinessSummary() {
     const attentionOrgs = readiness.length - readyOrgs;
     const averageScore = readiness.length
       ? Math.round(readiness.reduce((sum, item) => sum + Number(item.score || 0), 0) / readiness.length)
-      : 100;
+      : null; // no organisations yet: there is nothing to average (MIPM-133)
     const totalBlockers = readiness.reduce((sum, item) => sum + item.blockers.length, 0);
 
     return {

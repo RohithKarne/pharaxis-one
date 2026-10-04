@@ -107,7 +107,7 @@ export function AssociatedDocsPanel({ docId, token }) {
                 <div style={{ border: '1px solid var(--border)', borderRadius: 6, marginTop: 4, background: 'var(--surface)', maxHeight: 180, overflowY: 'auto' }}>
                   {searchResults.map(d => (
                     <div key={d.id} onClick={() => { setSelectedDoc(d); setSearch(d.name); setSearchResults([]) }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13, background: selectedDoc?.id === d.id ? 'var(--primary-light, #f0ebff)' : 'transparent' }}>
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13, background: selectedDoc?.id === d.id ? 'var(--primary-tint, #f0ebff)' : 'transparent' }}>
                       <strong>{d.name}</strong> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.doc_id} · {d.status}</span>
                     </div>
                   ))}
@@ -385,7 +385,7 @@ export function VersionAlertsPanel({ docId, token }) {
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No custom days set — only the mandatory 1-day alert will fire.</span>
           )}
           {(config.alert_days || []).map(d => (
-            <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--primary-light, #f0ebff)', border: '1px solid var(--primary)', borderRadius: 20, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
+            <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--primary-tint, #f0ebff)', border: '1px solid var(--primary)', borderRadius: 20, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
               {d} day{d !== 1 ? 's' : ''}
               <button onClick={() => removeDay(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
             </span>

@@ -236,7 +236,8 @@ describe('PAUD-2 item 3 — the response builder refuses unusable documents', ()
     await service.buildResponsePackage(req, 5, { selected_document_ids: [11] });
 
     const [sql] = documentQuery(execute);
-    expect(sql).toMatch(/d\.status\s*=\s*'Approved'/);
+    // MIPM-186: a response encloses published documents only (it read 'Approved', which refused published ones).
+    expect(sql).toMatch(/d\.status\s*=\s*'Published'/);
     expect(sql).toMatch(/expiry_date/);
     expect(sql).toMatch(/activation_date/);
   });

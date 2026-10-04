@@ -1,10 +1,8 @@
 'use strict';
 
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const pool = require('../../database/db');
-const JWT_SECRET = require('../../utils/jwtSecret');
-const { authenticate, requireRole, sessionCacheInvalidate } = require('../../middleware/auth');
+const { authenticate, requireRole, sessionCacheInvalidate, sessionIdle } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
@@ -15,14 +13,6 @@ function normalizeTokenDate(value) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function decodeSessionToken(token) {
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (_) {
-    return null;
-  }
-}
-
 function deriveApplication(role) {
   const normalized = String(role || '').toLowerCase();
   return normalized === 'admin' || normalized === 'platform_admin' ? 'Admin' : 'MIMS';
@@ -31,7 +21,7 @@ function deriveApplication(role) {
 router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [sessionRows] = await pool.execute(
-      `SELECT s.id, s.user_id, s.token, s.created_at, s.expires_at, u.name
+      `SELECT s.id, s.user_id, s.org_id, s.role, s.created_at, s.expires_at, s.last_seen_at, u.name
        FROM sessions s
        INNER JOIN users u ON u.id = s.user_id
        WHERE s.expires_at > NOW()
@@ -43,12 +33,15 @@ router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admi
     const orgIdSet = new Set();
 
     for (const row of sessionRows) {
-      const decoded = decodeSessionToken(row.token);
-      if (!decoded) continue;
+      // MIPM-172: the table keeps a fingerprint, not the token, so the
+      // organisation and role are their own columns.
+      const decoded = { orgId: row.org_id, role: row.role };
 
       if (!hasGlobalAdminScope(req.user) && Number(decoded.orgId || 0) !== Number(req.user.orgId || 0)) {
         continue;
       }
+      // MIPM-211: signed out by the idle timeout, so no longer logged in.
+      if (await sessionIdle(row.last_seen_at, decoded)) continue;
 
       const orgId = Number(decoded.orgId || 0);
       if (orgId > 0) orgIdSet.add(orgId);
@@ -106,7 +99,7 @@ router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('a
     }
 
     const [[sessionRow]] = await pool.execute(
-      `SELECT s.id, s.user_id, s.token, u.name
+      `SELECT s.id, s.user_id, s.org_id, s.token, u.name
        FROM sessions s
        INNER JOIN users u ON u.id = s.user_id
        WHERE s.id = ?
@@ -116,14 +109,13 @@ router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('a
 
     if (!sessionRow) return res.status(404).json({ error: 'Session not found.' });
 
-    const decoded = decodeSessionToken(sessionRow.token);
-    const rowOrgId = Number(decoded?.orgId || 0);
+    const rowOrgId = Number(sessionRow.org_id || 0);
     if (!hasGlobalAdminScope(req.user) && rowOrgId !== Number(req.user.orgId || 0)) {
       return res.status(403).json({ error: 'You can only sign out users in your tenant.' });
     }
 
     const [userSessionRows] = await pool.execute(
-      'SELECT id, token FROM sessions WHERE user_id = ?',
+      'SELECT id, org_id, token FROM sessions WHERE user_id = ?',
       [sessionRow.user_id]
     );
 
@@ -131,8 +123,7 @@ router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('a
     const tokensToInvalidate = [];
 
     for (const row of userSessionRows) {
-      const decodedRow = decodeSessionToken(row.token);
-      const rowOrgIdValue = Number(decodedRow?.orgId || 0);
+      const rowOrgIdValue = Number(row.org_id || 0);
       if (!hasGlobalAdminScope(req.user) && rowOrgIdValue !== Number(req.user.orgId || 0)) {
         continue;
       }

@@ -10,6 +10,7 @@ import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
 
 const DashboardTab = lazy(() => import('./tabs/Dashboard'))
+const OrganizationsTab = lazy(() => import('./tabs/Organizations'))
 const ServiceLogTab = lazy(() => import('./tabs/ServiceLog'))
 const SystemActivityTab = lazy(() => import('./tabs/SystemActivity'))
 const ServiceDashboardTab = lazy(() => import('./tabs/ServiceDashboard'))
@@ -74,6 +75,7 @@ function AdminTenantPicker() {
 
 const TABS = [
   { key: 'dashboard',         label: 'Dashboard',         component: DashboardTab        },
+  { key: 'organizations',     label: 'Organisations',     component: OrganizationsTab    },
   { key: 'service-log',       label: 'Service Log',       component: ServiceLogTab       },
   { key: 'system-activity',   label: 'System Activity',   component: SystemActivityTab   },
   { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboardTab },
@@ -141,7 +143,9 @@ function AdminAccessDenied({ label = 'this admin screen' }) {
 
 // Platform-admin tools, never shown to an organisation's admin (M-113: Copy
 // Division reaches every organisation). The server refuses them too.
-const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(['sys-maint-copy-division'])
+// The server keeps these to platform admins: each holds every organisation's data
+// (MIPM-149). A tenant admin saw the menu items and a screen whose data was refused.
+const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(['sys-maint-copy-division', 'sys-reports-access', 'sys-exception-log'])
 
 function withoutPlatformOnly(nav) {
   return nav.reduce((acc, item) => {
@@ -932,6 +936,8 @@ function MIMSAdminShellInner() {
   const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
   const visibleTabs = TABS.filter(t => {
     if (t.key === 'system') return systemNav.length > 0
+    // Creating and running organisations is the platform admin's job alone (MIPM-132).
+    if (t.key === 'organizations') return hasGlobalAdminScope(user)
     return true
   })
   useEffect(() => {

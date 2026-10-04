@@ -21,7 +21,7 @@ const DESTINATIONS = [
   { label: 'Case Query', to: '/case-query', icon: 'search', module: 'mims_core' },
   { label: 'Transmissions', to: '/transmissions', icon: 'transmissions', module: 'transmissions' },
   { label: 'Browse Content', to: '/browse-content', icon: 'browse', module: 'content_mgmt' },
-  { label: 'Content Management', to: '/content', icon: 'content', module: 'content_mgmt', adminOnly: true },
+  { label: 'Content Management', to: '/content', icon: 'content', module: 'content_mgmt' },
   { label: 'Reports', to: '/reports', icon: 'reports', module: 'reports', adminOnly: true },
   { label: 'Response Log', to: '/response-log', icon: 'content' },
   { label: 'MIMS Admin', to: '/mims-admin', icon: 'admin', module: 'admin_console', adminOnly: true },

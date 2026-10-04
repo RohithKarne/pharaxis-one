@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
+import TransmissionSignModal from './TransmissionSignModal'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
@@ -133,7 +134,7 @@ function computePcCompletion(data, fields, formConfig, sectionName) {
 export default function CasePCTab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave,
+  saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -164,10 +165,11 @@ export default function CasePCTab({
 
   useEffect(() => { loadPCVersions(); loadPcTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLocked = (ver) => ver && ver.is_locked === 1
+  // A closed case is read-only whatever its versions say (MIPM-208).
+  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestPcVersion = pcVersions.length > 0 ? pcVersions[pcVersions.length - 1] : null
-  const canCreatePcVersion = !latestPcVersion || isClosed(latestPcVersion)
+  const canCreatePcVersion = !caseClosed && (!latestPcVersion || isClosed(latestPcVersion))
   const pcCompletionByTab = useMemo(() => {
     const versionId = activePcVer?.id
     if (!versionId) return {}
@@ -265,8 +267,8 @@ export default function CasePCTab({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to close version')
-      setPcVersions(prev => prev.map(v => v.id === activePcVer.id ? { ...v, status: data.status || 'Closed' } : v))
-      setActivePcVer(prev => (prev ? { ...prev, status: data.status || 'Closed' } : prev))
+      setPcVersions(prev => prev.map(v => v.id === activePcVer.id ? { ...v, status: data.status || 'Closed', is_locked: data.is_locked } : v))
+      setActivePcVer(prev => (prev ? { ...prev, status: data.status || 'Closed', is_locked: data.is_locked } : prev))
       setSavedMsg('PC version closed'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) {
       toast.error(err.message)
@@ -336,13 +338,20 @@ export default function CasePCTab({
     finally { setPcTxSaving(false) }
   }
 
-  async function updatePcTxStatus(txId, status) {
+  // Closed and moving back out need an e-signature (MIPM-164); the sign
+  // box calls back here with it and shows any refusal itself.
+  const PC_TX_SIGNED = ['Closed']
+  const [pcTxSign, setPcTxSign] = useState(null)
+  async function updatePcTxStatus(txId, status, sign = null) {
+    const current = pcTransmissions.find(t => t.id === txId)?.status
+    if (!sign && (PC_TX_SIGNED.includes(status) || PC_TX_SIGNED.includes(current))) { setPcTxSign({ txId, status }); return '' }
     try {
-      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status, ...sign }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTransmissions(prev => prev.map(t => t.id === txId ? data : t))
-    } catch (err) { toast.error(err.message) }
+      return ''
+    } catch (err) { if (sign) return err.message; toast.error(err.message); return err.message }
   }
 
   return (
@@ -358,11 +367,11 @@ export default function CasePCTab({
         >
           {pcClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
+        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>
-      {!canCreatePcVersion && (
+      {!canCreatePcVersion && !caseClosed && (
         <div className="cf-inline-note">Close the current PC version before creating a new version.</div>
       )}
 
@@ -390,14 +399,16 @@ export default function CasePCTab({
                 onClick={() => { setActivePcVer(v); loadPCTab(v.id, activePcTab) }}
               >
                 <span className="cf-version-label">Version #{v.version_number}</span>
-                {v.is_locked && <span className="cf-lock-icon">Locked</span>}
+                {!!v.is_locked && <span className="cf-lock-icon">Locked</span>}
                 <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
           </div>
 
           {isLocked(activePcVer) && (
-            <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
+            <div className="cf-locked-notice">{caseClosed
+              ? 'This case is closed (read-only). Reopen the case to make changes.'
+              : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
 
           <div className="cf-case-workspace cf-pc-workspace">
@@ -442,7 +453,7 @@ export default function CasePCTab({
               <label>Assign To (Quality Team)</label>
               <select value={pcTxForm.assigned_to_id} onChange={e => setPcTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
                 <option value="">— Select Assignee —</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {handoffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
             <div className="cf-form-field">
@@ -467,6 +478,17 @@ export default function CasePCTab({
         </div>
       )}
 
+      <TransmissionSignModal
+        key={pcTxSign ? `${pcTxSign.txId}-${pcTxSign.status}` : 'none'}
+        target={pcTxSign}
+        what="Quality routing"
+        onCancel={() => setPcTxSign(null)}
+        onConfirm={async (password, reason) => {
+          const msg = await updatePcTxStatus(pcTxSign.txId, pcTxSign.status, { password, reason })
+          if (!msg) setPcTxSign(null)
+          return msg
+        }}
+      />
       <div className="cf-tx-tracker">
         <div className="cf-tx-tracker-title">PC Quality Routing Tracker</div>
         {pcTxLoading && <div className="cf-empty-msg">Loading routings…</div>}

@@ -9,9 +9,12 @@ function authoringSourceLabel(item) {
   return 'Uploaded'
 }
 
-export default function BrowseSection({ token }) {
+// Selected rows use the pale --primary-tint: --primary-light is a dark shade in
+// every theme, which left dark text on navy (MIPM-217).
+// `types` limits the switcher; Browse Content shows this for FAQs only (MIPM-216).
+export default function BrowseSection({ token, types = ['documents', 'faqs'] }) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
-  const [contentType, setContentType] = useState('documents')
+  const [contentType, setContentType] = useState(types[0])
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -102,7 +105,7 @@ export default function BrowseSection({ token }) {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <div
             onClick={() => setSelectedFolderId(null)}
-            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === null ? 'var(--primary-light,#f0f4ff)' : 'transparent', fontWeight: selectedFolderId === null ? 600 : 400, color: selectedFolderId === null ? 'var(--primary)' : 'var(--text-primary)' }}>
+            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === null ? 'var(--primary-tint, #f0f4ff)' : 'transparent', fontWeight: selectedFolderId === null ? 600 : 400, color: selectedFolderId === null ? 'var(--primary)' : 'var(--text-primary)' }}>
             <span>All Content</span>
           </div>
           {folders.map(f => {
@@ -110,7 +113,7 @@ export default function BrowseSection({ token }) {
             return (
               <div key={f.id}
                 onClick={() => setSelectedFolderId(f.id)}
-                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === f.id ? 'var(--primary-light,#f0f4ff)' : 'transparent', fontWeight: selectedFolderId === f.id ? 600 : 400, color: selectedFolderId === f.id ? 'var(--primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === f.id ? 'var(--primary-tint, #f0f4ff)' : 'transparent', fontWeight: selectedFolderId === f.id ? 600 : 400, color: selectedFolderId === f.id ? 'var(--primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'var(--bg)' }}
                 onMouseLeave={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'transparent' }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
@@ -124,7 +127,7 @@ export default function BrowseSection({ token }) {
       <div style={{ width: selectedItem ? 340 : '100%', flexShrink: 0, borderRight: selectedItem ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
-            {[{ key: 'documents', label: 'Documents' }, { key: 'faqs', label: 'FAQs' }].map(t => (
+            {[{ key: 'documents', label: 'Documents' }, { key: 'faqs', label: 'FAQs' }].filter(t => types.includes(t.key)).map(t => (
               <button key={t.key}
                 onClick={() => { setContentType(t.key); setShowBookmarks(false) }}
                 style={{ padding: '6px 14px', border: 'none', background: contentType === t.key && !showBookmarks ? 'var(--primary)' : '#fff', color: contentType === t.key && !showBookmarks ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: contentType === t.key && !showBookmarks ? 600 : 400 }}
@@ -162,7 +165,7 @@ export default function BrowseSection({ token }) {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No published {contentType} found.</div>
           ) : (
             items.map(item => (
-                <div key={item.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 8, background: selectedItem && selectedItem.id === item.id ? 'var(--primary-light, #f0f4ff)' : 'transparent' }}>
+                <div key={item.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 8, background: selectedItem && selectedItem.id === item.id ? 'var(--primary-tint, #f0f4ff)' : 'transparent' }}>
                 <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openItem(item)}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{item.name || item.title || item.question || '(Untitled)'}</div>
                 {contentType === 'documents' && (
@@ -253,7 +256,7 @@ export default function BrowseSection({ token }) {
                         )}
                       </div>
                     )}
-                    {selectedItem.file_path && (
+                    {(selectedItem.has_file || selectedItem.file_path) && (
                       <div style={{ marginTop: 20 }}>
                         <a href={`/api/cm/documents/${selectedItem.id}/download`} target="_blank" rel="noreferrer"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary)', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>

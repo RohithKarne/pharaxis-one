@@ -334,7 +334,7 @@ function HistoryTab({ token }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {runs.map(run => (
           <div key={run.id} onClick={() => loadDetail(run)}
-            style={{ padding: '12px 14px', border: `1px solid ${selected?.id === run.id ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', background: selected?.id === run.id ? 'var(--primary-light, #f0ebff)' : 'var(--surface)' }}>
+            style={{ padding: '12px 14px', border: `1px solid ${selected?.id === run.id ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', background: selected?.id === run.id ? 'var(--primary-tint, #f0ebff)' : 'var(--surface)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(run.health_score) }}>{run.health_score}%</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(run.started_at).toLocaleDateString()}</span>

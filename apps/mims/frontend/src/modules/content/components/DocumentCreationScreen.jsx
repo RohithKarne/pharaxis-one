@@ -363,6 +363,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                 </select>
               </div>
 
+              {/* The chosen tile's grey label could not be read on its fill (MIPM-200);
+                  the fill is now the pale --primary-tint and the label primary (MIPM-217). */}
               {form.response_doc_type === 'File' && (
                 <div style={{ display: 'flex', gap: 6, paddingTop: 20 }}>
                   <div
@@ -371,11 +373,11 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                       width: 54, height: 50, border: `2px dashed ${contentMode === 'upload' ? 'var(--primary)' : 'var(--border)'}`,
-                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'upload' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'upload' ? 'var(--primary-tint, #eef2ff)' : 'var(--bg)',
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'upload' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
                   </div>
                   <div
                     onClick={() => setFileMode('online')}
@@ -383,11 +385,11 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                       width: 54, height: 50, border: `2px dashed ${contentMode === 'online' ? 'var(--primary)' : 'var(--border)'}`,
-                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'online' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'online' ? 'var(--primary-tint, #eef2ff)' : 'var(--bg)',
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'online' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
                   </div>
                   <div
                     onClick={() => setFileMode('m365')}
@@ -395,11 +397,11 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                       width: 64, height: 50, border: `2px dashed ${contentMode === 'm365' ? 'var(--primary)' : 'var(--border)'}`,
-                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'm365' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'm365' ? 'var(--primary-tint, #eef2ff)' : 'var(--bg)',
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'm365' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
                 </div>
@@ -579,7 +581,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                         Selected — {selectedModules.length} module{selectedModules.length !== 1 ? 's' : ''} in order
                       </div>
                       {selectedModules.map((m, idx) => (
-                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: idx < selectedModules.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--primary-light, #eef2ff)' }}>
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: idx < selectedModules.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--primary-tint, #eef2ff)' }}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', minWidth: 20, textAlign: 'center' }}>{idx + 1}</span>
                           <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
                             {m.name}
@@ -675,7 +677,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                 <label className="cm-form-label">Additional Expiry Alert Recipients</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg)', minHeight: 38 }}>
                   {(form.expiry_alert_recipients || []).map((email, i) => (
-                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--primary-light, #eef2ff)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
+                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--primary-tint, #eef2ff)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
                       {email}
                       <button type="button" onClick={() => setForm(p => ({ ...p, expiry_alert_recipients: p.expiry_alert_recipients.filter((_, j) => j !== i) }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 0, lineHeight: 1 }}>✕</button>
                     </span>
@@ -772,7 +774,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   <label className="cm-form-label">Version Bump *</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {['minor', 'major'].map(bt => (
-                      <label key={bt} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', border: `1px solid ${form.bump_type === bt ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, background: form.bump_type === bt ? 'var(--primary-light, #f0ebff)' : 'var(--surface)' }}>
+                      <label key={bt} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', border: `1px solid ${form.bump_type === bt ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, background: form.bump_type === bt ? 'var(--primary-tint, #f0ebff)' : 'var(--surface)' }}>
                         <input type="radio" name="bump_type" value={bt} checked={form.bump_type === bt} onChange={() => setForm(p => ({ ...p, bump_type: bt }))} style={{ margin: 0 }} />
                         {bt === 'minor' ? 'Minor (1.x)' : 'Major (x.0)'}
                       </label>

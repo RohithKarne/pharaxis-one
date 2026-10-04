@@ -436,44 +436,9 @@ export default function OrganisationsView({ H, flash }) {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  {[
-                    {
-                      name: 'Workflow States',
-                      desc: 'State count, baseline states present',
-                      passed: (org.readiness?.counts?.workflowStates || 0) > 0,
-                      link: '#/admin/workflow'
-                    },
-                    {
-                      name: 'Picklists',
-                      desc: 'Custom picklists configured',
-                      passed: (org.readiness?.counts?.picklists || 0) > 0,
-                      link: '#/admin/picklists'
-                    },
-                    {
-                      name: 'Form Rules & Validation',
-                      desc: 'Active form rules count',
-                      passed: (org.readiness?.counts?.formRules || 0) > 0,
-                      link: '#/admin/forms'
-                    },
-                    {
-                      name: 'Security Groups',
-                      desc: 'Active security groups & privilege templates',
-                      passed: (org.readiness?.counts?.securityGroups || 0) > 0,
-                      link: '#/admin/security'
-                    },
-                    {
-                      name: 'Case Numbering',
-                      desc: 'Prefix, sequence, format defined',
-                      passed: ((org.readiness?.counts?.caseNumbering || 0) > 0 || org.readiness?.counts?.missingCaseNumbers === 0),
-                      link: '#/admin/casenumbering'
-                    },
-                    {
-                      name: 'Content Pack & Help',
-                      desc: 'Baseline help articles & starter folders',
-                      passed: ((org.readiness?.counts?.folders || 0) > 0 || (org.readiness?.counts?.helpTotal || 0) > 0),
-                      link: '#/admin/content'
-                    }
-                  ].map((item, idx) => (
+                  {/* The tiles are the server's own checks, the same ones that make the
+                      percentage above, so the two can never disagree (MIPM-133). */}
+                  {(org.readiness?.checks || []).map(check => ({ name: check.label, desc: check.detail, passed: check.ok })).map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${item.passed ? '#c3e6cb' : '#ffeeba'}`, borderRadius: 8, padding: 12, background: item.passed ? '#f8fff9' : '#fffaf0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ fontSize: 18 }}>
@@ -484,11 +449,6 @@ export default function OrganisationsView({ H, flash }) {
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.desc}</div>
                         </div>
                       </div>
-                      {!item.passed && (
-                        <a href={item.link} className="btn btn-outline" style={{ fontSize: 11, textDecoration: 'none', padding: '4px 8px', borderColor: '#856404', color: '#856404' }}>
-                          Setup Now
-                        </a>
-                      )}
                     </div>
                   ))}
                 </div>

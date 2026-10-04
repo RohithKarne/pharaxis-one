@@ -315,27 +315,27 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
       <div style={card}>
         <h3 style={h3}>Tailoring Options</h3>
         <div style={{ marginBottom: 12 }}>
-          <label style={lbl}>Country Default</label>
+          <label style={lbl}>Country Default<NotInEffect k="country_default" /></label>
           <select className="form-control" value={form.country_default ?? ''} onChange={e => set('country_default', e.target.value)}>
             <option value="">— Select —</option>
             {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
           </select>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={lbl}>Personal Info</label>
+          <label style={lbl}>Personal Info<NotInEffect k="personal_info_visibility" /></label>
           <select className="form-control" value={form.personal_info_visibility ?? 'visible'} onChange={e => set('personal_info_visibility', e.target.value)}>
             <option value="visible">Visible</option>
             <option value="hidden">Hidden</option>
           </select>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={lbl}>Date Format</label>
+          <label style={lbl}>Date Format<NotInEffect k="date_format" /></label>
           <select className="form-control" value={form.date_format ?? 'YYYY-MM-DD'} onChange={e => set('date_format', e.target.value)}>
             {DATE_FORMATS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={lbl}>Default Case Priority</label>
+          <label style={lbl}>Default Case Priority<NotInEffect k="default_case_priority" /></label>
           <select className="form-control" value={form.default_case_priority ?? ''} onChange={e => set('default_case_priority', e.target.value)}>
             <option value="">— Select —</option>
             {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
@@ -368,10 +368,37 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
 }
 
 // ── Shared field helpers ────────────────────────────────────────────────────
+// Saved here but read by nothing else in MIMS (MIPM-139): each shows a tag so an
+// administrator does not believe the setting changed how MIMS behaves. Remove a
+// key from this list in the same change that makes MIMS act on it.
+const NOT_IN_EFFECT = new Set([
+  'country_default', 'personal_info_visibility', 'date_format', 'default_case_priority',
+  'ce_lookup_city_zip', 'ce_lookup_rep_zip', 'ce_lookup_msl', 'ce_suppress_ae',
+  'ce_suppress_pc', 'ce_lock_entered_date', 'ce_sort_product_by_status',
+  'ce_allow_new_qa_case', 'ce_allow_field_translation', 'ce_max_contacts',
+  'ce_max_questions', 'num_case_number', 'num_ae_mode', 'num_pc_mode',
+  'resp_allow_letters', 'resp_custom_letters_mode', 'resp_store_secured_pdf',
+  'resp_allow_email', 'email_attachment_format', 'fax_server_domain',
+  'fax_out_address_mask', 'fax_out_subject', 'fax_out_success_phrase',
+  'ae_auto_snapshot_on_referral', 'ae_country_of_occurrence', 'ae_delete_cancel_mode',
+  'ae_med_types', 'ae_require_death_date', 'ae_contact_type_to_occupation',
+  'ae_default_report_type', 'ae_force_commit_cancel', 'ae_product_mode', 'ae_seriousness',
+  'ae_include_attachments', 'ae_integration_method', 'pc_auto_snapshot_on_referral',
+  'pc_delete_cancel_mode', 'pc_force_commit_cancel', 'pc_validate_case_entry',
+  'comp_notif_active', 'comp_notif_require_ae', 'comp_notif_include_letter',
+  'comp_notif_email_template', 'comp_notif_email_to', 'comp_notif_require_pc',
+  'comp_notif_include_snapshot', 'comp_notif_save_attachment', 'comp_rep_active',
+  'comp_rep_email_template', 'comp_rep_trigger', 'comp_rep_types', 'comp_msl_active',
+  'comp_msl_email_template',
+])
+function NotInEffect({ k }) {
+  if (!NOT_IN_EFFECT.has(k)) return null
+  return <span title="Saved, but MIMS does not act on this setting yet." style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: '#7a4f01', background: '#fff4d6', border: '1px solid #ffe69c', borderRadius: 4, padding: '0 5px' }}>Not in effect yet</span>
+}
 function FText({ form, set, k, label, ph, type = 'text' }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <label style={lbl}>{label}</label>
+      <label style={lbl}>{label}<NotInEffect k={k} /></label>
       <input className="form-control" type={type} value={form[k] ?? ''} placeholder={ph}
         onChange={e => set(k, e.target.value)} />
     </div>
@@ -380,7 +407,7 @@ function FText({ form, set, k, label, ph, type = 'text' }) {
 function FSelect({ form, set, k, label, options }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <label style={lbl}>{label}</label>
+      <label style={lbl}>{label}<NotInEffect k={k} /></label>
       <select className="form-control" value={form[k] ?? ''} onChange={e => set(k, e.target.value)}>
         {options.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
       </select>
@@ -390,7 +417,7 @@ function FSelect({ form, set, k, label, options }) {
 function FCheck({ form, set, k, label }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
-      <input type="checkbox" checked={!!form[k]} onChange={e => set(k, e.target.checked)} /> {label}
+      <input type="checkbox" checked={!!form[k]} onChange={e => set(k, e.target.checked)} /> {label}<NotInEffect k={k} />
     </label>
   )
 }
@@ -402,7 +429,7 @@ function FMulti({ form, set, k, label, options }) {
   }
   return (
     <div style={{ marginBottom: 12 }}>
-      <label style={lbl}>{label}</label>
+      <label style={lbl}>{label}<NotInEffect k={k} /></label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         {options.map(v => (
           <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
@@ -466,6 +493,7 @@ function CaseEntryFields({ form, set }) {
       </div>
       <div style={card}>
         <h3 style={h3}>Numbering Options</h3>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Case numbers are set under System › Setup › Forms &amp; Fields › Case Numbering.</div>
         <FText form={form} set={set} k="num_case_number" label="Case Number" ph="e.g. CASE-{YYYY}-{seq}" />
         <FSelect form={form} set={set} k="num_ae_mode" label="AE" options={[['same', 'Same case number'], ['new', 'New case number']]} />
         <FSelect form={form} set={set} k="num_pc_mode" label="PC" options={[['same', 'Same case number'], ['new', 'New case number']]} />
@@ -473,7 +501,7 @@ function CaseEntryFields({ form, set }) {
       <div style={card}>
         <h3 style={h3}>Response Options</h3>
         <FCheck form={form} set={set} k="resp_allow_letters" label="Allow response letters" />
-        {form.resp_allow_letters && (
+        {!!form.resp_allow_letters && (
           <FSelect form={form} set={set} k="resp_custom_letters_mode" label="Custom letters"
             options={[['auto_on', 'Auto-on'], ['auto_on_off', 'Auto on & off'], ['manual_on_off', 'Manual on & off']]} />
         )}

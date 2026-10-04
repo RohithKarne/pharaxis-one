@@ -64,7 +64,7 @@ router.get('/reviews', authenticate, async (req, res) => {
     const scope = reviewOrgFilter(req);
     const [reviews] = await pool.execute(
       `SELECT r.*, cr.status AS reviewer_status, cr.reason AS reviewer_reason, cr.reviewed_at,
-              u.name AS created_by_name
+              u.name AS created_by_name, COALESCE(d.name, f.question) AS document_name
        FROM cm_reviews r
        JOIN cm_reviewers cr ON r.id = cr.review_id
        LEFT JOIN users u ON r.created_by = u.id
@@ -149,8 +149,12 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
       [id, req.user.userId]
     );
     if (!reviewer) return res.status(404).json({ error: 'You are not a reviewer for this review.' });
+    if (review.status !== 'Open') return res.status(409).json({ error: 'This review is closed; its decisions can no longer change.' });
 
-    const validStatuses = ['Ongoing', 'Approved', 'Rejected', 'Withdrawn'];
+    // MIPM-178: the decisions the reviewer's dialog offers. The route accepted only
+    // Approved/Withdrawn besides Ongoing/Rejected, so Accepted, Accepted with
+    // Changes and Declined were refused and a reviewer could only reject.
+    const validStatuses = ['Ongoing', 'Accepted', 'Accepted with Changes', 'Declined', 'Rejected', 'Approved', 'Withdrawn'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
     }
@@ -160,6 +164,11 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
       [status, reason || null, id, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'REVIEWER_STATUS', 'cm_review', Number(id), { status, reason });
+    // MIPM-179: the last decision closes the review — there was no way to close one on screen.
+    if (review.status === 'Open' && status !== 'Ongoing' && !(await undecidedCount(id))) {
+      const wasRejected = await closeReview(review, req);
+      return res.json({ message: wasRejected ? 'Decision saved. The review is closed and the document returned to Draft.' : 'Decision saved. The review is closed and the document is ready for approval.', closed: true, wasRejected });
+    }
     res.json({ message: 'Reviewer status updated.' });
   } catch (err) {
     console.error('PUT /cm/reviews/:id/reviewer-status error:', err);
@@ -167,7 +176,66 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cm/reviews/:id/close — close review (doc → Approved, or Draft if any reviewer rejected)
+// MIPM-179: a review closes when every reviewer has decided — by itself after the
+// last decision, or by its owner. Closing never approves: approval is the
+// approver's e-signed step, and the author may not approve their own document.
+// Before, the owner (the author) could close a review nobody had answered and
+// the document became Approved with no decision and no signature.
+async function closeReview(review, req) {
+  const [[{ rejectedCount }]] = await pool.execute(
+    `SELECT COUNT(*) AS rejectedCount FROM cm_reviewers WHERE review_id = ? AND status = 'Rejected'`,
+    [review.id]
+  );
+  const wasRejected = rejectedCount > 0;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute("UPDATE cm_reviews SET status = 'Closed', updated_at = NOW() WHERE id = ?", [review.id]);
+    // Rejected → back to the author as Draft. Accepted → stays Under Review, ready for approval.
+    if (wasRejected && review.doc_type === 'document') {
+      await conn.execute("UPDATE cm_documents SET status = 'Draft', updated_at = NOW() WHERE id = ? AND status = 'Under Review'", [review.doc_id]);
+    } else if (wasRejected && review.doc_type === 'faq') {
+      await conn.execute("UPDATE cm_faqs SET status = 'Draft', updated_at = NOW() WHERE id = ? AND status = 'Under Review'", [review.doc_id]);
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  try {
+    const [[owner]] = review.doc_type === 'faq'
+      ? await pool.execute('SELECT created_by AS notify_user_id FROM cm_faqs WHERE id = ?', [review.doc_id])
+      : await pool.execute('SELECT COALESCE(owner_user_id, created_by) AS notify_user_id FROM cm_documents WHERE id = ?', [review.doc_id]);
+    if (owner?.notify_user_id) {
+      await pool.execute(
+        `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
+         VALUES (?, ?, ?, ?, '/content', ?)`,
+        [
+          owner.notify_user_id,
+          wasRejected ? 'cm_review_rejected' : 'content_review',
+          wasRejected ? 'Review Rejected' : 'Review complete',
+          wasRejected
+            ? `Review "${review.title}" was closed with rejections. The ${review.doc_type} has been returned to Draft.`
+            : `Review "${review.title}" is complete. The ${review.doc_type} is ready for approval.`,
+          JSON.stringify({ review_id: Number(review.id), doc_id: review.doc_id, doc_type: review.doc_type }),
+        ]
+      );
+    }
+  } catch (_) {}
+
+  await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(review.id), { doc_id: review.doc_id, doc_type: review.doc_type, wasRejected });
+  return wasRejected;
+}
+
+async function undecidedCount(reviewId) {
+  const [[row]] = await pool.execute("SELECT COUNT(*) AS n FROM cm_reviewers WHERE review_id = ? AND status = 'Ongoing'", [reviewId]);
+  return Number(row?.n || 0);
+}
+
+// POST /api/cm/reviews/:id/close — close a review whose reviewers have all decided
 router.post('/reviews/:id/close', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -179,78 +247,14 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
     if (review.status !== 'Open') {
       return res.status(400).json({ error: 'Only Open reviews can be closed.' });
     }
-
-    const [[{ rejectedCount }]] = await pool.execute(
-      `SELECT COUNT(*) AS rejectedCount FROM cm_reviewers WHERE review_id = ? AND status = 'Rejected'`,
-      [id]
-    );
-    const wasRejected = rejectedCount > 0;
-    const newDocStatus = wasRejected ? 'Draft' : 'Approved';
-
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      await conn.execute(
-        "UPDATE cm_reviews SET status = 'Closed', updated_at = NOW() WHERE id = ?",
-        [id]
-      );
-
-      if (review.doc_type === 'document') {
-        await conn.execute(
-          `UPDATE cm_documents SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'Under Review'`,
-          [newDocStatus, review.doc_id]
-        );
-      } else if (review.doc_type === 'faq') {
-        await conn.execute(
-          `UPDATE cm_faqs SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'Under Review'`,
-          [newDocStatus, review.doc_id]
-        );
-      }
-
-      await conn.commit();
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
+    if (await undecidedCount(id)) {
+      return res.status(409).json({ error: 'Every reviewer must decide before the review is closed.' });
     }
-
-    if (wasRejected) {
-      try {
-        let notifyUserId = null;
-        if (review.doc_type === 'document') {
-          const [[doc]] = await pool.execute(
-            `SELECT COALESCE(owner_user_id, created_by) AS notify_user_id FROM cm_documents WHERE id = ?`,
-            [review.doc_id]
-          );
-          notifyUserId = doc?.notify_user_id;
-        } else if (review.doc_type === 'faq') {
-          const [[faq]] = await pool.execute(
-            `SELECT created_by AS notify_user_id FROM cm_faqs WHERE id = ?`,
-            [review.doc_id]
-          );
-          notifyUserId = faq?.notify_user_id;
-        }
-        if (notifyUserId) {
-          await pool.execute(
-            `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
-             VALUES (?, 'cm_review_rejected', 'Review Rejected', ?, '/content', ?)`,
-            [
-              notifyUserId,
-              `Review "${review.title}" was closed with rejections. The ${review.doc_type} has been returned to Draft.`,
-              JSON.stringify({ review_id: Number(id), doc_id: review.doc_id, doc_type: review.doc_type }),
-            ]
-          );
-        }
-      } catch (_) {}
-    }
-
-    await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(id), { doc_id: review.doc_id, doc_type: review.doc_type, wasRejected });
-    const statusMsg = wasRejected
-      ? 'Review closed with rejections. Document returned to Draft.'
-      : 'Review closed. Document status set to Approved.';
-    res.json({ message: statusMsg, wasRejected });
+    const wasRejected = await closeReview(review, req);
+    res.json({
+      message: wasRejected ? 'Review closed with rejections. Document returned to Draft.' : 'Review closed. The document is ready for approval.',
+      wasRejected,
+    });
   } catch (err) {
     console.error('POST /cm/reviews/:id/close error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -368,6 +372,10 @@ router.patch('/reviews/:reviewId/config', authenticate, async (req, res) => {
     }
     const review = await getScopedReview(req, req.params.reviewId);
     if (!review) return res.status(404).json({ error: 'Review not found' });
+    // Any reviewer could change the mode for the whole review (MIPM-203).
+    if (review.created_by !== req.user.userId && !hasGlobalAdminScope(req.user)) {
+      return res.status(403).json({ error: 'Only the person who started this review can change its mode.' });
+    }
     await pool.execute(
       `INSERT INTO cm_review_config (doc_id, review_mode, updated_by)
        VALUES (?, ?, ?)

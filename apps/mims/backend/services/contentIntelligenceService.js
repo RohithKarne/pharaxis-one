@@ -76,11 +76,13 @@ const DEFAULT_EVIDENCE_RULES = [
     priority: 30,
   },
   {
-    rule_name: 'Template response requires active status',
+    // MIPM-190: templates move Draft → Approved → Published; none is ever 'Active',
+    // so this rule refused every template publish.
+    rule_name: 'Template must be approved or published',
     applies_to: 'template',
     mode_scope: 'response',
     check_type: 'status_in',
-    check_config: { values: ['Active'] },
+    check_config: { values: ['Approved', 'Published'] },
     severity: 'block',
     priority: 10,
   },
@@ -343,6 +345,7 @@ async function getContentSnapshot(orgId, contentType, contentId) {
          d.expiry_date,
          d.name,
          d.content_html,
+         d.standard_response_text,
          d.search_tags,
          d.usage_instructions,
          d.regulatory_ref,
@@ -367,7 +370,9 @@ async function getContentSnapshot(orgId, contentType, contentId) {
     );
     if (!rows[0]) return null;
     const row = rows[0];
-    const combined = [row.name, row.content_html, row.search_tags, row.usage_instructions, row.regulatory_ref].filter(Boolean).join(' ');
+    // MIPM-182: the standard response text is an uploaded document's own words; it
+    // was left out, so an uploaded SRD could not reach the minimum and never published.
+    const combined = [row.name, row.content_html, row.standard_response_text, row.search_tags, row.usage_instructions, row.regulatory_ref].filter(Boolean).join(' ');
     return {
       content_type: 'document',
       content_id: row.id,
@@ -457,7 +462,7 @@ function computeEvidenceRiskScore(context, blockers, warnings) {
   score += Math.min(20, context.open_contradictions * 5);
   if (context.is_expired) score += 20;
   if (context.mode === 'publish' && context.status !== 'Approved') score += 10;
-  if (context.mode === 'response' && context.status !== 'Active' && context.content_type === 'template') score += 10;
+  if (context.mode === 'response' && !['Approved', 'Published'].includes(context.status) && context.content_type === 'template') score += 10;
   if (context.content_length < 40) score += 10;
   return clamp(score, 0, 100);
 }
@@ -633,7 +638,7 @@ async function listEvidenceRuns({ orgId, limit = 50 }) {
 async function loadContradictionCorpus(orgId, includeNonPublished = false) {
   const docStatuses = includeNonPublished ? ['Draft', 'CheckedOut', 'Pending', 'Under Review', 'Approved', 'Published'] : ['Approved', 'Published'];
   const faqStatuses = includeNonPublished ? ['Draft', 'CheckedOut', 'Pending', 'Under Review', 'Approved', 'Published'] : ['Approved', 'Published'];
-  const tmplStatuses = includeNonPublished ? ['Active', 'Inactive'] : ['Active'];
+  const tmplStatuses = includeNonPublished ? ['Draft', 'Approved', 'Published'] : ['Approved', 'Published'];
 
   const [documents] = await pool.execute(
     `SELECT d.id, d.name, d.content_html, d.usage_instructions

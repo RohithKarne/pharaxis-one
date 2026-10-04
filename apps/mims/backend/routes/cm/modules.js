@@ -18,6 +18,38 @@ const {
 
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+const { publishedOnly } = require('../../middleware/cmAccess');
+const bcrypt = require('bcrypt');
+
+// MIPM-191: a module's status came straight from the request, so an author could
+// save one as Published — no review, no approval — and the response builder
+// offered it to agents at once. Approved needs content.approve and Published
+// needs content.publish; an author saves Draft or Pending.
+async function moduleStatusAllowed(req, status, previous) {
+  if (status === previous) return true;
+  if (status === 'Approved') return userHasActivityPrivilege(req.user, 'content.approve');
+  if (status === 'Published') return userHasActivityPrivilege(req.user, 'content.publish');
+  return true;
+}
+// True when a save would change a module's content (not just its status).
+const MODULE_CONTENT_FIELDS = ['folder_id', 'module_type', 'name', 'content_html', 'language', 'search_tags',
+  'usage_instructions', 'document_category', 'standard_response_text'];
+function moduleContentChanged(existing, body, file) {
+  if (file) return true;
+  const text = (v) => String(v ?? '').trim();
+  const day = (v) => (v instanceof Date ? v.toISOString() : text(v)).slice(0, 10);
+  for (const key of MODULE_CONTENT_FIELDS) {
+    if (body[key] !== undefined && text(body[key]) !== text(existing[key])) return true;
+  }
+  for (const key of ['activation_date', 'expiry_date']) {
+    if (body[key] !== undefined && day(body[key]) !== day(existing[key])) return true;
+  }
+  for (const key of ['publish_as_pdf', 'send_as_pdf']) {
+    if (body[key] !== undefined && parseBoolean(body[key], false) !== !!Number(existing[key] || 0)) return true;
+  }
+  return false;
+}
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -248,6 +280,7 @@ router.get('/modules', authenticate, async (req, res) => {
     await ensureCmModulesSchema();
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
+    const draftsHidden = await publishedOnly(req);
     const buildQuery = (includeCreatedBy) => {
       let query = `
         SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''}
@@ -262,6 +295,7 @@ router.get('/modules', authenticate, async (req, res) => {
         params.push(req.user.orgId);
       }
       if (status) { query += ' AND m.status = ?'; params.push(status); }
+      if (draftsHidden) query += " AND m.status = 'Published'";
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
       if (search) {
         query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
@@ -296,6 +330,7 @@ router.get('/modules/:id', authenticate, async (req, res) => {
     await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);
     if (!moduleRow) return res.status(404).json({ error: 'Module not found.' });
+    if (moduleRow.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Module not found.' });
     return res.json({ module: moduleRow });
   } catch (err) {
     console.error('GET /cm/modules/:id error:', err);
@@ -335,6 +370,16 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
     }
 
     const resolvedStatus = isPastDate(expiry_date) ? 'Archived' : normalizeStatus(status, 'Draft');
+    // MIPM-220: a module could be created already Approved or Published, by its
+    // author, with no approval at all. New modules start as Draft or Pending.
+    if (['Approved', 'Published'].includes(resolvedStatus)) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'A new module starts as Draft or Pending; it is approved and published after it is created.' });
+    }
+    if (!(await moduleStatusAllowed(req, resolvedStatus, null))) {
+      await conn.rollback();
+      return res.status(403).json({ error: `You do not have permission to save a module as ${resolvedStatus}.` });
+    }
     const filePath = req.file ? req.file.path : null;
     const fileName = req.file ? req.file.originalname : null;
     const fileSize = req.file ? req.file.size : null;
@@ -440,6 +485,37 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
     const nextStatus = isPastDate(expiry_date || existing.expiry_date)
       ? 'Archived'
       : normalizeStatus(status, existing.status || 'Draft');
+    if (!(await moduleStatusAllowed(req, nextStatus, existing.status))) {
+      await conn.rollback();
+      return res.status(403).json({ error: `You do not have permission to save a module as ${nextStatus}.` });
+    }
+    // MIPM-219: the author could approve their own module, and the text of an
+    // approved or published module could be changed while it stayed published —
+    // approved clinical wording altered with no new approval. Documents and FAQs
+    // already refuse both.
+    if (nextStatus === 'Approved' && existing.status !== 'Approved' && Number(existing.created_by) === Number(req.user.userId)) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'The author of a module cannot approve it. An independent reviewer is required.' });
+    }
+    if (['Approved', 'Published', 'Archived'].includes(existing.status) && nextStatus !== 'Draft' && moduleContentChanged(existing, req.body, req.file)) {
+      await conn.rollback();
+      return res.status(409).json({ error: `This module is ${existing.status}, so its content cannot change. Set its status to Draft to edit it; it will need approval again.` });
+    }
+    // MIPM-220: approving or publishing is an electronic signature — password and
+    // reason — as it is for documents and FAQs. Modules took it from a dropdown.
+    const signing = ['Approved', 'Published'].includes(nextStatus) && nextStatus !== existing.status;
+    if (signing) {
+      const { esign_password: password, esign_reason: reason } = req.body;
+      if (!password || !String(reason || '').trim()) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Your password and a reason are required to save a module as ${nextStatus}.` });
+      }
+      const [[signer]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+      if (!signer?.password || !(await bcrypt.compare(String(password), signer.password))) {
+        await conn.rollback();
+        return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+      }
+    }
     const filePath = req.file ? req.file.path : existing.file_path;
     const fileName = req.file ? req.file.originalname : existing.file_name;
     const fileSize = req.file ? req.file.size : existing.file_size;
@@ -486,6 +562,11 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       module_id: updated?.module_id || existing.module_id || null,
       status: updated?.status || nextStatus,
     });
+
+    if (signing) {
+      const versionStr = `${updated.version_major || 1}.${updated.version_minor || 0}`;
+      await addVersionHistory('module', updated.id, versionStr, nextStatus, String(req.body.esign_reason).trim(), req.user.userId);
+    }
 
     const movedToArchived = existing.status !== 'Archived' && updated?.status === 'Archived';
     if (movedToArchived) {

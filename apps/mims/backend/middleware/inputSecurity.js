@@ -3,7 +3,10 @@
 const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-const SCRIPT_INJECTION_PATTERN = /<\s*\/?\s*script\b|javascript:|on[a-z]+\s*=/i;
+// An inline event handler is only a script inside a tag. The bare "on…=" test
+// matched ordinary text — "Concentration=5 mg/mL", "position=2", "config=" — and
+// refused it as an attack (MIPM-153).
+const SCRIPT_INJECTION_PATTERN = /<\s*\/?\s*script\b|javascript:|<[^>]*\bon[a-z]+\s*=/i;
 const SQLI_PATTERN = /\bunion\b\s+\bselect\b|\bor\b\s+1\s*=\s*1|\bdrop\b\s+table\b|--|\/\*|\*\//i;
 const COMMAND_INJECTION_PATTERN = /`|\$\(|\|\||&&|;\s*(?:rm|bash|sh|curl|wget|nc|python|node)\b/i;
 const HIGH_RISK_KEY_PATTERN = /(command|cmd|shell|exec|script|query|sql)/i;

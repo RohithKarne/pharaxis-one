@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
+const { platformSmtpConfigError } = require('../utils/mailSecurity');
 const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
 const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../services/leaverCasesService');
 const { validate, schemas } = require('../middleware/validate');
@@ -402,6 +403,9 @@ router.put('/config', authenticate, requireRole('platform_admin'), async (req, r
         return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
     }
+    const smtpError = await platformSmtpConfigError(req.body, pool);
+    if (smtpError) return res.status(400).json({ error: smtpError });
+
     const configPairs = {
       smtp_host,
       smtp_port: smtp_port !== undefined ? String(smtp_port) : undefined,
@@ -789,6 +793,8 @@ router.post('/users/:id/unlock', authenticate, requireRole('platform_admin'), as
        WHERE user_id = ?`,
       [id]
     );
+    // A password lock-out is cleared too: "Unlock" left it in place (MIPM-144).
+    await pool.execute('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [id]);
     await audit(req.user.userId, req.user.email, 'UNLOCK_USER_SECURITY', 'user', Number(id), {});
     res.json({ message: `${user.name} security lock state cleared.` });
   } catch (err) {
@@ -1357,10 +1363,16 @@ router.post('/orgs/:orgId/logo', authenticate, requireRole('platform_admin'), lo
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const logoUrl = `/storage/org_logos/${req.file.filename}`;
+    const [[previous]] = await pool.execute('SELECT logo_url FROM organisations WHERE id = ?', [req.params.orgId]);
     await pool.execute(
       'UPDATE organisations SET logo_url = ? WHERE id = ?',
       [logoUrl, req.params.orgId]
     );
+    // The replaced logo stayed in this publicly served folder forever (MIPM-197).
+    const old = previous?.logo_url;
+    if (old && old !== logoUrl && old.startsWith('/storage/org_logos/')) {
+      fs.promises.unlink(path.join(__dirname, '../storage/org_logos', path.basename(old))).catch(() => {});
+    }
     res.json({ success: true, logo_url: logoUrl });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error.' });

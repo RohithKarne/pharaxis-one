@@ -35,6 +35,14 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
+// MIPM-187: if the server dies without a clean shutdown (kill -9, crash), this
+// worker used to keep running — old code, against the same job queue and mailbox.
+// The parent's IPC channel closes when it dies; stop with it.
+process.on('disconnect', () => {
+  logger.warn({ pid: process.pid }, 'pollerProcess: parent process gone — shutting down');
+  process.kill(process.pid, 'SIGTERM');
+});
+
 process.on('uncaughtException', (err) => {
   logger.error({ pid: process.pid, err: err.message }, 'pollerProcess: uncaughtException — exiting for restart');
   try { stopPoller(); } catch (e) { logger.warn({ pid: process.pid, err: e.message }, 'pollerProcess: stopPoller error on uncaughtException'); }

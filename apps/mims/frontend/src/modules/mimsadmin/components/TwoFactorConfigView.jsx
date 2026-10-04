@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
+import { useAuth } from '../../../shared/context/AuthContext'
+import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 
 export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/two-factor', showSessionTimeout = true }) {
+  // Platform SMTP and the platform-admin timeout belong to the platform admin only (MIPM-143).
+  const { user } = useAuth()
+  const platform = hasGlobalAdminScope(user)
   const [orgs, setOrgs] = useState([])
   const [loading, setLoading] = useState(true)
   const [systemForm, setSystemForm] = useState({
@@ -28,10 +33,10 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
     try {
       const [orgRes, configRes] = await Promise.all([
         guardedFetch(`${apiBase}/orgs`, { headers: H }),
-        guardedFetch(`${apiBase}/config`, { headers: H }),
+        platform ? guardedFetch(`${apiBase}/config`, { headers: H }) : null,
       ])
       const orgData = await orgRes.json()
-      const configData = await configRes.json()
+      const configData = configRes ? await configRes.json() : {}
       setOrgs(orgData.orgs || [])
       setSystemForm(f => ({
         ...f,
@@ -161,6 +166,7 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
 
   return (
     <>
+      {platform && (
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-header"><h3>Platform SMTP for User 2FA Emails</h3></div>
         <div className="card-body">
@@ -232,8 +238,9 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
           </form>
         </div>
       </div>
+      )}
 
-      {showSessionTimeout && (
+      {showSessionTimeout && platform && (
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-header"><h3>Platform Admin Session Timeout</h3></div>
         <div className="card-body">

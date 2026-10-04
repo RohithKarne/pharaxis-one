@@ -104,14 +104,14 @@ export default function Dashboard({ onNavigateTab }) {
 
   // Each card optionally navigates to another tab when clicked
   const cards = [
-    { label: 'Organisations',        value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, tab: 'system', systemItem: 'sys-division-params' },
-    { label: 'Users',                value: kpis.users?.total || 0,         note: `${kpis.users?.active || 0} active`,         tab: null },
+    { label: 'Organisations',        value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, tab: 'organizations' },
+    { label: 'Users',                value: kpis.users?.total || 0,         note: `${kpis.users?.active || 0} active`,         tab: 'system', systemItem: 'sys-sec-users' },
     { label: 'Failed Logins 24h',    value: kpis.failedLogins24h || 0,      note: 'Security watch',                            tab: null },
-    { label: 'Locked 2FA Users',     value: kpis.lockedUsers || 0,          note: 'Needs review',                              tab: null },
+    { label: 'Locked 2FA Users',     value: kpis.lockedUsers || 0,          note: 'Needs review',                              tab: 'system', systemItem: 'sys-sec-users' },
     { label: 'Unread Notifications', value: kpis.unreadNotifications || 0,  note: 'In-app queue',                              tab: null },
     { label: 'Alert Events 24h',     value: kpis.alertEvents24h || 0,       note: 'Platform alerts',                           tab: null },
-    { label: 'Ready Orgs',           value: readiness.readyOrgs || 0,       note: `${readiness.attentionOrgs || 0} need attention`, tab: 'system', systemItem: 'sys-division-params' },
-    { label: 'Average Readiness',    value: `${readiness.averageScore || 0}%`, note: `${readiness.totalBlockers || 0} active blockers`, tab: 'system', systemItem: 'sys-division-params' },
+    { label: 'Ready Orgs',           value: readiness.readyOrgs || 0,       note: `${readiness.attentionOrgs || 0} need attention`, tab: 'organizations' },
+    { label: 'Average Readiness',    value: readiness.averageScore == null ? '—' : `${readiness.averageScore}%`, note: `${readiness.totalBlockers || 0} active blockers`, tab: 'organizations' },
   ]
 
   function openCase(caseId) {
@@ -190,7 +190,7 @@ export default function Dashboard({ onNavigateTab }) {
             {!loading && (
               <div style={{ display: 'grid', gap: 10 }}>
                 <div>
-                  Ready: <b>{readiness.readyOrgs || 0}</b> · Need attention: <b>{readiness.attentionOrgs || 0}</b> · Average score: <b>{readiness.averageScore || 0}%</b>
+                  Ready: <b>{readiness.readyOrgs || 0}</b> · Need attention: <b>{readiness.attentionOrgs || 0}</b> · Average score: <b>{readiness.averageScore == null ? '—' : `${readiness.averageScore}%`}</b>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   Activation depends on workflow, help, content, numbering, sites, and case data readiness.

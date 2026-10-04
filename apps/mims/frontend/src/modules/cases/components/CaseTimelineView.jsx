@@ -38,11 +38,16 @@ export default function CaseTimelineView({ caseId, headers }) {
     return events.filter(e => {
       const t = (e.type || '').toLowerCase();
       const f = filter.toLowerCase();
+      // Most entries are case_audit rows, told apart by their title (STATUS_CHANGED,
+      // AE_HANDOFF_STATUS, …), and e-signatures arrive as type "esign" — matching on
+      // type alone left Status, Transmissions and E-signatures empty (MIPM-171).
+      const title = String(e.title || '').toLowerCase();
+      const field = String(e.detail?.field || '').toLowerCase();
       if (f === 'audit' && t.includes('audit')) return true;
-      if (f === 'status' && t.includes('status')) return true;
+      if (f === 'status' && (t.includes('status') || t.includes('state') || title === 'status_changed')) return true;
       if (f === 'comments' && (t.includes('comment') || t.includes('msg'))) return true;
-      if (f === 'transmissions' && t.includes('transmission')) return true;
-      if (f === 'e-signatures' && (t.includes('signature') || t.includes('esignature'))) return true;
+      if (f === 'transmissions' && (t.includes('transmission') || title.includes('handoff'))) return true;
+      if (f === 'e-signatures' && (t.includes('esign') || t.includes('signature') || title.includes('esign') || field.includes('e-signature'))) return true;
       return t.includes(f) || f.includes(t);
     });
   }, [events, filter]);

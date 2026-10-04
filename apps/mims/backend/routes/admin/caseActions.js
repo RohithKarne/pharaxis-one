@@ -26,6 +26,7 @@ const { authenticate, requireRole, requireCapability, requireScopedCapability } 
 const { verifyCaseOrg } = require('../../services/caseHelpers');
 const flags = require('../../services/featureFlagsService');
 const actions = require('../../services/caseActionsService');
+const pool    = require('../../database/db');
 
 const FLAG  = 'cf.theme8_smart_actions';
 const ADMIN = ['admin', 'platform_admin'];
@@ -91,6 +92,11 @@ router.post('/cases/:caseId/run-macro', authenticate, requireScopedCapability('c
   try {
     if (!(await gated(req, res))) return;
     if (!(await verifyCaseOrg(req.params.caseId, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
+    // MIPM-168: a closed case is locked on the case screen; a macro could still
+    // change its fields or reopen it.
+    const [[closed]] = await pool.execute(
+      'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [req.params.caseId]);
+    if (Number(closed?.is_closed) === 1) return res.status(409).json({ error: 'This case is closed. Reopen it before running a macro.' });
     const { macro_id } = req.body || {};
     if (!macro_id) return res.status(400).json({ error: 'macro_id required' });
     const results = await actions.runMacro({

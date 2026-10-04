@@ -28,7 +28,7 @@ export default function CaseFormPage() {
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
-    statuses, users, formConfig,
+    statuses, users, handoffUsers, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
@@ -38,6 +38,10 @@ export default function CaseFormPage() {
     getFieldConfig, getPicklistOptions,
     headers, changeControlAsk, setChangeControlAsk,
   } = useCaseForm(id, token)
+
+  // A closed case refuses AE and PC changes on the server (MIPM-162); its tabs
+  // kept every edit button anyway, and each save failed (MIPM-208).
+  const caseClosed = Number(statuses.find(st => Number(st.id) === Number(caseData?.status_id))?.is_closed) === 1
 
   // Sections with their own save (MI, AE, PC) register here, so Save Case also
   // saves whatever changed in them — instead of showing "Saved" while their
@@ -268,6 +272,8 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'AE' && (
                 <CaseAETab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
+                  caseClosed={caseClosed}
+                  handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
                   formConfig={formConfig}
@@ -281,6 +287,8 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'PC' && (
                 <CasePCTab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
+                  caseClosed={caseClosed}
+                  handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
                   formConfig={formConfig}

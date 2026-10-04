@@ -338,6 +338,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
   const canGrantPlatformAdmin = isEdit && isPlatformAdmin(me)
 
   const [tab,     setTab]     = useState('general')
+  const [securityBusy, setSecurityBusy] = useState('')
   const [saving,  setSaving]  = useState(false)
   const [errors,  setErrors]  = useState({})
   const [apiErr,  setApiErr]  = useState('')
@@ -474,6 +475,19 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       showFlash('Password expired. User must reset on next login.')
     } catch { showFlash('Network error.', 'error') }
     finally { setExpiringNow(false) }
+  }
+
+  // Platform admin only: the lock message tells the user to ask for exactly this,
+  // and there was no button for it (MIPM-144).
+  async function handleSecurityAction(action, okText) {
+    setSecurityBusy(action)
+    try {
+      const r = await httpFetch(`/api/admin/platform/users/${editUser.id}/${action}`, { method: 'POST', headers: H })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { showFlash(d.error || 'Action failed.', 'error'); return }
+      showFlash(d.message || okText)
+    } catch { showFlash('Network error.', 'error') }
+    finally { setSecurityBusy('') }
   }
 
   async function handleChangePassword() {
@@ -772,6 +786,27 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     >
                       {pwdSaving ? 'Saving…' : 'Set Password'}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {canGrantPlatformAdmin && (
+                <div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 10 }}>Sign-in Security</div>
+                  <div className="ma-usr-expiry-card">
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Unlock clears failed sign-in and 2FA attempts. Reset 2FA removes the user's 2FA set-up, backup codes and remembered devices; they set it up again at next sign-in.
+                    </div>
+                    <div className="ma-usr-qa-actions">
+                      <button className="ma-usr-qa-btn" disabled={!!securityBusy}
+                        onClick={() => handleSecurityAction('unlock', 'Account unlocked.')}>
+                        {securityBusy === 'unlock' ? 'Unlocking…' : 'Unlock Account'}
+                      </button>
+                      <button className="ma-usr-qa-btn danger" disabled={!!securityBusy}
+                        onClick={() => handleSecurityAction('reset-2fa', 'User 2FA reset.')}>
+                        {securityBusy === 'reset-2fa' ? 'Resetting…' : 'Reset 2FA'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

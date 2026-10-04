@@ -4,7 +4,9 @@ const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
+const { sessionKey } = require('../utils/sessionKey');
 const { hasGlobalAdminScope, isAdminUser, normalizeRole } = require('../utils/adminScope');
+const { getUserModules } = require('../utils/userModules');
 
 function createAuthError(message, code, status = 401, shouldLogout = status === 401) {
   const err = new Error(message);
@@ -79,7 +81,9 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
 
   // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
   // Cache miss / Redis down → falls through to DB check transparently.
-  const cached = await sessionCacheGet(token);
+  // MIPM-172: sessions and the cache are keyed by the token's fingerprint.
+  const key = sessionKey(token);
+  const cached = await sessionCacheGet(key);
   if (cached) {
     // Re-verify JWT signature even on cache hit (catches key rotation edge cases)
     try {
@@ -112,8 +116,8 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
     accountName = account?.name || null;
 
     const [[sessionRow]] = await pool.execute(
-      'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
-      [token]
+      'SELECT id, expires_at, last_seen_at FROM sessions WHERE token = ? LIMIT 1',
+      [key]
     );
 
     if (sessionRow) {
@@ -123,6 +127,14 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
         throw createAuthError('Session expired. Please log in again.', 'SESSION_EXPIRED');
       }
+      // MIPM-211: the idle timeout was only the cookie's lifetime, so the token
+      // itself stayed valid for 8 hours. A session unused for longer than the
+      // timeout now ends here. Checked on a cache miss, so at least once a minute.
+      if (await sessionIdle(sessionRow.last_seen_at, decoded)) {
+        await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
+        throw createAuthError('You were signed out after a period without activity. Please log in again.', 'SESSION_IDLE');
+      }
+      await pool.execute('UPDATE sessions SET last_seen_at = NOW() WHERE id = ?', [sessionRow.id]);
     }
   } catch (err) {
     if (err?.code) throw err;
@@ -147,7 +159,7 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   };
 
   // Populate cache for subsequent requests
-  await sessionCacheSet(token, result);
+  await sessionCacheSet(key, result);
   return refusePendingPasswordReset(result, allowPasswordReset);
 }
 
@@ -189,6 +201,13 @@ async function sessionTimeoutMinutes(user) {
   } catch (_) { /* keep the default; the cookie is still renewed */ }
   _timeoutCache.set(key, { minutes, until: Date.now() + 60_000 });
   return minutes;
+}
+
+// True when a session's last use is older than its organisation's timeout.
+async function sessionIdle(lastSeenAt, user) {
+  const lastSeen = sessionExpiryMs(lastSeenAt);
+  if (!lastSeen || Number.isNaN(lastSeen)) return false;
+  return Date.now() - lastSeen > (await sessionTimeoutMinutes(user)) * 60 * 1000;
 }
 
 async function renewSessionCookie(res, user) {
@@ -355,7 +374,7 @@ async function requireAccessNotExpired(req, res, next) {
 /**
  * requireModule(moduleKey) — the admin's module grant, enforced on the server.
  * Same rule as the browser's ModuleAccessGuard: platform admins pass; everyone
- * else needs a user_module_permissions row for the module. Module grants were
+ * else needs the module from their role's defaults or a personal grant. Module grants were
  * checked only in the browser, so any signed-in user could call e.g. the report
  * APIs directly (T11 / M-69). Use after authenticate.
  */
@@ -363,11 +382,9 @@ function requireModule(moduleKey) {
   return async (req, res, next) => {
     try {
       if (hasGlobalAdminScope(req.user)) return next();
-      const [[row]] = await pool.execute(
-        'SELECT 1 AS ok FROM user_module_permissions WHERE user_id = ? AND module = ? AND can_access = 1 LIMIT 1',
-        [req.user?.userId, moduleKey]
-      );
-      if (row) return next();
+      // Same resolver as sign-in: role defaults, then personal rows (MIPM-134).
+      const modules = await getUserModules(req.user?.userId);
+      if (modules.includes(moduleKey)) return next();
       return res.status(403).json({
         error: 'You do not have access to this module.',
         error_code: 'MODULE_FORBIDDEN',
@@ -380,4 +397,4 @@ function requireModule(moduleKey) {
   };
 }
 
-module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };
+module.exports = { sessionIdle, authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };

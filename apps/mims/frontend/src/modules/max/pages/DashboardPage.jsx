@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
-import { formatAdminRoleLabel, isAdminUser } from '../../../shared/utils/adminScope.js'
+import { formatAdminRoleLabel, hasGlobalAdminScope, isAdminUser } from '../../../shared/utils/adminScope.js'
 import { prefetchRoutePath } from '../../../shared/utils/routePrefetch.js'
 
 const API = '/api'
@@ -87,7 +87,8 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { token, user, orgName, hasModuleAccess } = useAuth()
-  const canSeeObservability = isAdminUser(user)
+  // The exception log holds every organisation's errors, so only a platform admin is sent there (MIPM-151).
+  const canSeeObservability = hasGlobalAdminScope(user)
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]

@@ -7,10 +7,11 @@ const express = require('express');
 const { decryptMailboxSecret } = require('../services/mailboxCrypto');
 const fs = require('fs');
 const router = express.Router();
-const { authenticate, requireRole, requireCapability } = require('../middleware/auth');
+const { authenticate, requireRole, requireCapability, requireModule } = require('../middleware/auth');
 const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const {
   FIRST_TOUCH_SLA_HOURS,
   RESPONSE_SLA_HOURS,
@@ -686,6 +687,7 @@ router.get('/users', authenticate, async (req, res) => {
   try {
     const requestedOrgId = parsePositiveInt(req.query?.org_id);
     let rows;
+    let rowsOrgId = requestedOrgId;
     if (hasGlobalAdminScope(req.user)) {
       if (requestedOrgId) {
         [rows] = await pool.execute(
@@ -705,6 +707,7 @@ router.get('/users', authenticate, async (req, res) => {
       const { requestedOrgId: scopedOrgId, orgIds } = await resolveInboxScope(req, requestedOrgId);
       const targetOrgId = scopedOrgId || Number(req.user.orgId || orgIds[0] || 0);
       if (!targetOrgId) return res.json({ users: [] });
+      rowsOrgId = targetOrgId;
       [rows] = await pool.execute(
         `SELECT DISTINCT u.id, u.name, u.email, u.role
          FROM users u
@@ -713,6 +716,16 @@ router.get('/users', authenticate, async (req, res) => {
          ORDER BY u.name ASC`,
         [targetOrgId]
       );
+    }
+    // MIPM-212: ?can=transmission.approve keeps only people who can accept or
+    // close a PV / Quality hand-off — the hand-off pickers listed everyone,
+    // content managers included. Rights come from role, group or personal grant.
+    if (req.query?.can === 'transmission.approve') {
+      const allowed = [];
+      for (const u of rows) {
+        if (await userHasActivityPrivilege({ userId: u.id, role: u.role, orgId: rowsOrgId }, 'transmission.approve')) allowed.push(u);
+      }
+      rows = allowed;
     }
     res.json({ users: rows });
   } catch (err) {
@@ -780,12 +793,16 @@ router.delete('/templates/:tid', authenticate, requireCapability('inbox.configur
 });
 
 // POST /api/inbox/fetch — trigger immediate IMAP ingest for all active inbound accounts
-router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+// MIPM-157: everyone who works the Inbox sees "Fetch mail"; agents were refused.
+// Only their own organisations' mailboxes are fetched — and none when they have no
+// organisation (that used to mean every organisation's).
+router.post('/fetch', authenticate, requireModule('inbox'), async (req, res) => {
   try {
     const { ingestAccount } = require('../services/emailPoller');
     const { logService } = require('../services/serviceLogger');
     const scope = await resolveInboxScope(req);
-    const orgClause = hasPlatformAdminScope(req) || scope.orgIds.length === 0
+    if (!hasPlatformAdminScope(req) && scope.orgIds.length === 0) return res.json({ ingested: 0, failed: 0, failures: [] });
+    const orgClause = hasPlatformAdminScope(req)
       ? ''
       : `AND org_id IN (${scope.orgIds.map(() => '?').join(',')})`;
     const [accounts] = await pool.execute(

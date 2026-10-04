@@ -28,7 +28,9 @@ export default function ContentPage() {
   const { user, token } = useAuth()
   const [searchParams] = useSearchParams()
   const standalone = searchParams.get('standalone') === '1'
-  const [activeTab, setActiveTab] = useState(['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents')
+  // ?view=reviews opens a reviewer's tasks — where a review notification lands (MIPM-176).
+  const openReviews = searchParams.get('view') === 'reviews'
+  const [activeTab, setActiveTab] = useState(openReviews ? 'documents' : (['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents'))
   const [showFolders, setShowFolders] = useState(false)
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const flash = () => {}
@@ -107,7 +109,7 @@ export default function ContentPage() {
 
           <div className="cm-content workspace-panel-body">
             <Suspense fallback={<ContentSectionLoader />}>
-              {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
+              {activeTab === 'documents' && <DocumentsSection token={token} user={user} initialSubTab={openReviews ? 'reviews' : 'all'} />}
               {activeTab === 'modules' && <ModulesSection token={token} />}
               {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
               {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}

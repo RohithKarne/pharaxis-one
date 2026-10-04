@@ -6,10 +6,13 @@
  * CSS namespace: bc- (browse content)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../browse.css'
+// Published FAQs had no place in Browse Content, so agents could not read them
+// at all (MIPM-216); the Content Management browser is reused for FAQs only.
+const BrowseSection = lazy(() => import('../../content/components/BrowseSection'))
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -52,7 +55,7 @@ function DetailSidebar({ doc, token, onClose }) {
   useEffect(() => { setActiveTab('details') }, [doc])
 
   const hasHtml    = !!(doc?.content_html || doc?.assembled_html)
-  const hasFile    = !!(doc?.file_path && doc?.file_mime)
+  const hasFile    = !!((doc?.has_file || doc?.file_path) && doc?.file_mime)
   const isPdf      = hasFile && (doc?.file_mime || '').includes('pdf')
   const isImage    = hasFile && (doc?.file_mime || '').startsWith('image/')
   const canPreview = hasHtml || isPdf || isImage
@@ -154,7 +157,7 @@ function DetailSidebar({ doc, token, onClose }) {
             </div>
             <div className="bc-detail-row">
               <span className="bc-detail-label">Author</span>
-              <span className="bc-detail-val">{doc.author_name || doc.created_by || '—'}</span>
+              <span className="bc-detail-val">{doc.author_name || doc.created_by_name || '—'}</span>
             </div>
             <div className="bc-detail-row">
               <span className="bc-detail-label">Created</span>
@@ -470,7 +473,7 @@ export default function BrowseContentPage() {
             <span className="bc-total-badge">
               {contentTab === 'documents'
                 ? `${total} document${total !== 1 ? 's' : ''}`
-                : `${modTotal} module${modTotal !== 1 ? 's' : ''}`}
+                : contentTab === 'modules' ? `${modTotal} module${modTotal !== 1 ? 's' : ''}` : 'Published FAQs'}
             </span>
           </div>
         </div>
@@ -489,7 +492,17 @@ export default function BrowseContentPage() {
           >
             Modules
           </button>
+          <button
+            className={`bc-content-tab ${contentTab === 'faqs' ? 'bc-content-tab--active' : ''}`}
+            onClick={() => switchTab('faqs')}
+          >
+            FAQs
+          </button>
         </div>
+
+        {contentTab === 'faqs' && (
+          <Suspense fallback={null}><BrowseSection token={token} types={['faqs']} /></Suspense>
+        )}
 
         {/* ── Filters ─────────────────────────────────────────────────── */}
         {contentTab === 'documents' && (
@@ -563,7 +576,7 @@ export default function BrowseContentPage() {
         )}
 
         {/* ── Main layout ─────────────────────────────────────────────── */}
-        <div className="bc-layout">
+        {contentTab !== 'faqs' && <div className="bc-layout">
           {/* Folder sidebar */}
           <aside className="bc-folder-panel">
             <div className="bc-folder-heading">Folders</div>
@@ -737,7 +750,7 @@ export default function BrowseContentPage() {
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Detail sidebars */}

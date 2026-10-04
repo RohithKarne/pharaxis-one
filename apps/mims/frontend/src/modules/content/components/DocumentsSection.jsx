@@ -16,49 +16,22 @@ const DEFAULT_FILTERS = {
   include_expired: false,
 }
 
-function ReviewRowWithMode({ r, authHeaders, onOpen }) {
-  const [mode, setMode] = useState(r.review_mode || null)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, { headers: authHeaders })
-      .then(res => res.ok ? res.json() : null)
-      .then(d => { if (d?.config?.review_mode) setMode(d.config.review_mode) })
-      .catch(() => {})
-  }, [r.id]) // eslint-disable-line
-
-  async function toggleMode(newMode) {
-    if (saving) return
-    setSaving(true)
-    try {
-      const res = await httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, {
-        method: 'PATCH', headers: authHeaders,
-        body: JSON.stringify({ review_mode: newMode }),
-      })
-      if (res.ok) setMode(newMode)
-    } catch { /* silent */ }
-    setSaving(false)
-  }
-
+// The Sequential / Parallel switch was here, on every reviewer's task row. Nothing
+// reads the mode — reviewers have no order, so both behaved alike — and any
+// reviewer could flip it for the whole review. Removed until sequential review is
+// built (MIPM-203).
+function ReviewRow({ r, onOpen }) {
   return (
     <tr>
       <td style={{ fontWeight: 500 }}>{r.document_name}</td>
       <td>{r.title}</td>
       <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
-      <td><StatusBadge status={r.my_status || 'Ongoing'} /></td>
+      {/* The list returns the reviewer's own decision as reviewer_status; my_status is never set (MIPM-178). */}
+      <td><StatusBadge status={r.reviewer_status || r.my_status || 'Ongoing'} /></td>
       <td>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['sequential', 'parallel'].map(m => (
-            <button key={m} className={`cm-btn cm-btn-sm ${mode === m ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
-              style={{ textTransform: 'capitalize', opacity: saving ? 0.6 : 1 }}
-              onClick={() => toggleMode(m)} disabled={saving}>
-              {m === 'sequential' ? 'Sequential' : 'Parallel'}
-            </button>
-          ))}
-        </div>
-      </td>
-      <td>
-        <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
+        {r.status === 'Open'
+          ? <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
+          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Review closed</span>}
       </td>
     </tr>
   )
@@ -71,14 +44,15 @@ function getAuthoringSourceLabel(doc) {
   return 'Uploaded'
 }
 
-export default function DocumentsSection({ token, user }) {
+export default function DocumentsSection({ token, user, initialSubTab = 'all' }) {
   const { hasCapability } = useAuth()
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [subTab, setSubTab] = useState('all')
+  const [subTab, setSubTab] = useState(initialSubTab)
   const [checkedInDocs, setCheckedInDocs] = useState([])
   const [checkedOutDocs, setCheckedOutDocs] = useState([])
   const [docs, setDocs] = useState([])
   const [reviews, setReviews] = useState([])
+  const pendingReviews = reviews.filter(r => r.status === 'Open' && (r.reviewer_status || 'Ongoing') === 'Ongoing').length
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -318,7 +292,8 @@ export default function DocumentsSection({ token, user }) {
           Checked Out {checkedOutDocs.length > 0 && <span style={{ background: 'var(--warning, #f59e0b)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{checkedOutDocs.length}</span>}
         </div>
         <div className={`cm-sub-tab ${subTab === 'reviews' ? 'active' : ''}`} onClick={() => setSubTab('reviews')}>
-          My Review Tasks {reviews.length > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{reviews.length}</span>}
+          {/* The badge counted closed and already-decided reviews too (MIPM-205). */}
+          My Review Tasks {pendingReviews > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{pendingReviews}</span>}
         </div>
       </div>
 
@@ -403,7 +378,7 @@ export default function DocumentsSection({ token, user }) {
           )}
 
           {selectedDocIds.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-light, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-tint, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedDocIds.length} selected</span>
               {hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleBulkAction('publish')} disabled={bulkLoading}>Bulk Publish</button>}
               {hasCapability('content.publish') && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleBulkAction('archive')} disabled={bulkLoading}>Bulk Archive</button>}
@@ -458,7 +433,8 @@ export default function DocumentsSection({ token, user }) {
                         </div>
                       </td>
                       <td style={{ minWidth: 140 }}>{d.folder_name || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{d.version || '1.0'}</td>
+                      {/* MIPM-177: documents carry version_major/version_minor; there is no `version`, so every row read 1.0. */}
+                      <td style={{ textAlign: 'center' }}>{d.version_major ?? 1}.{d.version_minor ?? 0}</td>
                       <td><StatusBadge status={d.status} /></td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{d.checked_out_by_name || '—'}</td>
                       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—'}</td>
@@ -559,13 +535,12 @@ export default function DocumentsSection({ token, user }) {
                 <th>Review Title</th>
                 <th>Planned End Date</th>
                 <th>My Status</th>
-                <th>Review Mode</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {reviews.map(r => (
-                <ReviewRowWithMode key={r.id} r={r} authHeaders={authHeaders} onOpen={() => setReviewStatusItem(r)} />
+                <ReviewRow key={r.id} r={r} onOpen={() => setReviewStatusItem(r)} />
               ))}
             </tbody>
           </table>

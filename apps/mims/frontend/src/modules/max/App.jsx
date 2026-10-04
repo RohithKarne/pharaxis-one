@@ -11,7 +11,6 @@ import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import ExceptionToast from '../../shared/components/ExceptionToast'
 import adminRouteMap from '../../shared/config/adminRouteMap.json'
-import { isAdminUser } from '../../shared/utils/adminScope.js'
 
 // ── Eagerly loaded — part of the critical navigation path ────────────────────
 import LoginPage            from './pages/LoginPage'
@@ -46,12 +45,6 @@ function PageLoader() {
       Loading…
     </div>
   )
-}
-
-function AdminRoleGuard({ children }) {
-  const { user } = useAuth()
-  if (isAdminUser(user)) return children
-  return <Navigate to="/no-access" replace />
 }
 
 function LegacyAdminConsoleRedirect({ to }) {
@@ -266,10 +259,10 @@ function AppRoutes() {
           } />
           <Route path="/content" element={
             <ProtectedRoute loginPath="/content/login">
+              {/* Content managers author content too, not only admins; the server
+                  checks each action's capability (MIPM-136). */}
               <ModuleAccessGuard moduleKey="content_mgmt">
-                <AdminRoleGuard>
-                  <ContentPage />
-                </AdminRoleGuard>
+                <ContentPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
@@ -332,9 +325,10 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
+          {/* Every organisation's exceptions: platform admins only, as on the server (MIPM-151). */}
           <Route path="/exceptions" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              <ModuleAccessGuard moduleKey="platform_admin_console">
                 <ExceptionLogsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
@@ -372,7 +366,9 @@ function AppRoutes() {
           } />
           <Route path="/transmissions" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              {/* MIPM-173: the page's data needs the transmissions module (MIPM-150); guarding
+                  on mims_core let a reviewer open an empty page that said "Request blocked". */}
+              <ModuleAccessGuard moduleKey="transmissions">
                 <TransmissionsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
@@ -383,7 +379,7 @@ function AppRoutes() {
           <Route path="/unified-tracking" element={<Navigate to="/cases" replace />} />
           <Route path="/browse-content" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              <ModuleAccessGuard moduleKey="browse_content">
                 <BrowseContentPage />
               </ModuleAccessGuard>
             </ProtectedRoute>

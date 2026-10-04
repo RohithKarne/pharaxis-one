@@ -19,6 +19,9 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { getUserModules } = require('../../utils/userModules');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+const { createNotification } = require('../../services/notificationCenterService');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -172,6 +175,20 @@ async function getScopedDocument(req, documentId) {
   return rows[0] || null;
 }
 
+// MIPM-185: a document goes to the browser without its server file path —
+// replies carried the absolute location on the server's disk. The screen only
+// needs to know whether a file exists.
+function publicDoc(d) {
+  if (!d) return d;
+  const { file_path, ...rest } = d;
+  return { ...rest, has_file: !!file_path };
+}
+
+// MIPM-184: people without Content Management (agents) read only published
+// documents. The Browse Content page listed Draft, Under Review and Approved
+// documents next to published ones, and any of them could be opened and downloaded.
+const { publishedOnly } = require('../../middleware/cmAccess');
+
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -247,6 +264,9 @@ router.get('/documents', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
 
+    if (await publishedOnly(req)) {
+      query += " AND d.status = 'Published'";
+    }
     if (status) {
       query += ' AND d.status = ?';
       params.push(status);
@@ -284,7 +304,7 @@ router.get('/documents', authenticate, async (req, res) => {
     query += ` ORDER BY d.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
     const [documents] = await pool.execute(query, params);
-    res.json({ documents, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ documents: documents.map(publicDoc), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list CM documents');
     res.status(500).json({ error: 'Server error.' });
@@ -390,7 +410,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     await conn.commit();
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_document', result.insertId, { doc_id: docId, name, folder_id });
     const [[created]] = await pool.execute('SELECT * FROM cm_documents WHERE id = ?', [result.insertId]);
-    res.status(201).json({ message: 'Document created.', id: result.insertId, document: created });
+    res.status(201).json({ message: 'Document created.', id: result.insertId, document: publicDoc(created) });
   } catch (err) {
     await conn.rollback();
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create CM document');
@@ -425,7 +445,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
     }
     query += ` ORDER BY relevance DESC LIMIT 50`;
     const [rows] = await pool.execute(query, params);
-    res.json({ documents: rows });
+    res.json({ documents: rows.map(publicDoc) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -450,6 +470,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
 
     const [versions] = await pool.execute(
       `SELECT vh.*, u.name AS author_name
@@ -487,7 +508,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
       }
     }
 
-    res.json({ document: { ...doc, assembled_html }, versions });
+    res.json({ document: publicDoc({ ...doc, assembled_html }), versions });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document');
     res.status(500).json({ error: 'Server error.' });
@@ -772,6 +793,34 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
   }
 });
 
+// MIPM-174: the people in an organisation who may review content. The review
+// dialog read the admin user list, which a content manager is refused, so the
+// content team could never start a review.
+async function contentReviewers(orgId) {
+  const [rows] = await pool.execute(
+    `SELECT u.id, u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role
+       FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id
+      WHERE uoa.org_id = ? AND uoa.is_active = 1 AND u.is_active = 1
+      ORDER BY u.name`, [orgId]);
+  const out = [];
+  for (const u of rows) {
+    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, 'content.review')) out.push({ id: u.id, name: u.name, email: u.email });
+  }
+  return out;
+}
+
+// GET /api/cm/reviewers — who can be asked to review content in the caller's organisation
+router.get('/reviewers', authenticate, async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
+    if (!orgId) return res.json({ users: [] });
+    res.json({ users: await contentReviewers(orgId) });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/reviewers' }, 'Failed to list content reviewers');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/cm/documents/:id/initiate-review — create cm_review
 router.post('/documents/:id/initiate-review', authenticate, async (req, res) => {
   try {
@@ -785,6 +834,17 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (!['Pending', 'Draft'].includes(doc.status)) {
       return res.status(400).json({ error: 'Document must be in Pending or Draft status to initiate a review.' });
+    }
+
+    // MIPM-174: a review needs at least one reviewer who may review content.
+    // The dialog sent no reviewer at all (wrong field name), so reviews were
+    // created that nobody could act on.
+    if (!Array.isArray(reviewer_ids) || reviewer_ids.length === 0) {
+      return res.status(400).json({ error: 'Choose at least one reviewer.' });
+    }
+    const allowed = new Set((await contentReviewers(doc.folder_org_id || req.user.orgId)).map((u) => Number(u.id)));
+    if (reviewer_ids.some((uid) => !allowed.has(Number(uid)))) {
+      return res.status(400).json({ error: 'Every reviewer must be allowed to review content in this organisation.' });
     }
 
     // WP1: reviewers must belong to the caller's org (platform admin may attach
@@ -824,6 +884,17 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
 
       await conn.commit();
       await audit(req.user.userId, req.user.email, 'INITIATE_REVIEW', 'cm_document', Number(id), { review_id: reviewResult.insertId, title });
+      // MIPM-176: reviewers were never told a review was waiting for them.
+      for (const uid of reviewer_ids) {
+        await createNotification(Number(uid), {
+          category: 'content_review',
+          title: `Content review assigned — ${doc.name}`,
+          message: `${req.user.name || req.user.email} asked you to review "${title}" (${doc.doc_id}) by ${String(planned_end_date).slice(0, 10)}.`,
+          linkUrl: '/content?view=reviews',
+          metadata: { review_id: reviewResult.insertId, document_id: Number(id) },
+          eventKey: 'cm-review-assigned',
+        }).catch(() => {});
+      }
       res.status(201).json({ message: 'Review initiated.', review_id: reviewResult.insertId });
     } catch (err) {
       await conn.rollback();
@@ -852,6 +923,10 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
     if (Number(req.user.userId) === Number(doc.created_by)) {
       return res.status(403).json({ error: 'The author of a document cannot approve it. An independent reviewer is required.' });
     }
+    // MIPM-179: approval waits for the review — an open review still has reviewers deciding.
+    const [[openReview]] = await pool.execute(
+      "SELECT id FROM cm_reviews WHERE doc_type = 'document' AND doc_id = ? AND status = 'Open' LIMIT 1", [id]);
+    if (openReview) return res.status(409).json({ error: 'The review of this document is still open. Approve it once every reviewer has decided.' });
 
     const match = await verifyEsignPassword(req.user.userId, password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
@@ -881,10 +956,10 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (doc.status !== 'Approved') return res.status(400).json({ error: 'Only Approved documents can be published.' });
-    // Owner lock enforcement — only the document owner can publish
-    if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Only the document owner can publish. Ask the owner to release the document first.' });
-    }
+    // MIPM-180: no owner lock on publish. The owner is the author who checked it in,
+    // and authors do not hold content.publish, so with the lock nobody could publish
+    // an author's document; "release" would have reset it to Draft. Publishing needs
+    // content.publish and the publisher's e-signature (below).
 
     const evidenceGate = await enforceEvidenceGate({
       orgId: doc.folder_org_id || req.user.orgId,
@@ -899,7 +974,7 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     });
     if (!evidenceGate.allow) {
       return res.status(422).json({
-        error: 'Evidence Chain Compiler blocked this publish request.',
+        error: `This document cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
         run_id: evidenceGate.run_id,
         evidence: evidenceGate.result,
       });
@@ -915,11 +990,9 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     try {
       await conn.beginTransaction();
 
-      // Archive any previously published version of the same document in the same folder
-      await conn.execute(
-        "UPDATE cm_documents SET status = 'Archived', updated_at = NOW() WHERE folder_id = ? AND doc_type = ? AND status = 'Published' AND id != ?",
-        [doc.folder_id, doc.doc_type, id]
-      );
+      // MIPM-183: no archive sweep. A document's versions live in its own row, so the
+      // old "archive the previous published version" step archived every OTHER
+      // published document of the same type in the folder.
 
       await conn.execute(
         "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
@@ -1139,9 +1212,13 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
     const offset = (page - 1) * limit;
+    // MIPM-218: Version History showed "—" as every version's author; who made
+    // each version is part of the record, so the name is looked up as for templates.
     const [versions] = await pool.execute(
-      `SELECT * FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?
-       ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      `SELECT vh.*, u.name AS author_name FROM cm_version_history vh
+       LEFT JOIN users u ON u.id = vh.author_id
+       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
+       ORDER BY vh.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
       [req.params.id]
     );
     const [[{ total }]] = await pool.execute(
@@ -1226,9 +1303,6 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
         if (doc.status !== 'Approved') {
           results.failed.push({ id: docId, reason: `Cannot publish from status: ${doc.status}` }); continue;
         }
-        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
-          results.failed.push({ id: docId, reason: 'Owner lock — not your document' }); continue;
-        }
 
         const evidenceGate = await enforceEvidenceGate({
           orgId: doc.folder_org_id || req.user.orgId,
@@ -1252,10 +1326,6 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
         const conn = await pool.getConnection();
         try {
           await conn.beginTransaction();
-          await conn.execute(
-            "UPDATE cm_documents SET status = 'Archived', updated_at = NOW() WHERE folder_id = ? AND doc_type = ? AND status = 'Published' AND id != ?",
-            [doc.folder_id, doc.doc_type, docId]
-          );
           await conn.execute(
             "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
             [newMajor, req.user.userId, req.user.userId, docId]
@@ -1396,13 +1466,14 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
 router.get('/documents/:id/download', authenticate, async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
-      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+      `SELECT d.file_path, d.file_name, d.file_mime, d.status, f.org_id
        FROM cm_documents d
        JOIN cm_folders f ON f.id = d.folder_id
        WHERE d.id = ?`,
       [req.params.id]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
     const isSA = hasGlobalAdminScope(req.user);
     if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
     if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });
@@ -1422,13 +1493,14 @@ router.get('/documents/:id/download', authenticate, async (req, res) => {
 router.get('/documents/:id/file', authenticate, async (req, res) => {
   try {
     const [[doc]] = await pool.execute(
-      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+      `SELECT d.file_path, d.file_name, d.file_mime, d.status, f.org_id
        FROM cm_documents d
        JOIN cm_folders f ON f.id = d.folder_id
        WHERE d.id = ?`,
       [req.params.id]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Document not found.' });
 
     // Org scope check (platform-admin bypasses)
     const isSA = hasGlobalAdminScope(req.user);
