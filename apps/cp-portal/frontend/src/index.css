@@ -2494,7 +2494,10 @@ body { background: var(--cp-bg); }
 @media (max-width: 768px) {
   .pp-header-inner { gap: 10px; height: auto; min-height: 66px; padding: 10px 16px; flex-wrap: wrap; }
   .pp-logo-text { font-size: 15px; }
-  .pp-nav { display: none; flex-direction: column; align-items: stretch; position: absolute; top: 66px; left: 0; right: 0; background: #fff; border-bottom: 1px solid var(--pp-border); padding: 8px; z-index: 99; }
+  /* CPPM-151: the open menu sits under the whole header. At 66px it covered the
+     header's second row (Submit Inquiry, the name chip and the Menu button itself),
+     so on a phone the menu could not be closed except by picking a link. */
+  .pp-nav { display: none; flex-direction: column; align-items: stretch; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border-bottom: 1px solid var(--pp-border); padding: 8px; z-index: 99; }
   .pp-nav-open { display: flex; }
   .pp-nav-link { color: var(--pp-text); }
   .pp-header-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; width: 100%; margin-left: 0; }
@@ -2680,7 +2683,7 @@ textarea:focus-visible {
 .pp-doc-type-badge.other            { background: #F3F4F6; color: #4B5563; }
 .pp-doc-title    { font-size: 14px; font-weight: 700; color: var(--pp-text, #1A1A2E); }
 .pp-doc-meta     { font-size: 12px; color: #4B5563; }
-.pp-doc-download { margin-top: auto; }
+.pp-doc-download { margin-top: auto; flex-wrap: wrap; } /* CPPM-151: four buttons do not fit a phone in one row */
 
 /* ── F-02: Consent Banner ──────────────────────────────────────── */
 
