@@ -52,6 +52,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
   const [checkedOutDocs, setCheckedOutDocs] = useState([])
   const [docs, setDocs] = useState([])
   const [reviews, setReviews] = useState([])
+  const pendingReviews = reviews.filter(r => r.status === 'Open' && (r.reviewer_status || 'Ongoing') === 'Ongoing').length
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -291,7 +292,8 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
           Checked Out {checkedOutDocs.length > 0 && <span style={{ background: 'var(--warning, #f59e0b)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{checkedOutDocs.length}</span>}
         </div>
         <div className={`cm-sub-tab ${subTab === 'reviews' ? 'active' : ''}`} onClick={() => setSubTab('reviews')}>
-          My Review Tasks {reviews.length > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{reviews.length}</span>}
+          {/* The badge counted closed and already-decided reviews too (MIPM-205). */}
+          My Review Tasks {pendingReviews > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{pendingReviews}</span>}
         </div>
       </div>
 
