@@ -1,20 +1,38 @@
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-function readinessForClient(client, expiredDocCounts, now = Date.now()) {
-  let score = 0;
-  if (client.logo_url) score += 20;
-  if (client.portal_name) score += 15;
-  if (client.enabled_feature_count >= 3) score += 20;
-  else if (client.enabled_feature_count > 0) score += 10;
-  score += 15;
-  if (client.msl_count > 0) score += 10;
-  if (client.submission_count > 0) score += 10;
-  if (client.primary_color && client.primary_color !== '#2563EB') score += 10;
+// F5-01: the eight readiness checks. CPPM-136: the one rule for readiness — the
+// client Overview and the dashboard both show this score, so they cannot disagree,
+// and no point is given without checking something.
+async function readinessChecks(pool, id) {
+  const [[branding]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [id]);
+  const [[{ cnt: enabledFeatureCount }]] = await pool.execute('SELECT COUNT(*) as cnt FROM cp_features WHERE client_id = ? AND is_enabled = 1', [id]);
+  const [[{ cnt: newsCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_news_posts WHERE client_id = ? AND status = 'published'", [id]);
+  const [[{ cnt: safetyCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_safety_alerts WHERE client_id = ? AND status = 'active'", [id]);
+  const [[{ cnt: docCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_documents WHERE client_id = ? AND is_active = 1 AND status = 'published'", [id]);
+  const [[{ cnt: mslCount }]] = await pool.execute('SELECT COUNT(*) as cnt FROM cp_msls WHERE client_id = ? AND is_active = 1', [id]);
+  const [[compliance]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [id]);
 
-  const readiness_score = Math.min(100, score);
-  const readiness_label = readiness_score >= 90 ? 'Ready'
-    : readiness_score >= 60 ? 'Almost Ready'
-    : 'Not Ready';
+  const checks = [
+    { key: 'branding',     label: 'Branding configured',          done: !!(branding?.logo_url && branding?.portal_name),          hint: 'Upload a logo and set a portal name', path: 'branding' },
+    { key: 'logo',         label: 'Logo uploaded',                done: !!branding?.logo_url,                                      hint: 'Upload a logo in Branding & Theme', path: 'branding' },
+    { key: 'compliance',   label: 'Compliance enabled',           done: !!(compliance && compliance.jurisdictions_json !== '[]'),  hint: 'Configure compliance jurisdictions', path: 'compliance' },
+    { key: 'features',     label: 'Features configured',          done: enabledFeatureCount > 0,                                   hint: 'Enable at least one portal feature', path: 'features' },
+    { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post', path: 'news' },
+    { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document', path: 'documents' },
+    { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison', path: 'msls' },
+    { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
+  ];
+
+  const doneCount = checks.filter(c => c.done).length;
+  const score = Math.round((doneCount / checks.length) * 100);
+  const label = score >= 90 ? 'Ready' : score >= 60 ? 'Almost Ready' : 'Not Ready';
+
+  return { checks, score, label, done: doneCount, total: checks.length };
+}
+
+function readinessForClient(client, expiredDocCounts, readiness, now = Date.now()) {
+  const readiness_score = readiness.score;
+  const readiness_label = readiness.label;
   const expired_doc_count = expiredDocCounts[client.id] || 0;
   const news_stale = !!client.latest_news_at && (now - new Date(client.latest_news_at).getTime()) > THIRTY_DAYS_MS;
 
@@ -93,8 +111,11 @@ async function listClients(pool) {
     lowest[c.id] = { rate: Math.round(100 * worst.confirmed / worst.addressed), letter_id: worst.id, letter_title: worst.title };
   }
 
+  const readiness = {};
+  for (const c of rows) readiness[c.id] = await readinessChecks(pool, c.id);
+
   return rows.map(client => ({
-    ...readinessForClient(client, expiredDocCounts),
+    ...readinessForClient(client, expiredDocCounts, readiness[client.id]),
     expiring_soon_doc_count: expiringSoonCounts[client.id] || 0,
     waiting: waiting[client.id] || { safety: 0, review: 0, access: 0, data_requests: 0 },
     safety_confirmation: lowest[client.id],
@@ -109,4 +130,4 @@ async function getClientBundle(pool, clientId) {
   return { client, branding: branding || null, features };
 }
 
-module.exports = { getClientBundle, listClients, readinessForClient };
+module.exports = { getClientBundle, listClients, readinessForClient, readinessChecks };

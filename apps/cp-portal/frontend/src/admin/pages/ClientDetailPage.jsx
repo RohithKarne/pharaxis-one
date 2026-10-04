@@ -52,26 +52,14 @@ const SECTION_DESC = {
   reports:     'Usage, audit, safety confirmations, and compliance',
 }
 
-// ── Health Score ──────────────────────────────────────────────────────────────
-function computeHealthScore(data, submissionStats) {
-  const { branding, features } = data || {}
-  const enabledCount = features?.filter(f => f.is_enabled).length || 0
-  let score = 0
-  if (branding?.logo_url)    score += 20
-  if (branding?.portal_name) score += 15
-  if (enabledCount >= 3)     score += 20
-  else if (enabledCount > 0) score += 10
-  score += 15 // compliance always set up
-  score += 10 // MSLs seeded
-  if ((submissionStats?.total || 0) > 0)            score += 10
-  if (branding?.primary_color && branding.primary_color !== '#2563EB') score += 10
-  return Math.min(100, score)
-}
-
-function healthMeta(score) {
-  if (score >= 75) return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
-  if (score >= 40) return { label: 'Needs attention', color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
-  return                  { label: 'Not launch ready', color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
+// ── Readiness ─────────────────────────────────────────────────────────────────
+// CPPM-136: the hero shows the server's eight readiness checks (the Setup Checklist
+// below), the same score as the dashboard. It used to add its own points, some given
+// without checking anything.
+function readinessMeta(label) {
+  if (label === 'Ready')        return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
+  if (label === 'Almost Ready') return { label: 'Almost ready',    color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
+  return                               { label: 'Not ready',       color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
 }
 
 // ── Badges ────────────────────────────────────────────────────────────────────
@@ -83,21 +71,13 @@ const BADGE_STYLES = {
   attention: { background: '#FEF9C3', color: '#92400E' },
 }
 
+// CPPM-136: a badge only where it comes from real data. Fixed labels such as "No
+// active alerts" (shown while alerts were active) and "Ready to use" were removed.
 function getBadge(path, data, submissionStats, integrationData) {
   const { branding, features } = data || {}
   const n = features?.filter(f => f.is_enabled).length || 0
   if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready to use',    s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
   if (path === 'features')    return n > 0  ? { label: `${n} active`,      s: 'info'      } : { label: 'Not configured', s: 'danger'    }
-  if (path === 'compliance')  return           { label: 'Ready to use',     s: 'success'   }
-  if (path === 'gate')        return           { label: 'Ready to use',     s: 'success'   }
-  if (path === 'chatbox')     return           { label: 'Not configured',   s: 'warning'   }
-  if (path === 'content')     return           { label: 'Content ready',    s: 'success'   }
-  if (path === 'news')        return           { label: 'Needs update',     s: 'attention' }
-  if (path === 'safety')      return           { label: 'No active alerts', s: 'attention' }
-  if (path === 'documents')   return           { label: 'Library ready',    s: 'success'   }
-  if (path === 'msls')        return           { label: 'Contacts ready',   s: 'success'   }
-  if (path === 'forms')       return           { label: 'Forms ready',      s: 'success'   }
-  if (path === 'analytics')   return           { label: 'View',             s: 'info'      }
   if (path === 'integration') {
     const integrations = integrationData?.integrations || []
     if (integrations.length === 0) return { label: 'Not configured', s: 'warning' }
@@ -105,9 +85,6 @@ function getBadge(path, data, submissionStats, integrationData) {
     if (integrations.some(i => i.last_sync_status === 'success'))  return { label: 'Connected',      s: 'success' }
     return { label: 'Not tested', s: 'attention' }
   }
-  if (path === 'sso')         return           { label: 'Optional',         s: 'attention' }
-  if (path === 'audit')       return           { label: 'Active',           s: 'info'      }
-  if (path === 'users')       return           { label: 'Active',           s: 'info'      }
   if (path === 'submissions' && submissionStats) {
     return submissionStats.total > 0
       ? { label: `${submissionStats.total} total`, s: 'info' }
@@ -221,8 +198,7 @@ export default function ClientDetailPage() {
 
   const { client, branding, features } = data
   const enabledCount = features?.filter(f => f.is_enabled).length || 0
-  const healthScore  = computeHealthScore(data, submissionStats)
-  const health       = healthMeta(healthScore)
+  const health       = readinessMeta(readiness?.label)
   // Bridge row 2: open alerts belong in "Attention Required" — it said "No issues
   // detected" while reports were failing to reach MIMS.
   const alertIssues = ['integration', 'safety'].flatMap(aud => {
@@ -303,10 +279,10 @@ export default function ClientDetailPage() {
 
         <div className="ck-health-block">
           <div className="ck-health-ring" style={{ color: health.color, background: health.bg, boxShadow: `0 0 0 3px ${health.ring}30, inset 0 2px 6px rgba(0,0,0,.08)` }}>
-            {healthScore}
+            {readiness ? readiness.score : '—'}
           </div>
-          <div className="ck-health-label" style={{ color: health.color }}>{health.label}</div>
-          <div className="ck-health-sub">Health Score</div>
+          <div className="ck-health-label" style={{ color: health.color }}>{readiness ? health.label : ''}</div>
+          <div className="ck-health-sub">Readiness</div>
         </div>
 
       </div>

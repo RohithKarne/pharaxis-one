@@ -65,7 +65,7 @@ export default function DashboardPage() {
   function readinessLabel(client) {
     if (client.readiness_label === 'Ready') return 'Ready to launch'
     if (client.readiness_label === 'Almost Ready') return 'Almost ready'
-    if (client.readiness_label === 'Needs Setup') return 'Setup needed'
+    if (client.readiness_label === 'Not Ready') return 'Setup needed' // CPPM-136: the server says 'Not Ready'
     return client.readiness_label || 'Not scored'
   }
 
