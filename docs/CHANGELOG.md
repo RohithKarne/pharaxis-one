@@ -100,11 +100,33 @@ the ones a validation plan should name.
 ### CP Portal end-to-end walk (4 Oct 2026, branch `claude/gallant-rubin-43pd3g`, no Jira per Rohith)
 
 **Revalidation impact of this batch:** Partial — *proposed by Saad Rahman (compliance owner); Rohith to confirm.*
-**Why:** sign-in behaviour changed in two places; no record structure, audit trail or calculation changed.
-**Revalidate:** admin sign-in (Superadmin mode), portal sign-in and the specialty prompt.
+**Why:** sign-in behaviour, staff password handling and the audit-trail export changed; no record structure or calculation changed. The export now contains every matching record where it held one page, which is a correction of the evidence an auditor receives, not a change to what is recorded.
+**Revalidate:** admin sign-in (Superadmin mode), portal sign-in, the specialty prompt and the SSO sign-in mode; client activation; the audit-trail export; admin password change and reset; erasure fulfilment; the cookie-consent banner and its audit log.
 
 - Area 1, sign-in: the admin sign-in page's Superadmin mode now ends the session it refuses. Before, "Superadmin access required" was shown while the client admin was already signed in on the next page load — `frontend/src/admin/pages/LoginPage.jsx`
 - Area 1, sign-in: a doctor whose specialty is already saved is no longer asked to choose it again at every sign-in; sign-in, email verification and gate confirmation now return the saved specialty — `backend/routes/portal/auth.js`
+- Area 2, Clients: a blank or spaces-only company name is refused on create and edit; the client code must be lowercase letters, digits and single hyphens — `backend/routes/admin/clients.js`
+- Area 2, Clients: a deactivated client stays on the list, marked Inactive, with an Activate button; the dashboard's inactive count is real — `backend/services/clientService.js`
+- Area 2, Clients: Deactivate asks first, naming the client and saying the portal goes offline at once — `frontend/src/admin/pages/ClientsPage.jsx`
+- Area 2, Clients: deactivating, reactivating or renaming a client reaches its portal immediately instead of after the 20-second settings cache — `backend/routes/admin/clients.js`
+- Area 2, Clients: new Edit button to change a client's name, description and contact; the code stays locked because it is the portal's address — `frontend/src/admin/pages/ClientsPage.jsx`
+- Area 2, Audit trail: the CSV export carries every record that matches the filters, not only the page on screen; the Entity and Action filters list what was actually recorded and match regardless of case — `backend/routes/admin/audit.js`, `frontend/src/admin/pages/AuditTrailPage.jsx`
+- Area 2, access: a client's own staff opening another client's address are sent to their own client instead of seeing empty screens — `frontend/src/App.jsx`
+- Area 3, Overview: the readiness check "Custom brand color set" no longer counts as done for an untouched client; it compares with the colour the app actually seeds — `backend/services/clientService.js`
+- Area 3, portal settings: switching the user gate, a user type, the chat box or Reset Branding reaches the portal immediately instead of after the 20-second cache; the same for compliance settings — `backend/routes/admin/gate.js`, `chatbox.js`, `compliance.js`, `branding.js`
+- Area 3, Branding: the logo help text names the accepted formats (PNG, JPG, GIF, WebP); SVG was listed but refused — `frontend/src/admin/pages/BrandingPage.jsx`
+- Area 3, Forms: adding a field with a key already on that form says so instead of "Server error." — `backend/routes/admin/forms.js`
+- Area 3, Chatbox: the portal's chat widget hides when "Enable chatbox on portal" is off; before, only the welcome text went — `frontend/src/portal/components/PortalLayout.jsx`
+- Area 4, Library: a therapeutic area, drug, event or resource cannot be created or renamed to a blank name; Deactivate asks first — `backend/routes/admin/content.js`, `frontend/src/admin/pages/ContentPage.jsx`
+- Area 4, FAQ: an item cannot have a blank question or answer — `backend/routes/admin/faq.js`
+- Area 4, MSL Directory: a removed MSL shows Reactivate instead of a second Remove — `frontend/src/admin/pages/MSLPage.jsx`
+- Area 5, Admin Users: an admin can set a new password for a staff account from Edit; it ends that account's sessions and is audited — `backend/routes/admin/adminUsers.js`, `frontend/src/admin/pages/AdminUsersPage.jsx`
+- Area 5, menu: "Change password" for the signed-in admin; the session is kept, other sessions end — `backend/routes/admin/auth.js`, `frontend/src/admin/components/AdminLayout.jsx`
+- Area 5, Portal Users: "Resend invite" on each active user; editing an email checks for an @ and names a duplicate — `frontend/src/admin/pages/PortalUsersPage.jsx`, `backend/routes/admin/portalUsers.js`
+- Area 6, Data Requests: fulfilling an erasure now also removes the person's name and email from their own request rows; before, the Data Requests screen still showed both after Fulfilled — `backend/services/dataSubject.js`
+- Area 7, Single Sign-On: with "Password only" the portal sign-in page no longer offers the SSO button — `backend/services/ssoService.js`
+- Area 7, Integration: adding an integration now says it is off until Enable is pressed — `frontend/src/admin/pages/IntegrationPage.jsx`
+- Area 8, Compliance: a consent given on the sign-in page is recorded against the account once the person signs in; before, every row of the Consent Audit Log read "Anonymous" — `frontend/src/portal/components/ConsentBanner.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124

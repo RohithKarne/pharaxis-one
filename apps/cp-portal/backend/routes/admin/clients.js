@@ -11,6 +11,14 @@ const { audit } = require('../../utils/audit');
 const { getClientBundle, listClients, readinessChecks } = require('../../services/clientService');
 const log = require('../../utils/logger');
 const { DEFAULT_AE_FIELDS, optionList } = require('../../services/formFields');
+const cache = require('../../utils/cache');
+
+// The portal reads its settings through a short cache. Deactivating a client (or
+// renaming it) must reach the portal at once, not when the cache happens to expire.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) cache.invalidate('config:'); });
+  next();
+});
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
@@ -69,6 +77,10 @@ const DEFAULT_FORM_FIELDS = {
     { key: 'message', label: 'Message',      type: 'textarea', required: 1, order: 4 },
   ],
 };
+
+// The code is the portal address (/portal/<code>), so it is what a URL can carry.
+const CODE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const CODE_MESSAGE = 'Client code may contain only lowercase letters, digits and single hyphens, e.g. ardelyx or walk-pharma.';
 
 function requireSuperadmin(req, res, next) {
   if (req.admin?.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required.' });
@@ -129,16 +141,19 @@ router.get('/:id/readiness', authenticateAdmin, requireClientScopeByIdParam, asy
 // POST /api/admin/clients — create client + seed defaults
 router.post('/', authenticateAdmin, requireSuperadmin, async (req, res) => {
   try {
-    const { name, code, description, contact_name, contact_email } = req.body;
+    const name = String(req.body.name ?? '').trim();
+    const code = String(req.body.code ?? '').trim().toLowerCase();
+    const { description, contact_name, contact_email } = req.body;
     if (!name || !code) return res.status(400).json({ error: 'name and code are required.' });
+    if (!CODE_PATTERN.test(code)) return res.status(400).json({ error: CODE_MESSAGE });
 
-    const [[exists]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ?', [code.toLowerCase()]);
+    const [[exists]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ?', [code]);
     if (exists) return res.status(409).json({ error: 'Client code already exists.' });
 
     const [info] = await pool.execute(`
       INSERT INTO cp_clients (name, code, description, contact_name, contact_email)
       VALUES (?, ?, ?, ?, ?)
-    `, [name, code.toLowerCase(), description ?? null, contact_name ?? null, contact_email ?? null]);
+    `, [name, code, description ?? null, contact_name ?? null, contact_email ?? null]);
 
     const clientId = info.insertId;
 
@@ -204,7 +219,9 @@ router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req,
     const { id } = req.params;
     const { name, description, contact_name, contact_email, is_active } = req.body;
     const updates = [], params = [];
-    if (name !== undefined)          { updates.push('name = ?');          params.push(name); }
+    // A name of only spaces showed as a blank row with nothing to click (CP walk, 4 Oct 2026).
+    if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'name cannot be empty.' });
+    if (name !== undefined)          { updates.push('name = ?');          params.push(String(name).trim()); }
     if (description !== undefined)   { updates.push('description = ?');   params.push(description); }
     if (contact_name !== undefined)  { updates.push('contact_name = ?');  params.push(contact_name); }
     if (contact_email !== undefined) { updates.push('contact_email = ?'); params.push(contact_email); }

@@ -81,6 +81,8 @@ export default function ContentPage() {
   }
 
   async function deactivate(endpoint, id) {
+    // Every other remove in the console asks first; taking an item off the portal should too.
+    if (!confirm('Deactivate this item? It leaves the portal immediately. You can reactivate it with "Show inactive".')) return
     setError('')
     try {
       const res = await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, { method: 'DELETE', headers: adminHeaders() })

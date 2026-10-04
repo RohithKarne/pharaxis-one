@@ -421,7 +421,12 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     const updates = [], params = [];
     if (first_name  !== undefined) { updates.push('first_name = ?');  params.push(first_name); }
     if (last_name   !== undefined) { updates.push('last_name = ?');   params.push(last_name); }
-    if (email       !== undefined) { updates.push('email = ?');       params.push(email); }
+    if (email       !== undefined) {
+      // The create route checks this; the edit route did not (CP walk, 4 Oct 2026).
+      const e = String(email).trim().toLowerCase();
+      if (!e.includes('@') || e.length > 254) return res.status(400).json({ error: 'Enter a valid email address.' });
+      updates.push('email = ?'); params.push(e);
+    }
     if (user_type   !== undefined && VALID_USER_TYPES.includes(user_type)) {
       updates.push('user_type = ?'); params.push(user_type);
     }
@@ -439,7 +444,12 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     const ROW = 'SELECT * FROM cp_portal_users WHERE id = ? AND client_id = ?';
     const [[before]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
     if (!before) return res.status(404).json({ error: 'User not found.' });
-    await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
+    try {
+      await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
+    } catch (err) {
+      if (err && err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A user with that email already exists for this portal.' });
+      throw err;
+    }
     const [[after]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
     // CPPM-43: what changed. A person's name, email and country are personal details:
     // recorded as changed, never their values, so the audit trail cannot undo an erasure.

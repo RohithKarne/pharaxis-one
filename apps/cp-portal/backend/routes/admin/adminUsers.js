@@ -145,6 +145,30 @@ router.patch('/:clientId/:userId', authenticateAdmin, requireClientAccess, requi
   }
 });
 
+// ── POST /:clientId/:userId/set-password — an admin gives a staff account a new password ──
+// Until the CP walk of 4 Oct 2026 nothing offered this: an admin who forgot their
+// password could only be deleted and re-created. The new password ends every
+// session the account holds; the audit line never carries the password.
+router.post('/:clientId/:userId/set-password', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.clientId);
+    const userId   = parseInt(req.params.userId);
+    const password = String(req.body?.password || '');
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    const [[user]] = await pool.execute('SELECT id, email, role FROM cp_admin_users WHERE id = ? AND client_id = ?', [userId, clientId]);
+    if (!user) return res.status(404).json({ error: 'Admin user not found.' });
+    if (user.role === 'superadmin') return res.status(403).json({ error: 'Superadmin accounts cannot be changed here.' });
+    if (user.id === req.admin.adminId) return res.status(400).json({ error: 'Use "Change password" at the foot of the menu for your own account.' });
+    const hash = bcrypt.hashSync(password, 12);
+    await pool.execute('UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?', [hash, userId]);
+    await audit(req.admin, clientId, 'PASSWORD_SET', 'admin_user', userId, { email: user.email });
+    res.json({ message: `New password set for ${user.email}. Any session they had open is signed out.` });
+  } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'POST /:clientId/:userId/set-password', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── POST /:clientId/:userId/unlock — CPPM-49: lift a sign-in lock early ──────
 router.post('/:clientId/:userId/unlock', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
   try {

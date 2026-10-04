@@ -171,6 +171,52 @@ function QuickSearch({ items }) {
   )
 }
 
+// The signed-in person changes their own password. The server re-issues this
+// session's cookie, so they stay signed in here and are signed out everywhere else.
+function ChangePasswordModal({ onClose }) {
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' })
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+  const [saving, setSaving] = useState(false)
+  async function submit(e) {
+    e.preventDefault(); setError('')
+    if (form.next.length < 8) { setError('The new password must be at least 8 characters.'); return }
+    if (form.next !== form.confirm) { setError('The two new passwords do not match.'); return }
+    if (form.next === form.current) { setError('The new password must differ from the current one.'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/auth/password', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_password: form.current, new_password: form.next }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'The password could not be changed.'); return }
+      setDone(true)
+    } catch { setError('Network error. Please try again.') } finally { setSaving(false) }
+  }
+  return (
+    <div className="cp-modal-overlay" onClick={() => !saving && onClose()}>
+      <div className="cp-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()} role="dialog" aria-label="Change password">
+        <div className="cp-modal-header"><span>Change password</span><button className="cp-modal-close" onClick={onClose} aria-label="Close">✕</button></div>
+        {done ? (
+          <div className="cp-modal-body">
+            <p>Your password is changed. You stay signed in here; any other browser you were signed in on is signed out.</p>
+            <div className="cp-modal-footer"><button type="button" className="cp-btn cp-btn-primary" onClick={onClose}>Done</button></div>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="cp-modal-body" autoComplete="off">
+            <div className="cp-field"><label>Current password</label><input type="password" required value={form.current} onChange={e => setForm(f => ({ ...f, current: e.target.value }))} autoComplete="current-password" /></div>
+            <div className="cp-field"><label>New password <span style={{ fontSize: 11, color: '#4B5563' }}>(min 8 characters)</span></label><input type="password" required minLength={8} value={form.next} onChange={e => setForm(f => ({ ...f, next: e.target.value }))} autoComplete="new-password" /></div>
+            <div className="cp-field"><label>Confirm new password</label><input type="password" required value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} autoComplete="new-password" /></div>
+            {error && <div className="cp-error">{error}</div>}
+            <div className="cp-modal-footer">
+              <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Change password'}</button>
+              <button type="button" className="cp-btn cp-btn-outline" onClick={onClose}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminLayout({ children }) {
   const { admin, signOut, hasRole, canChange, loadFailed } = useAdminAuth()
   const navigate  = useNavigate()
@@ -196,6 +242,7 @@ export default function AdminLayout({ children }) {
       to: `/admin/clients/${searchClient}${t.path ? '/' + t.path : ''}`,
     }))) : []),
   ]
+  const [showPassword, setShowPassword] = useState(false)
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
     // CPPM-126: on a phone the full sidebar leaves the page too little room.
@@ -347,10 +394,13 @@ export default function AdminLayout({ children }) {
         <div className="cp-sidebar-footer">
           <div className="cp-admin-name">{admin?.name}</div>
           <div className="cp-admin-role">{String(admin?.role || '').replace(/_/g, ' ')}</div>
+          {/* CP walk, 4 Oct 2026: the server could change a password, no screen offered it. */}
+          <button className="cp-logout-btn" style={{ marginBottom: 6 }} onClick={() => setShowPassword(true)}>Change password</button>
           <button className="cp-logout-btn" onClick={handleLogout}>Sign Out</button>
         </div>
       </aside>
 
+      {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
       <div className="cp-admin-main">
         {clientId && <div className="cp-brandbar" />}
         <div className="cp-admin-topbar">

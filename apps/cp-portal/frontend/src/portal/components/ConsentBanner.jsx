@@ -13,9 +13,15 @@ const DEFAULT_CHOICES = {
 // "true" with no date are asked once more — re-asking is the safe direction.
 const CONSENT_KEEP_MS = 365 * 24 * 60 * 60 * 1000
 
+// CP walk 2026-10-04: the browser now also keeps the choices made, so a person who
+// accepted before signing in (the banner covers the sign-in page) can have that
+// choice recorded against their account once they are signed in. Older browsers
+// stored only a timestamp; for them the choices are unknown.
 function rememberedConsent(key) {
-  const savedAt = Number(localStorage.getItem(key))
-  return savedAt > 0 && Date.now() - savedAt < CONSENT_KEEP_MS
+  const raw = localStorage.getItem(key)
+  let savedAt = Number(raw), choices = null
+  if (raw && raw[0] === '{') { try { const o = JSON.parse(raw); savedAt = Number(o.at); choices = o.choices || null } catch { savedAt = 0 } }
+  return savedAt > 0 && Date.now() - savedAt < CONSENT_KEEP_MS ? { choices } : null
 }
 
 const PREFERENCE_TOGGLES = [
@@ -43,18 +49,23 @@ export default function ConsentBanner() {
 
   useEffect(() => {
     if (!compliance) return
-    // Already chosen in this browser within the last 12 months
-    if (rememberedConsent(`cp_consent_v${version}`)) return
-    // Signed-in user — check DB first
+    const remembered = rememberedConsent(`cp_consent_v${version}`)
+    // Signed-in user — the record on their account decides. Before, a choice the
+    // browser remembered was taken as final, so a person who accepted on the
+    // sign-in page was never recorded in the Consent Audit Log under their name.
     if (user) {
       portalFetch(`/api/portal/consent/check?clientCode=${clientCode}&version=${version}`)
         .then(r => r.json())
-        .then(d => { if (!d.consented) setShow(true) })
+        .then(d => {
+          if (d.consented) return
+          if (remembered?.choices) saveConsent(remembered.choices) // record the choice they already made, without asking again
+          else setShow(true)
+        })
         .catch(() => setShow(true)) // fallback: show banner on error
       return
     }
     // Anonymous user — only localStorage
-    setShow(true)
+    if (!remembered) setShow(true)
   }, [compliance, user, clientCode, version])
 
   // CPPM-35: "Cookie settings" in the footer reopens the preferences with the
@@ -106,7 +117,7 @@ export default function ConsentBanner() {
       setSaving(false)
       return
     }
-    localStorage.setItem(`cp_consent_v${version}`, String(Date.now()))
+    localStorage.setItem(`cp_consent_v${version}`, JSON.stringify({ at: Date.now(), choices: finalChoices }))
     setSaving(false)
     setShow(false)
   }

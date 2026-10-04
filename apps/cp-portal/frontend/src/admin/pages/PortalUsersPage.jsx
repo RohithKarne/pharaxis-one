@@ -73,6 +73,19 @@ export default function PortalUsersPage({ requestsOnly = false }) {
   }
 
   // CPPM-49: lift a sign-in lock before its 30 minutes are up.
+  // CP walk, 4 Oct 2026: the server could reissue a set-password link; no screen offered it.
+  async function resendInvite(u) {
+    if (!confirm(`Email ${u.email} a new link to set their password? Any earlier link stops working.`)) return
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/${u.id}/resend-invite`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Resend failed.')
+      setMsg({ type: 'success', text: d.message || 'Invitation resent.' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
+  }
+
   async function unlock(u) {
     if (!confirm(`Unlock sign-in for ${u.email}?`)) return
     try {
@@ -285,6 +298,7 @@ export default function PortalUsersPage({ requestsOnly = false }) {
                     <CanChange area="users">
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
                     </CanChange>
+                    {u.is_active && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => resendInvite(u)}>Resend invite</button>}
                     {u.locked_until && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
                     </>)}
                   </td>

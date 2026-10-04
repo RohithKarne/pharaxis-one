@@ -176,7 +176,7 @@ export default function BrandingPage() {
                     Remove logo
                   </button>
                 )}
-                <span style={{ fontSize: 11, color: '#4B5563' }}>PNG, JPG, SVG, WebP · max 5 MB</span>
+                <span style={{ fontSize: 11, color: '#4B5563' }}>PNG, JPG, GIF, WebP · max 5 MB</span>
               </div>
             </div>
             {logoError && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 4 }}>{logoError}</div>}
