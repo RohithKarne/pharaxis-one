@@ -175,8 +175,8 @@ export default function EmailSettingsPage() {
             />
           </div>
           <div className="cp-field" style={{ flex: 1 }}>
-            <label>Encryption</label>
-            <select value={form.smtp_encryption} onChange={e => set('smtp_encryption', e.target.value)}>
+            <label htmlFor="smtp-encryption">Encryption</label>
+            <select id="smtp-encryption" value={form.smtp_encryption} onChange={e => set('smtp_encryption', e.target.value)}>
               {ENCRYPTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>

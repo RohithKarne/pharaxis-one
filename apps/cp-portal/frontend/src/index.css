@@ -1084,7 +1084,7 @@ body { background: var(--cp-bg); }
   color: #475569;
 }
 .cp-table-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-.cp-pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--text-muted, #6b7280); }
+.cp-pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #4B5563; } /* CPPM-98: 4.5:1 on the grey pager */
 
 /* ── Badges ───────────────────────────────────────────────────── */
 
@@ -1910,6 +1910,7 @@ body { background: var(--cp-bg); }
 .pp-hero-search-btn { flex: none; background: var(--pp-btn); color: var(--pp-btn-text); border: 0; font-weight: 700; font-size: 14px; padding: 10px 20px; border-radius: 2px; cursor: pointer; }
 .pp-hero-search-btn:hover { filter: brightness(0.95); }
 .pp-search-suggestions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--pp-text-muted); }
+.pp-search-suggestions > span { color: #4B5563; } /* CPPM-98: "Popular searches:" and "Go to:" sit on the grey banner, where the muted grey is below 4.5:1 */
 .pp-search-suggestions button { border: 1px solid var(--pp-border); background: #fff; color: var(--pp-text); border-radius: 2px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; }
 .pp-search-suggestions button:hover { border-color: var(--pp-primary); color: var(--pp-primary); }
 .pp-feature-card .pp-feature-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 2px; background: #EEF5FF; color: var(--pp-primary); margin-bottom: 12px; font-size: 0; }
@@ -2313,7 +2314,7 @@ body { background: var(--cp-bg); }
 /* ── MSL directory ───────────────────────────────────────── */
 .pp-msl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .pp-msl-card { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: calc(var(--pp-radius) * 1.5); padding: 24px; display: flex; gap: 16px; }
-.pp-msl-avatar { width: 52px; height: 52px; background: var(--pp-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+.pp-msl-avatar { width: 52px; height: 52px; background: var(--pp-primary); border-radius: 50%; /* CPPM-98: the lighter accent put white initials below 4.5:1 */ display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0; }
 .pp-msl-info { flex: 1; }
 .pp-msl-name { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
 .pp-msl-title { font-size: 13px; color: var(--pp-text-muted); margin-bottom: 8px; }

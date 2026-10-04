@@ -99,7 +99,7 @@ export default function FindMSLPage() {
       <div className="pp-filter-bar">
         <input className="pp-search-input" placeholder="Search by name, specialty, or territory…" value={search} onChange={e => setSearch(e.target.value)} />
         {regions.length > 0 && (
-          <select value={region} onChange={e => setRegion(e.target.value)}>
+          <select aria-label="Region" value={region} onChange={e => setRegion(e.target.value)}>
             <option value="">All Regions</option>
             {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
