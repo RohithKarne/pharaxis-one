@@ -1363,10 +1363,16 @@ router.post('/orgs/:orgId/logo', authenticate, requireRole('platform_admin'), lo
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const logoUrl = `/storage/org_logos/${req.file.filename}`;
+    const [[previous]] = await pool.execute('SELECT logo_url FROM organisations WHERE id = ?', [req.params.orgId]);
     await pool.execute(
       'UPDATE organisations SET logo_url = ? WHERE id = ?',
       [logoUrl, req.params.orgId]
     );
+    // The replaced logo stayed in this publicly served folder forever (MIPM-197).
+    const old = previous?.logo_url;
+    if (old && old !== logoUrl && old.startsWith('/storage/org_logos/')) {
+      fs.promises.unlink(path.join(__dirname, '../storage/org_logos', path.basename(old))).catch(() => {});
+    }
     res.json({ success: true, logo_url: logoUrl });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error.' });
