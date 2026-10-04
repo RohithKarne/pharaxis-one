@@ -97,6 +97,15 @@ is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
 
+### CP Portal end-to-end walk (4 Oct 2026, branch `claude/gallant-rubin-43pd3g`, no Jira per Rohith)
+
+**Revalidation impact of this batch:** Partial — *proposed by Saad Rahman (compliance owner); Rohith to confirm.*
+**Why:** sign-in behaviour changed in two places; no record structure, audit trail or calculation changed.
+**Revalidate:** admin sign-in (Superadmin mode), portal sign-in and the specialty prompt.
+
+- Area 1, sign-in: the admin sign-in page's Superadmin mode now ends the session it refuses. Before, "Superadmin access required" was shown while the client admin was already signed in on the next page load — `frontend/src/admin/pages/LoginPage.jsx`
+- Area 1, sign-in: a doctor whose specialty is already saved is no longer asked to choose it again at every sign-in; sign-in, email verification and gate confirmation now return the saved specialty — `backend/routes/portal/auth.js`
+
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
 - Five wrong passwords lock a sign-in for 30 minutes, and admins can unlock it — CPPM-49 (#685)
