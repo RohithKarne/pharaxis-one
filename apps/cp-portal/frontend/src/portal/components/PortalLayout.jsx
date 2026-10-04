@@ -405,7 +405,9 @@ export default function PortalLayout({ children }) {
         </div>
       </footer>
 
-      {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
+      {/* CPPM-151 walk: the button also goes when the admin unticks "Enable chatbox on
+          portal" — before, it stayed and every message then failed. */}
+      {isFeatureEnabled('chatbox') && portalConfig?.chatbox && <ChatboxWidget clientCode={clientCode} />}
       {!loading && showGate && <UserTypeGate />}
       {!loading && !showGate && user && !user.specialty && <SpecialtyPrompt clientCode={clientCode} />}
       {!loading && <ConsentBanner />}
