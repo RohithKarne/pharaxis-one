@@ -53,7 +53,6 @@ async function listClients(pool) {
     LEFT JOIN cp_features f     ON f.client_id = c.id AND f.is_enabled = 1
     LEFT JOIN cp_msls m         ON m.client_id = c.id AND m.is_active = 1
     LEFT JOIN cp_news_posts n   ON n.client_id = c.id AND n.status = 'published'
-    WHERE c.is_active = 1
     GROUP BY c.id
     ORDER BY c.name ASC
   `);
