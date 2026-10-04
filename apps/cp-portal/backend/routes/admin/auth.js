@@ -108,7 +108,16 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
     const hash = bcrypt.hashSync(new_password, 12);
     await pool.execute(`UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
     await audit(req.admin, req.admin.clientId ?? null, 'PASSWORD_CHANGED', 'admin_user', user.id, {});
-    res.json({ message: 'Password updated.' });
+    // The version bump ends every session this person holds, including this one.
+    // Re-issue this session's cookie so the person who changed the password stays
+    // signed in; any other browser they were signed in on is signed out (CP walk, 4 Oct 2026).
+    const tv = (user.token_version ?? 0) + 1;
+    const token = jwt.sign(
+      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv },
+      ADMIN_SECRET, { expiresIn: '12h' }
+    );
+    res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
+       .json({ message: 'Password updated.' });
   } catch (err) {
     // SEC: as in /login — `current_password` and `new_password` are in scope and
     // are never passed to the logger.
