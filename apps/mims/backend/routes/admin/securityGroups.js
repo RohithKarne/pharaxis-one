@@ -290,6 +290,18 @@ router.post('/security-groups', authenticate, requireRole('admin', 'platform_adm
       'INSERT INTO security_groups (name, description, privileges, created_by, org_id) VALUES (?, ?, ?, ?, ?)',
       [String(name).trim(), description || null, privilegesJson, req.user.userId, orgId]
     );
+    // Rights are read from access_group_privileges. A group created with rights
+    // stored them only in this JSON, so they never applied unless the screen made
+    // a second call — the API answered "created" for rights no one received.
+    const grantedKeys = Object.entries(privileges || {})
+      .filter(([key, value]) => value === true && key.includes('.'))
+      .map(([key]) => key);
+    for (const key of grantedKeys) {
+      await pool.execute(
+        'INSERT INTO access_group_privileges (group_id, privilege_key, is_allowed, updated_by) VALUES (?, ?, 1, ?)',
+        [result.insertId, key, req.user.userId]
+      );
+    }
 
     await audit(req.user.userId, req.user.email, 'CREATE', 'security_group', result.insertId, {
       name: String(name).trim(),
