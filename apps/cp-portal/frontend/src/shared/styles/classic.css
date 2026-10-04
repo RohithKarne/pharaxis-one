@@ -240,3 +240,9 @@
 @media (max-width: 1023px) {
   :root .cp-admin-topbar { height: auto; min-height: 40px; flex-wrap: wrap; padding: 4px 12px; row-gap: 4px; }
 }
+
+/* CPPM-149: on a narrower screen the dashboard's three small lists stack, so a client's
+   name is readable instead of cut down to its first letter. */
+@media (max-width: 900px) {
+  :root .oc-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+}
