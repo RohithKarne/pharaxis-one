@@ -234,3 +234,9 @@
   :root .ck-stat { flex: 1 1 50%; padding: 8px 12px; }
   :root .ck-health-block { flex: 1 1 100%; }
 }
+
+/* CPPM-148: on a phone or small tablet the top bar takes a second line, so the client being configured
+   is named in full instead of running off the right edge. */
+@media (max-width: 1023px) {
+  :root .cp-admin-topbar { height: auto; min-height: 40px; flex-wrap: wrap; padding: 4px 12px; row-gap: 4px; }
+}
