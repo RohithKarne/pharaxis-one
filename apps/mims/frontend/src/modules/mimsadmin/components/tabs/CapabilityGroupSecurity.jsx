@@ -224,6 +224,17 @@ export default function CapabilityGroupSecurity() {
     return Array.from(m.entries()).map(([category, items]) => ({ category, items }))
   }, [catalog])
 
+  // MIPM-192: a group only adds rights. The ones its members' role already carries
+  // (the catalog's role defaults) show ticked and locked, so nobody unticks a right
+  // and believes it is gone. Decided by Rohith, 2026-10-04.
+  const groupRole = String(groups.find(g => g.id === activeGroupId)?.privileges?.role || '').toLowerCase()
+  const roleLockedKeys = useMemo(() => new Set(
+    groupRole
+      ? catalog.filter(p => (p.default_allowed_roles || []).map(r => String(r).toLowerCase()).includes(groupRole)).map(p => p.privilege_key)
+      : []
+  ), [catalog, groupRole])
+  const isOn = key => roleLockedKeys.has(key) || selected.has(key)
+
   const filteredByCategory = useMemo(() => {
     const query = search.trim().toLowerCase()
     return byCategory
@@ -233,12 +244,12 @@ export default function CapabilityGroupSecurity() {
           const matchesSearch = !query
             || p.label.toLowerCase().includes(query)
             || p.privilege_key.toLowerCase().includes(query)
-          const matchesGranted = !onlyGranted || selected.has(p.privilege_key)
+          const matchesGranted = !onlyGranted || isOn(p.privilege_key)
           return matchesSearch && matchesGranted
         }),
       }))
       .filter(({ items }) => items.length > 0)
-  }, [byCategory, onlyGranted, search, selected])
+  }, [byCategory, onlyGranted, search, selected, roleLockedKeys]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const catalogByKey = useMemo(
     () => new Map(catalog.map((p) => [p.privilege_key, p])),
@@ -273,13 +284,14 @@ export default function CapabilityGroupSecurity() {
   }, [activeConflicts])
 
   const toggle = key => setSelected(prev => {
+    if (roleLockedKeys.has(key)) return prev
     const next = new Set(prev)
     next.has(key) ? next.delete(key) : next.add(key)
     return next
   })
   const toggleCategory = (items, on) => setSelected(prev => {
     const next = new Set(prev)
-    items.forEach(p => on ? next.add(p.privilege_key) : next.delete(p.privilege_key))
+    items.filter(p => !roleLockedKeys.has(p.privilege_key)).forEach(p => on ? next.add(p.privilege_key) : next.delete(p.privilege_key))
     return next
   })
   const applyTemplate = tpl => {
@@ -683,6 +695,11 @@ export default function CapabilityGroupSecurity() {
                   )}
                 </div>
 
+                {groupRole && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    Members of this group are <strong>{groupRole.replace('_', ' ')}</strong>s. Rights marked 🔒 come with that role and cannot be removed here — a group can only add rights.
+                  </div>
+                )}
                 {!filteredByCategory.length && (
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px', color: 'var(--text-muted)', fontSize: 13, background: 'var(--surface)', marginBottom: 10 }}>
                     No capabilities match the current filters.
@@ -690,7 +707,7 @@ export default function CapabilityGroupSecurity() {
                 )}
 
 	                {filteredByCategory.map(({ category, items }) => {
-	                  const allOn = items.every(p => selected.has(p.privilege_key))
+	                  const allOn = items.every(p => isOn(p.privilege_key))
 	                  const isCollapsed = collapsed[category]
 	                  const hasCategoryConflict = items.some((p) => conflictedPrivilegeKeys.has(p.privilege_key))
 	                  return (
@@ -705,7 +722,7 @@ export default function CapabilityGroupSecurity() {
                         <div style={{ fontWeight: 700, fontSize: 13 }}>
                           <span style={{ marginRight: 6, opacity: 0.5 }}>{isCollapsed ? '▸' : '▾'}</span>{category}
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
-                            {items.filter(p => selected.has(p.privilege_key)).length}/{items.length}
+                            {items.filter(p => isOn(p.privilege_key)).length}/{items.length}
                           </span>
                         </div>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -731,8 +748,9 @@ export default function CapabilityGroupSecurity() {
                                 color: isConflicted ? (isBlockConflict ? '#991b1b' : '#92400e') : 'inherit',
                                 background: isConflicted ? (isBlockConflict ? '#fef2f2' : '#fffbeb') : 'transparent',
                               }}>
-	                              <input type="checkbox" checked={selected.has(p.privilege_key)} onChange={() => toggle(p.privilege_key)} />
-	                              <span>{p.label}</span>
+	                              <input type="checkbox" checked={isOn(p.privilege_key)} disabled={roleLockedKeys.has(p.privilege_key)} onChange={() => toggle(p.privilege_key)} />
+	                              <span style={{ opacity: roleLockedKeys.has(p.privilege_key) ? 0.7 : 1 }}>{p.label}</span>
+                                {roleLockedKeys.has(p.privilege_key) ? <span title={`Built into the ${groupRole.replace('_', ' ')} role — a group cannot remove it`} style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔒 role</span> : null}
                                 {isConflicted ? <span title={isBlockConflict ? 'Block conflict' : 'Warning conflict'} style={{ color: isBlockConflict ? '#dc2626' : '#d97706', fontSize: 11 }}>⚠</span> : null}
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({p.privilege_key})</span>
 	                              {p.is_sensitive ? <span title="Sensitive capability" style={{ color: '#b8860b', fontSize: 11 }}>⚠</span> : null}
