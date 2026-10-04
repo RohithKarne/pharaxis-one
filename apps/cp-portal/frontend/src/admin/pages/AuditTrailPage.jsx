@@ -246,7 +246,7 @@ export default function AuditTrailPage() {
         {loading ? (
           <div className="cp-loading">Loading…</div>
         ) : records.length === 0 ? (
-          <p className="cp-page-desc">No audit records yet.</p>
+          <p className="cp-page-desc cp-empty-text">No audit records yet.</p>
         ) : (
           <>
             <table className="cp-table">

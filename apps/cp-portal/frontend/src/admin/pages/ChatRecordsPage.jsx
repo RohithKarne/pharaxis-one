@@ -101,7 +101,7 @@ export default function ChatRecordsPage() {
                 <option value="other">Other</option>
               </select>
             </div>
-            {loading ? <div>Loading...</div> : list.conversations.length === 0 ? <div>No conversations yet.</div> : (
+            {loading ? <div>Loading...</div> : list.conversations.length === 0 ? <div className="cp-empty-text">No conversations yet.</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left' }}>

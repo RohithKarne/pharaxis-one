@@ -152,6 +152,7 @@ the ones a validation plan should name.
 ### Doctor portal
 - "For you" on Home, matched by specialty, followed areas and area tags; an event page with Register and Add to calendar; notifications that open the exact item — CPPM-115–117, CPPM-122 (#709)
 - Clinical Trials and Training show only when they have published content — CPPM-109
+- Sign-in, the request form and the MSL meeting form tie every label to its box, so a screen reader names the field and clicking the label puts the cursor in it — CPPM-105
 
 ### Admin console
 - Seven main screens with tabs, a "Go to…" quick search, and a dashboard "Waiting on you" panel — CPPM-123, CPPM-130, CPPM-131
@@ -162,8 +163,12 @@ the ones a validation plan should name.
 - Classic look, and Katrina's six UI/UX priorities (#707, #708)
 - Fixes: collapsed sidebar width, page titles, client names cut short on the dashboard — CPPM-125, CPPM-126, CPPM-134
 - On a phone or small tablet: wide tables scroll inside themselves, the Overview and dashboard stack, and the top bar names the client in full — CPPM-146–149
+- The automated accessibility scan (WCAG 2.2 AA) reports no failure on 14 admin and 16 portal screens: darker text where it fell short, every dropdown named — CPPM-98
+- While a load on an admin screen has failed, the screen says it could not be loaded in full and hides its "No … yet" blocks, so a failed list never reads as an empty one — CPPM-83
 
 ### Platform
+- Four server libraries raised past high-severity security warnings (multer, mysql2, nodemailer, express-rate-limit); the scan reports no high or critical item — CPPM-76
+- Old chat conversations are purged after retention; the purge had failed silently since #660 — CPPM-150
 - Database migrations 0039–0043, folded into the baseline and checked by the fresh-install test (`backend/tests/fresh-provision.js`)
 - `GET /api/health` returns a `build` block; `version` is kept for existing consumers — `backend/server.js`
 - Each page loads on demand, so the portal sign-in no longer downloads the admin console (#704)

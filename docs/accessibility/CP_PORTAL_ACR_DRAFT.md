@@ -14,7 +14,7 @@ keyboard-only walk on a local copy. **Nobody has yet tested CP Portal with a scr
 | | |
 |---|---|
 | Product | CP Portal: public portal and admin console, web application |
-| Version | `main` plus branch `claude/human-made-ui-tgmzn6` (tickets CPPM-82, CPPM-83, CPPM-98, CPPM-99) |
+| Version | `main` at fb8f540 (4 October 2026) plus the CPPM-98 and CPPM-105 changes; earlier pass on branch `claude/human-made-ui-tgmzn6` (CPPM-82, CPPM-83, CPPM-98, CPPM-99) |
 | Browsers checked | Chromium only; desktop width (1400 × 900), and the portal at 375 px (CPPM-99) |
 | Assistive technology checked | None |
 
@@ -27,6 +27,12 @@ keyboard-only walk on a local copy. **Nobody has yet tested CP Portal with a scr
    - Admin console, 13 screens: sign-in, dashboard, clients, client overview, submissions,
      portal users, MSLs, forms, content, sync health, branding, features, audit trail.
      Before: 215 failures. After: 0.
+   - **Re-run on 4 October 2026** against `main` (fb8f540): the earlier numbers no longer
+     held. Admin console, 14 screens: 3 failures (two low-contrast texts, one unnamed
+     dropdown). Portal, 16 screens including the open MSL meeting form and the signed-out
+     sign-in page: 12 failures (seven unlabelled boxes and dropdowns on the request form,
+     unnamed region dropdown, four low-contrast texts). All fixed under CPPM-98 and
+     CPPM-105; the same scan now reports **0 failures** on both parts.
 2. **Keyboard-only walk**: portal sign-in, the submit form, admin sign-in.
 
 Screens not scanned (the remaining admin pages, every dialog, chat, events, training, news,
@@ -44,14 +50,14 @@ checked it yet. "Supports" here still needs a person's confirmation.
 |---|---|---|---|
 | 1.1.1 Non-text content | A | Not evaluated | The scan found no unlabelled images on the screens checked; client logos and document thumbnails not reviewed by a person. |
 | 1.2.1 – 1.2.5 Time-based media | A/AA | Not evaluated | Training and event pages not checked. |
-| 1.3.1 Info and relationships | A | Partially supports | Many admin forms show a label beside a field without linking the two. Fixed on the screens scanned; the same pattern likely remains on unscanned admin pages. |
+| 1.3.1 Info and relationships | A | Partially supports | Many admin forms show a label beside a field without linking the two. Fixed on the screens scanned; the same pattern likely remains on unscanned admin pages. The portal's sign-in, request and MSL meeting forms link every label to its box and read help text with the field (CPPM-105, 4 October 2026). |
 | 1.3.2 Meaningful sequence | A | Not evaluated | |
 | 1.3.3 Sensory characteristics | A | Not evaluated | |
 | 1.3.4 Orientation | AA | Not evaluated | |
 | 1.3.5 Identify input purpose | AA | Not evaluated | |
 | 1.4.1 Use of colour | A | Partially supports | Submission statuses show a word as well as a colour; other screens not reviewed. |
 | 1.4.2 Audio control | A | Not evaluated | |
-| 1.4.3 Contrast (minimum) | AA | Partially supports | 196 low-contrast texts, now 2. Grey, green, amber and red text was darkened across both parts. **The portal's colours come from each client's branding**; the demo client's secondary text colour still falls just short on the home page (4.2 : 1 against 4.5 : 1). The branding screen does not warn about contrast. |
+| 1.4.3 Contrast (minimum) | AA | Partially supports | 196 low-contrast texts, now 0 on the screens scanned (the last six, on the home page hints, the pager, the "approved" badge and the MSL initials, fixed 4 October 2026). Grey, green, amber and red text was darkened across both parts. **The portal's colours come from each client's branding**, and the branding screen does not warn about contrast, so another client's colours can fail where the demo client's now pass. |
 | 1.4.4 Resize text | AA | Not evaluated | |
 | 1.4.5 Images of text | AA | Not evaluated | |
 | 1.4.10 Reflow | AA | Partially supports | The portal at 375 px wide: see CPPM-99 for what was checked. Admin console is built for desktop. |

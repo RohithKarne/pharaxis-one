@@ -99,7 +99,7 @@ export default function FindMSLPage() {
       <div className="pp-filter-bar">
         <input className="pp-search-input" placeholder="Search by name, specialty, or territory…" value={search} onChange={e => setSearch(e.target.value)} />
         {regions.length > 0 && (
-          <select value={region} onChange={e => setRegion(e.target.value)}>
+          <select aria-label="Region" value={region} onChange={e => setRegion(e.target.value)}>
             <option value="">All Regions</option>
             {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -155,42 +155,43 @@ export default function FindMSLPage() {
               </div>
             ) : (
               <form onSubmit={handleBookingSubmit} className="cp-modal-body">
+                {/* CPPM-105: every label is tied to its box, and the slot hint is read with the slot list. */}
                 <div className="cp-field-row">
                   <div className="cp-field">
-                    <label>Your Name *</label>
-                    <input required value={bookingForm.requester_name} onChange={e => setBookingForm(f => ({ ...f, requester_name: e.target.value }))} placeholder="Full name" />
+                    <label htmlFor="msl-name">Your Name *</label>
+                    <input id="msl-name" required value={bookingForm.requester_name} onChange={e => setBookingForm(f => ({ ...f, requester_name: e.target.value }))} placeholder="Full name" />
                   </div>
                   <div className="cp-field">
-                    <label>Your Email *</label>
-                    <input required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder="you@example.com" />
+                    <label htmlFor="msl-email">Your Email *</label>
+                    <input id="msl-email" required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder="you@example.com" />
                   </div>
                 </div>
                 {availableSlots.length > 0 && (
                   <div className="cp-field">
-                    <label>Available Time Slots</label>
-                    <select value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
+                    <label htmlFor="msl-slot">Available Time Slots</label>
+                    <select id="msl-slot" aria-describedby="msl-slot-help" value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
                       <option value="">— No specific slot (request general availability) —</option>
                       {availableSlots.map(s => {
                         const label = s.starts_at ? formatDateTime(s.starts_at) : ''
                         return <option key={s.id} value={s.id}>{label}</option>
                       })}
                     </select>
-                    <span style={{ fontSize: 11, color: '#4B5563' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
+                    <span id="msl-slot-help" style={{ fontSize: 11, color: '#4B5563' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
                   </div>
                 )}
                 <div className="cp-field-row">
                   <div className="cp-field">
-                    <label>Preferred Date{selectedSlot ? ' (using selected slot)' : ''}</label>
-                    <input type="date" disabled={!!selectedSlot} value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
+                    <label htmlFor="msl-date">Preferred Date{selectedSlot ? ' (using selected slot)' : ''}</label>
+                    <input id="msl-date" type="date" disabled={!!selectedSlot} value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
                   </div>
                   <div className="cp-field">
-                    <label>Topic / Area of Interest</label>
-                    <input value={bookingForm.topic} onChange={e => setBookingForm(f => ({ ...f, topic: e.target.value }))} placeholder="e.g. Clinical data, pipeline product…" />
+                    <label htmlFor="msl-topic">Topic / Area of Interest</label>
+                    <input id="msl-topic" value={bookingForm.topic} onChange={e => setBookingForm(f => ({ ...f, topic: e.target.value }))} placeholder="e.g. Clinical data, pipeline product…" />
                   </div>
                 </div>
                 <div className="cp-field">
-                  <label>Additional Message</label>
-                  <textarea rows={3} value={bookingForm.message} onChange={e => setBookingForm(f => ({ ...f, message: e.target.value }))} placeholder="Any additional context or questions…" maxLength={500} />
+                  <label htmlFor="msl-message">Additional Message</label>
+                  <textarea id="msl-message" rows={3} value={bookingForm.message} onChange={e => setBookingForm(f => ({ ...f, message: e.target.value }))} placeholder="Any additional context or questions…" maxLength={500} />
                 </div>
                 {bookingError && <div className="cp-error">{bookingError}</div>}
                 <div className="cp-modal-footer">

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 const AdminAuthContext = createContext(null)
 const PENDING_SIGNOUT = 'cp_admin_signout_pending' // CPPM-40
@@ -20,6 +20,13 @@ export function AdminAuthProvider({ children }) {
     setFailNotice(text)
     setTimeout(() => setFailNotice(''), 10000)
   }
+  // CPPM-83: the notice above goes after ten seconds, so this flag outlives it. While a
+  // load on the current screen has failed, AdminLayout hides every "No … yet" block and
+  // says the page is incomplete, so a failed list never reads as an empty one. It clears
+  // when the person moves to another screen, whose own loads start afresh.
+  const [loadFailed, setLoadFailed] = useState(false)
+  const location = useLocation()
+  useEffect(() => { setLoadFailed(false) }, [location.pathname])
 
   function login(_token, adminData) {
     localStorage.removeItem('cp_admin_token')
@@ -82,15 +89,19 @@ export function AdminAuthProvider({ children }) {
       const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '')
       const isAdminApi = url.includes('/api/admin/')
       let res
+      const method = String(args[1]?.method || 'GET').toUpperCase()
       try {
         res = await originalFetch(...args)
       } catch (err) {
-        if (active && isAdminApi && err?.name !== 'AbortError') noticeFailure('Could not reach the server. Check your connection, then reload.')
+        if (active && isAdminApi && err?.name !== 'AbortError') {
+          noticeFailure('Could not reach the server. Check your connection, then reload.')
+          if (method === 'GET') setLoadFailed(true)
+        }
         throw err
       }
       try {
-        const method = String(args[1]?.method || 'GET').toUpperCase()
         if (active && isAdminApi && res.status >= 500) {
+          if (method === 'GET') setLoadFailed(true)
           noticeFailure(method === 'GET'
             ? 'Could not load everything on this page: the server reported an error. Try again in a moment.'
             : 'The server reported an error, so your last change may not have been saved. Check it and try again.')
@@ -151,7 +162,7 @@ export function AdminAuthProvider({ children }) {
   }
 
   return (
-    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish, canChange }}>
+    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, signOut, adminFetch, hasRole, canWrite, canApprove, canPublish, canChange, loadFailed }}>
       {children}
       {failNotice && (
         <div className="cp-fail-notice" role="alert">

@@ -245,7 +245,7 @@ export default function TrainingAdminPage() {
 
         <div className="cp-card" style={card}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Training Modules ({modules.length})</h3>
-          {loading ? <div>Loading...</div> : modules.length === 0 ? <div>No training modules yet.</div> : (
+          {loading ? <div>Loading...</div> : modules.length === 0 ? <div className="cp-empty-text">No training modules yet.</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left' }}>
@@ -353,7 +353,7 @@ export default function TrainingAdminPage() {
           <button className="cp-btn cp-btn-outline" onClick={exportCsv} style={{ marginLeft: 'auto' }}>Export CSV</button>
         </div>
         {cMsg && <div style={{ fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{cMsg}</div>}
-        {completions.length === 0 ? <div style={{ fontSize: 13 }}>No attempts match.</div> : (
+        {completions.length === 0 ? <div className="cp-empty-text" style={{ fontSize: 13 }}>No attempts match.</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left' }}>
