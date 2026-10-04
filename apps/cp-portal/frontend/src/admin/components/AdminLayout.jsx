@@ -111,6 +111,15 @@ function deriveTitle(pathname) {
   return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
 
+// CPPM-124: the sections and tabs this person's menu shows. Also read by the client
+// Overview (CPPM-135), so its cards and the menu never disagree.
+export function menuSections({ hasRole, canChange }, currentPath = null) {
+  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
+  return CLIENT_SECTIONS
+    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
+    .filter(sec => sec.tabs.length > 0)
+}
+
 // CPPM-131: "Go to…" — type part of a screen's name and jump to it. It offers
 // only what this person's menu offers. "/" anywhere outside a field focuses it.
 function QuickSearch({ items }) {
@@ -173,10 +182,7 @@ export default function AdminLayout({ children }) {
   const currentSection = CLIENT_SECTIONS.find(sec => sec.tabs.some(t => t.path === currentPath))
   // CPPM-124: a viewer may change nothing but is meant to look at everything.
   // The tab you are on always shows, even if your role cannot change it.
-  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
-  const sections = CLIENT_SECTIONS
-    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
-    .filter(sec => sec.tabs.length > 0)
+  const sections = menuSections({ hasRole, canChange }, currentPath)
   const shownSection = sections.find(sec => sec.key === currentSection?.key)
   const mainItems = NAV_ITEMS.filter(item => (!item.superadminOnly || admin?.role === 'superadmin') && !(item.platformOnly && admin?.clientId))
   const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
