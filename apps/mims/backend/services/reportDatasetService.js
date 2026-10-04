@@ -194,6 +194,9 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
         JOIN cases c ON c.id = t.case_id
         LEFT JOIN users u ON u.id = t.assigned_to
         WHERE c.org_id = ? AND c.is_deleted = 0
+          -- The report is "open transmissions" but listed closed ones too (MIPM-206).
+          -- Open means what the SLA engine tracks (caseGovernanceService).
+          AND t.status IN ('Pending', 'In Review', 'Accepted')
         UNION ALL
         SELECT
           'PC' AS transmission_type,
@@ -210,6 +213,7 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
         JOIN cases c ON c.id = t.case_id
         LEFT JOIN users u ON u.id = t.assigned_to
         WHERE c.org_id = ? AND c.is_deleted = 0
+          AND t.status IN ('Pending', 'Under Investigation')
       ) tx
       ${useDateFilter ? 'WHERE ((DATE(COALESCE(due_date, updated_at)) >= ? AND DATE(COALESCE(due_date, updated_at)) <= ?) OR (due_date IS NULL AND updated_at IS NULL))' : ''}
       ORDER BY
