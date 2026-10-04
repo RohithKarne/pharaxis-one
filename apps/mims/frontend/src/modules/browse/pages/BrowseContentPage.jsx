@@ -357,7 +357,10 @@ function ModuleSidebar({ mod, onClose }) {
 }
 
 export default function BrowseContentPage() {
-  const { token } = useAuth()
+  const { token, hasModuleAccess } = useAuth()
+  // Without Content Management only published content comes back (MIPM-184 /
+  // MIPM-210), so a status filter would offer choices that always return nothing.
+  const showStatusFilter = hasModuleAccess('content_mgmt')
   const headers   = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -522,14 +525,14 @@ export default function BrowseContentPage() {
               <option value="">All Folders</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select
+            {showStatusFilter && <select
               className="bc-filter-select"
               aria-label="Status"
               value={status}
               onChange={e => { setStatus(e.target.value); setPage(1) }}
             >
               {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
+            </select>}
             <select
               className="bc-filter-select"
               aria-label="Document type"
@@ -561,14 +564,14 @@ export default function BrowseContentPage() {
               <option value="">All Folders</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select
+            {showStatusFilter && <select
               className="bc-filter-select"
               aria-label="Status"
               value={modStatus}
               onChange={e => setModStatus(e.target.value)}
             >
               {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
+            </select>}
             {hasModFilter && (
               <button className="bc-clear-btn" onClick={clearModFilters}>✕ Clear</button>
             )}
