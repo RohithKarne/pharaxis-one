@@ -127,6 +127,7 @@ the ones a validation plan should name.
 - Area 7, Single Sign-On: with "Password only" the portal sign-in page no longer offers the SSO button — `backend/services/ssoService.js`
 - Area 7, Integration: adding an integration now says it is off until Enable is pressed — `frontend/src/admin/pages/IntegrationPage.jsx`
 - Area 8, Compliance: a consent given on the sign-in page is recorded against the account once the person signs in; before, every row of the Consent Audit Log read "Anonymous" — `frontend/src/portal/components/ConsentBanner.jsx`
+- Area 9, portal Therapeutic Areas: an area with no products says so instead of showing only its name — `frontend/src/portal/pages/TherapeuticAreasPage.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
