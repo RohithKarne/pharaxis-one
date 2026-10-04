@@ -64,6 +64,9 @@ export default function AuditTrailPage() {
   const [error, setError]       = useState('')
   const [detailRecord, setDetailRecord] = useState(null)
 
+  // CPPM-151: the lists offer what this scope has recorded; the fixed lists above
+  // are only the first paint before the server answers.
+  const [filterOptions, setFilterOptions] = useState({ entities: ENTITY_OPTIONS, actions: ACTION_OPTIONS })
   const [filterEntity, setFilterEntity] = useState('All')
   const [filterAction, setFilterAction] = useState('All')
   const [filterFrom,   setFilterFrom]   = useState('')
@@ -89,6 +92,7 @@ export default function AuditTrailPage() {
       const d = await res.json()
       setRecords(d.records || [])
       setTotal(d.total || 0)
+      if (d.filters) setFilterOptions({ entities: ['All', ...(d.filters.entities || [])], actions: ['All', ...(d.filters.actions || [])] })
     } catch (err) {
       setError('Failed to load audit records.')
       setRecords([])
@@ -154,14 +158,14 @@ export default function AuditTrailPage() {
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Entity</label>
             <select aria-label="Entity" value={filterEntity} onChange={e => setFilterEntity(e.target.value)}>
-              {ENTITY_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+              {filterOptions.entities.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
 
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Action</label>
             <select aria-label="Action" value={filterAction} onChange={e => setFilterAction(e.target.value)}>
-              {ACTION_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+              {filterOptions.actions.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
 

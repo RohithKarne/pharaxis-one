@@ -38,7 +38,13 @@ async function listRecords(req, res, scope) {
       params
     );
 
-    res.json({ records, total, page, limit, pages: Math.ceil(total / limit) });
+    // CPPM-151: the filter lists come from what this scope has actually recorded,
+    // so an admin can narrow to LOGIN, SUBMITTED or BULK_PUBLISH and not only to
+    // the handful of actions the screen used to list.
+    const [entities] = await pool.execute(`SELECT DISTINCT l.entity FROM cp_audit_logs l WHERE ${scope.condition} AND l.entity IS NOT NULL AND l.entity <> '' ORDER BY l.entity`, scope.params);
+    const [actions]  = await pool.execute(`SELECT DISTINCT l.action FROM cp_audit_logs l WHERE ${scope.condition} AND l.action IS NOT NULL AND l.action <> '' ORDER BY l.action`, scope.params);
+
+    res.json({ records, total, page, limit, pages: Math.ceil(total / limit), filters: { entities: entities.map(r => r.entity), actions: actions.map(r => r.action) } });
   } catch (err) {
     log.error('admin.audit.error', { err, route: `GET /${scope.name}`, path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
