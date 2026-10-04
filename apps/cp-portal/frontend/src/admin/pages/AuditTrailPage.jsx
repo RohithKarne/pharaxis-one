@@ -3,12 +3,8 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 
-const ENTITY_OPTIONS = [
-  'All', 'branding', 'feature', 'news', 'safety_alert', 'document',
-  'compliance', 'chatbox', 'gate', 'msl', 'integration', 'portal_user', 'client',
-]
-
-const ACTION_OPTIONS = ['All', 'CREATE', 'UPDATE', 'DELETE', 'ENABLE', 'DISABLE', 'UPLOAD']
+// The filter drop-downs list what the server has actually recorded for this
+// scope (sent with every page), so nothing recorded is impossible to filter for.
 
 const ACTION_BADGE_STYLES = {
   CREATE:  { background: '#dcfce7', color: '#166534' },
@@ -63,6 +59,8 @@ export default function AuditTrailPage() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
   const [detailRecord, setDetailRecord] = useState(null)
+  const [options, setOptions]   = useState({ entities: [], actions: [] })
+  const [exporting, setExporting] = useState(false)
 
   const [filterEntity, setFilterEntity] = useState('All')
   const [filterAction, setFilterAction] = useState('All')
@@ -89,6 +87,7 @@ export default function AuditTrailPage() {
       const d = await res.json()
       setRecords(d.records || [])
       setTotal(d.total || 0)
+      if (d.filters) setOptions(d.filters)
     } catch (err) {
       setError('Failed to load audit records.')
       setRecords([])
@@ -98,6 +97,42 @@ export default function AuditTrailPage() {
   }, [scope, page, filterEntity, filterAction, filterFrom, filterTo])
 
   useEffect(() => { loadRecords() }, [loadRecords])
+
+  // CP walk, 4 Oct 2026: the export carried only the page on screen (50 rows at
+  // most) under the name "GxP Audit Package". It now fetches every page that
+  // matches the filters and writes them all, newest first, the same order as the screen.
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const all = []
+      for (let pg = 1; ; pg++) {
+        const params = new URLSearchParams({ page: pg, limit: 100 })
+        if (filterEntity !== 'All') params.set('entity', filterEntity)
+        if (filterAction !== 'All') params.set('action', filterAction)
+        if (filterFrom)             params.set('from',   filterFrom)
+        if (filterTo)               params.set('to',     filterTo)
+        const res = await fetch(`/api/admin/audit/${scope}?${params.toString()}`, { headers: adminHeaders() })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const d = await res.json()
+        all.push(...(d.records || []))
+        if (pg >= (d.pages || 1)) break
+      }
+      const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+      const csvHeader = 'Timestamp,Admin,Action,Entity,EntityID,Details\n'
+      const csvRows = all.map(r => [r.created_at, r.admin_email || r.admin_name || '', r.action, r.entity, r.entity_id ?? '', r.details || ''].map(cell).join(',')).join('\n')
+      const blob = new Blob([csvHeader + csvRows], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gxp_audit_package_${scope}_${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('The export could not be completed. Nothing was downloaded.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   function handleApplyFilters() {
     setPage(1)
@@ -154,14 +189,14 @@ export default function AuditTrailPage() {
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Entity</label>
             <select aria-label="Entity" value={filterEntity} onChange={e => setFilterEntity(e.target.value)}>
-              {ENTITY_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+              {['All', ...options.entities].map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
 
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Action</label>
             <select aria-label="Action" value={filterAction} onChange={e => setFilterAction(e.target.value)}>
-              {ACTION_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+              {['All', ...options.actions].map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
 
@@ -201,21 +236,8 @@ export default function AuditTrailPage() {
       <div className="cp-card cp-table-card" style={{ marginTop: 24, padding: 0 }}>
         <div className="cp-card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px' }}>
           <span>Audit Records ({total})</span>
-          <button
-            className="cp-btn cp-btn-sm cp-btn-outline"
-            onClick={() => {
-              const csvHeader = 'Timestamp,Admin,Action,Entity,EntityID,Details\n';
-              const csvRows = records.map(r => `"${r.created_at}","${r.admin_name || ''}","${r.action}","${r.entity}","${r.entity_id || ''}","${(r.details || '').replace(/"/g, '""')}"`).join('\n');
-              const blob = new Blob([csvHeader + csvRows], { type: 'text/csv' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `gxp_audit_package_${scope}_${new Date().toISOString().slice(0, 10)}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          >
-            Export GxP Audit Package (CSV)
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={exportCsv} disabled={exporting || total === 0}>
+            {exporting ? 'Exporting…' : `Export GxP Audit Package (CSV, ${total} records)`}
           </button>
         </div>
 
