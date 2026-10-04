@@ -16,30 +16,11 @@ const DEFAULT_FILTERS = {
   include_expired: false,
 }
 
-function ReviewRowWithMode({ r, authHeaders, onOpen }) {
-  const [mode, setMode] = useState(r.review_mode || null)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, { headers: authHeaders })
-      .then(res => res.ok ? res.json() : null)
-      .then(d => { if (d?.config?.review_mode) setMode(d.config.review_mode) })
-      .catch(() => {})
-  }, [r.id]) // eslint-disable-line
-
-  async function toggleMode(newMode) {
-    if (saving) return
-    setSaving(true)
-    try {
-      const res = await httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, {
-        method: 'PATCH', headers: authHeaders,
-        body: JSON.stringify({ review_mode: newMode }),
-      })
-      if (res.ok) setMode(newMode)
-    } catch { /* silent */ }
-    setSaving(false)
-  }
-
+// The Sequential / Parallel switch was here, on every reviewer's task row. Nothing
+// reads the mode — reviewers have no order, so both behaved alike — and any
+// reviewer could flip it for the whole review. Removed until sequential review is
+// built (MIPM-203).
+function ReviewRow({ r, onOpen }) {
   return (
     <tr>
       <td style={{ fontWeight: 500 }}>{r.document_name}</td>
@@ -47,17 +28,6 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
       <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
       {/* The list returns the reviewer's own decision as reviewer_status; my_status is never set (MIPM-178). */}
       <td><StatusBadge status={r.reviewer_status || r.my_status || 'Ongoing'} /></td>
-      <td>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['sequential', 'parallel'].map(m => (
-            <button key={m} className={`cm-btn cm-btn-sm ${mode === m ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
-              style={{ textTransform: 'capitalize', opacity: saving ? 0.6 : 1 }}
-              onClick={() => toggleMode(m)} disabled={saving}>
-              {m === 'sequential' ? 'Sequential' : 'Parallel'}
-            </button>
-          ))}
-        </div>
-      </td>
       <td>
         {r.status === 'Open'
           ? <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
@@ -563,13 +533,12 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
                 <th>Review Title</th>
                 <th>Planned End Date</th>
                 <th>My Status</th>
-                <th>Review Mode</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {reviews.map(r => (
-                <ReviewRowWithMode key={r.id} r={r} authHeaders={authHeaders} onOpen={() => setReviewStatusItem(r)} />
+                <ReviewRow key={r.id} r={r} onOpen={() => setReviewStatusItem(r)} />
               ))}
             </tbody>
           </table>

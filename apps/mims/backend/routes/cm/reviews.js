@@ -372,6 +372,10 @@ router.patch('/reviews/:reviewId/config', authenticate, async (req, res) => {
     }
     const review = await getScopedReview(req, req.params.reviewId);
     if (!review) return res.status(404).json({ error: 'Review not found' });
+    // Any reviewer could change the mode for the whole review (MIPM-203).
+    if (review.created_by !== req.user.userId && !hasGlobalAdminScope(req.user)) {
+      return res.status(403).json({ error: 'Only the person who started this review can change its mode.' });
+    }
     await pool.execute(
       `INSERT INTO cm_review_config (doc_id, review_mode, updated_by)
        VALUES (?, ?, ?)
