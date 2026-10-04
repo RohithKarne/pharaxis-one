@@ -20,7 +20,7 @@ async function readinessChecks(pool, id) {
     { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post', path: 'news' },
     { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document', path: 'documents' },
     { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison', path: 'msls' },
-    { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
+    { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color.toUpperCase() !== '#6B3FA0'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
   ];
 
   const doneCount = checks.filter(c => c.done).length;
