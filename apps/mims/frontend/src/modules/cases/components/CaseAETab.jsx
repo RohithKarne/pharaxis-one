@@ -233,10 +233,28 @@ export default function CaseAETab({
       .then(d => setHasDrugRows((d.rows || []).length > 0))
       .catch(() => {})
   }, [id, drugRolesOn]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Rohith, 2026-10-04 (on Saad's call): with the feature on, Drugs is the one
+  // list that counts and Product Info steps aside — unless this version already
+  // has Product Info rows, which stay visible so nothing recorded is hidden.
+  const [hasProductRows, setHasProductRows] = useState(false)
+  useEffect(() => {
+    if (!drugRolesOn || !activeAeVer?.id) return
+    httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/product-info`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(rows => setHasProductRows(Array.isArray(rows) && rows.length > 0))
+      .catch(() => {})
+  }, [activeAeVer?.id, drugRolesOn]) // eslint-disable-line react-hooks/exhaustive-deps
   const aeTabs = useMemo(
-    () => AE_TABS.filter(t => t.key !== 'drugs' || drugRolesOn || hasDrugRows),
-    [drugRolesOn, hasDrugRows],
+    () => AE_TABS.filter(t => {
+      if (t.key === 'drugs') return drugRolesOn || hasDrugRows
+      if (t.key === 'product-info') return !drugRolesOn || hasProductRows
+      return true
+    }),
+    [drugRolesOn, hasDrugRows, hasProductRows],
   )
+  useEffect(() => {
+    if (!aeTabs.some(t => t.key === activeAeTab)) setActiveAeTab('general')
+  }, [aeTabs, activeAeTab])
 
   const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
   const canCreateAeVersion = !caseClosed && (!latestAeVersion || isClosed(latestAeVersion))
