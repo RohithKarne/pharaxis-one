@@ -136,6 +136,7 @@ the ones a validation plan should name.
 - Fixes: collapsed sidebar width, page titles, client names cut short on the dashboard — CPPM-125, CPPM-126, CPPM-134
 - On a phone or small tablet: wide tables scroll inside themselves, the Overview and dashboard stack, and the top bar names the client in full — CPPM-146–149
 - The automated accessibility scan (WCAG 2.2 AA) reports no failure on 14 admin and 16 portal screens: darker text where it fell short, every dropdown named — CPPM-98
+- While a load on an admin screen has failed, the screen says it could not be loaded in full and hides its "No … yet" blocks, so a failed list never reads as an empty one — CPPM-83
 
 ### Platform
 - Four server libraries raised past high-severity security warnings (multer, mysql2, nodemailer, express-rate-limit); the scan reports no high or critical item — CPPM-76

@@ -1236,6 +1236,11 @@ body { background: var(--cp-bg); }
 .cp-loading { padding: 40px; text-align: center; color: var(--cp-text-muted); }
 .cp-empty   { padding: 40px; text-align: center; color: var(--cp-text-muted); }
 .cp-empty p { margin-top: 8px; }
+/* CPPM-83: while a load on this screen has failed, no "No … yet" block shows; the line
+   AdminLayout puts above the page says it could not be loaded in full. */
+.cp-load-failed .cp-empty, .cp-load-failed .oc-empty-state, .cp-load-failed .cp-empty-text { display: none; }
+.cp-load-failed-line { margin-bottom: 12px; padding: 10px 14px; border: 1px solid #FCA5A5; border-radius: 2px; background: #FEF2F2; color: #B91C1C; font-weight: bold; font-size: 13px; display: flex; align-items: center; gap: 12px; }
+.cp-load-failed-line button { margin-left: auto; }
 
 .cp-error   { background: var(--cp-danger-lt); color: var(--cp-danger); border-radius: var(--cp-radius-sm); padding: 10px 14px; font-size: 13px; font-weight: 600; }
 .cp-success { background: var(--cp-success-lt); color: var(--cp-success); border-radius: var(--cp-radius-sm); padding: 10px 14px; font-size: 13px; font-weight: 600; }

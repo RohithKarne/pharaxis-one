@@ -172,7 +172,7 @@ function QuickSearch({ items }) {
 }
 
 export default function AdminLayout({ children }) {
-  const { admin, signOut, hasRole, canChange } = useAdminAuth()
+  const { admin, signOut, hasRole, canChange, loadFailed } = useAdminAuth()
   const navigate  = useNavigate()
   const { clientId } = useParams()
   const location  = useLocation()
@@ -371,7 +371,16 @@ export default function AdminLayout({ children }) {
             </span>
           )}
         </div>
-        <div className="cp-admin-content">
+        <div className={`cp-admin-content${loadFailed ? ' cp-load-failed' : ''}`}>
+          {/* CPPM-83: a load on this screen failed. This line stays until the person moves
+              on or reloads, and the page's "No … yet" blocks are hidden meanwhile, so a
+              list that could not be loaded never reads as an empty one. */}
+          {loadFailed && (
+            <div className="cp-load-failed-line" role="alert">
+              <span>This page could not be loaded in full. What is shown may be incomplete, and a list that looks empty may not be.</span>
+              <button type="button" className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => window.location.reload()}>Reload</button>
+            </div>
+          )}
           {scanner && !scanner.up && (
             <div className="cp-error" role="alert" style={{ marginBottom: 16 }}>
               The virus scanner is not running. Portal attachments are held and admin uploads are refused until it starts. It starts with the portal (npm run dev or npm start in apps/cp-portal/backend).
