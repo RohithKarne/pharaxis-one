@@ -696,6 +696,29 @@ router.delete('/cases/ae/product-info/:piId', authenticate, async (req, res) => 
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
+// Lab results, medical history and product info could only be deleted and added
+// again — a typo in a dose meant losing the row's history (MIPM-207). Each now
+// saves in place, under the same lock and audit as add and delete.
+const AE_ROW_EDIT = {
+  'lab-results':     { table: 'case_ae_lab_results',     cols: ['lab_name', 'test_name', 'result', 'unit', 'normal_range', 'test_date'] },
+  'medical-history': { table: 'case_ae_medical_history', cols: ['condition_name', 'start_date', 'end_date', 'is_ongoing', 'notes'], bools: ['is_ongoing'] },
+  'product-info':    { table: 'case_ae_product_info',    cols: ['product_id', 'product_name', 'product_type', 'product_category', 'batch_lot_number', 'dose', 'dose_unit', 'route_of_admin',
+                       'frequency', 'start_date', 'end_date', 'indication', 'action_taken', 'dechallenge', 'rechallenge', 'is_suspect', 'is_concomitant'], bools: ['is_suspect', 'is_concomitant'] },
+};
+for (const [tab, { table, cols, bools = [] }] of Object.entries(AE_ROW_EDIT)) {
+  router.put(`/cases/ae/${tab}/:rowId`, authenticate, async (req, res) => {
+    try {
+      const owned = await ensureAeChildAccess(table, req.params.rowId, req, { requireUnlocked: true });
+      const [[before]] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [req.params.rowId]);
+      const values = cols.map(c => (bools.includes(c) ? (req.body[c] ? 1 : 0) : (req.body[c] || null)));
+      await pool.execute(`UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...values, req.params.rowId]);
+      const [[updated]] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [req.params.rowId]);
+      await audit(req, owned.version_id, `${tab} #${req.params.rowId}`, before, updated);
+      res.json(updated);
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+  });
+}
+
 // ─── AE FLEX FIELDS ──────────────────────────────────────────────────────────
 
 router.get('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (req, res) => {
