@@ -101,7 +101,7 @@ the ones a validation plan should name.
 
 **Revalidation impact of this batch:** Partial — *proposed by Saad Rahman (compliance owner); Rohith to confirm.*
 **Why:** sign-in behaviour, staff password handling and the audit-trail export changed; no record structure or calculation changed. The export now contains every matching record where it held one page, which is a correction of the evidence an auditor receives, not a change to what is recorded.
-**Revalidate:** admin sign-in (Superadmin mode), portal sign-in and the specialty prompt; client activation; the audit-trail export; admin password change and reset.
+**Revalidate:** admin sign-in (Superadmin mode), portal sign-in, the specialty prompt and the SSO sign-in mode; client activation; the audit-trail export; admin password change and reset; erasure fulfilment.
 
 - Area 1, sign-in: the admin sign-in page's Superadmin mode now ends the session it refuses. Before, "Superadmin access required" was shown while the client admin was already signed in on the next page load — `frontend/src/admin/pages/LoginPage.jsx`
 - Area 1, sign-in: a doctor whose specialty is already saved is no longer asked to choose it again at every sign-in; sign-in, email verification and gate confirmation now return the saved specialty — `backend/routes/portal/auth.js`
@@ -124,6 +124,8 @@ the ones a validation plan should name.
 - Area 5, menu: "Change password" for the signed-in admin; the session is kept, other sessions end — `backend/routes/admin/auth.js`, `frontend/src/admin/components/AdminLayout.jsx`
 - Area 5, Portal Users: "Resend invite" on each active user; editing an email checks for an @ and names a duplicate — `frontend/src/admin/pages/PortalUsersPage.jsx`, `backend/routes/admin/portalUsers.js`
 - Area 6, Data Requests: fulfilling an erasure now also removes the person's name and email from their own request rows; before, the Data Requests screen still showed both after Fulfilled — `backend/services/dataSubject.js`
+- Area 7, Single Sign-On: with "Password only" the portal sign-in page no longer offers the SSO button — `backend/services/ssoService.js`
+- Area 7, Integration: adding an integration now says it is off until Enable is pressed — `frontend/src/admin/pages/IntegrationPage.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
