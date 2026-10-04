@@ -61,7 +61,9 @@ export default function ClientsPage() {
     }
   }
 
-  async function toggleActive(id, current) {
+  async function toggleActive(id, current, name) {
+    // Deactivating takes the client's portal offline for every visitor at once.
+    if (current && !confirm(`Deactivate ${name}? Its portal goes offline immediately for everyone. You can reactivate it here.`)) return
     try {
       await apiJson(`/api/admin/clients/${id}`, { method: 'PATCH', headers: adminHeaders(), body: { is_active: !current } })
       loadClients()
@@ -157,7 +159,7 @@ export default function ClientsPage() {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cp-btn cp-btn-sm" onClick={() => navigate(`/admin/clients/${c.id}`)}>Configure</button>
                     <CanChange area="clients">
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(c.id, c.is_active)}>
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(c.id, c.is_active, c.name)}>
                       {c.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                     </CanChange>
