@@ -189,7 +189,9 @@ async function getPublicLoginOptions(clientId, clientCode) {
   if (!client || !client.is_active) return null;
   const loginMode = normalizeLoginMode(client.login_mode);
   const rows = await getProviderRows(clientId);
-  const providers = rows
+  // CP walk 2026-10-04: under "Password only" the sign-in page offers no SSO button;
+  // before, a configured provider was still listed and the button shown.
+  const providers = loginMode === 'local_only' ? [] : rows
     .filter((row) => row.is_active && row.oidc_client_id && row.client_secret_encrypted)
     .map((row) => mapProviderSummary(row, clientCode));
   return {
