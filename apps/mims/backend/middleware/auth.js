@@ -7,6 +7,7 @@ const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('..
 const { sessionKey } = require('../utils/sessionKey');
 const { hasGlobalAdminScope, isAdminUser, normalizeRole } = require('../utils/adminScope');
 const { getUserModules } = require('../utils/userModules');
+const { applySupportScope } = require('./supportAccess');
 
 function createAuthError(message, code, status = 401, shouldLogout = status === 401) {
   const err = new Error(message);
@@ -251,7 +252,9 @@ async function authenticateRequest(req, res, next, options) {
   // as standalone middleware and mounted on nothing, so an expired grant let
   // every request through (PAUD-2 item 12). Chaining it to the one place every
   // authenticated route already passes through is what closes that.
-  return requireAccessNotExpired(req, res, next);
+  // A platform admin reads a client's cases only under its support grant
+  // (Rohith, 2026-10-04); chained here for the same reason.
+  return requireAccessNotExpired(req, res, () => applySupportScope(req, res, next));
 }
 
 /**
