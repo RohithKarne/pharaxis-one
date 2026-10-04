@@ -1202,6 +1202,22 @@ CREATE TABLE IF NOT EXISTS cp_safety_acknowledgements (
   CONSTRAINT fk_safety_ack_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── SAFETY LETTER REMINDERS (from 0043, CPPM-137) ──────────────
+CREATE TABLE IF NOT EXISTS cp_safety_ack_reminders (
+  id               INT      NOT NULL AUTO_INCREMENT,
+  client_id        INT      NOT NULL,
+  alert_id         INT      NOT NULL,
+  portal_user_id   INT      NOT NULL,
+  reminded_at      DATETIME NOT NULL,
+  outbox_id        INT      NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_safety_reminder (alert_id, portal_user_id),
+  KEY idx_safety_reminder_user (portal_user_id),
+  CONSTRAINT fk_safety_reminder_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
+  CONSTRAINT fk_safety_reminder_alert  FOREIGN KEY (alert_id) REFERENCES cp_safety_alerts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_safety_reminder_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 0039 (CPPM-109) only adds two feature rows to clients that already exist; a fresh
 -- database has none, and new clients get both rows when they are created.
 
@@ -1251,4 +1267,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0039_add_trials_training_switches.sql',     NULL),
   ('0040_add_portal_access_requests.sql',       NULL),
   ('0041_add_safety_acknowledgements.sql',      NULL),
-  ('0042_add_content_area_tags.sql',            NULL);
+  ('0042_add_content_area_tags.sql',            NULL),
+  ('0043_add_safety_ack_reminders.sql',         NULL);

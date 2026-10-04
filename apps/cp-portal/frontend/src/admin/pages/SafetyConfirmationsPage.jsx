@@ -58,6 +58,7 @@ export default function SafetyConfirmationsPage() {
       <p style={{ fontSize: 13, color: '#4B5563', marginTop: 0 }}>
         High and critical safety letters ask each signed-in doctor to confirm they have read them.
         This shows who has, out of the active doctors each letter is addressed to.
+        Anyone who has not confirmed three days after a letter goes live gets one reminder email.
       </p>
       {error && <div className="cp-error" role="alert">{error}</div>}
       {msg && <div className="cp-error" role="alert">{msg}</div>}
@@ -95,7 +96,7 @@ export default function SafetyConfirmationsPage() {
             <p style={{ fontSize: 13 }}>No active doctor is addressed by this letter.</p>
           ) : (
             <table className="cp-table" style={{ marginTop: 12 }}>
-              <thead><tr><th>Doctor</th><th>Email</th><th>Type</th><th>Confirmed</th></tr></thead>
+              <thead><tr><th>Doctor</th><th>Email</th><th>Type</th><th>Confirmed</th><th>Reminded</th></tr></thead>
               <tbody>
                 {open.doctors.map(d => (
                   <tr key={d.id}>
@@ -106,6 +107,7 @@ export default function SafetyConfirmationsPage() {
                       {fmt(d.acknowledged_at) || <span style={{ color: '#B45309' }}>Not yet</span>}
                       {!d.addressed && <span style={{ color: '#4B5563' }}> · no longer active or addressed</span>}
                     </td>
+                    <td>{fmt(d.reminded_at) || <span style={{ color: '#4B5563' }}>—</span>}</td>
                   </tr>
                 ))}
               </tbody>
