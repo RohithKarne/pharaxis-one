@@ -98,8 +98,8 @@ router.post('/request-access', async (req, res) => {
       raiseAlert(client.id, {
         kind: 'access_requested', audience: 'admin',
         title: 'Doctors have asked for portal access',
-        body: 'Open Portal Users and choose Requested to approve or decline them.',
-        linkPath: `/admin/clients/${client.id}/users?access=requested`,
+        body: 'Open Inbox › Access Requests to approve or decline them.', // CPPM-139
+        linkPath: `/admin/clients/${client.id}/access-requests`,
         dedupeKey: 'access_requested',
       });
     } catch (err) {

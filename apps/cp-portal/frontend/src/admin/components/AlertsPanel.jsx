@@ -66,7 +66,7 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
           <div style={{ fontWeight: 600 }}>{a.title}</div>
           {a.body && <div style={{ fontSize: 13, marginTop: 4 }}>{a.body}</div>}
           <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
-            {new Date(a.created_at).toLocaleString()} · {a.audience === 'safety' ? 'Safety' : 'Integration'} ·{' '}
+            {new Date(a.created_at).toLocaleString()} · {a.audience === 'safety' ? 'Safety' : a.audience === 'admin' ? 'Admins' : 'Integration'} ·{' '}
             {a.emailed_to ? `emailed to ${a.emailed_to}` : 'nobody was emailed — set who is told'}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
