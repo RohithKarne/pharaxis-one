@@ -285,19 +285,22 @@ export default function SubmitPage() {
               ) : <>
               {formFields.filter(f => isVisible(f)).map(field => (
                 <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
-                  <label>
+                  {/* CPPM-105: the label is tied to its box (a radio group, tick-box group
+                      or single tick box carries the name itself), and the help text is
+                      read out with the field. */}
+                  <label htmlFor={['radio', 'multiselect', 'checkbox'].includes(field.field_type) ? undefined : `f-${field.field_key}`}>
                     {field.label}
                     {field.is_required ? <span className="pp-required" aria-hidden="true"> *</span> : null}
                   </label>
                   {/* CPPM-87: help text the client writes appears under every field,
                       not only under the built-in screening question. */}
                   {field.help_text
-                    ? <span className="pp-field-help">{field.help_text}</span> : null}
+                    ? <span id={`f-${field.field_key}-help`} className="pp-field-help">{field.help_text}</span> : null}
                   {field.field_type === 'radio' ? (
                     /* Radio, not a dropdown: for a safety question the question and
                        both answers must be visible without interaction. A select
                        shows "-- Select --" and reads as furniture to scroll past. */
-                    <div className="pp-radio-group" role="radiogroup" aria-label={field.label}>
+                    <div className="pp-radio-group" role="radiogroup" aria-label={field.label} aria-describedby={field.help_text ? `f-${field.field_key}-help` : undefined}>
                       {optionList(field.options).map(o => (
                         <label key={o} className="pp-radio-label">
                           <input
@@ -313,6 +316,8 @@ export default function SubmitPage() {
                     </div>
                   ) : field.field_type === 'textarea' ? (
                     <textarea
+                      id={`f-${field.field_key}`}
+                      aria-describedby={field.help_text ? `f-${field.field_key}-help` : undefined}
                       rows={4}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}
@@ -320,6 +325,8 @@ export default function SubmitPage() {
                     />
                   ) : field.field_type === 'select' ? (
                     <select
+                      id={`f-${field.field_key}`}
+                      aria-describedby={field.help_text ? `f-${field.field_key}-help` : undefined}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}>
                       <option value="">-- Select --</option>
@@ -355,6 +362,8 @@ export default function SubmitPage() {
                     </label>
                   ) : (
                     <input
+                      id={`f-${field.field_key}`}
+                      aria-describedby={field.help_text ? `f-${field.field_key}-help` : undefined}
                       type={{ email: 'email', phone: 'tel', date: 'date', number: 'number' }[field.field_type] || 'text'}
                       inputMode={field.field_type === 'number' ? 'decimal' : undefined}
                       value={formValues[field.field_key] || ''}

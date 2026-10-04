@@ -249,7 +249,7 @@ export default function CompliancePage() {
       <div className="cp-card" style={{ marginTop: 24 }}>
         <div className="cp-card-title">Consent Audit Log</div>
         {records.length === 0 ? (
-          <p className="cp-page-desc">No consent records yet.</p>
+          <p className="cp-page-desc cp-empty-text">No consent records yet.</p>
         ) : (
           <>
             <table className="cp-table">

@@ -177,7 +177,7 @@ export default function NewsPage() {
     if (status === 'scheduled') return { background: '#DBEAFE', color: '#2563EB' }
     if (status === 'archived')  return { background: '#F3F4F6', color: '#5F6B7A', opacity: 0.7 }
     if (status === 'review')    return { background: '#FEF3C7', color: '#92400E' }   // S4-8
-    if (status === 'approved')  return { background: '#CCFBF1', color: '#0D9488' }   // S4-8
+    if (status === 'approved')  return { background: '#CCFBF1', color: '#0F766E' }   // S4-8; CPPM-98: darker teal, 4.8:1
     return {}
   }
 
@@ -327,7 +327,7 @@ export default function NewsPage() {
                     )}
                     {canApprove && p.status === 'review' && (
                       <>
-                        <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickAction(p, 'approved')}>Approve</button>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0F766E', border: '1px solid #99F6E4' }} onClick={() => quickAction(p, 'approved')}>Approve</button>
                         <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }} onClick={() => quickAction(p, 'draft')}>Reject</button>
                       </>
                     )}

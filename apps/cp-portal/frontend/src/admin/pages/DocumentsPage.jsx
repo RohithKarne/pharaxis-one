@@ -656,7 +656,7 @@ export default function DocumentsPage() {
                   <td>
                     <span className="cp-status-badge" style={{
                       background: docLiveLabel(d) !== docStatusLabel(d.status) ? '#FEF3C7' : d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
-                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#166534' : d.status === 'archived' ? '#5F6B7A' : d.status === 'review' ? '#92400E' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#4B5563',
+                      color:      docLiveLabel(d) !== docStatusLabel(d.status) ? '#B45309' : d.status === 'published' ? '#166534' : d.status === 'archived' ? '#5F6B7A' : d.status === 'review' ? '#92400E' : d.status === 'approved' ? '#0F766E' : d.status === 'scheduled' ? '#2563EB' : '#4B5563',
                     }}>{docLiveLabel(d)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
@@ -685,14 +685,14 @@ export default function DocumentsPage() {
                     )}
                     {/* CPPM-71: approve a never-approved live document as it stands (it stays live), or retire it */}
                     {canApprove && isNeverApprovedLive(d) && (
-                      <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve as is</button>
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0F766E', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve as is</button>
                     )}
                     {canPublish && isNeverApprovedLive(d) && (
                       <button className="cp-btn cp-btn-sm" style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }} onClick={() => quickDocAction(d, 'archived')}>Retire</button>
                     )}
                     {canApprove && d.status === 'review' && (
                       <>
-                        <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve</button>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0F766E', border: '1px solid #99F6E4' }} onClick={() => quickDocAction(d, 'approved')}>Approve</button>
                         <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }} onClick={() => quickDocAction(d, 'draft')}>Reject</button>
                       </>
                     )}

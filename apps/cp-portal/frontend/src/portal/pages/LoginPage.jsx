@@ -101,15 +101,17 @@ export default function LoginPage() {
 
         {localAllowed && (
         <form onSubmit={handleLogin} className="pp-auth-form">
+          {/* CPPM-105: each label is tied to its box, so a screen reader names the
+              field and clicking the label puts the cursor in it. */}
           <div className="pp-field">
-            <label>Email Address</label>
-            <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" aria-invalid={!!error} aria-describedby={error ? 'pp-login-error' : undefined} />
+            <label htmlFor="pp-login-email">Email Address</label>
+            <input id="pp-login-email" type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" aria-invalid={!!error} aria-describedby={error ? 'pp-login-error' : undefined} />
           </div>
           {/* LOW-09: password show/hide toggle */}
           <div className="pp-field pp-field-password">
-            <label>Password</label>
+            <label htmlFor="pp-login-password">Password</label>
             <div className="pp-input-wrapper">
-              <input type={showLoginPassword ? 'text' : 'password'} required value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+              <input id="pp-login-password" type={showLoginPassword ? 'text' : 'password'} required value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
               <button type="button" className="pp-password-toggle" onClick={() => setShowLoginPassword(s => !s)} aria-label={showLoginPassword ? 'Hide password' : 'Show password'}>
                 {showLoginPassword ? 'Hide' : 'Show'}
               </button>
