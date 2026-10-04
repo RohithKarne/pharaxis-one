@@ -2783,9 +2783,19 @@ router.get('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/ae-transmissions — create AE transmission (route to PV)
+// A new PV or Quality hand-off is a change to the case, and a closed case takes no
+// changes until it is reopened (MIPM-209). Hand-offs already started keep their
+// own status flow, so PV and Quality can still accept or close them.
+async function caseIsClosed(caseId) {
+  const [[row]] = await pool.execute(
+    'SELECT ws.is_closed FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id WHERE c.id = ?', [caseId]);
+  return Number(row?.is_closed) === 1;
+}
+
 router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const requestedPriority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;
@@ -2922,6 +2932,7 @@ router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
 router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const priority = normalizePcTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;

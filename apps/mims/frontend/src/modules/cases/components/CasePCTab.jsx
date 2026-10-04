@@ -367,7 +367,7 @@ export default function CasePCTab({
         >
           {pcClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
+        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>

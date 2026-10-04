@@ -428,7 +428,7 @@ export default function CaseAETab({
         >
           {aeClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)}>
+        <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
       </div>

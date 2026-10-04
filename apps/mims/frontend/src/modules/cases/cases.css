@@ -2392,6 +2392,7 @@
 }
 
 .cf-tx-trigger-btn:hover { background: #dcfce7; }
+.cf-tx-trigger-btn:disabled { opacity: 0.5; cursor: not-allowed; background: transparent; }
 
 .cf-tx-drawer {
   background: #f8fafc;
