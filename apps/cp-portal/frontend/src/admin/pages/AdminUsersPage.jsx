@@ -78,8 +78,17 @@ export default function AdminUsersPage() {
       }
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
+      // CP walk, 4 Oct 2026: a new password typed on the edit form is set after the
+      // details save; the server ends every session that account had open.
+      let passwordNote = ''
+      if (modal !== 'create' && form.password) {
+        const pr = await fetch(`/api/admin/admin-users/${clientId}/${modal.id}/set-password`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ password: form.password }) })
+        const pd = await pr.json().catch(() => ({}))
+        if (!pr.ok) { setError(pd.error || 'The details were saved but the new password was not set.'); setSaving(false); loadUsers(); return }
+        passwordNote = ` ${pd.message}`
+      }
       setModal(null)
-      if (data.released_tasks) setListMsg({ type: 'success', text: data.message })
+      if (data.released_tasks || passwordNote) setListMsg({ type: 'success', text: `${data.released_tasks ? data.message : 'Saved.'}${passwordNote}` })
       loadUsers()
     } catch {
       setError('Network error. Please try again.')
@@ -243,6 +252,13 @@ export default function AdminUsersPage() {
                       <input required minLength={8} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                     </div>
                   </>
+                )}
+
+                {!isCreate && modal.id !== admin?.id && (
+                  <div className="cp-field">
+                    <label>New password <span style={{ fontSize: 11, color: '#4B5563' }}>(optional, min 8 characters — signs them out everywhere)</span></label>
+                    <input minLength={8} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Leave blank to keep the current password" autoComplete="new-password" />
+                  </div>
                 )}
 
                 <div className="cp-field">
