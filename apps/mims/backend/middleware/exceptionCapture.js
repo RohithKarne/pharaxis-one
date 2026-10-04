@@ -31,6 +31,9 @@ function shouldCapture(req) {
   if (!req.originalUrl || !req.originalUrl.startsWith('/api')) return false;
   if (req.originalUrl.includes('/api/admin/service-logs')) return false;
   if (req.originalUrl.includes('/api/admin/system-activity')) return false;
+  // MIPM-215: the browser's own error reports (their rate-limit refusals were
+  // most of the log) and the routine "am I signed in?" check are not exceptions.
+  if (req.originalUrl.startsWith('/api/telemetry/')) return false;
   return true;
 }
 
@@ -64,6 +67,7 @@ function captureApiExceptions(req, res, next) {
 
   res.on('finish', () => {
     if (res.statusCode < 400) return;
+    if (res.statusCode === 401 && req.originalUrl.startsWith('/api/auth/me')) return;
     const exceptionId = sentExceptionId || createExceptionId();
     const levelStatus = res.statusCode >= 500 ? 'failed' : 'warning';
     const reqId = req.id || null;

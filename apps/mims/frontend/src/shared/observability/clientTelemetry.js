@@ -70,7 +70,11 @@ export function initClientObservability({ app = 'mims' } = {}) {
           body = null;
         }
         const exceptionId = body?.exception_id || response.headers.get('X-Exception-Id') || null;
-        sendClientError({
+        // MIPM-215: a failure carrying an exception id is already in the server's
+        // log; sending it again doubled every entry and tripped the rate limit,
+        // whose refusals were logged too. Only failures the server never saw
+        // (a proxy or network error) are reported from here.
+        if (!exceptionId) sendClientError({
           app,
           severity: response.status >= 500 ? 'error' : 'warning',
           message: `API failure ${response.status} ${req || ''}`.trim(),
