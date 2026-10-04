@@ -25,10 +25,10 @@ export default function SafetyConfirmationsPage() {
       .finally(() => setLoading(false))
   }, [clientId])
 
-  async function show(id) {
+  async function show(id, page = 1) {
     setMsg('')
-    if (open?.id === id) { setOpen(null); return }
-    const res = await fetch(`/api/admin/safety/${clientId}/confirmations/${id}`, { headers: adminHeaders() })
+    // CPPM-143: 50 doctors at a time; the counts and the CSV cover them all.
+    const res = await fetch(`/api/admin/safety/${clientId}/confirmations/${id}?page=${page}&limit=50`, { headers: adminHeaders() })
     const d = await res.json().catch(() => ({}))
     if (!res.ok) { setMsg(d.error || 'Could not load this letter.'); return }
     setOpen(d.letter)
@@ -77,7 +77,7 @@ export default function SafetyConfirmationsPage() {
                 <td style={{ textTransform: 'capitalize' }}>{l.severity}</td>
                 <td style={{ textTransform: 'capitalize' }}>{l.status}</td>
                 <td>{l.confirmed} of {l.addressed}{l.addressed ? ` (${Math.round(100 * l.confirmed / l.addressed)}%)` : ''}</td>
-                <td><button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => show(l.id)} aria-expanded={open?.id === l.id}>
+                <td><button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => (open?.id === l.id ? setOpen(null) : show(l.id))} aria-expanded={open?.id === l.id}>
                   {open?.id === l.id ? 'Hide doctors' : 'Show doctors'}
                 </button></td>
               </tr>
@@ -92,6 +92,13 @@ export default function SafetyConfirmationsPage() {
             <h3 style={{ margin: 0 }}>{open.title}: {open.confirmed} of {open.addressed} confirmed</h3>
             <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={exportCsv}>Export CSV</button>
           </div>
+          {open.doctors_total > open.limit && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13 }}>
+              <span>Showing {(open.page - 1) * open.limit + 1}–{Math.min(open.page * open.limit, open.doctors_total)} of {open.doctors_total}</span>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={open.page === 1} onClick={() => show(open.id, open.page - 1)}>Previous</button>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={open.page * open.limit >= open.doctors_total} onClick={() => show(open.id, open.page + 1)}>Next</button>
+            </div>
+          )}
           {open.doctors.length === 0 ? (
             <p style={{ fontSize: 13 }}>No active doctor is addressed by this letter.</p>
           ) : (
