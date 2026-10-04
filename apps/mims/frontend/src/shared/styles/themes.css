@@ -9,6 +9,9 @@ html[data-theme="blue"] {
   --primary:        #1d3557;
   --primary-rgb:    29,53,87;
   --primary-light:  #2a4a73;
+  /* MIPM-217: a pale wash of the primary colour for selected rows and chosen
+     options. --primary-light is a darker shade meant for borders and focus. */
+  --primary-tint:   #eef2f8;
   --primary-dark:   #152840;
   --accent:         #e8890c;
   --accent-hover:   #c9740a;
@@ -36,6 +39,7 @@ html[data-theme="blue"] {
 html[data-theme="warm"] {
   --primary:        #8a3324;
   --primary-light:  #b04531;
+  --primary-tint:   #fbeeea;
   --primary-dark:   #5e1f12;
   --accent:         #c2410c;
   --accent-hover:   #9a3308;
@@ -63,6 +67,7 @@ html[data-theme="warm"] {
 html[data-theme="green"] {
   --primary:        #064e3b;
   --primary-light:  #0a6b53;
+  --primary-tint:   #e7f3ef;
   --primary-dark:   #033026;
   --accent:         #047857;
   --accent-hover:   #03634a;

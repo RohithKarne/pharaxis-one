@@ -150,7 +150,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
                   style={{ width: '100%' }}
                 />
                 {selectedCase && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, padding: '4px 8px', background: 'var(--primary-light, #f0f4ff)', borderRadius: 4, fontSize: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, padding: '4px 8px', background: 'var(--primary-tint, #f0f4ff)', borderRadius: 4, fontSize: 12 }}>
                     <span><strong>{selectedCase.case_number}</strong>{selectedCase.patient_name ? ` — ${selectedCase.patient_name}` : ''}</span>
                     <button onClick={() => { setSelectedCase(null); setCaseSearch('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>✕</button>
                   </div>
@@ -164,7 +164,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
                     ) : caseResults.map(c => (
                       <div key={c.id} onClick={() => { setSelectedCase(c); setCaseSearch(''); setCaseResults([]) }}
                         style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-light, #f0f4ff)'}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-tint, #f0f4ff)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         <span style={{ fontWeight: 600 }}>{c.case_number}</span>
                         {c.patient_name && <span style={{ color: 'var(--text-muted)' }}>{c.patient_name}</span>}

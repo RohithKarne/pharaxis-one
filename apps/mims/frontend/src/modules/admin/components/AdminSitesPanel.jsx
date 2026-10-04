@@ -251,7 +251,7 @@ export default function AdminSitesPanel({ H, flash }) {
                 </td></tr>
               )}
               {filteredSites.map(s => (
-                <tr key={s.id} style={{ cursor: 'pointer', background: selectedSite?.id === s.id ? 'var(--primary-light, #e8f0fe)' : undefined }}
+                <tr key={s.id} style={{ cursor: 'pointer', background: selectedSite?.id === s.id ? 'var(--primary-tint, #e8f0fe)' : undefined }}
                   onClick={() => { if (selectedSite?.id === s.id) { setSelectedSite(null); return } selectSiteForConfig(s); setShowNewSiteForm(false) }}>
                   <td>
                     <span style={{ fontWeight: 600, color: selectedSite?.id === s.id ? 'var(--primary)' : undefined }}>{s.name}</span>
@@ -359,7 +359,7 @@ export default function AdminSitesPanel({ H, flash }) {
                                 {emailAccounts.map(ea => {
                                   const checked = (siteEmailPurposes[p.key] || []).includes(ea.id)
                                   return (
-                                    <label key={ea.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px', border: `1px solid ${checked ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer', background: checked ? 'var(--primary-light, #e8f0fe)' : 'var(--surface)', color: checked ? 'var(--primary)' : 'var(--text-primary)', userSelect: 'none' }}>
+                                    <label key={ea.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px', border: `1px solid ${checked ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer', background: checked ? 'var(--primary-tint, #e8f0fe)' : 'var(--surface)', color: checked ? 'var(--primary)' : 'var(--text-primary)', userSelect: 'none' }}>
                                       <input type="checkbox" checked={checked} style={{ display: 'none' }}
                                         onChange={ev => setSiteEmailPurposes(prev => ({ ...prev, [p.key]: ev.target.checked ? [...(prev[p.key] || []), ea.id] : (prev[p.key] || []).filter(id => id !== ea.id) }))} />
                                       <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${checked ? 'var(--primary)' : 'var(--border)'}`, background: checked ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

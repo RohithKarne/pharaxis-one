@@ -378,7 +378,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
           )}
 
           {selectedDocIds.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-light, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-tint, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedDocIds.length} selected</span>
               {hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleBulkAction('publish')} disabled={bulkLoading}>Bulk Publish</button>}
               {hasCapability('content.publish') && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleBulkAction('archive')} disabled={bulkLoading}>Bulk Archive</button>}

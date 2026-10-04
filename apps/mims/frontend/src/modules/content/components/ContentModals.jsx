@@ -292,7 +292,7 @@ export function VersionHistoryModal({ entityType, entityId, entityName, token, o
                 {versions.map(v => (
                   <tr key={v.id}>
                     <td><strong>v{v.version}</strong></td>
-                    <td><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--primary-light,#f0f4ff)', color: 'var(--primary)' }}>{v.status}</span></td>
+                    <td><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--primary-tint, #f0f4ff)', color: 'var(--primary)' }}>{v.status}</span></td>
                     <td style={{ fontSize: 12 }}>{v.author_name || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200 }}>{v.notes || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{v.created_at ? new Date(v.created_at).toLocaleString() : '—'}</td>
@@ -497,7 +497,7 @@ export function DocumentRelationsModal({ doc, token, onClose }) {
                 <div key={r.id}
                   onClick={() => linkDoc(r)}
                   style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-light,#f0f4ff)'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-tint, #f0f4ff)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <span style={{ fontWeight: 500 }}>{r.name}</span>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.status}</span>
