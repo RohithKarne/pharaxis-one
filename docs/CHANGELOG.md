@@ -100,11 +100,18 @@ the ones a validation plan should name.
 ### CP Portal end-to-end walk (4 Oct 2026, branch `claude/gallant-rubin-43pd3g`, no Jira per Rohith)
 
 **Revalidation impact of this batch:** Partial — *proposed by Saad Rahman (compliance owner); Rohith to confirm.*
-**Why:** sign-in behaviour changed in two places; no record structure, audit trail or calculation changed.
-**Revalidate:** admin sign-in (Superadmin mode), portal sign-in and the specialty prompt.
+**Why:** sign-in behaviour and the audit-trail export changed; no record structure or calculation changed. The export now contains every matching record where it held one page, which is a correction of the evidence an auditor receives, not a change to what is recorded.
+**Revalidate:** admin sign-in (Superadmin mode), portal sign-in and the specialty prompt; client activation; the audit-trail export.
 
 - Area 1, sign-in: the admin sign-in page's Superadmin mode now ends the session it refuses. Before, "Superadmin access required" was shown while the client admin was already signed in on the next page load — `frontend/src/admin/pages/LoginPage.jsx`
 - Area 1, sign-in: a doctor whose specialty is already saved is no longer asked to choose it again at every sign-in; sign-in, email verification and gate confirmation now return the saved specialty — `backend/routes/portal/auth.js`
+- Area 2, Clients: a blank or spaces-only company name is refused on create and edit; the client code must be lowercase letters, digits and single hyphens — `backend/routes/admin/clients.js`
+- Area 2, Clients: a deactivated client stays on the list, marked Inactive, with an Activate button; the dashboard's inactive count is real — `backend/services/clientService.js`
+- Area 2, Clients: Deactivate asks first, naming the client and saying the portal goes offline at once — `frontend/src/admin/pages/ClientsPage.jsx`
+- Area 2, Clients: deactivating, reactivating or renaming a client reaches its portal immediately instead of after the 20-second settings cache — `backend/routes/admin/clients.js`
+- Area 2, Clients: new Edit button to change a client's name, description and contact; the code stays locked because it is the portal's address — `frontend/src/admin/pages/ClientsPage.jsx`
+- Area 2, Audit trail: the CSV export carries every record that matches the filters, not only the page on screen; the Entity and Action filters list what was actually recorded and match regardless of case — `backend/routes/admin/audit.js`, `frontend/src/admin/pages/AuditTrailPage.jsx`
+- Area 2, access: a client's own staff opening another client's address are sent to their own client instead of seeing empty screens — `frontend/src/App.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
