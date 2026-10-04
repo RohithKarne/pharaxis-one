@@ -31,6 +31,24 @@ async function moduleStatusAllowed(req, status, previous) {
   if (status === 'Published') return userHasActivityPrivilege(req.user, 'content.publish');
   return true;
 }
+// True when a save would change a module's content (not just its status).
+const MODULE_CONTENT_FIELDS = ['folder_id', 'module_type', 'name', 'content_html', 'language', 'search_tags',
+  'usage_instructions', 'document_category', 'standard_response_text'];
+function moduleContentChanged(existing, body, file) {
+  if (file) return true;
+  const text = (v) => String(v ?? '').trim();
+  const day = (v) => (v instanceof Date ? v.toISOString() : text(v)).slice(0, 10);
+  for (const key of MODULE_CONTENT_FIELDS) {
+    if (body[key] !== undefined && text(body[key]) !== text(existing[key])) return true;
+  }
+  for (const key of ['activation_date', 'expiry_date']) {
+    if (body[key] !== undefined && day(body[key]) !== day(existing[key])) return true;
+  }
+  for (const key of ['publish_as_pdf', 'send_as_pdf']) {
+    if (body[key] !== undefined && parseBoolean(body[key], false) !== !!Number(existing[key] || 0)) return true;
+  }
+  return false;
+}
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -463,6 +481,18 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
     if (!(await moduleStatusAllowed(req, nextStatus, existing.status))) {
       await conn.rollback();
       return res.status(403).json({ error: `You do not have permission to save a module as ${nextStatus}.` });
+    }
+    // MIPM-219: the author could approve their own module, and the text of an
+    // approved or published module could be changed while it stayed published —
+    // approved clinical wording altered with no new approval. Documents and FAQs
+    // already refuse both.
+    if (nextStatus === 'Approved' && existing.status !== 'Approved' && Number(existing.created_by) === Number(req.user.userId)) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'The author of a module cannot approve it. An independent reviewer is required.' });
+    }
+    if (['Approved', 'Published', 'Archived'].includes(existing.status) && nextStatus !== 'Draft' && moduleContentChanged(existing, req.body, req.file)) {
+      await conn.rollback();
+      return res.status(409).json({ error: `This module is ${existing.status}, so its content cannot change. Set its status to Draft to edit it; it will need approval again.` });
     }
     const filePath = req.file ? req.file.path : existing.file_path;
     const fileName = req.file ? req.file.originalname : existing.file_name;
