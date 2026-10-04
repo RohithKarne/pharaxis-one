@@ -460,6 +460,15 @@ async function eraseUser(userId, clientId) {
     );
     summary.anonymized.push('cp_portal_users(identity)');
 
+    // CP walk 2026-10-04: the person's own data requests (this erasure, any export)
+    // are kept as the record that they were handled, but without the name and
+    // email — before this the Data Requests screen still showed both after Fulfil.
+    const [dr] = await conn.execute(
+      `UPDATE cp_data_requests SET requester_name = ?, requester_email = ? WHERE portal_user_id = ? AND client_id = ?`,
+      [ERASED, anonEmail, userId, clientId]
+    );
+    if (dr.affectedRows) summary.anonymized.push(`cp_data_requests(${dr.affectedRows})`);
+
     await conn.commit();
 
     // CPPM-11: MIMS is called only after the CP erasure has committed — never
