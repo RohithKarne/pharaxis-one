@@ -9,9 +9,10 @@ function authoringSourceLabel(item) {
   return 'Uploaded'
 }
 
-export default function BrowseSection({ token }) {
+// `types` limits the switcher; Browse Content shows this for FAQs only (MIPM-216).
+export default function BrowseSection({ token, types = ['documents', 'faqs'] }) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
-  const [contentType, setContentType] = useState('documents')
+  const [contentType, setContentType] = useState(types[0])
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -124,7 +125,7 @@ export default function BrowseSection({ token }) {
       <div style={{ width: selectedItem ? 340 : '100%', flexShrink: 0, borderRight: selectedItem ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
-            {[{ key: 'documents', label: 'Documents' }, { key: 'faqs', label: 'FAQs' }].map(t => (
+            {[{ key: 'documents', label: 'Documents' }, { key: 'faqs', label: 'FAQs' }].filter(t => types.includes(t.key)).map(t => (
               <button key={t.key}
                 onClick={() => { setContentType(t.key); setShowBookmarks(false) }}
                 style={{ padding: '6px 14px', border: 'none', background: contentType === t.key && !showBookmarks ? 'var(--primary)' : '#fff', color: contentType === t.key && !showBookmarks ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: contentType === t.key && !showBookmarks ? 600 : 400 }}
