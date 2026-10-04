@@ -12,6 +12,8 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const [file, setFile] = useState(null)
   const [contentMode, setContentMode] = useState(moduleDoc?.content_html ? 'online' : 'upload')
   const [saving, setSaving] = useState(false)
+  // MIPM-220: approving or publishing is an electronic signature, as for documents.
+  const [esign, setEsign] = useState({ password: '', reason: '' })
   const [form, setForm] = useState({
     folder_id: moduleDoc?.folder_id || '',
     module_type: moduleDoc?.module_type || 'SRD',
@@ -29,8 +31,11 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
     send_as_pdf: !!moduleDoc?.send_as_pdf,
   })
 
+  const signing = isEdit && ['Approved', 'Published'].includes(form.status) && form.status !== moduleDoc?.status
+
   async function handleSave() {
     if (!form.folder_id) return toast.warn('Folder is required.')
+    if (signing && (!esign.password || !esign.reason.trim())) return toast.warn(`Your password and a reason are required to save as ${form.status}.`)
     if (!form.name.trim()) return toast.warn('Module name is required.')
     setSaving(true)
     try {
@@ -39,6 +44,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
         if (v !== null && v !== undefined) fd.append(k, v)
       })
       if (file) fd.append('file', file)
+      if (signing) { fd.append('esign_password', esign.password); fd.append('esign_reason', esign.reason) }
 
       const url = isEdit ? `/api/cm/modules/${moduleDoc.id}` : '/api/cm/modules'
       const method = isEdit ? 'PUT' : 'POST'
@@ -88,12 +94,23 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
               <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
                 <option>Draft</option>
                 <option>Pending</option>
-                <option>Under Review</option>
-                <option>Approved</option>
-                <option>Published</option>
-                <option>Archived</option>
+                {/* A new module starts as Draft or Pending (MIPM-220). */}
+                {isEdit && <>
+                  <option>Under Review</option>
+                  <option>Approved</option>
+                  <option>Published</option>
+                  <option>Archived</option>
+                </>}
               </select>
             </div>
+            {signing && (
+              <div className="cm-form-group">
+                <label className="cm-form-label">Electronic signature — your password *</label>
+                <input type="password" className="cm-form-input" value={esign.password} onChange={e => setEsign(p => ({ ...p, password: e.target.value }))} autoComplete="current-password" />
+                <label className="cm-form-label" style={{ marginTop: 8 }}>Reason *</label>
+                <input className="cm-form-input" value={esign.reason} onChange={e => setEsign(p => ({ ...p, reason: e.target.value }))} placeholder={`Why this module is ${form.status.toLowerCase()}`} />
+              </div>
+            )}
           </div>
 
           <div className="cm-form-group">

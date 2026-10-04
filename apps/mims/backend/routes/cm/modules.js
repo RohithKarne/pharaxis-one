@@ -20,6 +20,7 @@ const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { publishedOnly } = require('../../middleware/cmAccess');
+const bcrypt = require('bcrypt');
 
 // MIPM-191: a module's status came straight from the request, so an author could
 // save one as Published — no review, no approval — and the response builder
@@ -369,6 +370,12 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
     }
 
     const resolvedStatus = isPastDate(expiry_date) ? 'Archived' : normalizeStatus(status, 'Draft');
+    // MIPM-220: a module could be created already Approved or Published, by its
+    // author, with no approval at all. New modules start as Draft or Pending.
+    if (['Approved', 'Published'].includes(resolvedStatus)) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'A new module starts as Draft or Pending; it is approved and published after it is created.' });
+    }
     if (!(await moduleStatusAllowed(req, resolvedStatus, null))) {
       await conn.rollback();
       return res.status(403).json({ error: `You do not have permission to save a module as ${resolvedStatus}.` });
@@ -494,6 +501,21 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       await conn.rollback();
       return res.status(409).json({ error: `This module is ${existing.status}, so its content cannot change. Set its status to Draft to edit it; it will need approval again.` });
     }
+    // MIPM-220: approving or publishing is an electronic signature — password and
+    // reason — as it is for documents and FAQs. Modules took it from a dropdown.
+    const signing = ['Approved', 'Published'].includes(nextStatus) && nextStatus !== existing.status;
+    if (signing) {
+      const { esign_password: password, esign_reason: reason } = req.body;
+      if (!password || !String(reason || '').trim()) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Your password and a reason are required to save a module as ${nextStatus}.` });
+      }
+      const [[signer]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+      if (!signer?.password || !(await bcrypt.compare(String(password), signer.password))) {
+        await conn.rollback();
+        return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+      }
+    }
     const filePath = req.file ? req.file.path : existing.file_path;
     const fileName = req.file ? req.file.originalname : existing.file_name;
     const fileSize = req.file ? req.file.size : existing.file_size;
@@ -540,6 +562,11 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       module_id: updated?.module_id || existing.module_id || null,
       status: updated?.status || nextStatus,
     });
+
+    if (signing) {
+      const versionStr = `${updated.version_major || 1}.${updated.version_minor || 0}`;
+      await addVersionHistory('module', updated.id, versionStr, nextStatus, String(req.body.esign_reason).trim(), req.user.userId);
+    }
 
     const movedToArchived = existing.status !== 'Archived' && updated?.status === 'Archived';
     if (movedToArchived) {
