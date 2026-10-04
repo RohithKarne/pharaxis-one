@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -80,11 +80,22 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   const [deleting, setDeleting] = useState(null)
   // Rows could only be removed and added again (MIPM-207); ✎ loads one into the form.
   const [editingId, setEditingId] = useState(null)
+  // MIPM-214: the product could only be typed, so it never linked to the product
+  // dictionary that MI cases, hand-offs and reports use. Picking one fills the
+  // name and links it; typing a name (another company's drug) clears the link.
+  const [products, setProducts] = useState([])
+  useEffect(() => {
+    if (tabKey !== 'product-info') return
+    httpFetch(`${API}/cases/mi/products`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setProducts(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [tabKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const blankForm = () => {
     if (tabKey === 'lab-results')     return { lab_name: '', test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
-    if (tabKey === 'product-info')    return { product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', is_suspect: true, is_concomitant: false }
+    if (tabKey === 'product-info')    return { product_id: '', product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', is_suspect: true, is_concomitant: false }
     if (tabKey === 'events')          return { event_description: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
@@ -286,7 +297,19 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   </div>
                 </>}
                 {tabKey === 'product-info' && <>
-                  {field('product_name', 'Product Name', <input value={form.product_name} onChange={e => set('product_name', e.target.value)} />)}
+                  {products.length > 0 && (
+                    <div className="cf-form-field">
+                      <label>From Product Dictionary</label>
+                      <select value={form.product_id || ''} onChange={e => {
+                        const picked = products.find(p => String(p.id) === e.target.value)
+                        editForm({ ...form, product_id: picked ? picked.id : '', product_name: picked ? picked.trade_name : form.product_name })
+                      }}>
+                        <option value="">— Not in dictionary —</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {field('product_name', 'Product Name', <input value={form.product_name} onChange={e => editForm({ ...form, product_name: e.target.value, product_id: '' })} />)}
                   <div className="cf-form-field"><label>Product Type</label><select value={form.product_type} onChange={e => set('product_type', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Type').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field"><label>Product Category</label><select value={form.product_category} onChange={e => set('product_category', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Category').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   {field('batch_lot_number', 'Batch / Lot Number', <input value={form.batch_lot_number} onChange={e => set('batch_lot_number', e.target.value)} />)}
