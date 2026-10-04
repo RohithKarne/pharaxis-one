@@ -370,10 +370,26 @@ async function applyPlatformCoreKeys(conn, orgId) {
   );
 }
 
+// Content documents are classified from mi_categories, which nothing seeded, so
+// New Document's MI Category list was empty in every new org. Start it with the
+// same names as the case form's MI Category picklist (MIPM-201).
+async function seedMiCategories(conn, orgId, userId) {
+  const [[{ n }]] = await conn.execute('SELECT COUNT(*) AS n FROM mi_categories WHERE org_id = ?', [orgId]);
+  if (n > 0) return;
+  const names = PICKLIST_GROUPS.find(g => g.field === 'mi_category').values;
+  for (const [i, name] of names.entries()) {
+    await conn.execute(
+      'INSERT INTO mi_categories (org_id, name, sort_order, created_by) VALUES (?, ?, ?, ?)',
+      [orgId, name, i + 1, userId || null]
+    );
+  }
+}
+
 async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
   await applyPlatformCoreKeys(conn, orgId);
   await seedPicklists(conn, orgId, userId);
+  await seedMiCategories(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
   await seedCustomizeFormsPlaceholders(conn, orgId);
 }
