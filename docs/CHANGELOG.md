@@ -90,6 +90,7 @@ the ones a validation plan should name.
 - An admin edit's audit entry records what changed, from and to — CPPM-43 (#676)
 - Doctors confirm "I have read this" on high and critical safety letters, with who and when recorded — CPPM-114
 - Reports › Safety Confirmations shows who confirmed each letter, with a CSV export that is itself audited — CPPM-127
+- Doctors who have not confirmed a high or critical letter after 3 days get one reminder email, recorded per doctor and shown on the report — CPPM-137 (migration 0043)
 - Training records a named person's attempts and issues real certificates; the fake "accredited" certificate is gone — CPPM-15, CPPM-48 (#687, #683)
 - Consent proof, document approval, answers sent back to the doctor, and erasure that reaches MIMS — CPPM-4, 9–14, 29, 31, 39 (#670)
 
@@ -104,12 +105,15 @@ the ones a validation plan should name.
 
 ### Admin console
 - Seven main screens with tabs, a "Go to…" quick search, and a dashboard "Waiting on you" panel — CPPM-123, CPPM-130, CPPM-131
+- The dashboard shows each client's lowest safety-letter confirmation rate — CPPM-138
+- The client Overview follows the 7-screen menu and shows only statuses taken from real data; Overview and dashboard share one readiness score (eight checks, no free points) — CPPM-135, CPPM-136
+- The access-request alert points to Inbox › Access Requests; an alert resolved by hand no longer silences the next access request or connection failure — CPPM-139, CPPM-140
 - The virus scanner starts with the portal, and admins see when it is down — CPPM-44 (#679)
 - Classic look, and Katrina's six UI/UX priorities (#707, #708)
 - Fixes: collapsed sidebar width, page titles, client names cut short on the dashboard — CPPM-125, CPPM-126, CPPM-134
 
 ### Platform
-- Database migrations 0039–0042, folded into the baseline and checked by the fresh-install test (`backend/tests/fresh-provision.js`)
+- Database migrations 0039–0043, folded into the baseline and checked by the fresh-install test (`backend/tests/fresh-provision.js`)
 - `GET /api/health` returns a `build` block; `version` is kept for existing consumers — `backend/server.js`
 - Each page loads on demand, so the portal sign-in no longer downloads the admin console (#704)
 
