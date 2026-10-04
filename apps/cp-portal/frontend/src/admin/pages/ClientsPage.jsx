@@ -42,6 +42,7 @@ export default function ClientsPage() {
   async function handleAdd(e) {
     e.preventDefault()
     setError('')
+    if (!form.name.trim()) { setError('Company name cannot be empty.'); return }
     if (clients.some(c => c.code?.toLowerCase() === form.code?.toLowerCase())) {
       setError('Client code already exists. Please choose a unique code.')
       return
