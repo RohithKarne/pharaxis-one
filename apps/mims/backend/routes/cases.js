@@ -1318,9 +1318,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       if (reporter.first_name || reporter.last_name) {
         await conn.execute(
           `INSERT INTO case_contacts
-             (case_id, contact_role, is_primary, first_name, last_name, reporter_type, institution, country, phone, email)
-           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?)`,
-          [caseId, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
+             (case_id, contact_role, is_primary, prefix, first_name, last_name, reporter_type, institution, country, phone, email)
+           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [caseId, reporter.prefix || null, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
            reporter.organisation || null, reporter.country || null, reporter.phone || null, reporter.email || null]
         );
       }

@@ -564,7 +564,12 @@ export default function InboxPage() {
     const name = (match ? match[1] : '').replace(/^["']|["']$/g, '').trim()
     if (!name && !email.includes('@')) return undefined
     const parts = name.split(/\s+/).filter(Boolean)
+    // A leading title goes to the prefix, spelled as the Prefix picklist spells it,
+    // so "Dr Priya Shah" is not saved with first name "Dr Priya" (MIPM-195).
+    const title = parts.length > 1 && /^(mr|ms|mrs|dr|prof)\.?$/i.exec(parts[0])
+    if (title) parts.shift()
     return {
+      prefix: title ? title[1][0].toUpperCase() + title[1].slice(1).toLowerCase() : '',
       first_name: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
       last_name: parts.length > 1 ? parts[parts.length - 1] : '',
       email: email.includes('@') ? email : '',
