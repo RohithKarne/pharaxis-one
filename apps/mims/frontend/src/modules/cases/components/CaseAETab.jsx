@@ -185,7 +185,7 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave,
+  saveDynFields, caseType, registerSectionSave, caseClosed = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -216,10 +216,11 @@ export default function CaseAETab({
 
   useEffect(() => { loadAEVersions(); loadAeTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLocked = (ver) => ver && ver.is_locked === 1
+  // A closed case is read-only whatever its versions say (MIPM-208).
+  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
-  const canCreateAeVersion = !latestAeVersion || isClosed(latestAeVersion)
+  const canCreateAeVersion = !caseClosed && (!latestAeVersion || isClosed(latestAeVersion))
   const aeCompletionByTab = useMemo(() => {
     const versionId = activeAeVer?.id
     if (!versionId) return {}
@@ -431,7 +432,7 @@ export default function CaseAETab({
           {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
       </div>
-      {!canCreateAeVersion && (
+      {!canCreateAeVersion && !caseClosed && (
         <div className="cf-inline-note">Close the current AE version before creating a new version.</div>
       )}
 
@@ -466,7 +467,9 @@ export default function CaseAETab({
           </div>
 
           {isLocked(activeAeVer) && (
-            <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
+            <div className="cf-locked-notice">{caseClosed
+              ? 'This case is closed (read-only). Reopen the case to make changes.'
+              : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
 
           <div className="cf-case-workspace cf-ae-workspace">

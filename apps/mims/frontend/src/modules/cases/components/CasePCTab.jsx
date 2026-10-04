@@ -134,7 +134,7 @@ function computePcCompletion(data, fields, formConfig, sectionName) {
 export default function CasePCTab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave,
+  saveDynFields, caseType, registerSectionSave, caseClosed = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -165,10 +165,11 @@ export default function CasePCTab({
 
   useEffect(() => { loadPCVersions(); loadPcTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLocked = (ver) => ver && ver.is_locked === 1
+  // A closed case is read-only whatever its versions say (MIPM-208).
+  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestPcVersion = pcVersions.length > 0 ? pcVersions[pcVersions.length - 1] : null
-  const canCreatePcVersion = !latestPcVersion || isClosed(latestPcVersion)
+  const canCreatePcVersion = !caseClosed && (!latestPcVersion || isClosed(latestPcVersion))
   const pcCompletionByTab = useMemo(() => {
     const versionId = activePcVer?.id
     if (!versionId) return {}
@@ -370,7 +371,7 @@ export default function CasePCTab({
           {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>
-      {!canCreatePcVersion && (
+      {!canCreatePcVersion && !caseClosed && (
         <div className="cf-inline-note">Close the current PC version before creating a new version.</div>
       )}
 
@@ -405,7 +406,9 @@ export default function CasePCTab({
           </div>
 
           {isLocked(activePcVer) && (
-            <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
+            <div className="cf-locked-notice">{caseClosed
+              ? 'This case is closed (read-only). Reopen the case to make changes.'
+              : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
 
           <div className="cf-case-workspace cf-pc-workspace">

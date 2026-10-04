@@ -611,8 +611,8 @@ router.get('/cases/workflow-states', authenticate, requireScopedCapability('case
     const orgId = hasGlobalAdminScope(req.user) ? null : Number(req.user.orgId);
     const [states] = await pool.execute(
       orgId
-        ? 'SELECT id, name, is_active, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
-        : 'SELECT id, name, is_active, org_id FROM workflow_states ORDER BY name',
+        ? 'SELECT id, name, is_active, is_closed, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
+        : 'SELECT id, name, is_active, is_closed, org_id FROM workflow_states ORDER BY name',
       orgId ? [orgId] : []
     );
     res.json({ states });
