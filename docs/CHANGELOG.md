@@ -59,6 +59,22 @@ integration consuming `/api/v1/content/documents` (behaviour changed 200 → 501
   - **Deployment note:** the alert rule ships with no recipient. Set one per environment on the platform-admin alert rules screen, or the rule records an event and reaches nobody.
 - Optional TLS on the MySQL connection, off unless configured — `backend/database/db.js`
 
+### MIMS — end-to-end walk fixes (MIPM-132 to MIPM-221, branch `claude/jolly-euler-fm0j12`)
+
+**Revalidation impact:** Full — *proposed by engineering, 2026-10-04; not final until Saad confirms.*
+**Why:** audit trail, electronic signatures, access rules and record locks changed for AE / PC cases and content.
+
+**Revalidate:** AE and PC case capture and closure, PV / Quality hand-offs, MI response sending,
+content review, approval and publication (documents, FAQs, modules), sign-in sessions.
+
+- Case records: AE and PC versions lock when closed; closed cases refuse changes and new hand-offs; AE rows can be edited in place; follow-up AE versions start as a copy — MIPM-160 to 170, 207 to 209
+- Audit trail: every AE, PC, drug and hand-off change is recorded field by field; MI response signatures appear on the case timeline — MIPM-169, 171
+- E-signatures: accepting or closing a PV / Quality hand-off needs the approve right, password and reason; module approval and publication now need password and reason — MIPM-163, 164, 220
+- Access: content changes follow Content Management rights; drafts are hidden from people without Content Management; MI categories, hand-off assignees and review mode are limited to the right people — MIPM-175, 184, 202, 203, 210, 212
+- Content lifecycle: review closes when every reviewer decides; authors cannot approve their own module; approved or published module text cannot change without going back to Draft; agents can read published FAQs — MIPM-174 to 183, 216, 219
+- Sessions: the idle timeout is enforced by the server, not only the browser; sessions are stored by fingerprint — MIPM-172, 211
+- Records added by migration: 151 to 158 (version locks, session fingerprint and last use, reviewer content access, template evidence status, contact field step, MI categories, content-usage backfill)
+
 ---
 
 ## Unreleased — CP Portal
