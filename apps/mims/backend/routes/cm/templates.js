@@ -12,6 +12,7 @@ const { getCaseProductName } = require('../../services/caseProductName');
 const { authenticate } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { publishedOnly } = require('../../middleware/cmAccess');
 const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -173,6 +174,8 @@ router.get('/templates', authenticate, async (req, res) => {
       query += ' AND t.status = ?';
       params.push(status);
     }
+    // MIPM-210: drafts are for Content Management, not for agents.
+    if (await publishedOnly(req)) query += " AND t.status = 'Published'";
     if (search) {
       query += ' AND (t.name LIKE ? OR t.subject LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
@@ -265,6 +268,7 @@ router.get('/templates/:id', authenticate, async (req, res) => {
   try {
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
+    if (template.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Template not found.' });
     res.json({ template: decorateTemplateRow(template) });
   } catch (err) {
     console.error('GET /cm/templates/:id error:', err);
@@ -351,6 +355,7 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
   try {
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
+    if (await publishedOnly(req)) return res.status(404).json({ error: 'Template not found.' });
     const [versions] = await pool.execute(
       `SELECT vh.*, u.name AS author_name
        FROM cm_version_history vh

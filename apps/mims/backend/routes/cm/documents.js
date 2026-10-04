@@ -187,11 +187,7 @@ function publicDoc(d) {
 // MIPM-184: people without Content Management (agents) read only published
 // documents. The Browse Content page listed Draft, Under Review and Approved
 // documents next to published ones, and any of them could be opened and downloaded.
-async function publishedOnly(req) {
-  if (hasPlatformAdminScope(req)) return false;
-  const modules = await getUserModules(req.user.userId);
-  return !modules.includes('content_mgmt');
-}
+const { publishedOnly } = require('../../middleware/cmAccess');
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(

@@ -19,6 +19,7 @@ const {
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+const { publishedOnly } = require('../../middleware/cmAccess');
 
 // MIPM-191: a module's status came straight from the request, so an author could
 // save one as Published — no review, no approval — and the response builder
@@ -260,6 +261,7 @@ router.get('/modules', authenticate, async (req, res) => {
     await ensureCmModulesSchema();
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
+    const draftsHidden = await publishedOnly(req);
     const buildQuery = (includeCreatedBy) => {
       let query = `
         SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''}
@@ -274,6 +276,7 @@ router.get('/modules', authenticate, async (req, res) => {
         params.push(req.user.orgId);
       }
       if (status) { query += ' AND m.status = ?'; params.push(status); }
+      if (draftsHidden) query += " AND m.status = 'Published'";
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
       if (search) {
         query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
@@ -308,6 +311,7 @@ router.get('/modules/:id', authenticate, async (req, res) => {
     await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);
     if (!moduleRow) return res.status(404).json({ error: 'Module not found.' });
+    if (moduleRow.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'Module not found.' });
     return res.json({ module: moduleRow });
   } catch (err) {
     console.error('GET /cm/modules/:id error:', err);

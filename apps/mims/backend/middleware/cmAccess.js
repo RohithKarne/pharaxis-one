@@ -37,6 +37,14 @@ async function allowed(req) {
   return modules.includes('content_mgmt') && (await has('content.author'));
 }
 
+// People without Content Management (agents) read only published content
+// (MIPM-184 for documents; MIPM-210 extends it to modules, FAQs and templates).
+async function publishedOnly(req) {
+  if (hasGlobalAdminScope(req.user)) return false;
+  const modules = await getUserModules(req.user.userId);
+  return !modules.includes('content_mgmt');
+}
+
 function cmWriteAccess(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   return authenticate(req, res, async () => {
@@ -49,4 +57,4 @@ function cmWriteAccess(req, res, next) {
   });
 }
 
-module.exports = { cmWriteAccess };
+module.exports = { cmWriteAccess, publishedOnly };

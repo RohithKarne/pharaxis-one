@@ -12,6 +12,7 @@ const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { publishedOnly } = require('../../middleware/cmAccess');
 const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -94,6 +95,8 @@ router.get('/faqs', authenticate, async (req, res) => {
       query += ' AND f.status = ?';
       params.push(status);
     }
+    // MIPM-210: drafts are for Content Management, not for agents browsing.
+    if (await publishedOnly(req)) query += " AND f.status = 'Published'";
     if (folder_id) {
       query += ' AND f.folder_id = ?';
       params.push(folder_id);
@@ -179,6 +182,7 @@ router.get('/faqs/:id', authenticate, async (req, res) => {
       hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
+    if (faq.status !== 'Published' && await publishedOnly(req)) return res.status(404).json({ error: 'FAQ not found.' });
 
     const [versions] = await pool.execute(
       `SELECT vh.*, u.name AS author_name
