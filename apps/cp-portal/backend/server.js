@@ -333,6 +333,10 @@ function createContentScheduler() {
       await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
       // Bridge row 7: files held unscanned too long.
       await sweepHeldFiles().catch(err => log.error('admin_alerts.held_sweep_failed', { err }));
+      // CPPM-137: one reminder to doctors who have not confirmed a high or critical
+      // safety letter three days after it went live.
+      const { sweepSafetyReminders } = require('./services/safetyConfirmations');
+      await sweepSafetyReminders().catch(err => log.error('safety.reminder.sweep_failed', { err }));
      });
     } catch (err) {
       // Logged, not swallowed: a tick that fails must be visible.

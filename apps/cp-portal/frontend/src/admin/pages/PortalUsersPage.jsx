@@ -5,7 +5,8 @@ import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import BulkPortalUserImport from '../components/BulkPortalUserImport'
 
-export default function PortalUsersPage() {
+// CPPM-128: as Inbox › Access Requests, the page lists only doctors waiting for access.
+export default function PortalUsersPage({ requestsOnly = false }) {
   const { canChange } = useAdminAuth() // CPPM-60
   const { clientId }    = useParams()
   const [users, setUsers]   = useState([])
@@ -15,7 +16,7 @@ export default function PortalUsersPage() {
   // CPPM-113: '' = everyone, 'requested' / 'declined' = access requests. The alert
   // email links here with ?access=requested.
   const [urlParams] = useSearchParams()
-  const [access, setAccess] = useState(['requested', 'declined'].includes(urlParams.get('access')) ? urlParams.get('access') : '')
+  const [access, setAccess] = useState(requestsOnly ? 'requested' : ['requested', 'declined'].includes(urlParams.get('access')) ? urlParams.get('access') : '')
 
   const [editUser, setEditUser]         = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -53,6 +54,7 @@ export default function PortalUsersPage() {
       if (!res.ok) { setMsg({ type: 'error', text: d.error || `Could not ${decision} the request (error ${res.status}).` }); return }
       setMsg({ type: 'success', text: `${u.first_name} ${u.last_name}: ${d.message}` })
       load()
+      window.dispatchEvent(new Event('cp:badges-changed')) // CPPM-128: the Inbox count
     } catch {
       setMsg({ type: 'error', text: 'Network error — please try again.' })
     }
@@ -148,11 +150,13 @@ export default function PortalUsersPage() {
         <input className="cp-search-input" placeholder="Search name or email…" value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
-        <select value={access} onChange={e => setAccess(e.target.value)} aria-label="Show access requests">
-          <option value="">All users</option>
-          <option value="requested">Requested</option>
-          <option value="declined">Declined</option>
-        </select>
+        {!requestsOnly && (
+          <select value={access} onChange={e => setAccess(e.target.value)} aria-label="Show access requests">
+            <option value="">All users</option>
+            <option value="requested">Requested</option>
+            <option value="declined">Declined</option>
+          </select>
+        )}
         <select aria-label="User type" value={userType} onChange={e => setUserType(e.target.value)}>
           <option value="">All Types</option>
           <option value="hcp">HCP</option>

@@ -12,6 +12,7 @@ const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
 const { validateUploads } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
+const { confirmationData } = require('../../services/safetyConfirmations'); // CPPM-127, CPPM-137
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -67,6 +68,65 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     res.json({ alerts });
   } catch (err) {
     log.error('admin.safety.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── CPPM-127: who has confirmed each high and critical letter ──────────────
+// Reading only; nothing here changes a record. The rule lives in the service.
+
+// GET /api/admin/safety/:clientId/confirmations — one line per letter.
+router.get('/:clientId/confirmations', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const letters = await confirmationData(req.params.clientId);
+    res.json({ letters: letters.map(({ doctors, ...l }) => l) });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/safety/:clientId/confirmations/:alertId — each doctor, confirmed or not.
+router.get('/:clientId/confirmations/:alertId', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [letter] = await confirmationData(req.params.clientId, req.params.alertId);
+    if (!letter) return res.status(404).json({ error: 'No high or critical letter with that number.' });
+    // CPPM-143: the doctor list a page at a time. The counts, and the CSV export
+    // below, still cover every doctor.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const doctors_total = letter.doctors.length;
+    res.json({ letter: { ...letter, doctors: letter.doctors.slice((page - 1) * limit, page * limit), doctors_total, page, limit } });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations/:alertId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/safety/:clientId/confirmations/:alertId/export — the same list as CSV.
+// The export is recorded in the audit trail, as the training export is.
+router.get('/:clientId/confirmations/:alertId/export', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [letter] = await confirmationData(req.params.clientId, req.params.alertId);
+    if (!letter) return res.status(404).json({ error: 'No high or critical letter with that number.' });
+    // Quoted, quotes doubled, and a leading = + - @ neutralised (as in training.js).
+    const cell = v => {
+      const s = String(v ?? '');
+      return `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
+    };
+    const header = ['Letter', 'Severity', 'Doctor', 'Email', 'Type', 'Confirmed at (UTC)', 'Reminded at (UTC)', 'Note'];
+    const lines = letter.doctors.map(d => [
+      letter.title, letter.severity, `${d.first_name} ${d.last_name}`, d.email, d.user_type || 'other',
+      d.acknowledged_at ? new Date(d.acknowledged_at).toISOString().replace('T', ' ').slice(0, 19) : 'Not yet',
+      d.reminded_at ? new Date(d.reminded_at).toISOString().replace('T', ' ').slice(0, 19) : '', // CPPM-137
+      d.addressed ? '' : 'No longer active or no longer addressed',
+    ].map(cell).join(','));
+    await audit(req.admin, req.params.clientId, 'EXPORT', 'safety_confirmations', letter.id, { rows: lines.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="safety-confirmations-${req.params.clientId}-${letter.id}-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send([header.map(cell).join(','), ...lines].join('\r\n'));
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations/:alertId/export', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

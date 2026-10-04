@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth, adminHeaders } from '../context/AdminAuthContext'
 import PageLoader from './PageLoader'
 import Icon from '../../shared/components/Icon'
 
 const NAV_ITEMS = [
-  { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true },
-  { to: '/admin/clients',          label: 'Clients',         icon: 'building' },
+  // CPPM-133: platformOnly — a client's own staff cannot read these, so they are not offered.
+  { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true, platformOnly: true },
+  { to: '/admin/clients',          label: 'Clients',         icon: 'building', platformOnly: true },
   // CPPM-62: records that belong to no client (platform-admin sign-ins, failed
   // sign-ins for unknown emails). Shown to the platform admin only.
   { to: '/admin/audit',            label: 'Platform Audit Trail', icon: 'clipboard', exact: true, superadminOnly: true },
@@ -25,15 +26,16 @@ const CLIENT_SECTIONS = [
     { path: '',              label: 'Overview' },
   ] },
   { key: 'inbox', label: 'Inbox', icon: 'inbox', tabs: [
-    { path: 'submissions',   label: 'Submissions', area: 'submissions' },
-    { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety', area: 'ae-review' },
+    { path: 'submissions',   label: 'Submissions', area: 'submissions', keywords: 'inquiries enquiries questions' },
+    { path: 'safety-queue',  label: 'Safety Queue', badge: 'safety', area: 'ae-review', keywords: 'adverse events unwell' },
     { path: 'review-queue',  label: 'Review Queue', badge: 'review', area: 'review-queue' },
+    { path: 'access-requests', label: 'Access Requests', badge: 'access', area: 'users' }, // CPPM-128
     { path: 'feedback',      label: 'Feedback', area: 'feedback' },
     { path: 'chat-records',  label: 'Chat Conversations', area: 'chat-records' },
-    { path: 'data-requests', label: 'Data Requests', area: 'data-requests' },
+    { path: 'data-requests', label: 'Data Requests', area: 'data-requests', keywords: 'erasure deletion privacy gdpr' },
   ] },
   { key: 'content', label: 'Content', icon: 'file', tabs: [
-    { path: 'content',       label: 'Library', area: 'content' },
+    { path: 'content',       label: 'Library', area: 'content', keywords: 'therapeutic areas drugs events resources' },
     { path: 'news',          label: 'News', area: 'news' },
     { path: 'documents',     label: 'Documents', area: 'documents' },
     { path: 'safety',        label: 'Safety Alerts', area: 'safety' },
@@ -44,25 +46,26 @@ const CLIENT_SECTIONS = [
   ] },
   { key: 'setup', label: 'Portal setup', icon: 'sliders', tabs: [
     { path: 'branding',      label: 'Branding', area: 'branding' },
-    { path: 'features',      label: 'Features', area: 'features' },
+    { path: 'features',      label: 'Features', area: 'features', keywords: 'pages switches' },
     { path: 'gate',          label: 'User Gate', area: 'gate' },
     { path: 'forms',         label: 'Forms', area: 'forms' },
-    { path: 'email-settings', label: 'Email Settings', area: 'email-config' },
+    { path: 'email-settings', label: 'Email Settings', area: 'email-config', keywords: 'smtp mail' },
     { path: 'chatbox',       label: 'Chatbox AI', area: 'chatbox' },
   ] },
   { key: 'people', label: 'People', icon: 'users', tabs: [
-    { path: 'users',         label: 'Portal Users', area: 'users' },
-    { path: 'admin-users',   label: 'Admin Users', area: 'admin-users' },
+    { path: 'users',         label: 'Portal Users', area: 'users', keywords: 'doctors hcp' },
+    { path: 'admin-users',   label: 'Admin Users', area: 'admin-users', keywords: 'staff roles' },
   ] },
   { key: 'connections', label: 'Connections', icon: 'link', tabs: [
     { path: 'integration',   label: 'Integration', area: 'integration' },
     { path: 'sync-health',   label: 'Sync Health', area: 'submissions' },
-    { path: 'sso',           label: 'Single Sign-On', area: 'sso' },
+    { path: 'sso',           label: 'Single Sign-On', area: 'sso', keywords: 'sso login oidc' },
   ] },
   { key: 'reports', label: 'Reports', icon: 'chart', tabs: [
     { path: 'analytics',     label: 'Analytics' },
     { path: 'audit',         label: 'Audit Trail' },
-    { path: 'compliance',    label: 'Compliance', area: 'compliance' },
+    { path: 'safety-confirmations', label: 'Safety Confirmations' }, // CPPM-127: for reading, so no area
+    { path: 'compliance',    label: 'Compliance', area: 'compliance', keywords: 'consent privacy' },
   ] },
 ]
 
@@ -93,6 +96,8 @@ const SEGMENT_TITLES = {
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',
+  'access-requests': 'Access Requests',
+  'safety-confirmations': 'Safety Confirmations',
   trials:         'Clinical Trials', // CPPM-125
   training:       'CME & Training',
   sso:            'Single Sign-On',
@@ -106,6 +111,66 @@ function deriveTitle(pathname) {
   return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
 
+// CPPM-124: the sections and tabs this person's menu shows. Also read by the client
+// Overview (CPPM-135), so its cards and the menu never disagree.
+export function menuSections({ hasRole, canChange }, currentPath = null) {
+  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
+  return CLIENT_SECTIONS
+    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
+    .filter(sec => sec.tabs.length > 0)
+}
+
+// CPPM-131: "Go to…" — type part of a screen's name and jump to it. It offers
+// only what this person's menu offers. "/" anywhere outside a field focuses it.
+function QuickSearch({ items }) {
+  const navigate = useNavigate()
+  const [q, setQ]     = useState('')
+  const [idx, setIdx] = useState(0)
+  const inputRef      = useRef(null)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target
+      if (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      e.preventDefault(); inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const matches = words.length
+    ? items.filter(it => { const hay = `${it.label} ${it.section} ${it.keywords || ''}`.toLowerCase(); return words.every(w => hay.includes(w)) }).slice(0, 8)
+    : []
+  function go(it) { setQ(''); setIdx(0); inputRef.current?.blur(); navigate(it.to) }
+  function onKeyDown(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, matches.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter' && matches[idx]) { e.preventDefault(); go(matches[idx]) }
+    else if (e.key === 'Escape') { setQ(''); inputRef.current?.blur() }
+  }
+  return (
+    <div className="cp-quick-search">
+      <input
+        ref={inputRef} type="search" value={q} placeholder="Go to… ( / )" aria-label="Go to a screen"
+        role="combobox" aria-expanded={matches.length > 0} aria-controls="cp-quick-search-list"
+        aria-activedescendant={matches[idx] ? `cp-qs-${idx}` : undefined}
+        onChange={e => { setQ(e.target.value); setIdx(0) }} onKeyDown={onKeyDown}
+        onBlur={() => setTimeout(() => setQ(''), 150)}
+      />
+      {words.length > 0 && (
+        <ul id="cp-quick-search-list" role="listbox" className="cp-quick-search-list">
+          {matches.length === 0 ? <li className="cp-quick-search-empty">No screen matches</li> : matches.map((it, i) => (
+            <li key={it.to} id={`cp-qs-${i}`} role="option" aria-selected={i === idx}
+              className={i === idx ? 'active' : ''} onMouseDown={e => { e.preventDefault(); go(it) }}>
+              <span>{it.label}</span><span className="cp-quick-search-where">{it.section}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function AdminLayout({ children }) {
   const { admin, signOut, hasRole, canChange } = useAdminAuth()
   const navigate  = useNavigate()
@@ -117,12 +182,20 @@ export default function AdminLayout({ children }) {
   const currentSection = CLIENT_SECTIONS.find(sec => sec.tabs.some(t => t.path === currentPath))
   // CPPM-124: a viewer may change nothing but is meant to look at everything.
   // The tab you are on always shows, even if your role cannot change it.
-  const showTab = (t) => !t.area || hasRole('viewer') || canChange(t.area) || t.path === currentPath
-  const sections = CLIENT_SECTIONS
-    .map(sec => ({ ...sec, tabs: sec.tabs.filter(showTab) }))
-    .filter(sec => sec.tabs.length > 0)
+  const sections = menuSections({ hasRole, canChange }, currentPath)
   const shownSection = sections.find(sec => sec.key === currentSection?.key)
+  const mainItems = NAV_ITEMS.filter(item => (!item.superadminOnly || admin?.role === 'superadmin') && !(item.platformOnly && admin?.clientId))
   const tabUrl = (t) => `/admin/clients/${clientId}${t.path ? '/' + t.path : ''}`
+  // CPPM-131: what "Go to…" offers — the person's own menu. A client's own staff
+  // get their client's screens from anywhere.
+  const searchClient = clientId || admin?.clientId
+  const searchItems = [
+    ...mainItems.map(it => ({ label: it.label, section: 'Main', to: it.to })),
+    ...(searchClient ? sections.flatMap(sec => sec.tabs.map(t => ({
+      label: t.label, section: sec.label, keywords: t.keywords,
+      to: `/admin/clients/${searchClient}${t.path ? '/' + t.path : ''}`,
+    }))) : []),
+  ]
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
     // CPPM-126: on a phone the full sidebar leaves the page too little room.
@@ -133,7 +206,8 @@ export default function AdminLayout({ children }) {
   //   review — S4-8: content awaiting editorial review
   //   safety — PD-2: portal submissions where someone reported becoming unwell
   //   safetyMine — CPPM-6: how many of those the signed-in person holds
-  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0 })
+  //   access — CPPM-128: doctors waiting for access
+  const [badges, setBadges] = useState({ review: 0, safety: 0, safetyMine: 0, reviewMine: 0, access: 0 })
   // CPPM-6: a page says when it changed a count (a task taken, handed over or
   // closed), so the sidebar does not wait for the next page change to catch up.
   const [badgeTick, setBadgeTick] = useState(0)
@@ -150,9 +224,11 @@ export default function AdminLayout({ children }) {
     Promise.all([
       get(`/api/admin/review-queue/${clientId}/count`),
       get(`/api/admin/ae-review/${clientId}/count`),
-    ]).then(([review, safety]) => setBadges({
+      get(`/api/admin/users/${clientId}/access-requests/count`),
+    ]).then(([review, safety, access]) => setBadges({
       review: review?.count || 0, safety: safety?.count || 0, safetyMine: safety?.mine || 0,
       reviewMine: review?.mine || 0, // CPPM-61
+      access: access?.count || 0,
     }))
   }, [clientId, location.pathname, badgeTick])
 
@@ -205,8 +281,8 @@ export default function AdminLayout({ children }) {
         </div>
 
         <nav className="cp-sidebar-nav">
-          <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>
-          {NAV_ITEMS.filter(item => !item.superadminOnly || admin?.role === 'superadmin').map(item => (
+          {mainItems.length > 0 && <div className="cp-nav-section-label" style={{ marginBottom: 4 }}>Main</div>}
+          {mainItems.map(item => (
             <NavLink
               key={item.to} to={item.to} end={item.exact}
               title={item.label}
@@ -247,7 +323,7 @@ export default function AdminLayout({ children }) {
               <div style={{ marginTop: 12 }} />
               {sections.map(sec => {
                 const count = sec.tabs.reduce((n, t) => n + (t.badge ? badges[t.badge] : 0), 0)
-                const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] : 0), 0)
+                const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] || 0 : 0), 0)
                 return (
                   <NavLink
                     key={sec.key} to={tabUrl(sec.tabs[0])} end
@@ -287,6 +363,7 @@ export default function AdminLayout({ children }) {
             {sidebarCompact ? '⟩⟩' : '⟨⟨'}
           </button>
           <h1 className="cp-topbar-title">{pageTitle}</h1>
+          <QuickSearch items={searchItems} />
           {clientId && clientName && (
             <span className="cp-client-chip" title={`Configuring ${clientName}`}>
               <span className="cp-client-avatar">{clientName.charAt(0).toUpperCase()}</span>

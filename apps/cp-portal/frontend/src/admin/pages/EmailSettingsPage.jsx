@@ -24,6 +24,15 @@ export default function EmailSettingsPage() {
   const [testMsg, setTestMsg] = useState(null)   // { type: 'success'|'error', text }
   const [testing, setTesting] = useState(false)
   const [outbox, setOutbox] = useState({ emails: [], counts: { sent: 0, pending: 0, failed: 0 } })
+  const [viewing, setViewing] = useState(null) // CPPM-144: one email, as it would be sent
+
+  async function viewEmail(id) {
+    setResendMsg(null)
+    const res = await fetch(`/api/admin/email-config/${clientId}/outbox/${id}`, { headers: adminHeaders() })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { setResendMsg({ type: 'error', text: d.error || 'Could not open this email.' }); return }
+    setViewing(d.email)
+  }
   const [resendMsg, setResendMsg] = useState(null)
 
   // CPPM-36: failed and retrying emails, so nobody is left unnotified unseen.
@@ -293,7 +302,8 @@ export default function EmailSettingsPage() {
                     {e.status === 'failed' ? `Failed (${e.attempts} tries)` : `Retrying (${e.attempts} so far)`}
                   </td>
                   <td style={{ padding: 8, color: '#4B5563', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.last_error || ''}>{e.last_error || '—'}</td>
-                  <td style={{ padding: 8 }}>
+                  <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                    <button className="cp-btn cp-btn-outline" style={{ padding: '4px 10px', fontSize: 12, marginRight: 6 }} onClick={() => viewEmail(e.id)}>View</button>
                     {e.status === 'failed' && !e.is_sensitive && (
                       <button className="cp-btn cp-btn-outline" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => handleResend(e.id)}>Resend</button>
                     )}
@@ -308,6 +318,25 @@ export default function EmailSettingsPage() {
         )}
       </div>
       </ReadOnlyUnless>
+      {viewing && (
+        <div className="cp-modal-overlay" onClick={() => setViewing(null)}>
+          <div className="cp-modal" role="dialog" aria-label="Email" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="cp-modal-header"><span>{viewing.subject}</span><button className="cp-modal-close" onClick={() => setViewing(null)} aria-label="Close">✕</button></div>
+            <div className="cp-modal-body" style={{ fontSize: 13 }}>
+              <div style={{ color: '#4B5563', marginBottom: 10 }}>
+                To {viewing.to_email} · {viewing.status === 'failed' ? 'Failed' : viewing.status === 'sent' ? 'Sent' : 'Waiting to send'} · queued {new Date(viewing.created_at).toISOString().replace('T', ' ').slice(0, 16)} UTC
+              </div>
+              {viewing.withheld ? (
+                <div role="note" style={{ padding: '10px 14px', background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1' }}>
+                  Content withheld: this email carries a personal sign-in or reset link, which is never shown here.
+                </div>
+              ) : (
+                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0, padding: 12, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>{viewing.text || '(no text)'}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

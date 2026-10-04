@@ -82,17 +82,35 @@ async function raiseAlert(clientId, { kind, audience, title, body = null, linkPa
 async function clearAlerts(clientId, dedupeKeys, by = 'system: problem cleared') {
   // Manual resolution (an admin's "Mark resolved") is in routes/admin/alerts.js and
   // keeps the key, so a dismissed alert does not come straight back on the next sweep.
+  // CPPM-140: once the problem has cleared, that key is released too. Otherwise a
+  // hand-resolved alert blocked its key for good, and the problem coming back later
+  // raised nothing. resolved_by is set before resolved_at, as MySQL applies SET in order.
   try {
     const keys = [].concat(dedupeKeys);
     if (!keys.length) return 0;
     const [r] = await pool.execute(
-      `UPDATE cp_admin_alerts SET resolved_at = UTC_TIMESTAMP(), resolved_by = ?, dedupe_key = CONCAT(dedupe_key, '#', id)
-        WHERE client_id = ? AND resolved_at IS NULL AND dedupe_key IN (${keys.map(() => '?').join(',')})`,
+      `UPDATE cp_admin_alerts SET resolved_by = IF(resolved_at IS NULL, ?, resolved_by),
+              resolved_at = COALESCE(resolved_at, UTC_TIMESTAMP()), dedupe_key = CONCAT(dedupe_key, '#', id)
+        WHERE client_id = ? AND dedupe_key IN (${keys.map(() => '?').join(',')})`,
       [String(by).slice(0, 255), clientId, ...keys]);
     return r.affectedRows;
   } catch (err) {
     log.error('admin_alerts.clear_failed', { err, client_id: clientId });
     return 0;
+  }
+}
+
+/**
+ * CPPM-140: release a key whose alert an admin resolved by hand, for alerts where
+ * each new event is new news (an access request), not the same problem again.
+ */
+async function releaseResolved(clientId, dedupeKey) {
+  try {
+    await pool.execute(
+      `UPDATE cp_admin_alerts SET dedupe_key = CONCAT(dedupe_key, '#', id)
+        WHERE client_id = ? AND dedupe_key = ? AND resolved_at IS NOT NULL`, [clientId, dedupeKey]);
+  } catch (err) {
+    log.error('admin_alerts.release_failed', { err, client_id: clientId, dedupe_key: dedupeKey });
   }
 }
 
@@ -184,4 +202,4 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-module.exports = { raiseAlert, clearAlerts, sweepWaitingSafetyTasks, sweepHeldFiles, recordConnectionResult, recipients, splitEmails, asSentence };
+module.exports = { raiseAlert, clearAlerts, releaseResolved, sweepWaitingSafetyTasks, sweepHeldFiles, recordConnectionResult, recipients, splitEmails, asSentence };

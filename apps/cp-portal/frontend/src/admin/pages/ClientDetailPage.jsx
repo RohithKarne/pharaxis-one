@@ -1,85 +1,65 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
+import AdminLayout, { menuSections } from '../components/AdminLayout'
 import AlertsPanel from '../components/AlertsPanel'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
 import Icon from '../../shared/components/Icon'
 import QRCode from 'qrcode'
 
-// ── Config Sections ───────────────────────────────────────────────────────────
-const CONFIG_GROUPS = [
-  {
-    key: 'experience',
-    label: 'Branding & Experience',
-    desc: 'Portal identity, visual design, and AI configuration',
-    sectionIcon: 'palette',
-    cards: [
-      { path: 'branding',  icon: 'palette', label: 'Branding & Theme', desc: 'Logo, colors, fonts, and portal name',             cta: 'Configure', primary: true },
-      { path: 'features',  icon: 'sliders', label: 'Features',         desc: 'Enable or disable portal sections',                cta: 'Configure' },
-      { path: 'gate',      icon: 'gate',    label: 'User Gate',        desc: 'User type confirmation and access control',        cta: 'Configure' },
-      { path: 'chatbox',   icon: 'message', label: 'Chatbox AI',       desc: 'AI provider and system prompt',                   cta: 'Configure' },
-    ],
-  },
-  {
-    key: 'content',
-    label: 'Content & Publishing',
-    desc: 'All content published and visible in the portal',
-    sectionIcon: 'file',
-    cards: [
-      { path: 'content',   icon: 'file',   label: 'Content Library',     desc: 'Therapeutic areas, drugs, events, and resources', cta: 'Open',   primary: true },
-      { path: 'news',      icon: 'news',   label: 'News & Announcements', desc: 'Publish news posts and updates',                  cta: 'Open'   },
-      { path: 'safety',    icon: 'shield', label: 'Safety Alerts',        desc: 'Drug safety communications and recalls',          cta: 'Review' },
-      { path: 'documents', icon: 'folder', label: 'Document Library',     desc: 'Upload and manage clinical documents',            cta: 'Open'   },
-      { path: 'msls',      icon: 'users',  label: 'MSL Directory',        desc: 'Medical Science Liaisons',                       cta: 'Open'   },
-    ],
-  },
-  {
-    key: 'compliance',
-    label: 'Compliance & Governance',
-    desc: 'Regulatory requirements and form configuration',
-    sectionIcon: 'lock',
-    cards: [
-      { path: 'compliance', icon: 'lock', label: 'Compliance',   desc: 'Consent, cookie policy, and regulatory settings', cta: 'Configure', primary: true },
-      { path: 'forms',      icon: 'form', label: 'Form Builder', desc: 'Submission form fields per inquiry type',         cta: 'Configure' },
-    ],
-  },
-  {
-    key: 'operations',
-    label: 'Operations & Monitoring',
-    desc: 'Users, submissions, integrations, and audit',
-    sectionIcon: 'chart',
-    cards: [
-      { path: 'users',       icon: 'users', label: 'Portal Users', desc: 'Manage registered portal users',                 cta: 'Open',      primary: true },
-      { path: 'submissions', icon: 'inbox', label: 'Submissions',  desc: 'View and manage form submissions',               cta: 'Open'      },
-      { path: 'integration', icon: 'link',  label: 'Integration',  desc: 'MIMS or third-party system connection',          cta: 'Configure' },
-      { path: 'sso',         icon: 'lock',  label: 'Single Sign-On', desc: 'OIDC login with Microsoft or Google',          cta: 'Configure' },
-      { path: 'audit',       icon: 'list',  label: 'Audit Trail',  desc: 'Full admin activity log',                       cta: 'Review'    },
-      { path: 'analytics',   icon: 'chart', label: 'Analytics',    desc: 'Portal usage, downloads, and submission trends', cta: 'View'      },
-    ],
-  },
-]
-
-// ── Health Score ──────────────────────────────────────────────────────────────
-function computeHealthScore(data, submissionStats) {
-  const { branding, features } = data || {}
-  const enabledCount = features?.filter(f => f.is_enabled).length || 0
-  let score = 0
-  if (branding?.logo_url)    score += 20
-  if (branding?.portal_name) score += 15
-  if (enabledCount >= 3)     score += 20
-  else if (enabledCount > 0) score += 10
-  score += 15 // compliance always set up
-  score += 10 // MSLs seeded
-  if ((submissionStats?.total || 0) > 0)            score += 10
-  if (branding?.primary_color && branding.primary_color !== '#2563EB') score += 10
-  return Math.min(100, score)
+// ── Cards ─────────────────────────────────────────────────────────────────────
+// CPPM-135: the cards follow the menu's main screens and tabs (menuSections), so
+// the Overview and the sidebar never disagree. This only adds a line of help and an
+// icon to each screen.
+const CARD_INFO = {
+  submissions:     { icon: 'inbox',   desc: 'Questions and reports sent from the portal' },
+  'safety-queue':  { icon: 'shield',  desc: 'Someone reported becoming unwell' },
+  'review-queue':  { icon: 'search',  desc: 'News and documents waiting for approval' },
+  'access-requests': { icon: 'users', desc: 'Doctors asking for an account' },
+  feedback:        { icon: 'message', desc: 'Ratings and comments from visitors' },
+  'chat-records':  { icon: 'message', desc: 'Chat box conversations' },
+  'data-requests': { icon: 'shield',  desc: 'Requests to export or delete personal data' },
+  content:         { icon: 'file',    desc: 'Therapeutic areas, drugs, events, and resources' },
+  news:            { icon: 'news',    desc: 'Publish news posts and updates' },
+  documents:       { icon: 'folder',  desc: 'Upload and manage clinical documents' },
+  safety:          { icon: 'shield',  desc: 'Drug safety communications and recalls' },
+  trials:          { icon: 'beaker',  desc: 'Studies shown on the portal' },
+  training:        { icon: 'book',    desc: 'Modules, attempts, and certificates' },
+  msls:            { icon: 'users',   desc: 'Medical Science Liaisons' },
+  faq:             { icon: 'help',    desc: 'Questions and answers on the portal' },
+  branding:        { icon: 'palette', desc: 'Logo, colors, fonts, and portal name' },
+  features:        { icon: 'sliders', desc: 'Turn portal pages on and off' },
+  gate:            { icon: 'gate',    desc: 'User type confirmation and access control' },
+  forms:           { icon: 'form',    desc: 'Submission form fields per inquiry type' },
+  'email-settings': { icon: 'mail',   desc: 'Mail server, sender, and the email outbox' },
+  chatbox:         { icon: 'message', desc: 'AI provider and system prompt' },
+  users:           { icon: 'users',   desc: 'Doctors and other registered portal users' },
+  'admin-users':   { icon: 'key',     desc: 'Staff accounts and roles' },
+  integration:     { icon: 'link',    desc: 'MIMS or third-party system connection' },
+  'sync-health':   { icon: 'chart',   desc: 'Deliveries to MIMS, failures, and retries' },
+  sso:             { icon: 'lock',    desc: 'OIDC login with Microsoft or Google' },
+  analytics:       { icon: 'chart',   desc: 'Portal usage, downloads, and submission trends' },
+  audit:           { icon: 'list',    desc: 'Full admin activity log' },
+  'safety-confirmations': { icon: 'shield', desc: 'Who has confirmed each high and critical letter' },
+  compliance:      { icon: 'lock',    desc: 'Consent, cookie policy, and regulatory settings' },
+}
+const SECTION_DESC = {
+  inbox:       'Everything waiting for someone to act',
+  content:     'Everything published on the portal',
+  setup:       'How the portal looks and behaves',
+  people:      'Portal users and staff accounts',
+  connections: 'MIMS, deliveries, and single sign-on',
+  reports:     'Usage, audit, safety confirmations, and compliance',
 }
 
-function healthMeta(score) {
-  if (score >= 75) return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
-  if (score >= 40) return { label: 'Needs attention', color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
-  return                  { label: 'Not launch ready', color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
+// ── Readiness ─────────────────────────────────────────────────────────────────
+// CPPM-136: the hero shows the server's eight readiness checks (the Setup Checklist
+// below), the same score as the dashboard. It used to add its own points, some given
+// without checking anything.
+function readinessMeta(label) {
+  if (label === 'Ready')        return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
+  if (label === 'Almost Ready') return { label: 'Almost ready',    color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
+  return                               { label: 'Not ready',       color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
 }
 
 // ── Badges ────────────────────────────────────────────────────────────────────
@@ -91,21 +71,13 @@ const BADGE_STYLES = {
   attention: { background: '#FEF9C3', color: '#92400E' },
 }
 
+// CPPM-136: a badge only where it comes from real data. Fixed labels such as "No
+// active alerts" (shown while alerts were active) and "Ready to use" were removed.
 function getBadge(path, data, submissionStats, integrationData) {
   const { branding, features } = data || {}
   const n = features?.filter(f => f.is_enabled).length || 0
   if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready to use',    s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
   if (path === 'features')    return n > 0  ? { label: `${n} active`,      s: 'info'      } : { label: 'Not configured', s: 'danger'    }
-  if (path === 'compliance')  return           { label: 'Ready to use',     s: 'success'   }
-  if (path === 'gate')        return           { label: 'Ready to use',     s: 'success'   }
-  if (path === 'chatbox')     return           { label: 'Not configured',   s: 'warning'   }
-  if (path === 'content')     return           { label: 'Content ready',    s: 'success'   }
-  if (path === 'news')        return           { label: 'Needs update',     s: 'attention' }
-  if (path === 'safety')      return           { label: 'No active alerts', s: 'attention' }
-  if (path === 'documents')   return           { label: 'Library ready',    s: 'success'   }
-  if (path === 'msls')        return           { label: 'Contacts ready',   s: 'success'   }
-  if (path === 'forms')       return           { label: 'Forms ready',      s: 'success'   }
-  if (path === 'analytics')   return           { label: 'View',             s: 'info'      }
   if (path === 'integration') {
     const integrations = integrationData?.integrations || []
     if (integrations.length === 0) return { label: 'Not configured', s: 'warning' }
@@ -113,9 +85,6 @@ function getBadge(path, data, submissionStats, integrationData) {
     if (integrations.some(i => i.last_sync_status === 'success'))  return { label: 'Connected',      s: 'success' }
     return { label: 'Not tested', s: 'attention' }
   }
-  if (path === 'sso')         return           { label: 'Optional',         s: 'attention' }
-  if (path === 'audit')       return           { label: 'Active',           s: 'info'      }
-  if (path === 'users')       return           { label: 'Active',           s: 'info'      }
   if (path === 'submissions' && submissionStats) {
     return submissionStats.total > 0
       ? { label: `${submissionStats.total} total`, s: 'info' }
@@ -178,9 +147,9 @@ function relativeTime(ts) {
 export default function ClientDetailPage() {
   const { clientId } = useParams()
   const navigate     = useNavigate()
+  const { hasRole, canChange } = useAdminAuth()
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
-  const [search, setSearch]           = useState('')
   const [submissionStats, setSubmissionStats] = useState(null)
   const [readiness, setReadiness]     = useState(null)
   const [integrationData, setIntegrationData] = useState(null)
@@ -229,8 +198,7 @@ export default function ClientDetailPage() {
 
   const { client, branding, features } = data
   const enabledCount = features?.filter(f => f.is_enabled).length || 0
-  const healthScore  = computeHealthScore(data, submissionStats)
-  const health       = healthMeta(healthScore)
+  const health       = readinessMeta(readiness?.label)
   // Bridge row 2: open alerts belong in "Attention Required" — it said "No issues
   // detected" while reports were failing to reach MIMS.
   const alertIssues = ['integration', 'safety'].flatMap(aud => {
@@ -244,11 +212,12 @@ export default function ClientDetailPage() {
   const checklistDone = readiness?.done   || 0
 
 
-  function matchesSearch(card) {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return card.label.toLowerCase().includes(q) || card.desc.toLowerCase().includes(q)
-  }
+  // CPPM-135: one group per main screen of this person's menu (Overview itself aside);
+  // the first tab is the wide card. "Go to…" in the top bar replaces the old search.
+  const groups = menuSections({ hasRole, canChange }).filter(sec => sec.key !== 'overview').map(sec => ({
+    key: sec.key, label: sec.label, desc: SECTION_DESC[sec.key], sectionIcon: sec.icon,
+    cards: sec.tabs.map((t, i) => ({ path: t.path, label: t.label, ...CARD_INFO[t.path], cta: 'Open', primary: i === 0 })),
+  }))
 
   return (
     <AdminLayout title={client.name}>
@@ -310,39 +279,24 @@ export default function ClientDetailPage() {
 
         <div className="ck-health-block">
           <div className="ck-health-ring" style={{ color: health.color, background: health.bg, boxShadow: `0 0 0 3px ${health.ring}30, inset 0 2px 6px rgba(0,0,0,.08)` }}>
-            {healthScore}
+            {readiness ? readiness.score : '—'}
           </div>
-          <div className="ck-health-label" style={{ color: health.color }}>{health.label}</div>
-          <div className="ck-health-sub">Health Score</div>
+          <div className="ck-health-label" style={{ color: health.color }}>{readiness ? health.label : ''}</div>
+          <div className="ck-health-sub">Readiness</div>
         </div>
 
       </div>
 
       <AlertsPanel clientId={clientId} onOpenAlerts={setOpenAlerts} />
 
-      {/* ── SEARCH ───────────────────────────────────────────────────── */}
-      <div className="cp-config-search-bar">
-        <span className="cp-config-search-icon"><Icon name="search" size={16} /></span>
-        <input
-          type="text"
-          className="cp-config-search-input"
-          placeholder="Search configuration sections…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        {search && <button className="cp-config-search-clear" onClick={() => setSearch('')}>✕</button>}
-      </div>
-
       {/* ── BODY ─────────────────────────────────────────────────────── */}
       <div className="ck-body">
 
         {/* ── LEFT: Config Groups ─────────────────────────────────── */}
         <div className="ck-groups">
-          {CONFIG_GROUPS.map(group => {
-            const filtered  = group.cards.filter(matchesSearch)
-            if (filtered.length === 0 && search.trim()) return null
-            const primary   = filtered.find(c => c.primary)
-            const secondary = filtered.filter(c => !c.primary)
+          {groups.map(group => {
+            const primary   = group.cards.find(c => c.primary)
+            const secondary = group.cards.filter(c => !c.primary)
             return (
               <div key={group.key} className="ck-group" data-key={group.key}>
                 <div className="ck-group-hdr">
