@@ -32,7 +32,8 @@ router.get('/:clientId/therapeutic-areas', authenticateAdmin, async (req, res) =
 
 router.post('/:clientId/therapeutic-areas', authenticateAdmin, async (req, res) => {
   try {
-    const { name, slug, short_desc, content, image_url, display_order } = req.body;
+    const name = cleanText(req.body.name), slug = cleanText(req.body.slug);
+    const { short_desc, content, image_url, display_order } = req.body;
     if (!name || !slug) return res.status(400).json({ error: 'name and slug are required.' });
     const [result] = await pool.execute(
       `INSERT INTO cp_therapeutic_areas (client_id, name, slug, short_desc, content, image_url, display_order)
@@ -49,7 +50,8 @@ router.post('/:clientId/therapeutic-areas', authenticateAdmin, async (req, res) 
 router.patch('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req, res) => {
   try {
     const allowed = ['name', 'slug', 'short_desc', 'content', 'image_url', 'is_active', 'display_order', 'status'];
-    const { updates, params } = buildUpdate(req.body, allowed);
+    const { updates, params, blank } = buildUpdate(req.body, allowed);
+    if (blank) return res.status(400).json({ error: `${blank} cannot be empty.` });
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
     const [result] = await pool.execute(`UPDATE cp_therapeutic_areas SET ${updates.join(', ')}, updated_at=NOW() WHERE id = ? AND client_id = ?`, params);
@@ -86,7 +88,8 @@ router.get('/:clientId/drugs', authenticateAdmin, async (req, res) => {
 
 router.post('/:clientId/drugs', authenticateAdmin, async (req, res) => {
   try {
-    const { therapeutic_area_id, brand_name, generic_name, indication, prescribing_info_url, storage_conditions, dosage_info, contraindications, side_effects, image_url, display_order } = req.body;
+    const brand_name = cleanText(req.body.brand_name);
+    const { therapeutic_area_id, generic_name, indication, prescribing_info_url, storage_conditions, dosage_info, contraindications, side_effects, image_url, display_order } = req.body;
     if (!brand_name) return res.status(400).json({ error: 'brand_name is required.' });
     const [result] = await pool.execute(
       `INSERT INTO cp_drugs (client_id, therapeutic_area_id, brand_name, generic_name, indication, prescribing_info_url, storage_conditions, dosage_info, contraindications, side_effects, image_url, display_order)
@@ -103,7 +106,8 @@ router.post('/:clientId/drugs', authenticateAdmin, async (req, res) => {
 router.patch('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
   try {
     const allowed = ['therapeutic_area_id', 'brand_name', 'generic_name', 'indication', 'prescribing_info_url', 'storage_conditions', 'dosage_info', 'contraindications', 'side_effects', 'image_url', 'is_active', 'display_order', 'status'];
-    const { updates, params } = buildUpdate(req.body, allowed);
+    const { updates, params, blank } = buildUpdate(req.body, allowed);
+    if (blank) return res.status(400).json({ error: `${blank} cannot be empty.` });
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
     const [result] = await pool.execute(`UPDATE cp_drugs SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
@@ -140,7 +144,8 @@ router.get('/:clientId/events', authenticateAdmin, async (req, res) => {
 
 router.post('/:clientId/events', authenticateAdmin, async (req, res) => {
   try {
-    const { title, description, event_type, venue, city, country, start_date, end_date, registration_url, image_url, is_featured, display_order } = req.body;
+    const title = cleanText(req.body.title);
+    const { description, event_type, venue, city, country, start_date, end_date, registration_url, image_url, is_featured, display_order } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required.' });
     const [result] = await pool.execute(
       `INSERT INTO cp_events (client_id, title, description, event_type, venue, city, country, start_date, end_date, registration_url, image_url, is_featured, display_order)
@@ -157,7 +162,8 @@ router.post('/:clientId/events', authenticateAdmin, async (req, res) => {
 router.patch('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
   try {
     const allowed = ['title', 'description', 'event_type', 'venue', 'city', 'country', 'start_date', 'end_date', 'registration_url', 'image_url', 'is_active', 'is_featured', 'display_order', 'status'];
-    const { updates, params } = buildUpdate(req.body, allowed);
+    const { updates, params, blank } = buildUpdate(req.body, allowed);
+    if (blank) return res.status(400).json({ error: `${blank} cannot be empty.` });
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
     const [result] = await pool.execute(`UPDATE cp_events SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
@@ -194,7 +200,8 @@ router.get('/:clientId/resources', authenticateAdmin, async (req, res) => {
 
 router.post('/:clientId/resources', authenticateAdmin, async (req, res) => {
   try {
-    const { title, description, resource_type, url, category, display_order } = req.body;
+    const title = cleanText(req.body.title);
+    const { description, resource_type, url, category, display_order } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required.' });
     const [result] = await pool.execute(
       `INSERT INTO cp_resources (client_id, title, description, resource_type, url, category, display_order)
@@ -211,7 +218,8 @@ router.post('/:clientId/resources', authenticateAdmin, async (req, res) => {
 router.patch('/:clientId/resources/:id', authenticateAdmin, async (req, res) => {
   try {
     const allowed = ['title', 'description', 'resource_type', 'url', 'category', 'is_active', 'display_order', 'status'];
-    const { updates, params } = buildUpdate(req.body, allowed);
+    const { updates, params, blank } = buildUpdate(req.body, allowed);
+    if (blank) return res.status(400).json({ error: `${blank} cannot be empty.` });
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.id, req.params.clientId);
     const [result] = await pool.execute(`UPDATE cp_resources SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
@@ -236,10 +244,21 @@ router.delete('/:clientId/resources/:id', authenticateAdmin, async (req, res) =>
 
 // ── Helper ────────────────────────────────────────────────────
 
+// A name of only spaces showed as a blank row with nothing to click (CP walk, 4 Oct 2026).
+// Returns the trimmed text, or null when nothing is left.
+function cleanText(v) {
+  const t = v === undefined || v === null ? '' : String(v).trim();
+  return t || null;
+}
+
+const NAME_FIELDS = new Set(['name', 'slug', 'brand_name', 'title']);
 function buildUpdate(body, allowed) {
   const updates = [], params = [];
   for (const key of allowed) {
-    if (body[key] !== undefined) { updates.push(`${key} = ?`); params.push(body[key]); }
+    if (body[key] === undefined) continue;
+    // The identifying field cannot be edited to nothing.
+    if (NAME_FIELDS.has(key)) { const t = cleanText(body[key]); if (!t) return { updates: [], params: [], blank: key }; updates.push(`${key} = ?`); params.push(t); continue; }
+    updates.push(`${key} = ?`); params.push(body[key]);
   }
   return { updates, params };
 }
