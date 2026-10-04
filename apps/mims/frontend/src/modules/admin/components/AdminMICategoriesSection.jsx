@@ -71,13 +71,15 @@ export default function AdminMICategoriesSection({ H }) {
 
   async function handleToggle(cat) {
     try {
-      await httpFetch(`/api/admin/mi-categories/${cat.id}`, {
+      const res = await httpFetch(`/api/admin/mi-categories/${cat.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...cat, is_active: cat.is_active ? 0 : 1 }),
       })
-      refreshCategories()
-    } catch { /* silent */ }
+      // A refused change used to be swallowed (MIPM-202).
+      if (res.ok) refreshCategories()
+      else { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Update failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   async function handleDelete(cat) {

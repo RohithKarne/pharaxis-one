@@ -10,8 +10,24 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { getUserModules } = require('../../utils/userModules');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 
 function hasPlatformAdminScope(req) { return hasGlobalAdminScope(req.user); }
+
+// Changes only checked that the caller was signed in, so an agent could add,
+// rename or delete categories (MIPM-202). They are edited from Content
+// Management's Taxonomy tab, so they follow its rule for changes (MIPM-175).
+async function requireCategoryEditor(req, res, next) {
+  try {
+    if (hasPlatformAdminScope(req)) return next();
+    const modules = await getUserModules(req.user.userId);
+    if (modules.includes('content_mgmt') && (await userHasActivityPrivilege(req.user, 'content.author'))) return next();
+    return res.status(403).json({ error: 'You do not have permission to change MI categories.' });
+  } catch (err) {
+    return next(err);
+  }
+}
 
 // GET /api/admin/mi-categories
 router.get('/mi-categories', authenticate, async (req, res) => {
@@ -30,7 +46,7 @@ router.get('/mi-categories', authenticate, async (req, res) => {
 });
 
 // POST /api/admin/mi-categories
-router.post('/mi-categories', authenticate, async (req, res) => {
+router.post('/mi-categories', authenticate, requireCategoryEditor, async (req, res) => {
   try {
     const { name, description, sort_order } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -49,7 +65,7 @@ router.post('/mi-categories', authenticate, async (req, res) => {
 });
 
 // PUT /api/admin/mi-categories/:id
-router.put('/mi-categories/:id', authenticate, async (req, res) => {
+router.put('/mi-categories/:id', authenticate, requireCategoryEditor, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, sort_order, is_active } = req.body;
@@ -71,7 +87,7 @@ router.put('/mi-categories/:id', authenticate, async (req, res) => {
 });
 
 // DELETE /api/admin/mi-categories/:id
-router.delete('/mi-categories/:id', authenticate, async (req, res) => {
+router.delete('/mi-categories/:id', authenticate, requireCategoryEditor, async (req, res) => {
   try {
     const { id } = req.params;
     const orgId = hasPlatformAdminScope(req) ? req.query.org_id : req.user.orgId;
