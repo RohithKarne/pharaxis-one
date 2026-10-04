@@ -4,6 +4,9 @@ import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 
+// MIPM-193: test and fetch times were shown as raw ISO strings (2026-10-03T21:16:00.000Z).
+const when = (v) => { const d = new Date(v); return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString() }
+
 export default function AdminEmailAccountsPanel({ H, flash }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [orgs, setOrgs] = useState([])
@@ -227,14 +230,14 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{account.from_email || '—'}</td>
                   <td><StatusPill active={account.is_active} /></td>
                   <td style={{ fontSize: 11 }}>
-                    {account.last_imap_test_at ? <span style={{ color: account.last_imap_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_imap_test_status} · {account.last_imap_test_at}</span> : '—'}
+                    {account.last_imap_test_at ? <span style={{ color: account.last_imap_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_imap_test_status} · {when(account.last_imap_test_at)}</span> : '—'}
                     {account.last_imap_test_status === 'fail' && account.last_imap_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_imap_test_error}</div>}
                   </td>
                   <td style={{ fontSize: 11 }}>
-                    {account.last_smtp_test_at ? <span style={{ color: account.last_smtp_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_smtp_test_status} · {account.last_smtp_test_at}</span> : '—'}
+                    {account.last_smtp_test_at ? <span style={{ color: account.last_smtp_test_status === 'pass' ? 'var(--success)' : 'var(--danger)' }}>{account.last_smtp_test_status} · {when(account.last_smtp_test_at)}</span> : '—'}
                     {account.last_smtp_test_status === 'fail' && account.last_smtp_test_error && <div style={{ color: 'var(--danger)' }}>{account.last_smtp_test_error}</div>}
                   </td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{account.last_ingest_at || '—'}</td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{account.last_ingest_at ? when(account.last_ingest_at) : '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn btn-outline" style={{ fontSize: 11 }} onClick={() => openEditEmailModal(account)}>Edit</button>
