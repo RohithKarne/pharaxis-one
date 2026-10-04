@@ -101,17 +101,6 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
             <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
           </div>
           <div className="cm-form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-              <input type="checkbox" checked={form.approval_required} onChange={e => setForm(p => ({ ...p, approval_required: e.target.checked }))} />
-              Approval Required
-            </label>
-            {!form.approval_required && (
-              <p style={{ fontSize: 12, color: 'var(--info)', marginTop: 6, padding: '6px 10px', background: '#e8f0fb', borderRadius: 4 }}>
-                Note: This FAQ will publish immediately when you complete Check-In.
-              </p>
-            )}
-          </div>
-          <div className="cm-form-group">
             <label className="cm-form-label">Question <span className="required">*</span></label>
             <textarea className="cm-form-textarea" value={form.question} onChange={e => setForm(p => ({ ...p, question: e.target.value }))} rows={3} placeholder="Enter the question…" />
           </div>
