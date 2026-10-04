@@ -7,6 +7,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -219,13 +220,31 @@ export default function CaseAETab({
   // A closed case is read-only whatever its versions say (MIPM-208).
   const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
+  // MIPM-213: "Drugs" (suspect / co-suspect / concomitant roles) is the opt-in
+  // PV — Drug Roles feature, but it showed on every AE case beside Product Info,
+  // so drugs were entered twice. It shows when the feature is on, or when the
+  // case already has drugs in it (never hide recorded data).
+  const drugRolesOn = useFeatureFlag('cf.pv_drug_roles')
+  const [hasDrugRows, setHasDrugRows] = useState(false)
+  useEffect(() => {
+    if (drugRolesOn) return
+    httpFetch(`${API}/cases/${id}/drugs`, { headers })
+      .then(r => (r.ok ? r.json() : { rows: [] }))
+      .then(d => setHasDrugRows((d.rows || []).length > 0))
+      .catch(() => {})
+  }, [id, drugRolesOn]) // eslint-disable-line react-hooks/exhaustive-deps
+  const aeTabs = useMemo(
+    () => AE_TABS.filter(t => t.key !== 'drugs' || drugRolesOn || hasDrugRows),
+    [drugRolesOn, hasDrugRows],
+  )
+
   const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
   const canCreateAeVersion = !caseClosed && (!latestAeVersion || isClosed(latestAeVersion))
   const aeCompletionByTab = useMemo(() => {
     const versionId = activeAeVer?.id
     if (!versionId) return {}
     return Object.fromEntries(
-      AE_TABS.map(tab => {
+      aeTabs.map(tab => {
         const def = AE_COMPLETION_DEFS[tab.key]
         if (!def) return [tab.key, null]
         const payload = aeTabData[`${versionId}_${tab.key}`]
@@ -236,7 +255,7 @@ export default function CaseAETab({
         return [tab.key, summary]
       }),
     )
-  }, [activeAeVer?.id, aeTabData, getFieldConfig])
+  }, [activeAeVer?.id, aeTabData, getFieldConfig, aeTabs])
 
   useEffect(() => {
     const versionId = activeAeVer?.id
@@ -474,7 +493,7 @@ export default function CaseAETab({
 
           <div className="cf-case-workspace cf-ae-workspace">
             <StickySectionNav
-              sections={AE_TABS.map(t => ({
+              sections={aeTabs.map(t => ({
                 id: t.key,
                 label: t.label,
                 count: aeCompletionByTab[t.key]?.count,
