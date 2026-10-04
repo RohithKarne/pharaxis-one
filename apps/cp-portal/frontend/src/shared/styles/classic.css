@@ -217,3 +217,20 @@
 @media (max-width: 1279px) {
   :root .cp-admin-content table { display: block; max-width: 100%; overflow-x: auto; }
 }
+
+/* CPPM-147: on a narrower screen the Overview header stacks (name and portal address,
+   then the figures, then the readiness score) instead of cutting the score off, and the
+   Attention Required panel moves below the setup list instead of off the right edge. */
+@media (max-width: 1100px) {
+  :root .ck-hero { flex-wrap: wrap; }
+  :root .ck-hero-identity { flex: 1 1 100%; min-width: 0; max-width: none; border-right: 0; border-bottom: 1px solid var(--cp-border); }
+}
+@media (max-width: 900px) {
+  :root .ck-body { grid-template-columns: minmax(0, 1fr); }
+  :root .ck-panel { position: static; }
+}
+@media (max-width: 640px) {
+  :root .ck-hero-stats { flex: 1 1 100%; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--cp-border); }
+  :root .ck-stat { flex: 1 1 50%; padding: 8px 12px; }
+  :root .ck-health-block { flex: 1 1 100%; }
+}
