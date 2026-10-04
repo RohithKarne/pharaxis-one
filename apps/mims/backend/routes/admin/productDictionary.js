@@ -91,7 +91,7 @@ router.get('/product-groups', authenticate, requireRole('admin', 'platform_admin
 router.post('/product-groups', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, description, is_active } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required.' });
+    if (!String(name || '').trim()) return res.status(400).json({ error: 'name is required.' });
     const groupType = requireGroupType(req.body.group_type);
     const orgId = getScopedOrgId(req, req.body.org_id);
     const [result] = await pool.execute(
@@ -275,7 +275,7 @@ router.get('/product-families', authenticate, requireRole('admin', 'platform_adm
 router.post('/product-families', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, ingredients, is_active } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required.' });
+    if (!String(name || '').trim()) return res.status(400).json({ error: 'name is required.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
 
     const [result] = await pool.execute(
@@ -403,7 +403,7 @@ router.get('/products/:id/defaults', authenticate, requireRole('admin', 'platfor
 router.post('/products-full', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { trade_name, family_id, mah, dosage, atc_code, authorization_country, is_active } = req.body;
-    if (!trade_name) return res.status(400).json({ error: 'trade_name is required.' });
+    if (!String(trade_name || '').trim()) return res.status(400).json({ error: 'trade_name is required.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
 
     // Check if products table has extra columns; if not, fall back to base columns only
@@ -568,7 +568,7 @@ router.get('/products/:id/approvals', authenticate, requireRole('admin', 'platfo
 router.post('/products/:id/approvals', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { approval_number, regulatory_body, approval_date, expiry_date, status } = req.body;
-    if (!approval_number) return res.status(400).json({ error: 'approval_number is required.' });
+    if (!String(approval_number || '').trim()) return res.status(400).json({ error: 'approval_number is required.' });
 
     const [result] = await pool.execute(
       `INSERT INTO product_approvals (product_id, approval_number, regulatory_body, approval_date, expiry_date, status)
@@ -593,7 +593,7 @@ router.put('/products/approvals/:approvalId', authenticate, requireRole('admin',
     if (!existing) return res.status(404).json({ error: 'Approval not found.' });
 
     const { approval_number, regulatory_body, approval_date, expiry_date, status } = req.body;
-    if (!approval_number) return res.status(400).json({ error: 'approval_number is required.' });
+    if (!String(approval_number || '').trim()) return res.status(400).json({ error: 'approval_number is required.' });
 
     await pool.execute(
       `UPDATE product_approvals SET approval_number = ?, regulatory_body = ?, approval_date = ?,
@@ -644,7 +644,7 @@ router.get('/products/:id/country-authorizations', authenticate, requireRole('ad
 router.post('/products/:id/country-authorizations', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { country, auth_number, auth_date, status } = req.body;
-    if (!country) return res.status(400).json({ error: 'country is required.' });
+    if (!String(country || '').trim()) return res.status(400).json({ error: 'country is required.' });
 
     const [result] = await pool.execute(
       `INSERT INTO product_country_authorizations (product_id, country, auth_number, auth_date, status)
@@ -668,7 +668,7 @@ router.put('/products/country-authorizations/:authId', authenticate, requireRole
     if (!existing) return res.status(404).json({ error: 'Authorization not found.' });
 
     const { country, auth_number, auth_date, status } = req.body;
-    if (!country) return res.status(400).json({ error: 'country is required.' });
+    if (!String(country || '').trim()) return res.status(400).json({ error: 'country is required.' });
 
     await pool.execute(
       `UPDATE product_country_authorizations SET country = ?, auth_number = ?, auth_date = ?,
