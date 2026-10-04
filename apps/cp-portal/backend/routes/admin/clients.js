@@ -11,6 +11,14 @@ const { audit } = require('../../utils/audit');
 const { getClientBundle, listClients, readinessChecks } = require('../../services/clientService');
 const log = require('../../utils/logger');
 const { DEFAULT_AE_FIELDS, optionList } = require('../../services/formFields');
+const cache = require('../../utils/cache');
+
+// The portal reads its settings through a short cache. Deactivating a client (or
+// renaming it) must reach the portal at once, not when the cache happens to expire.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) cache.invalidate('config:'); });
+  next();
+});
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
