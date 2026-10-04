@@ -240,10 +240,13 @@ async function seedFieldSetup(conn, orgId, _userId) {
   const allRows = [...FIELD_SETUP_ROWS, ...EXTRA_FIELDS];
   for (const row of allRows) {
     await conn.execute(
+      // MIPM-194: Contact / Requestor fields belong to the Contacts step (the
+      // contact card on step 1). Untagged, they were drawn on every other step as
+      // an empty duplicate form whose required stars nothing enforced.
       `INSERT IGNORE INTO field_setup
-        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id)
-       VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-      [row[0], row[1], row[2], row[3], row[4], row[5], row[6], orgId]
+        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id, display_tab)
+       VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
+      [row[0], row[1], row[2], row[3], row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null]
     );
   }
 }
