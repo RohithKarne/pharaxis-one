@@ -80,10 +80,24 @@ async function listClients(pool) {
     safety: Number(r.safety), review: Number(r.review), access: Number(r.access), data_requests: Number(r.data_requests),
   }]));
 
+  // CPPM-138: each client's lowest confirmation rate among live, active high and
+  // critical safety letters — the same rule as Reports › Safety Confirmations.
+  const { confirmationData } = require('./safetyConfirmations');
+  const lowest = {};
+  for (const c of rows) {
+    const live = (await confirmationData(c.id))
+      .filter(l => l.status === 'active' && l.addressed > 0 && (!l.publish_at || new Date(l.publish_at) <= new Date()));
+    if (!live.length) { lowest[c.id] = null; continue; }
+    const worst = live.reduce((w, l) => (l.confirmed / l.addressed < w.confirmed / w.addressed ? l : w));
+    // Rounded as the report rounds, so the two always show the same figure.
+    lowest[c.id] = { rate: Math.round(100 * worst.confirmed / worst.addressed), letter_id: worst.id, letter_title: worst.title };
+  }
+
   return rows.map(client => ({
     ...readinessForClient(client, expiredDocCounts),
     expiring_soon_doc_count: expiringSoonCounts[client.id] || 0,
     waiting: waiting[client.id] || { safety: 0, review: 0, access: 0, data_requests: 0 },
+    safety_confirmation: lowest[client.id],
   }));
 }
 

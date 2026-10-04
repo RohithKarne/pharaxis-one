@@ -51,7 +51,7 @@ async function confirmationData(clientId, alertId) {
       if (!addressed.some(d => d.id === a.id)) rows.push({ id: a.id, first_name: a.first_name, last_name: a.last_name, email: a.email, user_type: a.user_type, acknowledged_at: a.acknowledged_at, reminded_at: reminded.get(a.id) || null, addressed: false });
     }
     return {
-      id: l.id, title: l.title, severity: l.severity, status: l.status, effective_date: l.effective_date,
+      id: l.id, title: l.title, severity: l.severity, status: l.status, effective_date: l.effective_date, publish_at: l.publish_at,
       addressed: addressed.length, confirmed: rows.filter(r => r.addressed && r.acknowledged_at).length, doctors: rows,
     };
   });
