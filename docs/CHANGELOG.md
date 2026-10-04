@@ -61,17 +61,17 @@ integration consuming `/api/v1/content/documents` (behaviour changed 200 → 501
 
 ---
 
-## cp-portal 1.0.0 — 2026-10-03
+## Unreleased — CP Portal
 
-**Tag:** `cp-portal-v1.0.0`, the first CP Portal release under SOP §38.10. Everything
-on `main` up to this entry, including the earlier "Unreleased — CP Portal" note
-(the health endpoint's `build` block), which this release absorbs.
+**Not tagged.** On 4 Oct 2026 Rohith decided not to tag CP Portal releases for now, and
+to remove the old `v1.0.0` tag. This entry records everything on `main` so the change
+history and its revalidation flag exist when a release is tagged. It absorbs the earlier
+"Unreleased — CP Portal" note (the health endpoint's `build` block).
 
 **Revalidation impact:** Full. *Proposed by engineering (Varun Karne). Confirmed by
-Saad Rahman, compliance owner, in the 3 Oct 2026 team session, on Rohith Karne's
-instruction to release.*
-**Why:** This is the first release, so there is no validated earlier version to compare
-against. It also changes access control (roles, lock-out, single sign-on), the audit
+Saad Rahman, compliance owner, in the 3 Oct 2026 team session.*
+**Why:** No CP Portal version has been validated under this change log, so there is
+nothing earlier to compare against. It also changes access control (roles, lock-out, single sign-on), the audit
 trail (what changed, from and to; exports recorded), and record structures (safety
 confirmations, training attempts, consent proof, access requests). Each of these alone
 is "Full" under the table above.
