@@ -135,6 +135,9 @@ export default function GatePage() {
                 onChange={e => setConf('require_disclaimer', e.target.checked ? 1 : 0)} />
               <label htmlFor="reqDisclaimer">Require user to accept disclaimer before proceeding</label>
             </div>
+            {!!config.require_disclaimer && !String(config.disclaimer_text || '').trim() && (
+              <p className="cp-page-desc" style={{ marginTop: 4 }}>No disclaimer text is set, so there is nothing to accept: people confirm their type without a tick box until you add one.</p>
+            )}
           </div>
         )}
 

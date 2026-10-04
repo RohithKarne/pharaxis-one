@@ -15,7 +15,10 @@ export default function UserTypeGate() {
 
   if (!gate) return null
 
-  const canConfirm = selected && (!gate.require_disclaimer || accepted)
+  // CPPM-151 walk: "require the disclaimer" with no disclaimer text showed nothing to
+  // accept, so Confirm could never be pressed and every unconfirmed doctor was stuck.
+  const needsTick = !!gate.require_disclaimer && !!gate.disclaimer_text
+  const canConfirm = selected && (!needsTick || accepted)
 
   async function confirm() {
     if (!canConfirm) return
