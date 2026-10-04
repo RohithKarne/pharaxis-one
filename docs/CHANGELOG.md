@@ -130,6 +130,7 @@ the ones a validation plan should name.
 - The virus scanner starts with the portal, and admins see when it is down — CPPM-44 (#679)
 - Classic look, and Katrina's six UI/UX priorities (#707, #708)
 - Fixes: collapsed sidebar width, page titles, client names cut short on the dashboard — CPPM-125, CPPM-126, CPPM-134
+- On a phone or small tablet: wide tables scroll inside themselves, the Overview and dashboard stack, and the top bar names the client in full — CPPM-146–149
 
 ### Platform
 - Database migrations 0039–0043, folded into the baseline and checked by the fresh-install test (`backend/tests/fresh-provision.js`)
