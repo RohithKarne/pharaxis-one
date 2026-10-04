@@ -10,6 +10,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [editing, setEditing] = useState(null)   // the client being edited, or null
   const [form, setForm]       = useState({ name: '', code: '', description: '', contact_name: '', contact_email: '' })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
@@ -61,6 +62,31 @@ export default function ClientsPage() {
     }
   }
 
+  function openEdit(c) {
+    setError('')
+    setEditing(c)
+    setForm({ name: c.name || '', code: c.code || '', description: c.description || '', contact_name: c.contact_name || '', contact_email: c.contact_email || '' })
+  }
+
+  // The client code is the portal's address, so it is not editable here: changing
+  // it would break every link and QR code already handed out.
+  async function handleEdit(e) {
+    e.preventDefault()
+    setError('')
+    if (!form.name.trim()) { setError('Company name cannot be empty.'); return }
+    setSaving(true)
+    try {
+      const { name, description, contact_name, contact_email } = form
+      await apiJson(`/api/admin/clients/${editing.id}`, { method: 'PATCH', headers: adminHeaders(), body: { name, description, contact_name, contact_email } })
+      setEditing(null)
+      await loadClients()
+    } catch (requestError) {
+      setError(requestError.message || 'Failed to save client.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function toggleActive(id, current, name) {
     // Deactivating takes the client's portal offline for every visitor at once.
     if (current && !confirm(`Deactivate ${name}? Its portal goes offline immediately for everyone. You can reactivate it here.`)) return
@@ -81,14 +107,14 @@ export default function ClientsPage() {
         </CanChange>
       </div>
 
-      {showAdd && (
-        <div className="cp-modal-overlay" onClick={() => !saving && setShowAdd(false)}>
+      {(showAdd || editing) && (
+        <div className="cp-modal-overlay" onClick={() => { if (!saving) { setShowAdd(false); setEditing(null) } }}>
           <div className="cp-modal" onClick={e => e.stopPropagation()}>
             <div className="cp-modal-header">
-              <span>Add New Client</span>
-              <button className="cp-modal-close" onClick={() => setShowAdd(false)}>✕</button>
+              <span>{editing ? `Edit ${editing.name}` : 'Add New Client'}</span>
+              <button className="cp-modal-close" onClick={() => { setShowAdd(false); setEditing(null) }}>✕</button>
             </div>
-            <form onSubmit={handleAdd} className="cp-modal-body" autoComplete="off">
+            <form onSubmit={editing ? handleEdit : handleAdd} className="cp-modal-body" autoComplete="off">
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>Company Name *</label>
@@ -96,8 +122,8 @@ export default function ClientsPage() {
                 </div>
                 <div className="cp-field">
                   <label>Client Code *</label>
-                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s/g, '-') }))} required placeholder="e.g. ardelyx" />
-                  <small>Used in portal URL. Lowercase, no spaces.</small>
+                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s/g, '-') }))} required placeholder="e.g. ardelyx" disabled={!!editing} />
+                  <small>{editing ? 'The portal address cannot change: links and QR codes already point at it.' : 'Used in portal URL. Lowercase, no spaces.'}</small>
                 </div>
               </div>
               <div className="cp-field">
@@ -116,8 +142,8 @@ export default function ClientsPage() {
               </div>
               {error && <div className="cp-error">{error}</div>}
               <div className="cp-modal-footer">
-                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create Client'}</button>
-                <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowAdd(false)}>Cancel</button>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Client'}</button>
+                <button type="button" className="cp-btn cp-btn-outline" onClick={() => { setShowAdd(false); setEditing(null) }}>Cancel</button>
               </div>
             </form>
           </div>
@@ -159,6 +185,7 @@ export default function ClientsPage() {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cp-btn cp-btn-sm" onClick={() => navigate(`/admin/clients/${c.id}`)}>Configure</button>
                     <CanChange area="clients">
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(c)}>Edit</button>
                     <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(c.id, c.is_active, c.name)}>
                       {c.is_active ? 'Deactivate' : 'Activate'}
                     </button>
