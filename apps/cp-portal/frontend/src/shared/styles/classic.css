@@ -210,3 +210,10 @@
 :root .pp-load-error p { color: #b91c1c; font-weight: bold; }
 /* The header is white in Classic: the Notifications button takes the header's dark text, not white. */
 :root .pp-bell-btn { color: var(--pp-text); }
+
+/* CPPM-146: on a phone or small tablet a wide admin table scrolls sideways inside itself,
+   as the portal's tables already do, instead of sliding the whole screen with it or,
+   on the dashboard, being cut off where nobody can reach it. */
+@media (max-width: 1279px) {
+  :root .cp-admin-content table { display: block; max-width: 100%; overflow-x: auto; }
+}
