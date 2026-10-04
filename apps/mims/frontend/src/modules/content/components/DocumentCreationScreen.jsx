@@ -363,6 +363,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                 </select>
               </div>
 
+              {/* --primary-light is a dark shade in every theme, so the chosen tile's
+                  label is white — grey on it could not be read (MIPM-200). */}
               {form.response_doc_type === 'File' && (
                 <div style={{ display: 'flex', gap: 6, paddingTop: 20 }}>
                   <div
@@ -375,7 +377,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'upload' ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
                   </div>
                   <div
                     onClick={() => setFileMode('online')}
@@ -387,7 +389,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'online' ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
                   </div>
                   <div
                     onClick={() => setFileMode('m365')}
@@ -399,7 +401,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       transition: 'all 0.15s',
                     }}
                   >
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: contentMode === 'm365' ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
                 </div>
