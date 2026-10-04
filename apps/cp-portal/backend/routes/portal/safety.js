@@ -50,6 +50,26 @@ router.get('/:clientCode/acknowledgements', authenticatePortal, requirePortalAut
   }
 });
 
+// GET /api/portal/safety/:clientCode/my-letters — CPPM-145: the doctor's own record:
+// high and critical letters still waiting for their confirmation, and the ones they
+// confirmed, with the time. Only the signed-in doctor's own rows.
+router.get('/:clientCode/my-letters', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    const waiting = await unconfirmed(client.id, req.portalUser);
+    const [confirmed] = await pool.execute(
+      `SELECT a.id, a.title, a.severity, k.acknowledged_at
+         FROM cp_safety_acknowledgements k JOIN cp_safety_alerts a ON a.id = k.alert_id
+        WHERE k.client_id = ? AND k.portal_user_id = ?
+        ORDER BY k.acknowledged_at DESC`, [client.id, req.portalUser.userId]);
+    res.json({ waiting: waiting.map(({ id, title, severity }) => ({ id, title, severity })), confirmed });
+  } catch (err) {
+    log.error('portal.safety.error', { err, route: 'GET /:clientCode/my-letters', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/portal/safety/:clientCode/alerts/:id/acknowledge — CPPM-114: the doctor
 // confirms they have read a high or critical letter they can see. Recorded once.
 router.post('/:clientCode/alerts/:id/acknowledge', authenticatePortal, requirePortalAuth, async (req, res) => {

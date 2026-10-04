@@ -187,8 +187,6 @@ body { background: var(--cp-bg); }
 }
 .cp-admin-sidebar.compact .cp-nav-text { display: none; }
 .cp-admin-sidebar.compact .cp-client-nav-groups { margin-top: 8px; }
-.cp-admin-sidebar.compact .cp-nav-group-header { display: none; }
-.cp-admin-sidebar.compact .cp-nav-group-items { margin: 0; }
 .cp-admin-sidebar.compact .cp-sidebar-footer {
   padding: 10px 6px;
   display: flex;
@@ -572,17 +570,6 @@ body { background: var(--cp-bg); }
   gap: 10px;
 }
 .oc-work-row:hover, .oc-readiness-row:hover { border-color: #93C5FD; background: #F8FAFC; }
-.oc-work-icon {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 2px;
-  background: #EFF6FF;
-  color: #1D4ED8;
-}
-.oc-work-icon.news { background: #F0F9FF; color: #0369A1; }
-.oc-work-icon.doc, .oc-work-icon.expiring { background: #FFFBEB; color: #B45309; }
 .oc-work-body { display: flex; flex-direction: column; min-width: 0; }
 .oc-work-body strong { font-size: 13px; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .oc-work-body span { font-size: 12px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -775,41 +762,6 @@ body { background: var(--cp-bg); }
 }
 .cp-hero-url { color: var(--cp-primary); font-family: monospace; font-size: 12px; }
 
-/* ── #4 Search bar ──────────────────────────────────────────────── */
-
-.cp-config-search-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--cp-surface);
-  border: 1px solid var(--cp-border);
-  border-radius: var(--cp-radius);
-  padding: 0 12px;
-  margin-bottom: 20px;
-  box-shadow: var(--cp-shadow);
-}
-.cp-config-search-icon { font-size: 14px; color: var(--cp-text-muted); flex-shrink: 0; }
-.cp-config-search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 10px 0;
-  font-size: 13px;
-  color: var(--cp-text);
-  outline: none;
-  font-family: inherit;
-}
-.cp-config-search-clear {
-  background: none;
-  border: none;
-  color: var(--cp-text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 3px;
-}
-.cp-config-search-clear:hover { color: var(--cp-text); background: var(--cp-bg); }
-
 /* ── #5 Main body layout ─────────────────────────────────────────── */
 
 .cp-client-detail-body {
@@ -977,30 +929,6 @@ body { background: var(--cp-bg); }
 /* ── #1 Sidebar group nav ────────────────────────────────────────── */
 
 .cp-client-nav-groups { margin-top: 12px; }
-
-.cp-nav-group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px 8px 4px;
-  color: #475569;
-  text-align: left;
-}
-.cp-nav-group-header:hover { color: #5F6B7A; }
-
-.cp-nav-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-.cp-nav-group-toggle { font-size: 9px; }
-
-.cp-nav-group-items { padding-left: 0; }
 
 /* ── #10 Stronger sidebar active state ──────────────────────────── */
 
@@ -1926,23 +1854,12 @@ body { background: var(--cp-bg); }
   margin-top: 1px;
 }
 
-.cp-nav-group-header {
-  margin-top: 4px;
-  border-radius: 2px;
-  padding: 5px 8px;
-  font-size: 10px;
-  letter-spacing: 0.3px;
-}
-
 .cp-nav-item { padding: 6px 10px; font-size: 12.5px; letter-spacing: -0.1px; }
-
-.cp-nav-group-items { padding-left: 6px; }
 
 .cp-sidebar-nav { padding: 10px 8px; }
 
 /* Tighten sidebar on shorter screens */
 @media (max-height: 700px) {
-  .cp-client-nav-groups .cp-nav-group-header { padding: 4px 8px; }
   .cp-nav-item { padding: 5px 10px; }
 }
 

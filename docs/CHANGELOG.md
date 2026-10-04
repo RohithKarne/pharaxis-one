@@ -91,6 +91,9 @@ the ones a validation plan should name.
 - Doctors confirm "I have read this" on high and critical safety letters, with who and when recorded — CPPM-114
 - Reports › Safety Confirmations shows who confirmed each letter, with a CSV export that is itself audited — CPPM-127
 - Doctors who have not confirmed a high or critical letter after 3 days get one reminder email, recorded per doctor and shown on the report — CPPM-137 (migration 0043)
+- The confirmations report lists a letter's doctors 50 at a time; counts and CSV still cover all — CPPM-143
+- Admins can read any outbox email as it would be sent; emails carrying a sign-in or reset link are never shown, and each read is audited — CPPM-144
+- A doctor's My Activity lists the safety letters they confirmed, with the time, and those still waiting — CPPM-145
 - Training records a named person's attempts and issues real certificates; the fake "accredited" certificate is gone — CPPM-15, CPPM-48 (#687, #683)
 - Consent proof, document approval, answers sent back to the doctor, and erasure that reaches MIMS — CPPM-4, 9–14, 29, 31, 39 (#670)
 

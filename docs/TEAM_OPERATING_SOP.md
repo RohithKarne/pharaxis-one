@@ -34,6 +34,7 @@
 > Revision update: 2026-09-29 (**Team is five.** On Rohith's instruction: **Aditi Raghavan, Bala Kaviti, Narayana Reddy and Arjun are removed.** **Rohith is Co-founder & CEO and Varun is Co-founder & CTO.** Saad and Vasu report to Rohith; Kiranmai reports to Varun. **Nobody routes asks any more:** when Rohith names a person, that person answers and owns the ask; when he names nobody, the owner of the topic answers first. **Saad takes Bala's work** — market and competitor research, the routines Bala owned, keeping the documents current. **Kiranmai takes Arjun's deployment work, later.** §27 retired; `/aditi`, `/narayana` and `/arjun` deleted. §4, §5, §26, §27, §28, §30, §31, §32, §37, §38, §39, §41, §42, §46, §47 and §48 updated; elsewhere, a mention of the four is history and §4 says who holds their work now.)
 > Revision update: 2026-09-29, later the same day (**Saad Rahman becomes the team's point of contact** — he leads the product and decides the direction of both applications while Varun focuses on development. When Rohith names nobody, Saad takes the ask first, answers what is product, brings in the owner for the rest, and tracks it to closure. **Session prompt regrouped from eleven points to five, nothing dropped** (§39.10). §4, §5, §27, §39.3, §39.4, §39.10 and §39.12 updated.)
 > Revision update: 2026-10-01 (**Team is four.** On Rohith's instruction: **Vasu Ranabothu is removed** and **Saad Rahman takes compliance, validation and GxP** alongside product — the regulatory position, approval of compliance-impacting releases and the revalidation flag. Rohith keeps final sign-off. `/vasu` deleted. **Session prompt gains point 6** (§39.10): whatever the team finds while working — a defect, a missed workflow, missed logic, or a new feature worth having — is fixed or built in the same session without waiting for Rohith's approval; pushing still needs his word. §4, §5, §26, §30, §31, §32, §38, §39, §40, §42, §46 and §48 updated; elsewhere, a mention of Vasu is history and §4 says who holds his work now.)
+> Revision update: 2026-10-04 (**Release tags paused.** On Rohith's decision: CP Portal and MIMS releases are not tagged for now, and the old `v1.0.0` tag and its GitHub Release are deleted. `docs/CHANGELOG.md` still records every change under Unreleased with its revalidation flag. §38.7 and §38.10 updated — CPPM-141.)
 
 ---
 
@@ -2517,7 +2518,7 @@ Recorded openly rather than left to be discovered:
 | ~~**Only CP Portal deploys**~~ | **Closed 2026-09-24.** Neither product deploys. The MIMS stub was removed with the rest (38.12). | — |
 | **Nothing is deployed anywhere** | Both products run only on a developer machine. Nobody outside the team can reach either one, and no client demonstration is possible without rebuilding a deployment path. **Accepted deliberately** — see 38.12. | Rohith |
 | **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see §5), so this is still a build task with a name against it. | Varun |
-| **Releases have never been logged** | One git tag, `v1.0.0`. `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
+| **Releases are not tagged** | Paused by Rohith on 2026-10-04 (38.10); the old `v1.0.0` tag is deleted. Changes are logged in `docs/CHANGELOG.md` under Unreleased, with their revalidation flags. The release workflows have never run. | Varun |
 | **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
 | **The tester is the author** | Since 2026-09-28 Kiranmai writes and tests most changes, and Varun reviews the code and signs. FDA's software validation guidance (§4.9, independence of review) calls self-validation extremely difficult; our independence rests on Varun's reading of her evidence, not on a separate tester. **Replaces** the 2026-09-20 gap *"the author is usually the reviewer"*, which closed the same day. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. The regulatory position — Saad's from 2026-10-01, Vasu's before — is stated and never tested from outside. | Rohith |
@@ -2591,6 +2592,13 @@ For an urgent production fix:
 
 **Merging to `main` is not releasing.** A release is a deliberate, tagged act.
 
+> **No tags for now — Rohith, 2026-10-04 (CPPM-141).** Releases are not tagged until
+> Rohith says otherwise. The old `v1.0.0` tag ("CP Portal GA", March 2026) and its GitHub
+> Release were deleted the same day; the repository holds no tags. What continues:
+> `docs/CHANGELOG.md` records every change under **Unreleased**, per product, with its
+> revalidation impact flag — engineering proposes it, Saad confirms it. When tagging
+> resumes, the first tag takes the Unreleased entry as its own, in the forms below.
+
 Releases use app-specific tags:
 
 | Product | Tag form |
@@ -2606,9 +2614,9 @@ owner (Vasu Ranabothu until 2026-10-01), confirms it.** It is not final until he
 > entry and a revalidation flag. It does not reach a server, because there is no
 > longer a server to reach.
 >
-> **Status, recorded honestly 2026-08-07:** this rule has never been exercised. The
-> repository holds **one tag, `v1.0.0`**, in none of the forms above, and
-> `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows exist and
+> **Status, 2026-10-04:** no release has been tagged under this rule, and tagging is
+> paused (above). `docs/CHANGELOG.md` carries "Unreleased" entries for MIMS (flag
+> Partial) and CP Portal (flag Full, everything up to PR #713). The release workflows
 > have never run. See 38.7.
 
 ### 38.11 Repository layout — nothing loose at the top level

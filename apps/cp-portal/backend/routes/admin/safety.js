@@ -91,7 +91,12 @@ router.get('/:clientId/confirmations/:alertId', authenticateAdmin, requireClient
   try {
     const [letter] = await confirmationData(req.params.clientId, req.params.alertId);
     if (!letter) return res.status(404).json({ error: 'No high or critical letter with that number.' });
-    res.json({ letter });
+    // CPPM-143: the doctor list a page at a time. The counts, and the CSV export
+    // below, still cover every doctor.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const doctors_total = letter.doctors.length;
+    res.json({ letter: { ...letter, doctors: letter.doctors.slice((page - 1) * limit, page * limit), doctors_total, page, limit } });
   } catch (err) {
     log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations/:alertId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

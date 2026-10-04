@@ -126,6 +126,28 @@ router.get('/:clientId/outbox', authenticateAdmin, requireClientAccess, async (r
   }
 })
 
+// GET /api/admin/email-config/:clientId/outbox/:id — CPPM-144: one email exactly as
+// it would be sent. Admins only, as resending is, because the text can carry a
+// person's name. A sensitive email (a live sign-in or reset link) is never shown,
+// even while it waits to be sent. Each read is in the audit trail.
+router.get('/:clientId/outbox/:id', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const [[row]] = await pool.execute(
+      `SELECT id, kind, to_email, subject, status, attempts, is_sensitive, text_body, html, created_at
+         FROM cp_email_outbox WHERE id = ? AND client_id = ?`, [req.params.id, req.params.clientId])
+    if (!row) return res.status(404).json({ error: 'No such email.' })
+    const withheld = !!row.is_sensitive
+    // Shown as plain text, never rendered as HTML. Older emails may have only HTML.
+    const text = withheld ? null
+      : row.text_body || (row.html || '').replace(/<br\s*\/?>|<\/p>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&[lr]dquo;/g, '"').trim()
+    await audit(req.admin, req.params.clientId, 'VIEW', 'email_outbox', Number(req.params.id), { withheld })
+    res.json({ email: { id: row.id, kind: row.kind, to_email: row.to_email, subject: row.subject, status: row.status, attempts: row.attempts, created_at: row.created_at, withheld, text } })
+  } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'GET /:clientId/outbox/:id', path: req.path, request_id: req.requestId || null })
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
 // POST /api/admin/email-config/:clientId/outbox/:id/resend
 router.post('/:clientId/outbox/:id/resend', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
   try {
