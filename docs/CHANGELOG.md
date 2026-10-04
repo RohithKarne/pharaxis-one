@@ -112,6 +112,11 @@ the ones a validation plan should name.
 - Area 2, Clients: new Edit button to change a client's name, description and contact; the code stays locked because it is the portal's address — `frontend/src/admin/pages/ClientsPage.jsx`
 - Area 2, Audit trail: the CSV export carries every record that matches the filters, not only the page on screen; the Entity and Action filters list what was actually recorded and match regardless of case — `backend/routes/admin/audit.js`, `frontend/src/admin/pages/AuditTrailPage.jsx`
 - Area 2, access: a client's own staff opening another client's address are sent to their own client instead of seeing empty screens — `frontend/src/App.jsx`
+- Area 3, Overview: the readiness check "Custom brand color set" no longer counts as done for an untouched client; it compares with the colour the app actually seeds — `backend/services/clientService.js`
+- Area 3, portal settings: switching the user gate, a user type, the chat box or Reset Branding reaches the portal immediately instead of after the 20-second cache; the same for compliance settings — `backend/routes/admin/gate.js`, `chatbox.js`, `compliance.js`, `branding.js`
+- Area 3, Branding: the logo help text names the accepted formats (PNG, JPG, GIF, WebP); SVG was listed but refused — `frontend/src/admin/pages/BrandingPage.jsx`
+- Area 3, Forms: adding a field with a key already on that form says so instead of "Server error." — `backend/routes/admin/forms.js`
+- Area 3, Chatbox: the portal's chat widget hides when "Enable chatbox on portal" is off; before, only the welcome text went — `frontend/src/portal/components/PortalLayout.jsx`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
