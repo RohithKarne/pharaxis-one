@@ -244,7 +244,13 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
-    res.json({ message: 'Password updated successfully.' });
+    // CPPM-151: bumping token_version ends every other session, as intended — but it
+    // ended this one too, so the person was dropped to the sign-in page the moment
+    // they pressed Save, with no message. Re-issue this browser's token so the
+    // person who changed the password stays signed in; everyone else is signed out.
+    const [[fresh]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    res.cookie('cp_portal_token', makeToken(fresh, req.portalUser.clientId), { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+       .json({ message: 'Password updated successfully.' });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'PATCH /password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
