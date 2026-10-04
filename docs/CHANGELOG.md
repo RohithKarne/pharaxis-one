@@ -74,6 +74,8 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Content lifecycle: review closes when every reviewer decides; authors cannot approve their own module; approved or published module text cannot change without going back to Draft; agents can read published FAQs — MIPM-174 to 183, 216, 219
 - Sessions: the idle timeout is enforced by the server, not only the browser; sessions are stored by fingerprint — MIPM-172, 211
 - Records added by migration: 151 to 158 (version locks, session fingerprint and last use, reviewer content access, template evidence status, contact field step, MI categories, content-usage backfill)
+- Follow-up (no Jira, epic MIPM-131): FAQ check-in always goes to Pending (the no-approval option could never publish); module version moves on change and publication; archived modules open read-only; AE event edits no longer fail on empty coded fields; a security group created through the API now grants the rights it lists; reviewers and agents no longer see buttons or filters they cannot use
+- Migrations 159 (link earlier AE products to the dictionary, open versions only) and 160 (remove logo files no organisation uses)
 
 ---
 

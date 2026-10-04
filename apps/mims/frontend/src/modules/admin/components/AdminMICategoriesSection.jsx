@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 export default function AdminMICategoriesSection({ H }) {
+  // Changes need the content author right (MIPM-202); people without it, such
+  // as reviewers, see the list without buttons the server would refuse.
+  const { hasCapability } = useAuth()
+  const canEdit = hasCapability('content.author')
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -100,12 +105,12 @@ export default function AdminMICategoriesSection({ H }) {
             Configure Medical Information categories used in document creation and case forms.
           </p>
         </div>
-        <button
+        {canEdit && <button
           onClick={openAdd}
           style={{ padding: '8px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
         >
           + Add Category
-        </button>
+        </button>}
       </div>
 
       {/* Add / Edit Form */}
@@ -195,13 +200,13 @@ export default function AdminMICategoriesSection({ H }) {
                   </span>
                 </td>
                 <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  {canEdit && <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button onClick={() => openEdit(cat)} style={{ padding: '4px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>Edit</button>
                     <button onClick={() => handleToggle(cat)} style={{ padding: '4px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: cat.is_active ? 'var(--text-muted)' : 'var(--primary)' }}>
                       {cat.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                     <button onClick={() => handleDelete(cat)} style={{ padding: '4px 10px', fontSize: 12, border: '1px solid #fca5a5', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--danger)' }}>Delete</button>
-                  </div>
+                  </div>}
                 </td>
               </tr>
             ))}

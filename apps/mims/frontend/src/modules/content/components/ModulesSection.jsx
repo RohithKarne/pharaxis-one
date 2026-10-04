@@ -67,7 +67,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
       <div className="cm-drawer-overlay" onClick={onClose} />
       <div className="cm-drawer">
         <div className="cm-drawer-header">
-          <span className="cm-drawer-title">{isEdit ? `Edit Module — ${moduleDoc.name}` : 'New Modular Document'}</span>
+          <span className="cm-drawer-title">{isEdit ? `${moduleDoc.status === 'Archived' ? 'Archived Module (set Draft to reuse)' : 'Edit Module'} — ${moduleDoc.name}` : 'New Modular Document'}</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-secondary)' }}>×</button>
         </div>
         <div className="cm-drawer-body">
@@ -300,7 +300,7 @@ export default function ModulesSection({ token }) {
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.updated_at ? new Date(m.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>Edit</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>{m.status === 'Archived' ? 'View' : 'Edit'}</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageModule(m)}>Usage</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>

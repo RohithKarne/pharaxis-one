@@ -148,8 +148,9 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
       const body = { ...form }
       const boolCols = ['is_ongoing','is_suspect','is_concomitant','is_serious','is_death','is_life_threatening','is_hospitalization','is_disability','is_congenital_anomaly','is_other_medically_important','is_required_intervention','is_lab_abnormality']
       boolCols.forEach(k => { if (typeof body[k] === 'boolean') body[k] = body[k] ? 1 : 0 })
-      // An emptied date is sent as no date, not as text the date column refuses.
-      Object.keys(body).forEach(k => { if (k.endsWith('_date') && body[k] === '') body[k] = null })
+      // An empty field is sent as no value: date and coded columns (outcome,
+      // causality…) refuse empty text, so an event edit failed with "outcome is not valid".
+      Object.keys(body).forEach(k => { if (body[k] === '') body[k] = null })
       const res  = editingId
         ? await httpFetch(`${API}/cases/ae/${tabKey}/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) })
         : await httpFetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })

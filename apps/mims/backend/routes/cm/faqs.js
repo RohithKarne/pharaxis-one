@@ -2,7 +2,7 @@
 
 /**
  * cm/faqs.js — Content Management FAQs API
- * FAQ lifecycle: Draft → CheckedOut → Pending (or Published if approval_required=false) → Approved → Published → Archived
+ * FAQ lifecycle: Draft → CheckedOut → Pending → Approved → Published → Archived
  */
 
 const express = require('express');
@@ -269,7 +269,7 @@ router.post('/faqs/:id/checkout', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/checkin — check in
-// Special: if approval_required=false, go directly to Published
+// Check-in always goes to Pending (see below).
 router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -283,25 +283,11 @@ router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
 
     const newMinor = faq.version_minor + 1;
     const versionStr = `${faq.version_major}.${newMinor}`;
-    const nextStatus = faq.approval_required ? 'Pending' : 'Published';
-
-    if (nextStatus === 'Published') {
-      const evidenceGate = await enforceEvidenceGate({
-        orgId: faq.folder_org_id || req.user.orgId,
-        contentType: 'faq',
-        contentId: Number(id),
-        mode: 'publish',
-        actorUserId: req.user.userId,
-        metadata: { route: '/api/cm/faqs/:id/checkin', auto_publish: true },
-      });
-      if (!evidenceGate.allow) {
-        return res.status(422).json({
-          error: `This FAQ cannot be published yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
-          run_id: evidenceGate.run_id,
-          evidence: evidenceGate.result,
-        });
-      }
-    }
+    // An FAQ marked "approval not required" was meant to publish on check-in, but
+    // the evidence gate only publishes Approved content, so that check-in always
+    // failed and left the FAQ checked out. The gate is the control: every
+    // check-in goes to Pending for an independent approval (MIPM-131 follow-up).
+    const nextStatus = 'Pending';
 
     await pool.execute(
       `UPDATE cm_faqs SET status = ?, checked_out_by = NULL, checked_out_at = NULL,

@@ -516,6 +516,12 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
         return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
       }
     }
+    // A module's version never moved. As for documents and FAQs: a content change
+    // adds to the minor number, and publishing moves to the next major (MIPM-131).
+    let versionMajor = Number(existing.version_major) || 1;
+    let versionMinor = Number(existing.version_minor) || 0;
+    if (nextStatus === 'Published' && existing.status !== 'Published') { versionMajor += 1; versionMinor = 0; }
+    else if (moduleContentChanged(existing, req.body, req.file)) versionMinor += 1;
     const filePath = req.file ? req.file.path : existing.file_path;
     const fileName = req.file ? req.file.originalname : existing.file_name;
     const fileSize = req.file ? req.file.size : existing.file_size;
@@ -531,6 +537,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
            status = ?, language = ?, search_tags = ?, publish_as_pdf = ?, send_as_pdf = ?,
            activation_date = ?, expiry_date = ?, usage_instructions = ?,
            document_category = ?, standard_response_text = ?, attributes = ?,
+           version_major = ?, version_minor = ?,
            updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
@@ -550,6 +557,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
         document_category !== undefined ? (document_category || null) : existing.document_category,
         standard_response_text !== undefined ? (standard_response_text || null) : existing.standard_response_text,
         attrs ? JSON.stringify(attrs) : null,
+        versionMajor, versionMinor,
         req.user.userId,
         req.params.id,
       ]
