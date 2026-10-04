@@ -20,26 +20,17 @@ export default function AdminIntegrationSection({ contentSection, H }) {
     let cancelled = false
 
     ;(async () => {
-      try {
-        const res = await httpFetch('/api/admin/integrations/config', { headers: H })
-        if (res.ok) {
-          const d = await res.json()
-          if (!cancelled) setIntegrationConfig(d.config || d.configs || {})
-        } else {
-          throw new Error('fallback')
-        }
-      } catch {
+      // Config is served per integration type only. The combined
+      // /api/admin/integrations/config this used to try first never existed, so
+      // every visit logged a 404 before falling back here (MIPM-196).
+      const entries = await Promise.all(INTEGRATION_TYPES.map(async (type) => {
         try {
-          const entries = await Promise.all(INTEGRATION_TYPES.map(async (type) => {
-            try {
-              const res = await httpFetch(`/api/admin/integrations/${type}/config`, { headers: H })
-              const d = await res.json()
-              return [type, d.config || {}]
-            } catch { return [type, {}] }
-          }))
-          if (!cancelled) setIntegrationConfig(Object.fromEntries(entries))
-        } catch { /* silent */ }
-      }
+          const res = await httpFetch(`/api/admin/integrations/${type}/config`, { headers: H })
+          const d = await res.json()
+          return [type, d.config || {}]
+        } catch { return [type, {}] }
+      }))
+      if (!cancelled) setIntegrationConfig(Object.fromEntries(entries))
 
       try {
         const res = await httpFetch('/api/admin/integrations', { headers: H })
