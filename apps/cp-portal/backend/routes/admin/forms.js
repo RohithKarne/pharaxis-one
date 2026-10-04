@@ -64,6 +64,8 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Field added.' });
   } catch (err) {
+    // uq_form_config (client, form, key): the same key twice would give the portal two answers for one name.
+    if (err && err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: `A field with the key "${req.body.field_key}" already exists on this form. Choose another key.` });
     log.error('admin.forms.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
