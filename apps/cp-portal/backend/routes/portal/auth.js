@@ -15,7 +15,7 @@ const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
 const { systemAudit } = require('../../utils/audit');
 const lockout = require('../../utils/loginLockout');
-const { raiseAlert } = require('../../services/adminAlerts');
+const { raiseAlert, releaseResolved } = require('../../services/adminAlerts');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 
@@ -95,11 +95,14 @@ router.post('/request-access', async (req, res) => {
       // Tell the client's admins. One open alert per portal, however many requests
       // arrive, so a burst of requests cannot become a burst of emails. It carries no
       // personal detail; names and emails are read in the admin console.
+      // CPPM-140: a new request is new news, so an alert an admin resolved by hand
+      // does not keep it quiet.
+      await releaseResolved(client.id, 'access_requested');
       raiseAlert(client.id, {
         kind: 'access_requested', audience: 'admin',
         title: 'Doctors have asked for portal access',
-        body: 'Open Portal Users and choose Requested to approve or decline them.',
-        linkPath: `/admin/clients/${client.id}/users?access=requested`,
+        body: 'Open Inbox › Access Requests to approve or decline them.', // CPPM-139
+        linkPath: `/admin/clients/${client.id}/access-requests`,
         dedupeKey: 'access_requested',
       });
     } catch (err) {

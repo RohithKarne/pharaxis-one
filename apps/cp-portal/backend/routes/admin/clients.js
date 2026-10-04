@@ -8,7 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
-const { getClientBundle, listClients } = require('../../services/clientService');
+const { getClientBundle, listClients, readinessChecks } = require('../../services/clientService');
 const log = require('../../utils/logger');
 const { DEFAULT_AE_FIELDS, optionList } = require('../../services/formFields');
 
@@ -119,30 +119,7 @@ router.get('/:id/readiness', authenticateAdmin, requireClientScopeByIdParam, asy
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE id = ?', [id]);
     if (!client) return res.status(404).json({ error: 'Client not found.' });
 
-    const [[branding]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [id]);
-    const [[{ cnt: enabledFeatureCount }]] = await pool.execute('SELECT COUNT(*) as cnt FROM cp_features WHERE client_id = ? AND is_enabled = 1', [id]);
-    const [[{ cnt: newsCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_news_posts WHERE client_id = ? AND status = 'published'", [id]);
-    const [[{ cnt: safetyCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_safety_alerts WHERE client_id = ? AND status = 'active'", [id]);
-    const [[{ cnt: docCount }]] = await pool.execute("SELECT COUNT(*) as cnt FROM cp_documents WHERE client_id = ? AND is_active = 1 AND status = 'published'", [id]);
-    const [[{ cnt: mslCount }]] = await pool.execute('SELECT COUNT(*) as cnt FROM cp_msls WHERE client_id = ? AND is_active = 1', [id]);
-    const [[compliance]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [id]);
-
-    const checks = [
-      { key: 'branding',     label: 'Branding configured',          done: !!(branding?.logo_url && branding?.portal_name),          hint: 'Upload a logo and set a portal name', path: 'branding' },
-      { key: 'logo',         label: 'Logo uploaded',                done: !!branding?.logo_url,                                      hint: 'Upload a logo in Branding & Theme', path: 'branding' },
-      { key: 'compliance',   label: 'Compliance enabled',           done: !!(compliance && compliance.jurisdictions_json !== '[]'),  hint: 'Configure compliance jurisdictions', path: 'compliance' },
-      { key: 'features',     label: 'Features configured',          done: enabledFeatureCount > 0,                                   hint: 'Enable at least one portal feature', path: 'features' },
-      { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post', path: 'news' },
-      { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document', path: 'documents' },
-      { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison', path: 'msls' },
-      { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
-    ];
-
-    const doneCount = checks.filter(c => c.done).length;
-    const score = Math.round((doneCount / checks.length) * 100);
-    const label = score >= 90 ? 'Ready' : score >= 60 ? 'Almost Ready' : 'Not Ready';
-
-    res.json({ checks, score, label, done: doneCount, total: checks.length });
+    res.json(await readinessChecks(pool, id)); // CPPM-136: one rule, shared with the dashboard
   } catch (err) {
     log.error('admin.clients.error', { err, route: 'GET /:id/readiness', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

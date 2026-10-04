@@ -57,13 +57,15 @@ export default function DashboardPage() {
     { key: 'access',        label: 'Access requests', tab: 'access-requests' },
     { key: 'data_requests', label: 'Data requests',   tab: 'data-requests' },
   ]
-  const waitingClients = clients.filter(c => c.is_active && WAITING.some(w => c.waiting?.[w.key] > 0))
+  // CPPM-138: a client also waits on us while any live high or critical letter is below 100% confirmed.
+  const lowConfirmation = c => c.safety_confirmation && c.safety_confirmation.rate < 100
+  const waitingClients = clients.filter(c => c.is_active && (WAITING.some(w => c.waiting?.[w.key] > 0) || lowConfirmation(c)))
   const waitingTotal = waitingClients.reduce((n, c) => n + WAITING.reduce((m, w) => m + (c.waiting?.[w.key] || 0), 0), 0)
 
   function readinessLabel(client) {
     if (client.readiness_label === 'Ready') return 'Ready to launch'
     if (client.readiness_label === 'Almost Ready') return 'Almost ready'
-    if (client.readiness_label === 'Needs Setup') return 'Setup needed'
+    if (client.readiness_label === 'Not Ready') return 'Setup needed' // CPPM-136: the server says 'Not Ready'
     return client.readiness_label || 'Not scored'
   }
 
@@ -97,7 +99,7 @@ export default function DashboardPage() {
           <div className="oc-empty-state">Nothing is waiting.</div>
         ) : (
           <table className="cp-table">
-            <thead><tr><th>Client</th>{WAITING.map(w => <th key={w.key}>{w.label}</th>)}</tr></thead>
+            <thead><tr><th>Client</th>{WAITING.map(w => <th key={w.key}>{w.label}</th>)}<th>Safety confirmations</th></tr></thead>
             <tbody>
               {waitingClients.map(c => (
                 <tr key={c.id}>
@@ -110,6 +112,14 @@ export default function DashboardPage() {
                         : <span style={{ color: '#4B5563' }}>0</span>}
                     </td>
                   ))}
+                  <td>
+                    {!c.safety_confirmation ? <span style={{ color: '#4B5563' }}>—</span>
+                      : c.safety_confirmation.rate >= 100 ? <span style={{ color: '#166534' }}>All confirmed</span>
+                      : <button className="cp-link-btn" onClick={() => navigate(`/admin/clients/${c.id}/safety-confirmations`)}
+                          title="Lowest confirmation rate among live high and critical letters">
+                          {c.safety_confirmation.rate}% · {c.safety_confirmation.letter_title}
+                        </button>}
+                  </td>
                 </tr>
               ))}
             </tbody>
