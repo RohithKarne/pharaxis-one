@@ -12,6 +12,7 @@ const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
 const { validateUploads } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
+const { canSee } = require('../../utils/audience');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -67,6 +68,90 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     res.json({ alerts });
   } catch (err) {
     log.error('admin.safety.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── CPPM-127: who has confirmed each high and critical letter ──────────────
+// "Addressed to" is every active doctor the letter's audience covers: the same
+// people the portal banner asks to confirm (routes/portal/safety.js, CPPM-114).
+// Reading only; nothing here changes a record.
+async function confirmationData(clientId, alertId) {
+  const [letters] = await pool.execute(
+    `SELECT id, title, severity, status, effective_date, publish_at, target_types_json
+       FROM cp_safety_alerts
+      WHERE client_id = ? AND severity IN ('high', 'critical')${alertId ? ' AND id = ?' : ''}
+      ORDER BY effective_date DESC, id DESC`,
+    alertId ? [clientId, alertId] : [clientId]);
+  const [doctors] = await pool.execute(
+    `SELECT id, first_name, last_name, email, user_type FROM cp_portal_users
+      WHERE client_id = ? AND is_active = 1 AND access_status IS NULL`, [clientId]);
+  const [acks] = await pool.execute(
+    `SELECT k.alert_id, k.acknowledged_at, u.id, u.first_name, u.last_name, u.email, u.user_type
+       FROM cp_safety_acknowledgements k JOIN cp_portal_users u ON u.id = k.portal_user_id
+      WHERE k.client_id = ?`, [clientId]);
+  return letters.map(l => {
+    const addressed = doctors.filter(d => canSee(l.target_types_json, d.user_type || 'other'));
+    const confirmed = new Map(acks.filter(a => a.alert_id === l.id).map(a => [a.id, a]));
+    const rows = addressed.map(d => ({ ...d, acknowledged_at: confirmed.get(d.id)?.acknowledged_at || null, addressed: true }));
+    // Someone who confirmed and has since left (deactivated, or the audience
+    // changed) still appears, so no confirmation drops out of the record.
+    for (const a of confirmed.values()) {
+      if (!addressed.some(d => d.id === a.id)) rows.push({ id: a.id, first_name: a.first_name, last_name: a.last_name, email: a.email, user_type: a.user_type, acknowledged_at: a.acknowledged_at, addressed: false });
+    }
+    return {
+      id: l.id, title: l.title, severity: l.severity, status: l.status, effective_date: l.effective_date,
+      addressed: addressed.length, confirmed: rows.filter(r => r.addressed && r.acknowledged_at).length, doctors: rows,
+    };
+  });
+}
+
+// GET /api/admin/safety/:clientId/confirmations — one line per letter.
+router.get('/:clientId/confirmations', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const letters = await confirmationData(req.params.clientId);
+    res.json({ letters: letters.map(({ doctors, ...l }) => l) });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/safety/:clientId/confirmations/:alertId — each doctor, confirmed or not.
+router.get('/:clientId/confirmations/:alertId', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [letter] = await confirmationData(req.params.clientId, req.params.alertId);
+    if (!letter) return res.status(404).json({ error: 'No high or critical letter with that number.' });
+    res.json({ letter });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations/:alertId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/safety/:clientId/confirmations/:alertId/export — the same list as CSV.
+// The export is recorded in the audit trail, as the training export is.
+router.get('/:clientId/confirmations/:alertId/export', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [letter] = await confirmationData(req.params.clientId, req.params.alertId);
+    if (!letter) return res.status(404).json({ error: 'No high or critical letter with that number.' });
+    // Quoted, quotes doubled, and a leading = + - @ neutralised (as in training.js).
+    const cell = v => {
+      const s = String(v ?? '');
+      return `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
+    };
+    const header = ['Letter', 'Severity', 'Doctor', 'Email', 'Type', 'Confirmed at (UTC)', 'Note'];
+    const lines = letter.doctors.map(d => [
+      letter.title, letter.severity, `${d.first_name} ${d.last_name}`, d.email, d.user_type || 'other',
+      d.acknowledged_at ? new Date(d.acknowledged_at).toISOString().replace('T', ' ').slice(0, 19) : 'Not yet',
+      d.addressed ? '' : 'No longer active or no longer addressed',
+    ].map(cell).join(','));
+    await audit(req.admin, req.params.clientId, 'EXPORT', 'safety_confirmations', letter.id, { rows: lines.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="safety-confirmations-${req.params.clientId}-${letter.id}-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send([header.map(cell).join(','), ...lines].join('\r\n'));
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/confirmations/:alertId/export', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

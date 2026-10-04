@@ -33,6 +33,7 @@ const CompliancePage       = lazy(() => import('./admin/pages/CompliancePage'))
 const AuditTrailPage       = lazy(() => import('./admin/pages/AuditTrailPage'))
 const SubmissionsPage      = lazy(() => import('./admin/pages/SubmissionsPage'))
 const SafetyQueuePage      = lazy(() => import('./admin/pages/SafetyQueuePage'))
+const SafetyConfirmationsPage = lazy(() => import('./admin/pages/SafetyConfirmationsPage')) // CPPM-127
 const AdminUsersPage      = lazy(() => import('./admin/pages/AdminUsersPage'))
 const ReviewQueuePage     = lazy(() => import('./admin/pages/ReviewQueuePage'))
 
@@ -79,6 +80,20 @@ const TrainingModulePage      = lazy(() => import('./portal/pages/TrainingModule
 
 const TrialsAdminPage         = lazy(() => import('./admin/pages/TrialsAdminPage'))
 const TrainingAdminPage       = lazy(() => import('./admin/pages/TrainingAdminPage'))
+
+// CPPM-133: the dashboard and the client list are the platform admin's. A client's
+// own staff, who cannot read them, go to their client instead.
+// CPPM-129: reviewers start on Inbox, safety reviewers on the Safety Queue. A
+// sign-in sent to a particular page still goes there (LoginPage's returnTo).
+const CLIENT_HOME = { reviewer: 'submissions', safety_reviewer: 'safety-queue' }
+function PlatformOnly({ children }) {
+  const { admin } = useAdminAuth()
+  if (admin?.clientId) {
+    const home = CLIENT_HOME[admin.role]
+    return <Navigate to={`/admin/clients/${admin.clientId}${home ? '/' + home : ''}`} replace />
+  }
+  return children
+}
 
 function AdminGuard({ children }) {
   const { admin, authLoading, signOut } = useAdminAuth()
@@ -192,8 +207,8 @@ function AdminRoutes() {
       <Routes>
         {/* Admin Console */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
-        <Route path="/admin/clients" element={<AdminGuard><ClientsPage /></AdminGuard>} />
+        <Route path="/admin" element={<AdminGuard><PlatformOnly><AdminDashboard /></PlatformOnly></AdminGuard>} />
+        <Route path="/admin/clients" element={<AdminGuard><PlatformOnly><ClientsPage /></PlatformOnly></AdminGuard>} />
         <Route path="/admin/clients/:clientId" element={<AdminGuard><ClientDetailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/branding" element={<AdminGuard><BrandingPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/features" element={<AdminGuard><FeaturesPage /></AdminGuard>} />
@@ -205,6 +220,7 @@ function AdminRoutes() {
         <Route path="/admin/clients/:clientId/data-requests" element={<AdminGuard><DataRequestsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/access-requests" element={<AdminGuard><PortalUsersPage requestsOnly /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chat-records" element={<AdminGuard><ChatRecordsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/gate"       element={<AdminGuard><GatePage /></AdminGuard>} />
@@ -216,6 +232,7 @@ function AdminRoutes() {
         <Route path="/admin/audit" element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/safety-queue" element={<AdminGuard><SafetyQueuePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/safety-confirmations" element={<AdminGuard><SafetyConfirmationsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/feedback"     element={<AdminGuard><FeedbackPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/admin-users"  element={<AdminGuard><AdminUsersPage /></AdminGuard>} />

@@ -50,6 +50,16 @@ export default function DashboardPage() {
 
   const priorityItems = freshnessAlerts.slice(0, 5)
 
+  // CPPM-130: what each client has waiting, and the Inbox tab that holds it.
+  const WAITING = [
+    { key: 'safety',        label: 'Safety tasks',    tab: 'safety-queue' },
+    { key: 'review',        label: 'To review',       tab: 'review-queue' },
+    { key: 'access',        label: 'Access requests', tab: 'access-requests' },
+    { key: 'data_requests', label: 'Data requests',   tab: 'data-requests' },
+  ]
+  const waitingClients = clients.filter(c => c.is_active && WAITING.some(w => c.waiting?.[w.key] > 0))
+  const waitingTotal = waitingClients.reduce((n, c) => n + WAITING.reduce((m, w) => m + (c.waiting?.[w.key] || 0), 0), 0)
+
   function readinessLabel(client) {
     if (client.readiness_label === 'Ready') return 'Ready to launch'
     if (client.readiness_label === 'Almost Ready') return 'Almost ready'
@@ -79,6 +89,32 @@ export default function DashboardPage() {
             ))}
           </tbody>
         </table>
+      </section>
+
+      <section className="oc-panel" aria-label="Waiting on you">
+        <div className="oc-panel-header"><h2>Waiting on you ({waitingTotal})</h2></div>
+        {loading ? <div className="cp-loading">Loading...</div> : waitingClients.length === 0 ? (
+          <div className="oc-empty-state">Nothing is waiting.</div>
+        ) : (
+          <table className="cp-table">
+            <thead><tr><th>Client</th>{WAITING.map(w => <th key={w.key}>{w.label}</th>)}</tr></thead>
+            <tbody>
+              {waitingClients.map(c => (
+                <tr key={c.id}>
+                  <td>{c.name}</td>
+                  {WAITING.map(w => (
+                    <td key={w.key}>
+                      {c.waiting[w.key] > 0
+                        ? <button className="cp-link-btn" onClick={() => navigate(`/admin/clients/${c.id}/${w.tab}`)}
+                            aria-label={`${c.name}: ${c.waiting[w.key]} ${w.label.toLowerCase()}`}>{c.waiting[w.key]}</button>
+                        : <span style={{ color: '#4B5563' }}>0</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <div className="oc-dashboard-grid">
