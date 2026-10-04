@@ -123,6 +123,7 @@ the ones a validation plan should name.
 - Area 5, Admin Users: an admin can set a new password for a staff account from Edit; it ends that account's sessions and is audited — `backend/routes/admin/adminUsers.js`, `frontend/src/admin/pages/AdminUsersPage.jsx`
 - Area 5, menu: "Change password" for the signed-in admin; the session is kept, other sessions end — `backend/routes/admin/auth.js`, `frontend/src/admin/components/AdminLayout.jsx`
 - Area 5, Portal Users: "Resend invite" on each active user; editing an email checks for an @ and names a duplicate — `frontend/src/admin/pages/PortalUsersPage.jsx`, `backend/routes/admin/portalUsers.js`
+- Area 6, Data Requests: fulfilling an erasure now also removes the person's name and email from their own request rows; before, the Data Requests screen still showed both after Fulfilled — `backend/services/dataSubject.js`
 
 ### Access control and sign-in
 - A role may change only its own areas, and the admin menu shows each person only those screens — CPPM-60, CPPM-124
