@@ -119,6 +119,15 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   const privilegesByCategory = useMemo(() => groupPrivilegesByCategory(overview?.privileges || []), [overview])
   const selectedGroup = useMemo(() => asArray(overview?.groups).find(group => String(group.id) === String(selectedGroupId)) || null, [overview, selectedGroupId])
+  // MIPM-192: a group only adds rights. The ones its members' role already carries
+  // (the catalog's role defaults) are shown ticked and locked, so nobody unticks a
+  // right and believes it is gone. Decided by Rohith, 2026-10-04.
+  const groupRole = String(selectedGroup?.privileges?.role || '').toLowerCase()
+  const roleLockedKeys = useMemo(() => new Set(
+    groupRole
+      ? asArray(overview?.privileges).filter(p => asArray(p.default_allowed_roles).map(r => String(r).toLowerCase()).includes(groupRole)).map(p => p.privilege_key)
+      : []
+  ), [overview, groupRole])
 
   useEffect(() => { loadOrgs() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -320,6 +329,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
   }
 
   function togglePrivilege(key) {
+    if (roleLockedKeys.has(key)) return
     setSelectedPrivilegeKeys(prev => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key])
   }
 
@@ -460,14 +470,19 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
         <div style={cardStyle('#0f766e')}>
           <h3 style={{ marginTop: 0 }}>{selectedGroup ? selectedGroup.name : 'Select a group'}</h3>
           {selectedGroup && <p style={{ color: 'var(--text-muted)' }}>{selectedGroup.description || 'No description.'}</p>}
+          {selectedGroup && groupRole && (
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              Members of this group are <strong>{groupRole.replace('_', ' ')}</strong>s. Rights marked <em>built into the role</em> come with that role and cannot be removed here; a group can only add rights.
+            </p>
+          )}
           {Object.entries(privilegesByCategory).map(([category, list]) => (
             <div key={category} style={{ marginBottom: 18 }}>
               <h4 style={{ margin: '0 0 8px' }}>{category}</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
                 {list.map(privilege => (
-                  <label key={privilege.privilege_key} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <input type="checkbox" checked={selectedPrivilegeKeys.includes(privilege.privilege_key)} onChange={() => togglePrivilege(privilege.privilege_key)} />
-                    <span><strong>{privilege.label}</strong>{privilege.is_sensitive && <span style={{ color: '#dc2626', marginLeft: 6 }}>Sensitive</span>}<div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{privilege.description}</div></span>
+                  <label key={privilege.privilege_key} title={roleLockedKeys.has(privilege.privilege_key) ? `Built into the ${groupRole.replace('_', ' ')} role` : undefined} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'flex', gap: 8, alignItems: 'flex-start', opacity: roleLockedKeys.has(privilege.privilege_key) ? 0.75 : 1 }}>
+                    <input type="checkbox" checked={roleLockedKeys.has(privilege.privilege_key) || selectedPrivilegeKeys.includes(privilege.privilege_key)} disabled={roleLockedKeys.has(privilege.privilege_key)} onChange={() => togglePrivilege(privilege.privilege_key)} />
+                    <span><strong>{privilege.label}</strong>{privilege.is_sensitive && <span style={{ color: '#dc2626', marginLeft: 6 }}>Sensitive</span>}{roleLockedKeys.has(privilege.privilege_key) && <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 12 }}>🔒 built into the role</span>}<div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{privilege.description}</div></span>
                   </label>
                 ))}
               </div>
