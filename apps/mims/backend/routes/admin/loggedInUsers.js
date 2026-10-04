@@ -2,7 +2,7 @@
 
 const express = require('express');
 const pool = require('../../database/db');
-const { authenticate, requireRole, sessionCacheInvalidate } = require('../../middleware/auth');
+const { authenticate, requireRole, sessionCacheInvalidate, sessionIdle } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
@@ -21,7 +21,7 @@ function deriveApplication(role) {
 router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [sessionRows] = await pool.execute(
-      `SELECT s.id, s.user_id, s.org_id, s.role, s.created_at, s.expires_at, u.name
+      `SELECT s.id, s.user_id, s.org_id, s.role, s.created_at, s.expires_at, s.last_seen_at, u.name
        FROM sessions s
        INNER JOIN users u ON u.id = s.user_id
        WHERE s.expires_at > NOW()
@@ -40,6 +40,8 @@ router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admi
       if (!hasGlobalAdminScope(req.user) && Number(decoded.orgId || 0) !== Number(req.user.orgId || 0)) {
         continue;
       }
+      // MIPM-211: signed out by the idle timeout, so no longer logged in.
+      if (await sessionIdle(row.last_seen_at, decoded)) continue;
 
       const orgId = Number(decoded.orgId || 0);
       if (orgId > 0) orgIdSet.add(orgId);

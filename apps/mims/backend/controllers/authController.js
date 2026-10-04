@@ -193,7 +193,7 @@ async function trackSessionToken(userId, token) {
     const expiresAt = toMysqlDateTimeFromUnix(decoded.exp) || '2099-12-31 23:59:59';
     // MIPM-172: the fingerprint is stored, not the token.
     await pool.execute(
-      'INSERT INTO sessions (user_id, org_id, role, token, expires_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), expires_at = VALUES(expires_at), created_at = NOW()',
+      'INSERT INTO sessions (user_id, org_id, role, token, expires_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), expires_at = VALUES(expires_at), created_at = NOW(), last_seen_at = NOW()',
       [userId, Number(decoded.orgId) || null, decoded.role || null, sessionKey(token), expiresAt]
     );
   } catch (_) {

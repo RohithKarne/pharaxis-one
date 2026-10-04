@@ -116,7 +116,7 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
     accountName = account?.name || null;
 
     const [[sessionRow]] = await pool.execute(
-      'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
+      'SELECT id, expires_at, last_seen_at FROM sessions WHERE token = ? LIMIT 1',
       [key]
     );
 
@@ -127,6 +127,14 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
         throw createAuthError('Session expired. Please log in again.', 'SESSION_EXPIRED');
       }
+      // MIPM-211: the idle timeout was only the cookie's lifetime, so the token
+      // itself stayed valid for 8 hours. A session unused for longer than the
+      // timeout now ends here. Checked on a cache miss, so at least once a minute.
+      if (await sessionIdle(sessionRow.last_seen_at, decoded)) {
+        await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
+        throw createAuthError('You were signed out after a period without activity. Please log in again.', 'SESSION_IDLE');
+      }
+      await pool.execute('UPDATE sessions SET last_seen_at = NOW() WHERE id = ?', [sessionRow.id]);
     }
   } catch (err) {
     if (err?.code) throw err;
@@ -193,6 +201,13 @@ async function sessionTimeoutMinutes(user) {
   } catch (_) { /* keep the default; the cookie is still renewed */ }
   _timeoutCache.set(key, { minutes, until: Date.now() + 60_000 });
   return minutes;
+}
+
+// True when a session's last use is older than its organisation's timeout.
+async function sessionIdle(lastSeenAt, user) {
+  const lastSeen = sessionExpiryMs(lastSeenAt);
+  if (!lastSeen || Number.isNaN(lastSeen)) return false;
+  return Date.now() - lastSeen > (await sessionTimeoutMinutes(user)) * 60 * 1000;
 }
 
 async function renewSessionCookie(res, user) {
@@ -382,4 +397,4 @@ function requireModule(moduleKey) {
   };
 }
 
-module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };
+module.exports = { sessionIdle, authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, endAllSessions, isSwitchedOff, ACCESS_ENDED_MESSAGE, ACCESS_ENDED_CODE, sessionExpiryMs, readBearer };

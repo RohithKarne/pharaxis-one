@@ -3,7 +3,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
+const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs, sessionIdle } = require('../middleware/auth');
 const { sessionKey } = require('../utils/sessionKey');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
@@ -93,7 +93,7 @@ router.get('/sessions', authenticate, async (req, res) => {
     const token = extractBearerToken(req);
 
     const [rows] = await pool.execute(
-      `SELECT id, token, created_at, expires_at, DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expires_at_text
+      `SELECT id, token, created_at, expires_at, last_seen_at, DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expires_at_text
        FROM sessions
        WHERE user_id = ?
        ORDER BY created_at DESC
@@ -101,13 +101,14 @@ router.get('/sessions', authenticate, async (req, res) => {
       [req.user.userId]
     );
 
-    const sessions = rows.map((row) => ({
+    // MIPM-211: a session unused for longer than the timeout has ended too.
+    const sessions = await Promise.all(rows.map(async (row) => ({
       id: row.id,
       is_current: !!token && row.token === sessionKey(token),
       created_at: row.created_at,
       expires_at: row.expires_at_text,
-      is_expired: isExpired(row.expires_at),
-    }));
+      is_expired: isExpired(row.expires_at) || await sessionIdle(row.last_seen_at, req.user),
+    })));
 
     const currentSession = sessions.find((s) => s.is_current) || null;
 
