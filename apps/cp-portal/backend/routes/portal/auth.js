@@ -234,7 +234,7 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
     if (new_password.length < 8)  return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (new_password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-    const [[user]] = await pool.execute('SELECT password FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     if (!user || !bcrypt.compareSync(current_password, user.password)) {
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
@@ -244,7 +244,12 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
-    res.json({ message: 'Password updated successfully.' });
+    // CP walk 2026-10-04: re-issue this browser's cookie with the new token version, so the
+    // person who changed the password stays signed in; every other browser is signed out.
+    // Before, the next page load after a change showed the sign-in page.
+    const token = makeToken({ ...user, token_version: (user.token_version ?? 0) + 1 }, req.portalUser.clientId ?? user.client_id);
+    res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+       .json({ message: 'Password updated successfully.' });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'PATCH /password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
