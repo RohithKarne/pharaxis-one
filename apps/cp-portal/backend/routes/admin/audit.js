@@ -20,8 +20,9 @@ async function listRecords(req, res, scope) {
     const conditions = [scope.condition];
     const params     = [...scope.params];
 
-    if (req.query.entity) { conditions.push('l.entity = ?'); params.push(req.query.entity); }
-    if (req.query.action) { conditions.push('l.action = ?'); params.push(req.query.action); }
+    // Case-insensitive: a few routes recorded 'create' / 'update' in lowercase.
+    if (req.query.entity) { conditions.push('LOWER(l.entity) = LOWER(?)'); params.push(req.query.entity); }
+    if (req.query.action) { conditions.push('UPPER(l.action) = UPPER(?)'); params.push(req.query.action); }
     if (req.query.from)   { conditions.push('DATE(l.created_at) >= DATE(?)'); params.push(req.query.from); }
     if (req.query.to)     { conditions.push('DATE(l.created_at) <= DATE(?)'); params.push(req.query.to); }
 
@@ -38,13 +39,13 @@ async function listRecords(req, res, scope) {
       params
     );
 
-    // CPPM-151: the filter lists come from what this scope has actually recorded,
-    // so an admin can narrow to LOGIN, SUBMITTED or BULK_PUBLISH and not only to
-    // the handful of actions the screen used to list.
-    const [entities] = await pool.execute(`SELECT DISTINCT l.entity FROM cp_audit_logs l WHERE ${scope.condition} AND l.entity IS NOT NULL AND l.entity <> '' ORDER BY l.entity`, scope.params);
-    const [actions]  = await pool.execute(`SELECT DISTINCT l.action FROM cp_audit_logs l WHERE ${scope.condition} AND l.action IS NOT NULL AND l.action <> '' ORDER BY l.action`, scope.params);
-
-    res.json({ records, total, page, limit, pages: Math.ceil(total / limit), filters: { entities: entities.map(r => r.entity), actions: actions.map(r => r.action) } });
+    // What the filter drop-downs offer: the entities and actions actually recorded
+    // in this scope, so a sign-in or an unlock can be filtered for, not only the
+    // six actions a fixed list once named.
+    const [entityRows] = await pool.execute(`SELECT DISTINCT LOWER(l.entity) AS v FROM cp_audit_logs l WHERE ${scope.condition} ORDER BY v`, scope.params);
+    const [actionRows] = await pool.execute(`SELECT DISTINCT UPPER(l.action) AS v FROM cp_audit_logs l WHERE ${scope.condition} ORDER BY v`, scope.params);
+    res.json({ records, total, page, limit, pages: Math.ceil(total / limit),
+               filters: { entities: entityRows.map(r => r.v), actions: actionRows.map(r => r.v) } });
   } catch (err) {
     log.error('admin.audit.error', { err, route: `GET /${scope.name}`, path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

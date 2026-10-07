@@ -116,6 +116,19 @@ export default function MSLPage() {
     }
   }
 
+  // "Remove" only switched an MSL off; nothing switched one back on (CP walk, 4 Oct 2026).
+  async function reactivate(id) {
+    setFormError('')
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: 1 }) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setFormError(d.error || `Could not reactivate MSL (error ${res.status}).`); return }
+    } catch {
+      setFormError('Network error — please try again.')
+      return
+    }
+    loadMSLs()
+  }
+
   async function deactivate(id) {
     if (!confirm('Remove this MSL from the directory?')) return
     try {
@@ -340,7 +353,9 @@ export default function MSLPage() {
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openSlots(m)}>Slots</button>
                       </CanChange>
                       <CanChange area="msls">
-                      <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(m.id)}>Remove</button>
+                      {m.is_active
+                        ? <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(m.id)}>Remove</button>
+                        : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#166534', borderColor: '#16A34A' }} onClick={() => reactivate(m.id)}>Reactivate</button>}
                       </CanChange>
                     </td>
                   </tr>

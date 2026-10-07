@@ -57,11 +57,6 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
   try {
     const { form_type, field_key, field_label, field_type, field_options, placeholder, help_text, is_required, display_order } = req.body;
     if (!form_type || !field_key || !field_label) return res.status(400).json({ error: 'form_type, field_key and field_label are required.' });
-    // CPPM-153: a second field with the same key on the same form was a server error with no message.
-    const [[dup]] = await pool.execute(
-      'SELECT id FROM cp_form_config WHERE client_id = ? AND form_type = ? AND field_key = ? LIMIT 1',
-      [req.params.clientId, form_type, field_key]);
-    if (dup) return res.status(409).json({ error: 'A field with this key already exists on this form.' });
     const [result] = await pool.execute(
       `INSERT INTO cp_form_config (client_id, form_type, field_key, field_label, field_type, field_options, placeholder, help_text, is_required, display_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -69,7 +64,8 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Field added.' });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A field with this key already exists on this form.' });
+    // uq_form_config (client, form, key): the same key twice would give the portal two answers for one name.
+    if (err && err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: `A field with the key "${req.body.field_key}" already exists on this form. Choose another key.` });
     log.error('admin.forms.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }

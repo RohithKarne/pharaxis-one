@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { AdminAuthProvider, useAdminAuth } from './admin/context/AdminAuthContext'
 import IdleTimeout from './shared/components/IdleTimeout'
 
@@ -98,8 +98,15 @@ function PlatformOnly({ children }) {
 function AdminGuard({ children }) {
   const { admin, authLoading, signOut } = useAdminAuth()
   const location = useLocation()
+  const { clientId } = useParams()
   if (authLoading) return <div className="cp-loading">Restoring admin session...</div>
   if (!admin) return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
+  // A client's own staff opening another client's address were shown that
+  // client's screens, empty, as though they were settings to fill in; the
+  // server had refused every read. Send them to their own client instead.
+  if (admin.clientId && clientId && String(clientId) !== String(admin.clientId)) {
+    return <Navigate to={`/admin/clients/${admin.clientId}`} replace />
+  }
   // CP-64: idle auto-logoff active only while authenticated in the admin console.
   // CPPM-40: signOut, so the server session ends too.
   return <><IdleTimeout timeoutMinutes={ADMIN_IDLE_MINUTES} onTimeout={signOut} />{children}</>

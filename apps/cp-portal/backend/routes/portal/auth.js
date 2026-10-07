@@ -159,7 +159,7 @@ router.post('/login', async (req, res) => {
 
     await pool.execute(`UPDATE cp_portal_users SET last_login_at = NOW() WHERE id = ?`, [user.id]);
 
-    const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed };
+    const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
     const token = makeToken(user, client.id);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ user: safe });
@@ -190,7 +190,7 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
 
     await pool.execute(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`, [user_type, req.portalUser.userId]);
 
-    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Type confirmed.', user: updated });
@@ -217,7 +217,7 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, async (req, res)
     params.push(req.portalUser.userId);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id = ?`, params);
 
-    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     // SEC: do not echo the JWT in the response body — it lives only in the httpOnly cookie.
     res.json({ message: 'Profile updated.', user: updated });
   } catch (err) {
@@ -234,7 +234,7 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
     if (new_password.length < 8)  return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (new_password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-    const [[user]] = await pool.execute('SELECT password FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     if (!user || !bcrypt.compareSync(current_password, user.password)) {
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
@@ -244,12 +244,11 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
-    // CPPM-151: bumping token_version ends every other session, as intended — but it
-    // ended this one too, so the person was dropped to the sign-in page the moment
-    // they pressed Save, with no message. Re-issue this browser's token so the
-    // person who changed the password stays signed in; everyone else is signed out.
-    const [[fresh]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
-    res.cookie('cp_portal_token', makeToken(fresh, req.portalUser.clientId), { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+    // CP walk 2026-10-04: re-issue this browser's cookie with the new token version, so the
+    // person who changed the password stays signed in; every other browser is signed out.
+    // Before, the next page load after a change showed the sign-in page.
+    const token = makeToken({ ...user, token_version: (user.token_version ?? 0) + 1 }, req.portalUser.clientId ?? user.client_id);
+    res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Password updated successfully.' });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'PATCH /password', path: req.path, request_id: req.requestId || null });
@@ -277,7 +276,7 @@ router.post('/verify-email', async (req, res) => {
 
     const authToken = makeToken(user, user.client_id);
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-       .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed } });
+       .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty } });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'POST /verify-email', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

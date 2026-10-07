@@ -176,6 +176,7 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
       WHERE client_id = ?
     `, [req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'RESET', 'branding', Number(req.params.clientId), {});
+    cache.invalidate('config:'); // the portal must show the defaults at once, as it does after an edit
     res.json({ message: 'Branding reset to defaults.' });
   } catch (err) {
     log.error('admin.branding.error', { err, route: 'POST /:clientId/reset', path: req.path, request_id: req.requestId || null });

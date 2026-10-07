@@ -321,7 +321,7 @@ export default function DocumentsPage() {
                       Expiry warning: this document expires within 30 days
                     </div>
                   )}
-                  <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                  <div className="pp-doc-download" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 10 }}>
                     <button
                       className="pp-btn pp-btn-outline pp-btn-sm"
                       onClick={() => handleDownload(doc)}
@@ -367,7 +367,7 @@ export default function DocumentsPage() {
                 {doc.category && <span>{doc.category} · </span>}
                 {formatFileSize(doc.file_size)}
               </div>
-              <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="pp-doc-download" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`Quick View ${doc.title}`}>
                   Quick View
                 </button>

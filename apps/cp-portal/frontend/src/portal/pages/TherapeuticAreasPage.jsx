@@ -111,7 +111,10 @@ export default function TherapeuticAreasPage() {
                 {selected.overview    && <div className="pp-ta-overview">{selected.overview}</div>}
                 {drugsLoading ? <div className="pp-loading">Loading products…</div> : drugsError ? (
                   <div className="pp-error-state">{drugsError}</div>
-                ) : drugs.length > 0 && (
+                ) : drugs.length === 0 ? (
+                  // CP walk 2026-10-04: say so — before, an area with no products showed only its name.
+                  <p className="pp-ta-detail-desc" style={{ color: 'var(--pp-text-muted, #6B7280)' }}>No products are listed in this area yet.</p>
+                ) : (
                   <div className="pp-ta-drugs">
                     <h3>Products in this area</h3>
                     <div className="pp-drug-cards">

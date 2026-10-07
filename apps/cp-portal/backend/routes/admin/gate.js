@@ -5,6 +5,13 @@
 
 const express = require('express');
 const router  = express.Router();
+const cache = require('../../utils/cache');
+// The portal keeps its settings for 20 seconds (CP-22). A successful write here
+// changes what the portal shows, so the copy is cleared at once (CP walk, 4 Oct 2026).
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) cache.invalidate('config:'); });
+  next();
+});
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit, changesBetween } = require('../../utils/audit');

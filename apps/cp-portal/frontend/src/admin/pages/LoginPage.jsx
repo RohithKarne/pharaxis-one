@@ -42,6 +42,9 @@ export default function LoginPage() {
         return
       }
       if (mode === 'superadmin' && data.admin?.role !== 'superadmin') {
+        // The server has already signed this person in; end that session, or the
+        // refusal on screen is not a refusal at all — the next page load is signed in.
+        await fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
         setError('Superadmin access required.')
         setPassword('')
         return

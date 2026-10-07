@@ -25,7 +25,9 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 // POST /api/admin/faq/:clientId
 router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const { question, answer, category, sort_order, is_published } = req.body;
+    const { category, sort_order, is_published } = req.body;
+    // Trimmed first: a question of only spaces was saved as a blank item (CP walk, 4 Oct 2026).
+    const question = String(req.body.question ?? '').trim(), answer = String(req.body.answer ?? '').trim();
     if (!question || !answer) return res.status(400).json({ error: 'question and answer are required.' });
     const [result] = await pool.execute(`
       INSERT INTO cp_faq_items (client_id, question, answer, category, sort_order, is_published)
@@ -46,6 +48,8 @@ router.put('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async (r
   try {
     const { question, answer, category, sort_order, is_published } = req.body;
     const fields = [], values = [];
+    if (question !== undefined && !String(question).trim()) return res.status(400).json({ error: 'question cannot be empty.' });
+    if (answer   !== undefined && !String(answer).trim())   return res.status(400).json({ error: 'answer cannot be empty.' });
     if (question    !== undefined) { fields.push('question = ?');     values.push(question.trim()); }
     if (answer      !== undefined) { fields.push('answer = ?');       values.push(answer.trim()); }
     if (category    !== undefined) { fields.push('category = ?');     values.push(category?.trim() || null); }

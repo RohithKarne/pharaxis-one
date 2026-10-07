@@ -20,7 +20,7 @@ async function readinessChecks(pool, id) {
     { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post', path: 'news' },
     { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document', path: 'documents' },
     { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison', path: 'msls' },
-    { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
+    { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color.toUpperCase() !== '#6B3FA0'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
   ];
 
   const doneCount = checks.filter(c => c.done).length;
@@ -53,7 +53,6 @@ async function listClients(pool) {
     LEFT JOIN cp_features f     ON f.client_id = c.id AND f.is_enabled = 1
     LEFT JOIN cp_msls m         ON m.client_id = c.id AND m.is_active = 1
     LEFT JOIN cp_news_posts n   ON n.client_id = c.id AND n.status = 'published'
-    WHERE c.is_active = 1
     GROUP BY c.id
     ORDER BY c.name ASC
   `);
