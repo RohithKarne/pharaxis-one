@@ -128,6 +128,18 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
 
     const placeholders = ids.map(() => '?').join(',')
     if (action === 'publish') {
+      // CPPM-151: the single-post route only lets an approved (or scheduled) post go
+      // live, and so must this one — otherwise ticking the boxes is the way around
+      // review, and an archived post comes back without anyone reading it again.
+      // The whole batch is refused rather than part of it, so nobody is left
+      // believing all the selected posts went live.
+      const [selected] = await pool.execute(`SELECT id, title, status FROM cp_news_posts WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId])
+      const notReady = selected.filter(p => !['approved', 'scheduled', 'published'].includes(p.status))
+      if (notReady.length > 0) {
+        return res.status(400).json({
+          error: `Nothing was published. ${notReady.length} of ${selected.length} selected post(s) have not been approved: ${notReady.map(p => p.title).join(', ')}.`,
+        })
+      }
       await pool.execute(`UPDATE cp_news_posts SET status='published', updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId])
     } else {
       await pool.execute(`UPDATE cp_news_posts SET status='archived', updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId])

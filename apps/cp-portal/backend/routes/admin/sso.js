@@ -73,9 +73,14 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     if (!client) return res.status(404).json({ error: 'Client not found.' });
 
     const loginMode = sso.normalizeLoginMode(req.body.login_mode);
+    const incoming = Array.isArray(req.body.providers) ? req.body.providers : [];
+    // CPPM-154: "SSO only" with no usable provider would hide password sign-in and offer
+    // nothing in its place, so nobody could sign in. Refused before anything is saved.
+    if (loginMode === 'sso_only' && !incoming.some(p => p && p.is_active && String(p.oidc_client_id || '').trim())) {
+      return res.status(400).json({ error: 'Switch on at least one provider, with its client ID, before choosing SSO only.' });
+    }
     await pool.execute('UPDATE cp_clients SET login_mode = ?, updated_at = NOW() WHERE id = ?', [loginMode, client.id]);
 
-    const incoming = Array.isArray(req.body.providers) ? req.body.providers : [];
     const saved = []; // CPPM-10: what changed per provider — never the client secret
     for (const item of incoming) {
       const providerKey = sso.normalizeProviderKey(item.provider_key);

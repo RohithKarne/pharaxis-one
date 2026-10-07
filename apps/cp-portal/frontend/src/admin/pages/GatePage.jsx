@@ -135,6 +135,9 @@ export default function GatePage() {
                 onChange={e => setConf('require_disclaimer', e.target.checked ? 1 : 0)} />
               <label htmlFor="reqDisclaimer">Require user to accept disclaimer before proceeding</label>
             </div>
+            {!!config.require_disclaimer && !String(config.disclaimer_text || '').trim() && (
+              <p className="cp-page-desc" style={{ marginTop: 4 }}>No disclaimer text is set, so there is nothing to accept: people confirm their type without a tick box until you add one.</p>
+            )}
           </div>
         )}
 
@@ -152,7 +155,6 @@ export default function GatePage() {
           <div className="cp-gate-type-list">
             {userTypes.map(t => (
               <div key={t.id} className={`cp-gate-type-row ${!t.is_enabled ? 'cp-gate-type-disabled' : ''}`}>
-                <div className="cp-gate-type-icon">{t.icon}</div>
                 <div className="cp-gate-type-body">
                   <input
                     className="cp-gate-type-label-input"
@@ -192,7 +194,6 @@ export default function GatePage() {
                   <th className="cp-matrix-feature-col">Feature</th>
                   {enabledTypes.map(t => (
                     <th key={t.type_key} className="cp-matrix-type-col">
-                      <span className="cp-matrix-type-icon">{t.icon}</span>
                       <span className="cp-matrix-type-label">{t.label.split(' ')[0]}</span>
                     </th>
                   ))}
