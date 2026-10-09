@@ -15,6 +15,7 @@ const ClientsPage          = lazy(() => import('./admin/pages/ClientsPage'))
 const ClientDetailPage     = lazy(() => import('./admin/pages/ClientDetailPage'))
 const BrandingPage         = lazy(() => import('./admin/pages/BrandingPage'))
 const FeaturesPage         = lazy(() => import('./admin/pages/FeaturesPage'))
+const LanguagePage         = lazy(() => import('./admin/pages/LanguagePage'))
 const ContentPage          = lazy(() => import('./admin/pages/ContentPage'))
 const FormsPage            = lazy(() => import('./admin/pages/FormsPage'))
 const MSLPage              = lazy(() => import('./admin/pages/MSLPage'))
@@ -219,6 +220,7 @@ function AdminRoutes() {
         <Route path="/admin/clients/:clientId" element={<AdminGuard><ClientDetailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/branding" element={<AdminGuard><BrandingPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/features" element={<AdminGuard><FeaturesPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/language" element={<AdminGuard><LanguagePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/content" element={<AdminGuard><ContentPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/forms" element={<AdminGuard><FormsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/msls" element={<AdminGuard><MSLPage /></AdminGuard>} />
