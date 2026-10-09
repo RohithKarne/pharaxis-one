@@ -109,7 +109,10 @@ export default function FeaturesPage() {
               )}
               <input className="cp-feature-label-input" defaultValue={f.display_name || ''}
                 onBlur={e => updateLabel(f.feature_key, e.target.value)}
-                placeholder="Display label…" />
+                aria-label={`Name for ${f.feature_key.replace(/_/g, ' ')} in the admin console`}
+                placeholder="Name in the admin console…" />
+              {/* CPPM-152: the name is used by the User Gate access matrix, not by the doctor portal, whose menu has its own wording. */}
+              <div style={{ fontSize: 11, color: '#5F6B7A', marginTop: 2 }}>Used as the row name in Portal setup › User Gate. The doctor portal's menu keeps its own wording.</div>
             </div>
             <div className="cp-feature-order" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>Order: {f.display_order}</span>
