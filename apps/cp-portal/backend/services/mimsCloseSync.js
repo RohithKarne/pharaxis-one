@@ -165,8 +165,15 @@ async function followIntegration(integ) {
   if (!integ.changes_read_at) await claimExistingCases(integ, headers);
   let since = integ.changes_since ? minusSeconds(integ.changes_since, OVERLAP_SECONDS) : null;
   let afterId = integ.changes_since ? 0 : null;
+  // The overlap re-reads the seconds just before the checkpoint. Pages that only
+  // catch up to where the last tick ended do not count against this tick's page
+  // cap: when more changes than ten pages hold share those seconds (a bulk close
+  // in MIMS), every tick used to re-read the same first pages, stop at the cap and
+  // never get past them, so the rest stayed open for good.
+  const reached = integ.changes_since ? { since: String(integ.changes_since), afterId: Number(integ.changes_after_id || 0) } : null;
+  const isBehindCheckpoint = (next) => !!reached && (next.since < reached.since || (next.since === reached.since && Number(next.after_id) <= reached.afterId));
 
-  for (let page = 0; page < MAX_PAGES_PER_TICK; page++) {
+  for (let page = 0; page < MAX_PAGES_PER_TICK;) {
     const url = new URL('/api/v1/cases/changes', integ.api_base_url);
     url.searchParams.set('limit', String(PAGE));
     if (since) { url.searchParams.set('since', since); url.searchParams.set('after_id', String(afterId || 0)); }
@@ -188,12 +195,14 @@ async function followIntegration(integ) {
       if (applied) result[applied]++;
     }
     if (data.next) {
+      if (!isBehindCheckpoint(data.next)) page++;
       since = data.next.since;
       afterId = data.next.after_id;
       await pool.execute(
         'UPDATE cp_integration_config SET changes_since = ?, changes_after_id = ?, changes_read_at = NOW() WHERE id = ?',
         [since, afterId, integ.id]);
     } else {
+      page++;
       await pool.execute('UPDATE cp_integration_config SET changes_read_at = NOW() WHERE id = ?', [integ.id]);
     }
     if (!data.has_more) break;
