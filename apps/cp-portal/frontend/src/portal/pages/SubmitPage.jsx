@@ -26,7 +26,7 @@ export function optionList(raw) {
 }
 
 export default function SubmitPage() {
-  const { clientCode, portalHeaders, isFeatureEnabled, portalConfig, user } = usePortal()
+  const { clientCode, portalHeaders, isFeatureEnabled, portalConfig, user, t } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
   const [params, setParams] = useSearchParams()
   // ?type=adverse_event (e.g. from the Contact page) opens that form directly.
@@ -209,23 +209,23 @@ export default function SubmitPage() {
   }
 
   const SUBMISSION_KEYS = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
-  if (SUBMISSION_KEYS.some(k => isFeatureEnabled(k) === null)) return <div className="pp-loading">Loading…</div>
+  if (SUBMISSION_KEYS.some(k => isFeatureEnabled(k) === null)) return <div className="pp-loading">{t('Loading…')}</div>
   const anyEnabled = SUBMISSION_KEYS.some(k => isFeatureEnabled(k))
   if (!anyEnabled) {
-    return <div className="pp-container pp-page-content"><div className="pp-info-box">Submission forms are not available for this portal.</div></div>
+    return <div className="pp-container pp-page-content"><div className="pp-info-box">{t('Submission forms are not available for this portal.')}</div></div>
   }
   // Filter form types to only show enabled ones
   const availableTypes = FORM_TYPES.filter(t => isFeatureEnabled(t.key))
   if (selectedType && !isFeatureEnabled(selectedType)) {
-    return <div className="pp-container pp-page-content"><div className="pp-info-box">This form is not available on this portal. <Link to={`/portal/${clientCode}/submit`}>See the forms that are</Link>.</div></div>
+    return <div className="pp-container pp-page-content"><div className="pp-info-box">{t('This form is not available on this portal.')} <Link to={`/portal/${clientCode}/submit`}>{t('See the forms that are')}</Link>.</div></div>
   }
 
   if (submitted) {
     return (
       <div className="pp-container pp-page-content">
         <div className="pp-success-card">
-          <h2>Submission Received</h2>
-          <p>Your reference number is <strong>{submitted.reference}</strong></p>
+          <h2>{t('Submission Received')}</h2>
+          <p>{t('Your reference number is')} <strong>{submitted.reference}</strong></p>
           {submitted.attachments_blocked?.length > 0 && (
             /* CPPM-39: the report went through; the infected file did not. */
             <p className="pp-success-sub" role="alert" style={{ color: '#B91C1C' }}>
@@ -240,8 +240,8 @@ export default function SubmitPage() {
               : slaText}
           </p>
           <div className="pp-success-actions">
-            <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>Submit Another</button>
-            <Link to={`/portal/${clientCode}`} className="pp-btn pp-btn-primary">Back to Home</Link>
+            <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>{t('Submit Another')}</button>
+            <Link to={`/portal/${clientCode}`} className="pp-btn pp-btn-primary">{t('Back to Home')}</Link>
           </div>
         </div>
       </div>
@@ -251,8 +251,8 @@ export default function SubmitPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Submit a Request</h1>
-        <p>Select the type of request you would like to submit.</p>
+        <h1>{t('Submit a Request')}</h1>
+        <p>{t('Select the type of request you would like to submit.')}</p>
       </div>
 
       {!selectedType ? (
@@ -267,7 +267,7 @@ export default function SubmitPage() {
       ) : (
         <div className="pp-form-wrapper">
           <div className="pp-form-header">
-            <button className="pp-back-btn" onClick={() => setSelectedType(null)}>Back</button>
+            <button className="pp-back-btn" onClick={() => setSelectedType(null)}>{t('Back')}</button>
             <h2>{FORM_TYPES.find(t => t.key === selectedType)?.label}</h2>
           </div>
 
@@ -275,15 +275,15 @@ export default function SubmitPage() {
 
           {dirty && Object.keys(formValues).length > 0 && (
             <div style={{ padding: '10px 14px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.85rem' }}>
-              <span><strong>Draft Auto-Saved</strong> — Your entries are kept while this tab is open. Signing out clears them.</span>
-              <button type="button" onClick={() => { clearDraft(); setFormValues({}); setDirty(false) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
+              <span><strong>{t('Draft Auto-Saved')}</strong> {t('— Your entries are kept while this tab is open. Signing out clears them.')}</span>
+              <button type="button" onClick={() => { clearDraft(); setFormValues({}); setDirty(false) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>{t('Clear draft')}</button>
             </div>
           )}
 
           {fieldsLoading ? (
-            <div className="pp-loading">Loading form…</div>
+            <div className="pp-loading">{t('Loading form…')}</div>
           ) : formFields.length === 0 ? (
-            <div className="pp-info-box">No form fields have been configured for this submission type. Please contact your administrator.</div>
+            <div className="pp-info-box">{t('No form fields have been configured for this submission type. Please contact your administrator.')}</div>
           ) : (
             <form onSubmit={handleSubmit} className="pp-submission-form">
               {reviewing ? (
@@ -335,7 +335,7 @@ export default function SubmitPage() {
                       aria-describedby={field.help_text ? `f-${field.field_key}-help` : undefined}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}>
-                      <option value="">-- Select --</option>
+                      <option value="">{t('-- Select --')}</option>
                       {optionList(field.options).map(o => (
                         <option key={o} value={o}>{o}</option>
                       ))}
@@ -383,9 +383,9 @@ export default function SubmitPage() {
                 </div>
               ))}
               <div className="pp-attach">
-                <label className="pp-attach-label">Attachments <span>(optional — PDF, JPG, PNG, DOCX · max 10MB each · up to 5 files · no macros)</span></label>
+                <label className="pp-attach-label">{t('Attachments')} <span>{t('(optional — PDF, JPG, PNG, DOCX · max 10MB each · up to 5 files · no macros)')}</span></label>
                 <label className="pp-attach-drop">
-                  <Icon name="file" size={17} /> Choose files
+                  <Icon name="file" size={17} /> {t('Choose files')}
                   <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={handleFiles} style={{ display: 'none' }} />
                 </label>
                 {attachError && <span className="pp-field-error-msg">{attachError}</span>}
@@ -404,15 +404,15 @@ export default function SubmitPage() {
               </div>
               </>}
               <div className="pp-form-disclaimer">
-                <small>By submitting this form, you confirm that the information provided is accurate to the best of your knowledge. This portal is intended for medical information purposes only and does not provide medical advice.</small>
+                <small>{t('By submitting this form, you confirm that the information provided is accurate to the best of your knowledge. This portal is intended for medical information purposes only and does not provide medical advice.')}</small>
               </div>
               <div className="pp-form-actions">
                 <button type="submit" className="pp-btn pp-btn-primary" disabled={submitting}>
-                  {submitting ? 'Submitting…' : reviewing ? 'Send' : CHECK_FIRST.includes(selectedType) ? 'Check your answers' : 'Submit'}
+                  {submitting ? t('Submitting…') : reviewing ? t('Send') : CHECK_FIRST.includes(selectedType) ? t('Check your answers') : t('Submit')}
                 </button>
                 {reviewing
-                  ? <button type="button" className="pp-btn pp-btn-outline" disabled={submitting} onClick={() => setReviewing(false)}>Edit answers</button>
-                  : <button type="button" className="pp-btn pp-btn-outline" onClick={() => setSelectedType(null)}>Cancel</button>}
+                  ? <button type="button" className="pp-btn pp-btn-outline" disabled={submitting} onClick={() => setReviewing(false)}>{t('Edit answers')}</button>
+                  : <button type="button" className="pp-btn pp-btn-outline" onClick={() => setSelectedType(null)}>{t('Cancel')}</button>}
               </div>
             </form>
           )}
@@ -424,20 +424,21 @@ export default function SubmitPage() {
 
 // CPPM-112: every answer the person can see, on one screen, before Send.
 function CheckAnswers({ fields, values, attachments }) {
+  const { t } = usePortal()
   const shown = v => Array.isArray(v) ? (v.length ? v.join(', ') : '—')
-    : v === true ? 'Yes' : v === false || v == null || String(v).trim() === '' ? '—' : String(v)
+    : v === true ? t('Yes') : v === false || v == null || String(v).trim() === '' ? '—' : String(v)
   return (
     <section aria-labelledby="pp-check-title">
-      <h3 id="pp-check-title" style={{ margin: '0 0 4px' }}>Check your answers</h3>
-      <p style={{ margin: '0 0 16px', color: 'var(--pp-text-muted, #6B7280)' }}>Nothing has been sent yet. Press Send when everything is right, or Edit answers to change something.</p>
+      <h3 id="pp-check-title" style={{ margin: '0 0 4px' }}>{t('Check your answers')}</h3>
+      <p style={{ margin: '0 0 16px', color: 'var(--pp-text-muted, #6B7280)' }}>{t('Nothing has been sent yet. Press Send when everything is right, or Edit answers to change something.')}</p>
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'minmax(140px, 34%) 1fr', gap: '10px 16px' }}>
         {fields.map(f => (
           <div key={f.field_key} style={{ display: 'contents' }}>
             <dt style={{ fontWeight: 600 }}>{f.label}</dt>
-            <dd style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{f.field_type === 'checkbox' ? (values[f.field_key] ? 'Yes' : 'No') : shown(values[f.field_key])}</dd>
+            <dd style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{f.field_type === 'checkbox' ? (values[f.field_key] ? t('Yes') : t('No')) : shown(values[f.field_key])}</dd>
           </div>
         ))}
-        <dt style={{ fontWeight: 600 }}>Attachments</dt>
+        <dt style={{ fontWeight: 600 }}>{t('Attachments')}</dt>
         <dd style={{ margin: 0 }}>{attachments.length ? attachments.map(a => a.name).join(', ') : 'None'}</dd>
       </dl>
     </section>

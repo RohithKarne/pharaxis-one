@@ -18,14 +18,14 @@ const SSO_ERRORS = {
 }
 
 export default function SsoCompletePage() {
-  const { clientCode, login } = usePortal()
+  const { clientCode, login, t } = usePortal()
   const navigate  = useNavigate()
   const [params]  = useSearchParams()
   const base      = `/portal/${clientCode}`
   const errorCode = params.get('error')
   const returnTo  = params.get('return_to')
 
-  usePageTitle('Signing in…')
+  usePageTitle(t('Signing in…'))
 
   const [error, setError] = useState('')
 
@@ -62,13 +62,13 @@ export default function SsoCompletePage() {
           <>
             <div className="pp-error-msg" role="alert">{error}</div>
             <button type="button" className="pp-btn pp-btn-primary pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/login`, { replace: true })}>
-              Back to sign in
+              {t('Back to sign in')}
             </button>
           </>
         ) : (
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <div className="pp-spinner" aria-hidden="true" />
-            <p style={{ marginTop: 12 }}>Completing your sign-in…</p>
+            <p style={{ marginTop: 12 }}>{t('Completing your sign-in…')}</p>
           </div>
         )}
       </div>

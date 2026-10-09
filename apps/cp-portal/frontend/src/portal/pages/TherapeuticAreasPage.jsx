@@ -6,7 +6,7 @@ import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 export default function TherapeuticAreasPage() {
-  const { clientCode, user, portalHeaders } = usePortal()
+  const { clientCode, user, portalHeaders, t } = usePortal()
   const [areas, setAreas]   = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -16,7 +16,7 @@ export default function TherapeuticAreasPage() {
   const [followed, setFollowed] = useState([])
   const [followBusy, setFollowBusy] = useState(false)
 
-  usePageTitle('Therapeutic Areas')
+  usePageTitle(t('Therapeutic Areas'))
 
   useEffect(() => {
     if (!user) return
@@ -71,12 +71,12 @@ export default function TherapeuticAreasPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Therapeutic Areas</h1>
-        <p>Disease areas and treatment categories.</p>
+        <h1>{t('Therapeutic Areas')}</h1>
+        <p>{t('Disease areas and treatment categories.')}</p>
       </div>
 
       {loading ? <SkeletonCards count={4} /> : areas.length === 0 ? (
-        <div className="pp-empty-state"><span><Icon name="beaker" size={40} /></span><p>No therapeutic areas published yet.</p></div>
+        <div className="pp-empty-state"><span><Icon name="beaker" size={40} /></span><p>{t('No therapeutic areas published yet.')}</p></div>
       ) : (
         <div className="pp-ta-layout">
           <div className="pp-ta-list">
@@ -89,7 +89,7 @@ export default function TherapeuticAreasPage() {
           </div>
           <div className="pp-ta-detail">
             {!selected ? (
-              <div className="pp-ta-placeholder"><span><Icon name="beaker" size={40} /></span><p>Select a therapeutic area to explore.</p></div>
+              <div className="pp-ta-placeholder"><span><Icon name="beaker" size={40} /></span><p>{t('Select a therapeutic area to explore.')}</p></div>
             ) : (
               <>
                 {selected.image_url && <img src={selected.image_url} alt={selected.name} className="pp-ta-image" loading="lazy" />}
@@ -109,14 +109,14 @@ export default function TherapeuticAreasPage() {
                 </div>
                 {selected.description && <p className="pp-ta-detail-desc">{selected.description}</p>}
                 {selected.overview    && <div className="pp-ta-overview">{selected.overview}</div>}
-                {drugsLoading ? <div className="pp-loading">Loading products…</div> : drugsError ? (
+                {drugsLoading ? <div className="pp-loading">{t('Loading products…')}</div> : drugsError ? (
                   <div className="pp-error-state">{drugsError}</div>
                 ) : drugs.length === 0 ? (
                   // CP walk 2026-10-04: say so — before, an area with no products showed only its name.
-                  <p className="pp-ta-detail-desc" style={{ color: 'var(--pp-text-muted, #6B7280)' }}>No products are listed in this area yet.</p>
+                  <p className="pp-ta-detail-desc" style={{ color: 'var(--pp-text-muted, #6B7280)' }}>{t('No products are listed in this area yet.')}</p>
                 ) : (
                   <div className="pp-ta-drugs">
-                    <h3>Products in this area</h3>
+                    <h3>{t('Products in this area')}</h3>
                     <div className="pp-drug-cards">
                       {drugs.map(d => (
                         <div key={d.id} className="pp-drug-card">

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function VerifyEmailPage() {
-  const { clientCode, login } = usePortal()
+  const { clientCode, login, t } = usePortal()
   const navigate = useNavigate()
   const location = useLocation()
   const [status, setStatus] = useState('verifying') // 'verifying' | 'success' | 'error' | 'expired'
@@ -60,25 +60,25 @@ export default function VerifyEmailPage() {
       <div className="pp-auth-card" style={{ textAlign: 'center', padding: '40px 32px' }}>
         {status === 'verifying' && (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Verifying your email…</h2>
-            <p style={{ color: '#4B5563', fontSize: 14 }}>Please wait a moment.</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>{t('Verifying your email…')}</h2>
+            <p style={{ color: '#4B5563', fontSize: 14 }}>{t('Please wait a moment.')}</p>
           </>
         )}
         {status === 'success' && (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#166534' }}>Email Verified!</h2>
-            <p style={{ color: '#4B5563', fontSize: 14 }}>Your account is active. Redirecting you now…</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#166534' }}>{t('Email Verified!')}</h2>
+            <p style={{ color: '#4B5563', fontSize: 14 }}>{t('Your account is active. Redirecting you now…')}</p>
           </>
         )}
         {(status === 'error' || status === 'expired') && (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#B91C1C' }}>Verification Failed</h2>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#B91C1C' }}>{t('Verification Failed')}</h2>
             <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>{message}</p>
             <button className="pp-btn pp-btn-primary" onClick={resend}>
-              Resend Verification Email
+              {t('Resend Verification Email')}
             </button>
             <p style={{ marginTop: 16, fontSize: 13 }}>
-              <button className="pp-link-btn" onClick={() => navigate(`/portal/${clientCode}/login`)}>Back to Sign In</button>
+              <button className="pp-link-btn" onClick={() => navigate(`/portal/${clientCode}/login`)}>{t('Back to Sign In')}</button>
             </p>
           </>
         )}

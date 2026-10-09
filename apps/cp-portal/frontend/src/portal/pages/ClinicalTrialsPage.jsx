@@ -3,7 +3,7 @@ import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 
 export default function ClinicalTrialsPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const [trials, setTrials]   = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
@@ -24,14 +24,14 @@ export default function ClinicalTrialsPage() {
   return (
     <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
       <div className="pp-page-header" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>Clinical Trials & Real-World Evidence</h1>
-        <p style={{ color: '#4B5563', fontSize: 14 }}>Browse clinical trials: their status, indication, study sites and investigators.</p>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>{t('Clinical Trials & Real-World Evidence')}</h1>
+        <p style={{ color: '#4B5563', fontSize: 14 }}>{t('Browse clinical trials: their status, indication, study sites and investigators.')}</p>
       </div>
 
       <div className="pp-filter-bar" style={{ marginBottom: 20 }}>
         <input
           className="pp-search-input"
-          placeholder="Search by trial NCT ID, indication, or title…"
+          placeholder={t('Search by trial NCT ID, indication, or title…')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ width: '100%', maxWidth: 480, padding: '10px 14px', borderRadius: 8, border: '1px solid #E5E7EB' }}
@@ -39,7 +39,7 @@ export default function ClinicalTrialsPage() {
       </div>
 
       {loading ? <SkeletonCards count={3} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><p>No active clinical trials match your query.</p></div>
+        <div className="pp-empty-state"><p>{t('No active clinical trials match your query.')}</p></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {filtered.map(trial => (
@@ -51,10 +51,10 @@ export default function ClinicalTrialsPage() {
                 </span>
               </div>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', margin: '4px 0 8px' }}>{trial.title}</h3>
-              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>NCT ID:</strong> {trial.nct_id}</div>
-              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>Indication:</strong> {trial.indication}</div>
-              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>Locations:</strong> {trial.site_location}</div>
-              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 14 }}><strong>Principal Investigator:</strong> {trial.pi}</div>
+              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>{t('NCT ID:')}</strong> {trial.nct_id}</div>
+              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>{t('Indication:')}</strong> {trial.indication}</div>
+              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>{t('Locations:')}</strong> {trial.site_location}</div>
+              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 14 }}><strong>{t('Principal Investigator:')}</strong> {trial.pi}</div>
             </div>
           ))}
         </div>

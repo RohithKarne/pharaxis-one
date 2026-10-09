@@ -221,21 +221,21 @@ export default function PortalLayout({ children }) {
 
   return (
     <div className="pp-root">
-      <a href="#pp-main" className="pp-skip-link">Skip to content</a>
+      <a href="#pp-main" className="pp-skip-link">{t('Skip to content')}</a>
       {ackWaiting && (
         <div className="pp-safety-banner" role="alert">
           <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
           <span className="pp-safety-banner-copy">
             {ackWaiting.waiting === 1 ? '1 safety letter needs' : `${ackWaiting.waiting} safety letters need`} your confirmation
           </span>
-          <Link to={`${base}/safety`} className="pp-safety-banner-link">Read and confirm</Link>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">{t('Read and confirm')}</Link>
         </div>
       )}
       {!ackWaiting && has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
           <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
-          <span className="pp-safety-banner-copy">Important Safety Information</span>
-          <Link to={`${base}/safety`} className="pp-safety-banner-link">Review safety alerts and prescribing information</Link>
+          <span className="pp-safety-banner-copy">{t('Important Safety Information')}</span>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">{t('Review safety alerts and prescribing information')}</Link>
           <button
             onClick={dismissSafetyBanner}
             aria-label="Dismiss safety banner"
@@ -384,7 +384,7 @@ export default function PortalLayout({ children }) {
             ) : (
               <Link to={`${base}/login`} className="pp-btn pp-btn-outline">{t('btn.sign_in')}</Link>
             ))}
-            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>Menu</button>
+            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>{t('Menu')}</button>
           </div>
         </div>
       </header>
@@ -403,12 +403,12 @@ export default function PortalLayout({ children }) {
             {branding.tagline && <p className="pp-footer-tagline">{branding.tagline}</p>}
           </div>
           <div className="pp-footer-links">
-            {isFeatureEnabled('medical_inquiry') && <Link to={`${base}/submit`}>Submit Inquiry</Link>}
-            {isFeatureEnabled('find_msl')          && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
-            {isFeatureEnabled('events')           && <Link to={`${base}/events`}>Events</Link>}
-            <Link to={`${base}/contact`}>Contact Us</Link>
+            {isFeatureEnabled('medical_inquiry') && <Link to={`${base}/submit`}>{t('Submit Inquiry')}</Link>}
+            {isFeatureEnabled('find_msl')          && <Link to={`${base}/find-msl`}>{t('Find an MSL')}</Link>}
+            {isFeatureEnabled('events')           && <Link to={`${base}/events`}>{t('Events')}</Link>}
+            <Link to={`${base}/contact`}>{t('Contact Us')}</Link>
             <button type="button" className="pp-footer-link-btn" onClick={() => window.dispatchEvent(new Event('cp:open-consent'))}>
-              Cookie settings
+              {t('Cookie settings')}
             </button>
           </div>
           <div className="pp-footer-legal">
@@ -466,14 +466,14 @@ function SpecialtyPrompt({ clientCode }) {
   return (
     <div className="pp-pdf-overlay" onClick={skip} role="dialog" aria-modal="true" aria-label="Choose your specialty">
       <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
-        <h2>Your area of practice</h2>
-        <p>Choose your specialty. It is saved to your profile.</p>
+        <h2>{t('Your area of practice')}</h2>
+        <p>{t('Choose your specialty. It is saved to your profile.')}</p>
         <div className="pp-specialty-grid">
           {SPECIALTIES.map(s => (
             <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
           ))}
         </div>
-        <button type="button" className="pp-specialty-skip" onClick={skip}>Skip for now</button>
+        <button type="button" className="pp-specialty-skip" onClick={skip}>{t('Skip for now')}</button>
       </div>
     </div>
   )
@@ -553,15 +553,15 @@ function ChatboxWidget({ clientCode }) {
       {open ? (
         <div className="pp-chat-window">
           <div className="pp-chat-header">
-            <span>AI Medical Assistant</span>
+            <span>{t('AI Medical Assistant')}</span>
             <button onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
           </div>
           {/* CPPM-16: the assistant is for signed-in users, so the client knows who it is talking to. */}
           {!user ? (
             <div className="pp-chat-body pp-chat-signin">
-              <p className="pp-chat-signin-title">Sign in to chat</p>
-              <p>Our medical assistant answers from approved information. Please sign in so we can tailor answers to you and follow up if needed.</p>
-              <Link to={`/portal/${clientCode}/login`} className="pp-btn pp-btn-primary" onClick={() => setOpen(false)}>Sign In</Link>
+              <p className="pp-chat-signin-title">{t('Sign in to chat')}</p>
+              <p>{t('Our medical assistant answers from approved information. Please sign in so we can tailor answers to you and follow up if needed.')}</p>
+              <Link to={`/portal/${clientCode}/login`} className="pp-btn pp-btn-primary" onClick={() => setOpen(false)}>{t('Sign In')}</Link>
             </div>
           ) : (<>
           <div className="pp-chat-body">
@@ -570,7 +570,7 @@ function ChatboxWidget({ clientCode }) {
                 <div className="pp-chat-bubble">{m.content}</div>
                 {m.sources && m.sources.length > 0 && (
                   <div className="pp-chat-sources">
-                    <span className="pp-chat-sources-lbl">Based on approved content</span>
+                    <span className="pp-chat-sources-lbl">{t('Based on approved content')}</span>
                     {m.sources.map(s => (
                       <span key={s.n} className="pp-chat-source" title={s.title}>{s.source}: {s.title}</span>
                     ))}
@@ -584,29 +584,29 @@ function ChatboxWidget({ clientCode }) {
             {unwell === 'sent' ? (
               <p className="pp-chat-safety-done" role="status">
                 Thank you. Our safety team will review this. You can also give full details on the{' '}
-                <Link to={`/portal/${clientCode}/submit?type=adverse_event`} onClick={() => setOpen(false)}>side effect form</Link>.
-                {' '}<button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report something else</button>
+                <Link to={`/portal/${clientCode}/submit?type=adverse_event`} onClick={() => setOpen(false)}>{t('side effect form')}</Link>.
+                {' '}<button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>{t('Report something else')}</button>
               </p>
             ) : unwell === 'no' ? (
-              <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report that someone became unwell</button>
+              <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>{t('Report that someone became unwell')}</button>
             ) : unwell === 'yes' ? (
               <>
-                <label htmlFor="pp-chat-unwell-detail" className="pp-chat-safety-q">Please tell us what happened</label>
+                <label htmlFor="pp-chat-unwell-detail" className="pp-chat-safety-q">{t('Please tell us what happened')}</label>
                 <textarea id="pp-chat-unwell-detail" rows={2} maxLength={2000} value={unwellDetail} disabled={unwellBusy}
-                  onChange={e => setUnwellDetail(e.target.value)} placeholder="In your own words. Anything you can tell us helps." />
+                  onChange={e => setUnwellDetail(e.target.value)} placeholder={t('In your own words. Anything you can tell us helps.')} />
                 {unwellError && <p className="pp-chat-safety-error" role="alert">{unwellError}</p>}
                 <div className="pp-chat-safety-actions">
                   <button type="button" onClick={sendUnwellReport} disabled={unwellBusy}>{unwellBusy ? 'Sending…' : 'Send to safety team'}</button>
-                  <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell(null)} disabled={unwellBusy}>Cancel</button>
+                  <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell(null)} disabled={unwellBusy}>{t('Cancel')}</button>
                 </div>
               </>
             ) : (
               <>
-                <p className="pp-chat-safety-q">Did anyone become unwell, or have an unexpected medical problem, after using the product?</p>
-                <p className="pp-chat-safety-help">This includes anything you did not expect — however minor, and whether or not you think the product caused it.</p>
+                <p className="pp-chat-safety-q">{t('Did anyone become unwell, or have an unexpected medical problem, after using the product?')}</p>
+                <p className="pp-chat-safety-help">{t('This includes anything you did not expect — however minor, and whether or not you think the product caused it.')}</p>
                 <div className="pp-chat-safety-actions">
-                  <button type="button" onClick={() => setUnwell('yes')}>Yes</button>
-                  <button type="button" className="pp-chat-safety-no" onClick={() => setUnwell('no')}>No</button>
+                  <button type="button" onClick={() => setUnwell('yes')}>{t('Yes')}</button>
+                  <button type="button" className="pp-chat-safety-no" onClick={() => setUnwell('no')}>{t('No')}</button>
                 </div>
               </>
             )}
@@ -614,7 +614,7 @@ function ChatboxWidget({ clientCode }) {
           <form className="pp-chat-input-row" onSubmit={sendMessage}>
             <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a medical question…" disabled={loading} maxLength={500} />
             <span className="pp-chat-counter">{input.length}/500</span>
-            <button type="submit" disabled={sendCooldown || loading || !input.trim()}>Send</button>
+            <button type="submit" disabled={sendCooldown || loading || !input.trim()}>{t('Send')}</button>
           </form>
           </>)}
         </div>

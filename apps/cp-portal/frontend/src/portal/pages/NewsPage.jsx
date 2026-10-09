@@ -26,7 +26,7 @@ function stripHtml(html) {
 }
 
 export default function NewsPage() {
-  const { clientCode, user, language } = usePortal()
+  const { clientCode, user, language, t } = usePortal()
   const navigate                  = useNavigate()
   const [posts, setPosts]         = useState([])
   const [total, setTotal]         = useState(0)
@@ -42,7 +42,7 @@ export default function NewsPage() {
 
   const limit = 10
 
-  usePageTitle('News')
+  usePageTitle(t('News'))
 
   // Debounce the search box, and reset to page 1 whenever the query changes,
   // so search runs server-side across the whole archive (not just the loaded page).
@@ -117,14 +117,14 @@ export default function NewsPage() {
 
   return (
     <div className="pp-news-page">
-      <h1 className="pp-page-header-title" style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>News &amp; Announcements</h1>
+      <h1 className="pp-page-header-title" style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>{t('News & Announcements')}</h1>
 
       <div className="pp-docs-search" style={{ marginBottom: 12 }}>
         <input
-          placeholder="Search news…"
+          placeholder={t('Search news…')}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          aria-label="Search news"
+          aria-label={t('Search news')}
         />
       </div>
 
@@ -144,7 +144,7 @@ export default function NewsPage() {
       )}
 
       {filtered.length === 0 ? (
-        <div className="pp-empty-state"><p>No announcements at this time.</p></div>
+        <div className="pp-empty-state"><p>{t('No announcements at this time.')}</p></div>
       ) : (
         <div className="pp-news-grid" role="list">
           {filtered.map(post => (
@@ -159,7 +159,7 @@ export default function NewsPage() {
                 }
                 <div className="pp-news-card-body">
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {post.is_pinned ? <span style={{ fontSize: 11, background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>Pinned</span> : null}
+                    {post.is_pinned ? <span style={{ fontSize: 11, background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>{t('Pinned')}</span> : null}
                     {post.category && <div className="pp-news-card-cat">{post.category}</div>}
                   </div>
                   <div className="pp-news-card-title">{post.title}</div>
@@ -198,9 +198,9 @@ export default function NewsPage() {
 
       {totalPages > 1 && (
         <div className="pp-news-pagination">
-          <button className="pp-btn pp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
+          <button className="pp-btn pp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('Previous')}</button>
           <span style={{ fontSize: 13, color: '#4B5563', alignSelf: 'center' }}>Page {page} of {totalPages}</span>
-          <button className="pp-btn pp-btn-outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+          <button className="pp-btn pp-btn-outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>{t('Next')}</button>
         </div>
       )}
     </div>

@@ -10,11 +10,12 @@
  * belonging to a real portal appears around it.
  */
 export default function PortalUnavailablePage() {
+  const { t } = usePortal()
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-empty-state">
-        <h1>Portal not available</h1>
-        <p>This address does not belong to a portal. Check the link you were given.</p>
+        <h1>{t('Portal not available')}</h1>
+        <p>{t('This address does not belong to a portal. Check the link you were given.')}</p>
       </div>
     </div>
   )

@@ -31,7 +31,7 @@ const PREFERENCE_TOGGLES = [
 ]
 
 export default function ConsentBanner() {
-  const { portalConfig, clientCode, user, portalFetch } = usePortal()
+  const { portalConfig, clientCode, user, portalFetch, t } = usePortal()
   const compliance = portalConfig?.compliance
   // Use the configured version verbatim. This used to strip a leading "v", so a
   // config of "v1.1" was recorded as "1.1" here while other clients (and the
@@ -172,16 +172,16 @@ export default function ConsentBanner() {
           </>
         ) : (
           <>
-            <div className="pp-consent-title" id="consent-title">Manage Cookie Preferences</div>
-            <div className="pp-consent-body">Choose which cookies you accept. Necessary cookies are always on.</div>
+            <div className="pp-consent-title" id="consent-title">{t('Manage Cookie Preferences')}</div>
+            <div className="pp-consent-body">{t('Choose which cookies you accept. Necessary cookies are always on.')}</div>
 
             {/* Necessary — always on */}
             <div className="pp-consent-toggle-row">
               <div>
-                <div className="pp-consent-toggle-label">Necessary</div>
-                <div className="pp-consent-toggle-desc">Required for the portal to function. Cannot be disabled.</div>
+                <div className="pp-consent-toggle-label">{t('Necessary')}</div>
+                <div className="pp-consent-toggle-desc">{t('Required for the portal to function. Cannot be disabled.')}</div>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>Always On</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>{t('Always On')}</span>
             </div>
 
             {PREFERENCE_TOGGLES.map(t => (
@@ -217,7 +217,7 @@ export default function ConsentBanner() {
                 {saving ? 'Saving…' : 'Save My Preferences'}
               </button>
               <button className="pp-consent-btn-link" onClick={() => setStep('banner')} disabled={saving}>
-                Back
+                {t('Back')}
               </button>
             </div>
           </>

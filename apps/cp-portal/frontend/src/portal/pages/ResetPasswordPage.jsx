@@ -4,11 +4,11 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 export default function ResetPasswordPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const navigate = useNavigate()
   const base = `/portal/${clientCode}`
 
-  usePageTitle('Set a new password')
+  usePageTitle(t('Set a new password'))
 
   const [token, setToken]       = useState('')
   const [pwd, setPwd]           = useState('')
@@ -48,20 +48,20 @@ export default function ResetPasswordPage() {
   return (
     <div className="pp-auth-page">
       <div className="pp-auth-card">
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1A1A2E', marginBottom: 8 }}>Set a new password</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1A1A2E', marginBottom: 8 }}>{t('Set a new password')}</h1>
 
         {done ? (
           <>
-            <p style={{ color: '#166534', fontSize: 14 }}>Your password has been reset.</p>
+            <p style={{ color: '#166534', fontSize: 14 }}>{t('Your password has been reset.')}</p>
             <button className="pp-btn pp-btn-primary pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/login`)}>
-              Go to Sign In
+              {t('Go to Sign In')}
             </button>
           </>
         ) : !token ? (
           <>
-            <p style={{ color: '#B91C1C', fontSize: 14 }}>This reset link is missing or invalid. Please request a new one.</p>
+            <p style={{ color: '#B91C1C', fontSize: 14 }}>{t('This reset link is missing or invalid. Please request a new one.')}</p>
             <button className="pp-btn pp-btn-outline pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/forgot-password`)}>
-              Request a new link
+              {t('Request a new link')}
             </button>
           </>
         ) : (
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
             {error && <div className="pp-error-msg">{error}</div>}
             <form onSubmit={submit} className="pp-auth-form">
               <div className="pp-field pp-field-password">
-                <label>New password <span style={{ fontSize: 11, color: '#4B5563' }}>(min 8 characters)</span></label>
+                <label>{t('New password')} <span style={{ fontSize: 11, color: '#4B5563' }}>{t('(min 8 characters)')}</span></label>
                 <div className="pp-input-wrapper">
                   <input type={show ? 'text' : 'password'} required value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••" />
                   <button type="button" className="pp-password-toggle" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'}>
@@ -78,7 +78,7 @@ export default function ResetPasswordPage() {
                 </div>
               </div>
               <div className="pp-field">
-                <label>Confirm new password</label>
+                <label>{t('Confirm new password')}</label>
                 <input type={show ? 'text' : 'password'} required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" />
               </div>
               <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>

@@ -9,7 +9,7 @@ import { formatLongDate } from '../../shared/utils/datetime'
 export default function NewsDetailPage() {
   const { postId }              = useParams()
   const navigate                = useNavigate()
-  const { clientCode, language } = usePortal()
+  const { clientCode, language, t } = usePortal()
   const [post, setPost]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -36,13 +36,13 @@ export default function NewsDetailPage() {
     if (clientCode && postId) load()
   }, [clientCode, postId, language])
 
-  if (loading) return <div className="pp-article-page"><div className="pp-loading">Loading…</div></div>
+  if (loading) return <div className="pp-article-page"><div className="pp-loading">{t('Loading…')}</div></div>
   if (error)   return <div className="pp-article-page"><div className="pp-error-state">{error}</div></div>
   if (!post)   return null
 
   return (
     <div className="pp-article-page">
-      <button onClick={() => navigate(-1)} className="pp-back-btn">Back to News</button>
+      <button onClick={() => navigate(-1)} className="pp-back-btn">{t('Back to News')}</button>
 
       {post.category && <div className="pp-article-cat">{post.category}</div>}
       <h1 className="pp-article-title">{post.title}</h1>

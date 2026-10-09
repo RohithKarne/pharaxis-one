@@ -11,7 +11,7 @@ import { formatLongDate, formatDateTime } from '../../shared/utils/datetime'
 const SEVERITIES = ['critical', 'high', 'medium', 'warning', 'informational']
 
 export default function SafetyPage() {
-  const { clientCode, portalHeaders, language, user } = usePortal()
+  const { clientCode, portalHeaders, language, user, t } = usePortal()
   const [ackBusy, setAckBusy]         = useState(null)
   const [ackError, setAckError]       = useState('')
   const [alerts, setAlerts]           = useState([])
@@ -19,7 +19,7 @@ export default function SafetyPage() {
   const [error, setError]             = useState('')
   const [sevFilter, setSevFilter]     = useState('all')
 
-  usePageTitle('Safety Alerts')
+  usePageTitle(t('Safety Alerts'))
 
   useEffect(() => {
     async function load() {
@@ -82,7 +82,7 @@ export default function SafetyPage() {
       <div id={`alert-${alert.id}`} className={`pp-alert-card severity-${alert.severity}${isResolved ? ' resolved' : ''}`}>
         <div className="pp-alert-header">
           <SeverityBadge severity={alert.severity} />
-          {isResolved && <span className="pp-severity-badge resolved">Resolved</span>}
+          {isResolved && <span className="pp-severity-badge resolved">{t('Resolved')}</span>}
           <span style={{ fontSize: 12, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
             {alert.alert_type?.replace(/_/g, ' ')}
           </span>
@@ -110,7 +110,7 @@ export default function SafetyPage() {
               <span role="status">You confirmed you read this on {formatDateTime(alert.acknowledged_at)}.</span>
             ) : (
               <>
-                <span style={{ marginRight: 12 }}>Please confirm you have read this safety letter.</span>
+                <span style={{ marginRight: 12 }}>{t('Please confirm you have read this safety letter.')}</span>
                 <button type="button" className="pp-btn pp-btn-primary pp-btn-sm" disabled={ackBusy === alert.id} onClick={() => acknowledge(alert)}>
                   {ackBusy === alert.id ? 'Saving…' : 'I have read this'}
                 </button>
@@ -129,7 +129,7 @@ export default function SafetyPage() {
               rel="noopener noreferrer"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <Icon name="file" size={15} /> Download PDF
+              <Icon name="file" size={15} /> {t('Download PDF')}
             </a>
           </>
         )}
@@ -138,16 +138,16 @@ export default function SafetyPage() {
     )
   }
 
-  if (loading) return <div className="pp-safety-page"><div className="pp-loading">Loading…</div></div>
+  if (loading) return <div className="pp-safety-page"><div className="pp-loading">{t('Loading…')}</div></div>
   if (error)   return <div className="pp-safety-page"><div className="pp-error-state">{error}</div></div>
 
   return (
     <div className="pp-safety-page">
-      <h1 className="pp-safety-section-title">Safety Alerts</h1>
+      <h1 className="pp-safety-section-title">{t('Safety Alerts')}</h1>
       {ackError && <div className="pp-error-msg" role="alert">{ackError}</div>}
 
       {availableSeverities.length > 1 && (
-        <div className="pp-sev-filter" role="group" aria-label="Filter by severity">
+        <div className="pp-sev-filter" role="group" aria-label={t('Filter by severity')}>
           <button className={`pp-sev-chip${sevFilter === 'all' ? ' on' : ''}`} onClick={() => setSevFilter('all')}>All ({active.length})</button>
           {availableSeverities.map(s => (
             <button key={s} className={`pp-sev-chip sev-${s}${sevFilter === s ? ' on' : ''}`} onClick={() => setSevFilter(s)}>
@@ -158,7 +158,7 @@ export default function SafetyPage() {
       )}
 
       {active.length === 0 ? (
-        <div className="pp-safety-empty">No active safety alerts at this time.</div>
+        <div className="pp-safety-empty">{t('No active safety alerts at this time.')}</div>
       ) : shown.length === 0 ? (
         <div className="pp-safety-empty">No {sevFilter} alerts.</div>
       ) : (
@@ -167,7 +167,7 @@ export default function SafetyPage() {
 
       {resolved.length > 0 && (
         <>
-          <div className="pp-safety-resolved-title">Resolved Alerts</div>
+          <div className="pp-safety-resolved-title">{t('Resolved Alerts')}</div>
           {resolved.map(a => <AlertCard key={a.id} alert={a} isResolved={true} />)}
         </>
       )}

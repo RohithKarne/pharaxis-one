@@ -28,7 +28,7 @@ const DOC_TYPE_CLASSES = {
 }
 
 export default function DocumentsPage() {
-  const { clientCode, user, language, authLoading } = usePortal()
+  const { clientCode, user, language, authLoading, t } = usePortal()
   const navigate                  = useNavigate()
   const [docs, setDocs]           = useState([])
   const [categories, setCategories] = useState([])
@@ -210,12 +210,12 @@ export default function DocumentsPage() {
       </span>
     )
     if (doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 14 * 86400000) {
-      badges.push(<span key="new" className="pp-badge-new" style={{ marginLeft: 4 }}>New</span>)
+      badges.push(<span key="new" className="pp-badge-new" style={{ marginLeft: 4 }}>{t('New')}</span>)
     }
     if (doc.expires_at) {
       const ms = new Date(doc.expires_at).getTime() - Date.now()
-      if (ms < 0) badges.push(<span key="exp" className="pp-badge-exp gone" style={{ marginLeft: 4 }}>Expired</span>)
-      else if (ms < 30 * 86400000) badges.push(<span key="exp" className="pp-badge-exp" style={{ marginLeft: 4 }}>Expiring Soon</span>)
+      if (ms < 0) badges.push(<span key="exp" className="pp-badge-exp gone" style={{ marginLeft: 4 }}>{t('Expired')}</span>)
+      else if (ms < 30 * 86400000) badges.push(<span key="exp" className="pp-badge-exp" style={{ marginLeft: 4 }}>{t('Expiring Soon')}</span>)
       else badges.push(<span key="exp-valid" style={{ background: '#F3F4F6', color: '#4B5563', fontSize: 11, padding: '2px 6px', borderRadius: 4, marginLeft: 4 }}>Valid until {new Date(doc.expires_at).toLocaleDateString()}</span>)
     }
     return badges
@@ -226,12 +226,12 @@ export default function DocumentsPage() {
 
   return (
     <div className="pp-docs-page">
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>Document Library</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>{t('Document Library')}</h1>
       {docNotice && <div className="pp-info-box" role="status" style={{ marginBottom: 16 }}>{docNotice}</div>}
 
       <div className="pp-docs-search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
-          placeholder="Search documents…"
+          placeholder={t('Search documents…')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => {
@@ -248,7 +248,7 @@ export default function DocumentsPage() {
             onClick={submitAiSearch}
             disabled={aiLoading}
           >
-            {aiLoading ? 'Searching…' : 'Search'}
+            {aiLoading ? t('Searching…') : t('Search')}
           </button>
         )}
         {aiAvailable && !aiUnavailable && (
@@ -283,14 +283,14 @@ export default function DocumentsPage() {
       {aiMode ? (
         <>
           <div style={{ fontStyle: 'italic', color: '#4B5563', marginBottom: 12 }}>
-            AI-assisted results — review source documents before use
+            {t('AI-assisted results — review source documents before use')}
           </div>
           {aiError ? (
             <div className="pp-error-state">{aiError}</div>
           ) : aiLoading ? (
-            <div className="pp-loading" role="status" aria-live="polite">Searching…</div>
+            <div className="pp-loading" role="status" aria-live="polite">{t('Searching…')}</div>
           ) : aiResults.length === 0 ? (
-            <div className="pp-empty-state"><p>No relevant documents found for your query</p></div>
+            <div className="pp-empty-state"><p>{t('No relevant documents found for your query')}</p></div>
           ) : (
             <div className="pp-docs-grid">
               {aiResults.map(doc => (
@@ -318,7 +318,7 @@ export default function DocumentsPage() {
                   </div>
                   {doc.is_expiring_soon && (
                     <div style={{ color: '#B45309', marginTop: 6, fontSize: 12 }}>
-                      Expiry warning: this document expires within 30 days
+                      {t('Expiry warning: this document expires within 30 days')}
                     </div>
                   )}
                   <div className="pp-doc-download" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 10 }}>
@@ -352,7 +352,7 @@ export default function DocumentsPage() {
           )}
         </>
       ) : filtered.length === 0 ? (
-        <div className="pp-empty-state"><p>No documents found.</p></div>
+        <div className="pp-empty-state"><p>{t('No documents found.')}</p></div>
       ) : (
         <div className="pp-docs-grid">
           {filtered.map(doc => (
@@ -369,7 +369,7 @@ export default function DocumentsPage() {
               </div>
               <div className="pp-doc-download" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`Quick View ${doc.title}`}>
-                  Quick View
+                  {t('Quick View')}
                 </button>
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
