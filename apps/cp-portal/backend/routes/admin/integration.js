@@ -128,7 +128,7 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
       const safeUrl = await assertSafeOutboundUrl(cfg.api_base_url);
       // NEW-D: for auth_type 'oauth' this mints a fresh token from the stored client
       // credentials, so the Test button also proves the token exchange works.
-      invalidateAuth(cfg.id);
+      await invalidateAuth(cfg.id);
       const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(cfg)) };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
