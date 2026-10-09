@@ -741,6 +741,8 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
       [req.apiClient.org_id, c.id, stored.provider, stored.key,
        String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, checksum]
     );
+    await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+      'ATTACHMENT_ADDED_VIA_API', 'attachment', null, `${String(req.file.originalname || '').slice(0, 200)} (${req.file.size} bytes)`);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     res.status(500).json(intakeFailure(err, req, 'Failed to store attachment.'));
