@@ -861,7 +861,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
     // NEW-D: a cached OAuth token can be revoked/expired server-side — mint a
     // fresh one and retry exactly once before recording a failure.
     if (r.status === 401 && integration.auth_type === 'oauth') {
-      invalidateAuth(integration.id);
+      await invalidateAuth(integration.id);
       headers = await buildHeaders();
       r = await postCase();
     }
@@ -998,7 +998,7 @@ async function forwardFollowUp(followupId) {
     });
     let r = await post();
     if (r.status === 401 && integration.auth_type === 'oauth') {
-      invalidateAuth(integration.id);
+      await invalidateAuth(integration.id);
       headers = await buildHeaders();
       r = await post();
     }

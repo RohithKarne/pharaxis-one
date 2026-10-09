@@ -47,6 +47,7 @@ const CLIENT_SECTIONS = [
   { key: 'setup', label: 'Portal setup', icon: 'sliders', tabs: [
     { path: 'branding',      label: 'Branding', area: 'branding' },
     { path: 'features',      label: 'Features', area: 'features', keywords: 'pages switches' },
+    { path: 'language',      label: 'Language', area: 'language', keywords: 'translation languages' },
     { path: 'gate',          label: 'User Gate', area: 'gate' },
     { path: 'forms',         label: 'Forms', area: 'forms' },
     { path: 'email-settings', label: 'Email Settings', area: 'email-config', keywords: 'smtp mail' },
@@ -93,6 +94,7 @@ const SEGMENT_TITLES = {
   'admin-users':  'Admin Users',
   'review-queue':    'Review Queue',
   'email-settings':  'Email Settings',
+  language:       'Language',
   analytics:      'Analytics',
   feedback:       'Feedback',
   faq:            'FAQ',

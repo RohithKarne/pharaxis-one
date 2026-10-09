@@ -6,6 +6,7 @@ import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
 import FeedbackWidget from './FeedbackWidget'
 import LocalClock from './LocalClock'
+import { SUPPORTED_LANGUAGES } from '../utils/translations'
 
 function timeAgo(dateStr) {
   if (!dateStr) return ''
@@ -271,7 +272,19 @@ export default function PortalLayout({ children }) {
           </nav>
 
           <div className="pp-header-actions">
-            {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
+            {/* Language switcher — only shown when the client offers more than one language (back 2026-10-09). */}
+            {(portalConfig?.language?.enabled?.length || 0) > 1 && (
+              <select
+                className="pp-lang-select"
+                value={language}
+                onChange={e => setLanguage(e.target.value)}
+                aria-label="Language"
+              >
+                {SUPPORTED_LANGUAGES
+                  .filter(l => portalConfig.language.enabled.includes(l.code))
+                  .map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </select>
+            )}
             {/* Header search removed (2026-07-09) — it pushed the header off-alignment.
                 Search lives on the home hero + the dedicated /search page. */}
             <LocalClock />

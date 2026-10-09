@@ -2500,7 +2500,8 @@ body { background: var(--cp-bg); }
   .pp-nav-link { color: var(--pp-text); }
   .pp-header-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; width: 100%; margin-left: 0; }
   .pp-header-search { grid-column: 1 / -1; order: 3; width: 100%; min-width: 0; max-width: none; height: 36px; }
-  .pp-header-actions > .pp-btn-primary { padding: 8px 10px; font-size: 12px; }
+  /* 2026-10-09: a longer label in another language ("Soumettre une demande") must wrap, or the header row grows past the phone's width. */
+  .pp-header-actions > .pp-btn-primary { padding: 8px 10px; font-size: 12px; white-space: normal; min-width: 0; line-height: 1.2; }
   .pp-mobile-menu-btn { display: block; }
   .pp-hero { padding: 34px 0 24px; }
   .pp-hero-inner { grid-template-columns: 1fr; gap: 24px; padding: 0 16px; }
@@ -2781,6 +2782,12 @@ textarea:focus-visible {
   .pp-hero-title        { font-size: 27px; }
   .pp-container         { padding: 0 12px; }
   .pp-hero-inner        { padding: 0 12px; }
+}
+
+/* Language switcher in the header — shown only when the client offers 2+ languages. */
+.pp-lang-select { font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--pp-border); background: var(--pp-surface, #fff); color: var(--pp-text); cursor: pointer; max-width: 140px; }
+@media (max-width: 768px) {
+  .pp-lang-select { grid-column: 1 / -1; width: 100%; max-width: none; }
 }
 
 /* Persistent local date/time clock in the header (all portal pages). */

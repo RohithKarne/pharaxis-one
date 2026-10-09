@@ -10,6 +10,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { audit } = require('../../utils/audit');
 const { autoTranslate, isMachineTranslationEnabled, missingTranslations } = require('../../utils/translator');
 const log = require('../../utils/logger');
+const cache = require('../../utils/cache');
 
 const SUPPORTED = ['en', 'fr', 'de', 'es', 'ja', 'zh'];
 
@@ -57,6 +58,7 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       : { default: defaultLang, enabled });
     await pool.execute("UPDATE cp_clients SET language_config_json = ?, updated_at = NOW() WHERE id = ?", [config, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'UPDATE', 'language_config', req.params.clientId, { default: defaultLang, enabled });
+    cache.invalidate('config:'); // CP-22: the portal reads the language list from its cached config — show the change at once
     res.json({ ok: true, language: { default: defaultLang, enabled, machine_translation: isMachineTranslationEnabled(existing) } });
   } catch (err) {
     log.error('admin.language.error', { err, route: 'PUT /:clientId', path: req.path, request_id: req.requestId || null });

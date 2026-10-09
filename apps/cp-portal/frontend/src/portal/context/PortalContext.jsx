@@ -20,8 +20,18 @@ export function PortalProvider({ children }) {
   // sent to the sign-in page and from there to Home.
   const [authLoading, setAuthLoading]   = useState(true)
   const [showGate, setShowGate]         = useState(false)
-  // English-only for now (2026-07-03) — language switching disabled; always 'en'.
-  const [language, setLanguageState]    = useState('en')
+  // Language switching returned 2026-10-09 (Rohith). The browser remembers the reader's
+  // choice per client; once the config arrives, a choice the client no longer offers
+  // falls back to the client's default language.
+  const [language, setLanguageState]    = useState(() => {
+    try { return localStorage.getItem(`cp_lang_${rawClientCode}`) || 'en' } catch { return 'en' }
+  })
+  useEffect(() => {
+    const cfg = portalConfig?.language
+    if (!cfg) return
+    const enabled = Array.isArray(cfg.enabled) && cfg.enabled.length ? cfg.enabled : ['en']
+    if (!enabled.includes(language)) setLanguageState(enabled.includes(cfg.default) ? cfg.default : enabled[0])
+  }, [portalConfig])
 
   // Show gate when: gate is enabled, user is logged in, user hasn't confirmed type yet
   useEffect(() => {
@@ -156,7 +166,7 @@ export function PortalProvider({ children }) {
   }
 
   function setLanguage(lang) {
-    localStorage.setItem(`cp_lang_${rawClientCode}`, lang)
+    try { localStorage.setItem(`cp_lang_${rawClientCode}`, lang) } catch { /* storage disabled */ }
     setLanguageState(lang)
   }
 
