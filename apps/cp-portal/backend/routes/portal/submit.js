@@ -835,7 +835,9 @@ async function syncToIntegration(clientId, submissionId, formType) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
     await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
-    await alertIfStuck(clientId, submissionId, reason);
+    // Retrying the same mapping gives the same answer, so the team is told now, not
+    // after the six automatic tries (about half an hour of silence).
+    await alertIfStuck(clientId, submissionId, reason, { unpreparable: true });
     return;
   }
 
@@ -903,16 +905,17 @@ const TYPE_LABEL = { medical_inquiry: 'medical enquiry', adverse_event: 'side-ef
 // Bridge row 2: tell the client's team when a report is not getting through — at once
 // if MIMS refused it outright, otherwise when the automatic retries are used up.
 // One alert per report; it closes itself when the report reaches MIMS.
-async function alertIfStuck(clientId, submissionId, reason, { refused = false } = {}) {
+async function alertIfStuck(clientId, submissionId, reason, { refused = false, unpreparable = false } = {}) {
   try {
     const [[s]] = await pool.execute('SELECT sync_attempts, submission_type FROM cp_submissions WHERE id = ?', [submissionId]);
-    if (!s || (!refused && s.sync_attempts < MAX_SYNC_ATTEMPTS)) return;
+    if (!s || (!refused && !unpreparable && s.sync_attempts < MAX_SYNC_ATTEMPTS)) return;
     const ref = `CP-${String(submissionId).padStart(6, '0')}`;
     const what = TYPE_LABEL[s.submission_type] || 'report';
+    const Title = `${what[0].toUpperCase()}${what.slice(1)} ${ref}`;
     await raiseAlert(clientId, {
-      kind: refused ? 'sync_refused' : 'sync_gave_up', audience: 'integration',
-      title: refused ? `MIMS refused ${what} ${ref}` : `${what[0].toUpperCase()}${what.slice(1)} ${ref} has not reached MIMS after ${s.sync_attempts} tries`,
-      body: `Reason: ${asSentence(reason)} It is on the Sync Health page, where it can be sent again once the cause is fixed.`,
+      kind: refused ? 'sync_refused' : unpreparable ? 'sync_unpreparable' : 'sync_gave_up', audience: 'integration',
+      title: refused ? `MIMS refused ${what} ${ref}` : unpreparable ? `${Title} could not be prepared for MIMS` : `${Title} has not reached MIMS after ${s.sync_attempts} tries`,
+      body: `Reason: ${asSentence(reason)} ${unpreparable ? 'Sending again will fail the same way until the field mapping on the Integration page is fixed.' : ''}It is on the Sync Health page, where it can be sent again once the cause is fixed.`,
       linkPath: `/admin/clients/${clientId}/sync-health`,
       relatedType: 'submission', relatedId: submissionId, dedupeKey: `sync:${submissionId}`,
     });
