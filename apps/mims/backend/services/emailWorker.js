@@ -283,8 +283,8 @@ async function processBatch() {
           // Log permanent failure to transmission_audit_trail
           await pool.execute(
             `INSERT INTO transmission_audit_trail
-               (case_id, target_system, payload_summary, status, response_code)
-             VALUES (?, 'MI Email', ?, 'Failed', 500)`,
+               (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
+             VALUES (?, 0, 'MIMS email worker', 'MI Email', ?, 'Failed', 500)`,
             [job.case_id, `Email job ${job.id} exhausted after ${newAttempts} attempts: ${String(err.message).slice(0, 200)}`]
           ).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to write exhaustion audit'));
         }
