@@ -89,7 +89,7 @@ function FieldMappingSection({ clientId, integration }) {
             {typeMappings.map(m => (
               <tr key={m.id}>
                 <td>{m.cp_field}</td>
-                <td>{m.target_field}</td>
+                <td>{m.target_field}{m.is_known === false && <span className="cp-badge badge-inactive" style={{ marginLeft: 8 }} title="MIMS has no such field, so this mapping is ignored on every report. Remove it and map onto a field from the list.">not a MIMS field</span>}</td>
                 <td>{m.transform || '—'}</td>
                 <td>{m.default_value || '—'}</td>
                 <CanChange area="integration">

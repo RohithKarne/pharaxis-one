@@ -4,13 +4,13 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 export default function LoginPage() {
-  const { clientCode, login, user, portalConfig } = usePortal()
+  const { clientCode, login, user, portalConfig, t } = usePortal()
   const navigate              = useNavigate()
   const location              = useLocation()
   const base                  = `/portal/${clientCode}`
   const returnTo              = location.state?.from || base
 
-  usePageTitle('Sign In')
+  usePageTitle(t('Sign In'))
 
   // AUTH-03: redirect already-authenticated users away from the login page
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function LoginPage() {
         ) : (<>
         <div className="pp-auth-footer" style={{ marginBottom: 16, textAlign: 'left' }}>
           Accounts are approved by the portal team.{' '}
-          {localAllowed && <button type="button" className="pp-link-btn" onClick={() => { setRequesting(true); setError('') }}>No account? Request access</button>}
+          {localAllowed && <button type="button" className="pp-link-btn" onClick={() => { setRequesting(true); setError('') }}>{t('No account? Request access')}</button>}
         </div>
 
         {/* SSO: single sign-on with the portal's configured identity providers */}
@@ -95,7 +95,7 @@ export default function LoginPage() {
                 Continue with {p.label}
               </button>
             ))}
-            {localAllowed && <div className="pp-sso-divider"><span>or</span></div>}
+            {localAllowed && <div className="pp-sso-divider"><span>{t('or')}</span></div>}
           </div>
         )}
 
@@ -104,12 +104,12 @@ export default function LoginPage() {
           {/* CPPM-105: each label is tied to its box, so a screen reader names the
               field and clicking the label puts the cursor in it. */}
           <div className="pp-field">
-            <label htmlFor="pp-login-email">Email Address</label>
-            <input id="pp-login-email" type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" aria-invalid={!!error} aria-describedby={error ? 'pp-login-error' : undefined} />
+            <label htmlFor="pp-login-email">{t('Email Address')}</label>
+            <input id="pp-login-email" type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder={t('you@example.com')} aria-invalid={!!error} aria-describedby={error ? 'pp-login-error' : undefined} />
           </div>
           {/* LOW-09: password show/hide toggle */}
           <div className="pp-field pp-field-password">
-            <label htmlFor="pp-login-password">Password</label>
+            <label htmlFor="pp-login-password">{t('Password')}</label>
             <div className="pp-input-wrapper">
               <input id="pp-login-password" type={showLoginPassword ? 'text' : 'password'} required value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
               <button type="button" className="pp-password-toggle" onClick={() => setShowLoginPassword(s => !s)} aria-label={showLoginPassword ? 'Hide password' : 'Show password'}>
@@ -118,11 +118,11 @@ export default function LoginPage() {
             </div>
           </div>
           <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? t('Signing in…') : t('Sign In')}
           </button>
           <div style={{ marginTop: 14, textAlign: 'center' }}>
             <button type="button" className="pp-link-btn" onClick={() => navigate(`${base}/forgot-password`)}>
-              Forgot your password?
+              {t('Forgot your password?')}
             </button>
           </div>
         </form>
@@ -144,6 +144,7 @@ const ROLE_CHOICES = [
 ]
 
 function RequestAccess({ clientCode, userTypes, onBack }) {
+  const { t } = usePortal()
   const roles = Array.isArray(userTypes) && userTypes.length ? userTypes : ROLE_CHOICES
   const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '' })
   const [busy, setBusy] = useState(false)
@@ -167,30 +168,30 @@ function RequestAccess({ clientCode, userTypes, onBack }) {
   if (done) {
     return (
       <div role="status">
-        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>Request sent</h2>
+        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>{t('Request sent')}</h2>
         <p style={{ margin: '0 0 16px' }}>{done}</p>
-        <button type="button" className="pp-btn pp-btn-outline pp-btn-full" onClick={onBack}>Back to sign in</button>
+        <button type="button" className="pp-btn pp-btn-outline pp-btn-full" onClick={onBack}>{t('Back to sign in')}</button>
       </div>
     )
   }
   return (
     <form onSubmit={send} className="pp-auth-form" aria-labelledby="pp-request-title">
-      <h2 id="pp-request-title" style={{ fontSize: 18, margin: '0 0 4px' }}>Request access</h2>
-      <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--pp-text-muted, #6B7280)' }}>The portal team reviews each request. Once approved, you get an email to set your password.</p>
+      <h2 id="pp-request-title" style={{ fontSize: 18, margin: '0 0 4px' }}>{t('Request access')}</h2>
+      <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--pp-text-muted, #6B7280)' }}>{t('The portal team reviews each request. Once approved, you get an email to set your password.')}</p>
       {error && <div className="pp-error-msg" role="alert">{error}</div>}
-      <div className="pp-field"><label htmlFor="ra-first">First name</label><input id="ra-first" required maxLength={255} value={f.first_name} onChange={e => set('first_name', e.target.value)} autoComplete="given-name" /></div>
-      <div className="pp-field"><label htmlFor="ra-last">Last name</label><input id="ra-last" required maxLength={255} value={f.last_name} onChange={e => set('last_name', e.target.value)} autoComplete="family-name" /></div>
-      <div className="pp-field"><label htmlFor="ra-email">Work email</label><input id="ra-email" type="email" required maxLength={254} value={f.email} onChange={e => set('email', e.target.value)} autoComplete="email" /></div>
-      <div className="pp-field"><label htmlFor="ra-role">Your role</label>
+      <div className="pp-field"><label htmlFor="ra-first">{t('First name')}</label><input id="ra-first" required maxLength={255} value={f.first_name} onChange={e => set('first_name', e.target.value)} autoComplete="given-name" /></div>
+      <div className="pp-field"><label htmlFor="ra-last">{t('Last name')}</label><input id="ra-last" required maxLength={255} value={f.last_name} onChange={e => set('last_name', e.target.value)} autoComplete="family-name" /></div>
+      <div className="pp-field"><label htmlFor="ra-email">{t('Work email')}</label><input id="ra-email" type="email" required maxLength={254} value={f.email} onChange={e => set('email', e.target.value)} autoComplete="email" /></div>
+      <div className="pp-field"><label htmlFor="ra-role">{t('Your role')}</label>
         <select id="ra-role" required value={f.user_type} onChange={e => set('user_type', e.target.value)}>
-          <option value="">-- Select --</option>
+          <option value="">{t('-- Select --')}</option>
           {roles.map(r => <option key={r.type_key} value={r.type_key}>{r.label}</option>)}
         </select>
       </div>
-      <div className="pp-field"><label htmlFor="ra-country">Country</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
+      <div className="pp-field"><label htmlFor="ra-country">{t('Country')}</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
       <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={busy}>{busy ? 'Sending…' : 'Send request'}</button>
       <div style={{ marginTop: 14, textAlign: 'center' }}>
-        <button type="button" className="pp-link-btn" onClick={onBack}>Back to sign in</button>
+        <button type="button" className="pp-link-btn" onClick={onBack}>{t('Back to sign in')}</button>
       </div>
     </form>
   )

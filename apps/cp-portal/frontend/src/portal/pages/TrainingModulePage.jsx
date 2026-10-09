@@ -7,7 +7,7 @@ import { formatDateTime } from '../../shared/utils/datetime'
 // CPPM-15: read the module's document, answer every question, submit. The server
 // marks the answers and records the attempt; a pass links to the certificate.
 export default function TrainingModulePage() {
-  const { clientCode, portalFetch } = usePortal()
+  const { clientCode, portalFetch, t } = usePortal()
   const { moduleId } = useParams()
   const base = `/portal/${clientCode}`
   const [data, setData]         = useState(null)
@@ -56,11 +56,11 @@ export default function TrainingModulePage() {
     return (
       <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
         <div className="pp-error-msg" role="alert">{error}</div>
-        <Link to={`${base}/training`}>Back to training</Link>
+        <Link to={`${base}/training`}>{t('Back to training')}</Link>
       </div>
     )
   }
-  if (!data) return <div className="pp-loading">Loading…</div>
+  if (!data) return <div className="pp-loading">{t('Loading…')}</div>
 
   const { module, document: doc, questions, attempts } = data
   const certificateUrl = ref => `/api/portal/training/${clientCode}/certificates/${ref}`
@@ -70,18 +70,18 @@ export default function TrainingModulePage() {
 
   return (
     <div className="pp-container pp-page-content" style={{ padding: '24px 0', maxWidth: 820 }}>
-      <Link to={`${base}/training`} style={{ fontSize: 13 }}>All training modules</Link>
+      <Link to={`${base}/training`} style={{ fontSize: 13 }}>{t('All training modules')}</Link>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E', margin: '10px 0 4px' }}>{module.title}</h1>
       <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
         {module.type} · {module.duration} · Pass mark {module.pass_score}% · Version {module.version}
       </p>
 
       <section style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, padding: 18, marginBottom: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>1. Read the module</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{t('1. Read the module')}</h2>
         <p style={{ fontSize: 14, color: '#4B5563', marginBottom: 10 }}>{doc.title}</p>
         {isPdf
-          ? <button type="button" className="pp-btn pp-btn-outline" onClick={() => setShowDoc(true)}>Open the document</button>
-          : <a className="pp-btn pp-btn-outline" href={docUrl}>Download the document</a>}
+          ? <button type="button" className="pp-btn pp-btn-outline" onClick={() => setShowDoc(true)}>{t('Open the document')}</button>
+          : <a className="pp-btn pp-btn-outline" href={docUrl}>{t('Download the document')}</a>}
       </section>
 
       {result ? (
@@ -90,19 +90,19 @@ export default function TrainingModulePage() {
             <>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: '#065F46' }}>You passed with {result.score}%.</h2>
               <p style={{ fontSize: 14, margin: '6px 0 12px' }}>The pass mark is {result.pass_score}%. Your reference is <strong>{result.reference}</strong>.</p>
-              <a className="pp-btn pp-btn-primary" href={certificateUrl(result.reference)}>Download your certificate</a>
+              <a className="pp-btn pp-btn-primary" href={certificateUrl(result.reference)}>{t('Download your certificate')}</a>
             </>
           ) : (
             <>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: '#92400E' }}>You scored {result.score}%. The pass mark is {result.pass_score}%.</h2>
-              <p style={{ fontSize: 14, margin: '6px 0 12px' }}>Read the document again, then try the questions once more.</p>
-              <button type="button" className="pp-btn pp-btn-primary" onClick={retake}>Try again</button>
+              <p style={{ fontSize: 14, margin: '6px 0 12px' }}>{t('Read the document again, then try the questions once more.')}</p>
+              <button type="button" className="pp-btn pp-btn-primary" onClick={retake}>{t('Try again')}</button>
             </>
           )}
         </section>
       ) : (
         <form onSubmit={submit} style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, padding: 18, marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>2. Answer the questions</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{t('2. Answer the questions')}</h2>
           {questions.map((q, i) => (
             <fieldset key={q.id} style={{ border: 'none', padding: 0, margin: '0 0 18px' }}>
               <legend style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{i + 1}. {q.question}</legend>
@@ -118,16 +118,16 @@ export default function TrainingModulePage() {
           <button type="submit" className="pp-btn pp-btn-primary" disabled={!allAnswered || submitting}>
             {submitting ? 'Submitting…' : 'Submit answers'}
           </button>
-          {!allAnswered && <span style={{ fontSize: 12, color: '#4B5563', marginLeft: 10 }}>Answer every question to submit.</span>}
+          {!allAnswered && <span style={{ fontSize: 12, color: '#4B5563', marginLeft: 10 }}>{t('Answer every question to submit.')}</span>}
         </form>
       )}
 
       {attempts.length > 0 && (
         <section style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, padding: 18 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Your attempts</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{t('Your attempts')}</h2>
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead><tr style={{ textAlign: 'left', borderBottom: '1px solid #E5E7EB' }}>
-              <th style={{ padding: 6 }}>When</th><th style={{ padding: 6 }}>Version</th><th style={{ padding: 6 }}>Score</th><th style={{ padding: 6 }}>Result</th><th style={{ padding: 6 }}></th>
+              <th style={{ padding: 6 }}>{t('When')}</th><th style={{ padding: 6 }}>{t('Version')}</th><th style={{ padding: 6 }}>{t('Score')}</th><th style={{ padding: 6 }}>{t('Result')}</th><th style={{ padding: 6 }}></th>
             </tr></thead>
             <tbody>
               {attempts.map(a => (
@@ -136,7 +136,7 @@ export default function TrainingModulePage() {
                   <td style={{ padding: 6 }}>{a.module_version}</td>
                   <td style={{ padding: 6 }}>{a.score}%</td>
                   <td style={{ padding: 6 }}>{a.passed ? 'Passed' : 'Not passed'}</td>
-                  <td style={{ padding: 6 }}>{a.passed ? <a href={certificateUrl(a.reference)}>Certificate</a> : null}</td>
+                  <td style={{ padding: 6 }}>{a.passed ? <a href={certificateUrl(a.reference)}>{t('Certificate')}</a> : null}</td>
                 </tr>
               ))}
             </tbody>

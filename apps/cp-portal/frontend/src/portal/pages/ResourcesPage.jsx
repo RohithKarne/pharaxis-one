@@ -5,13 +5,13 @@ import usePageTitle from '../hooks/usePageTitle'
 
 // LOW-15: resource_type icon map (extended)
 export default function ResourcesPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const [resources, setResources] = useState([])
   const [loading, setLoading]     = useState(true)
   const [filter, setFilter]       = useState('')
   const [search, setSearch]       = useState('')
 
-  usePageTitle('Resources')
+  usePageTitle(t('Resources'))
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/resources`)
@@ -38,20 +38,20 @@ export default function ResourcesPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Resources</h1>
-        <p>Access approved publications, clinical data, and educational materials.</p>
+        <h1>{t('Resources')}</h1>
+        <p>{t('Access approved publications, clinical data, and educational materials.')}</p>
       </div>
 
       <div className="pp-filter-bar">
-        <input className="pp-search-input" placeholder="Search resources…" value={search} onChange={e => setSearch(e.target.value)} />
-        <select aria-label="Resource type" value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="">All Types</option>
+        <input className="pp-search-input" placeholder={t('Search resources…')} value={search} onChange={e => setSearch(e.target.value)} />
+        <select aria-label={t('Resource type')} value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="">{t('All Types')}</option>
           {types.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
         </select>
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><p>No resources found.</p></div>
+        <div className="pp-empty-state"><p>{t('No resources found.')}</p></div>
       ) : (
         groupKeys.map(cat => (
           <div key={cat} className="pp-resource-group">
@@ -66,7 +66,7 @@ export default function ResourcesPage() {
                   </div>
                   {(r.url || r.file_path) && (
                     <a href={r.url || r.file_path} target="_blank" rel="noopener noreferrer" className="pp-resource-link">
-                      View
+                      {t('View')}
                     </a>
                   )}
                 </div>

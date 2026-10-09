@@ -8,7 +8,7 @@ import { statusLabel } from '../utils/submissionStatus'
 
 
 export default function MyActivityPage() {
-  const { clientCode, user, portalHeaders } = usePortal()
+  const { clientCode, user, portalHeaders, t } = usePortal()
   const navigate = useNavigate()
   const base = `/portal/${clientCode}`
   const [stats, setStats]     = useState(null)
@@ -16,7 +16,7 @@ export default function MyActivityPage() {
   const [letters, setLetters] = useState(null) // CPPM-145
   const [loading, setLoading] = useState(true)
 
-  usePageTitle('My Activity')
+  usePageTitle(t('My Activity'))
 
   useEffect(() => {
     if (!user) { navigate(`${base}/login`); return }
@@ -29,7 +29,7 @@ export default function MyActivityPage() {
 
   const fmtDate = (str) => formatDateTime(str)
 
-  if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">Loading…</div></div>
+  if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">{t('Loading…')}</div></div>
 
   const stat = [
     { icon: 'inbox', label: 'Submissions', value: stats?.submissions?.total ?? 0, to: `${base}/my-submissions` },
@@ -40,8 +40,8 @@ export default function MyActivityPage() {
   return (
     <div className="pp-container pp-page-content" style={{ maxWidth: 820 }}>
       <div className="pp-page-header">
-        <h1>My Activity</h1>
-        <p>Your submissions, saved items, safety letters, and the topics you follow.</p>
+        <h1>{t('My Activity')}</h1>
+        <p>{t('Your submissions, saved items, safety letters, and the topics you follow.')}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 26 }}>
@@ -58,7 +58,7 @@ export default function MyActivityPage() {
 
       {stats?.submissions?.by_status?.length > 0 && (
         <div style={{ marginBottom: 26 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Submissions by status</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{t('Submissions by status')}</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {/* CPPM-91: the same plain words as My Submissions; the four internal
                 states all count as "In progress", so they are added together. */}
@@ -78,9 +78,9 @@ export default function MyActivityPage() {
       {/* CPPM-145: the doctor's own record of the safety letters they confirmed. */}
       {letters && (
         <div style={{ marginBottom: 26 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Safety letters</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{t('Safety letters')}</h2>
           {letters.waiting.length === 0 && letters.confirmed.length === 0 ? (
-            <p style={{ color: 'var(--pp-text-muted)', fontSize: 14 }}>No safety letter has asked you to confirm you have read it.</p>
+            <p style={{ color: 'var(--pp-text-muted)', fontSize: 14 }}>{t('No safety letter has asked you to confirm you have read it.')}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {letters.waiting.map(l => (
@@ -88,7 +88,7 @@ export default function MyActivityPage() {
                   style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: '12px 16px', textDecoration: 'none', color: 'inherit' }}>
                   <Icon name="shield" size={18} />
                   <span style={{ fontWeight: 600, flex: 1 }}>{l.title}</span>
-                  <span style={{ fontSize: 13, color: '#92400E', fontWeight: 600 }}>Waiting — read and confirm</span>
+                  <span style={{ fontSize: 13, color: '#92400E', fontWeight: 600 }}>{t('Waiting — read and confirm')}</span>
                 </Link>
               ))}
               {letters.confirmed.map(l => (
@@ -105,11 +105,11 @@ export default function MyActivityPage() {
       )}
 
       <div>
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Topics you follow</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{t('Topics you follow')}</h2>
         {follows.length === 0 ? (
           <p style={{ color: 'var(--pp-text-muted)', fontSize: 14 }}>
             You are not following any topics. Follow a therapeutic area to see its updates on your home page.{' '}
-            <Link to={`${base}/therapeutic-areas`} style={{ color: 'var(--pp-primary)' }}>Browse topics</Link>
+            <Link to={`${base}/therapeutic-areas`} style={{ color: 'var(--pp-primary)' }}>{t('Browse topics')}</Link>
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

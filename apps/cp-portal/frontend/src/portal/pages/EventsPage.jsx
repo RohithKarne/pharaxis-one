@@ -7,12 +7,12 @@ import usePageTitle from '../hooks/usePageTitle'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function EventsPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const [events, setEvents]   = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState('upcoming')
 
-  usePageTitle('Events')
+  usePageTitle(t('Events'))
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/events`)
@@ -46,13 +46,13 @@ export default function EventsPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Events & Webinars</h1>
-        <p>Stay up to date with upcoming medical education events and symposia.</p>
+        <h1>{t('Events & Webinars')}</h1>
+        <p>{t('Stay up to date with upcoming medical education events and symposia.')}</p>
       </div>
 
       <div className="pp-tab-bar">
-        <button className={`pp-tab ${filter === 'upcoming' ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'upcoming'} onClick={() => setFilter('upcoming')}>Upcoming</button>
-        <button className={`pp-tab ${filter === 'past'     ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'past'}     onClick={() => setFilter('past')}>Past Events</button>
+        <button className={`pp-tab ${filter === 'upcoming' ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'upcoming'} onClick={() => setFilter('upcoming')}>{t('Upcoming')}</button>
+        <button className={`pp-tab ${filter === 'past'     ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'past'}     onClick={() => setFilter('past')}>{t('Past Events')}</button>
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
@@ -63,7 +63,7 @@ export default function EventsPage() {
             const isPast = new Date(getEventDate(ev)) < now
             return (
             <div key={ev.id} className={`pp-event-card ${isPast ? 'pp-event-past' : ''}`}>
-              {isPast && <span className="pp-badge pp-badge-past">Past Event</span>}
+              {isPast && <span className="pp-badge pp-badge-past">{t('Past Event')}</span>}
               <div className="pp-event-date-badge">
                 <div className="pp-event-month">{formatDate(ev.start_date).split(' ')[0]}</div>
                 <div className="pp-event-day">{ev.start_date ? new Date(ev.start_date).getDate() : '—'}</div>
@@ -75,13 +75,13 @@ export default function EventsPage() {
                 <div className="pp-event-meta">
                   {(ev.city || ev.country) && <span>{[ev.venue, ev.city, ev.country].filter(Boolean).join(', ')}</span>}
                   {ev.start_date && <span>{formatDate(ev.start_date)}</span>}
-                  {ev.event_type === 'webinar' && <span className="pp-virtual-tag">Virtual</span>}
+                  {ev.event_type === 'webinar' && <span className="pp-virtual-tag">{t('Virtual')}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Link to={`/portal/${clientCode}/events/${ev.id}`} className="pp-btn pp-btn-sm pp-btn-outline">Details</Link>
+                  <Link to={`/portal/${clientCode}/events/${ev.id}`} className="pp-btn pp-btn-sm pp-btn-outline">{t('Details')}</Link>
                   {!isPast && safeWebUrl(ev.registration_url) && (
                     <a href={safeWebUrl(ev.registration_url)} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-sm pp-btn-primary">
-                      Register
+                      {t('Register')}
                     </a>
                   )}
                 </div>

@@ -6,12 +6,12 @@ import usePageTitle from '../hooks/usePageTitle'
 const MESSAGE_MAX = 2000
 
 export default function ContactPage() {
-  const { portalConfig, clientCode, isFeatureEnabled, user } = usePortal()
+  const { portalConfig, clientCode, isFeatureEnabled, user, t } = usePortal()
   const client   = portalConfig?.client   || {}
   const branding = portalConfig?.branding || {}
   const base     = `/portal/${clientCode}`
 
-  usePageTitle('Contact Us')
+  usePageTitle(t('Contact Us'))
 
   const [name,    setName]    = useState('')
   const [email,   setEmail]   = useState('')
@@ -93,50 +93,50 @@ export default function ContactPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Contact Us</h1>
-        <p>Get in touch with our medical affairs and support teams.</p>
+        <h1>{t('Contact Us')}</h1>
+        <p>{t('Get in touch with our medical affairs and support teams.')}</p>
       </div>
 
       <div className="pp-contact-layout">
         <div className="pp-contact-card">
-          <h3>Medical Information</h3>
-          <p>For medical information requests and clinical inquiries, use our submission portal.</p>
-          <Link to={`${base}/submit`} className="pp-contact-action">Submit a medical inquiry</Link>
+          <h3>{t('Medical Information')}</h3>
+          <p>{t('For medical information requests and clinical inquiries, use our submission portal.')}</p>
+          <Link to={`${base}/submit`} className="pp-contact-action">{t('Submit a medical inquiry')}</Link>
           {/* Contact details come from the client record; render only if present. */}
           {client.contact_email && (
             <a href={`mailto:${client.contact_email}`} className="pp-contact-link">{client.contact_email}</a>
           )}
         </div>
         <div className="pp-contact-card">
-          <h3>Phone Support</h3>
-          <p>Our medical affairs team is available Monday to Friday during business hours.</p>
+          <h3>{t('Phone Support')}</h3>
+          <p>{t('Our medical affairs team is available Monday to Friday during business hours.')}</p>
           {client.contact_phone
             ? <a href={`tel:${client.contact_phone.replace(/\s+/g, '')}`} className="pp-contact-link">{client.contact_phone}</a>
-            : <p className="pp-contact-muted">Prefer writing? Use the form below and we will reply by email.</p>}
+            : <p className="pp-contact-muted">{t('Prefer writing? Use the form below and we will reply by email.')}</p>}
         </div>
         <div className="pp-contact-card pp-contact-card-alert">
-          <h3>Adverse Events</h3>
-          <p>To report a suspected adverse event or side effect, please use our secure reporting form.</p>
-          <Link to={`${base}/submit?type=adverse_event`} className="pp-contact-action pp-contact-action-alert">Report a side effect</Link>
+          <h3>{t('Adverse Events')}</h3>
+          <p>{t('To report a suspected adverse event or side effect, please use our secure reporting form.')}</p>
+          <Link to={`${base}/submit?type=adverse_event`} className="pp-contact-action pp-contact-action-alert">{t('Report a side effect')}</Link>
         </div>
       </div>
 
       <div className="pp-contact-form-card">
         <div className="pp-contact-form-head">
-          <h2>Send Us a Message</h2>
-          <p>General questions about this portal, events or your account. We usually reply within 2 working days.</p>
+          <h2>{t('Send Us a Message')}</h2>
+          <p>{t('General questions about this portal, events or your account. We usually reply within 2 working days.')}</p>
         </div>
 
         {!contactEnabled ? (
-          <div className="pp-contact-note">Contact form submissions are not currently available for this portal.</div>
+          <div className="pp-contact-note">{t('Contact form submissions are not currently available for this portal.')}</div>
         ) : status === 'success' ? (
           <div className="pp-contact-success" role="status">
-            <h3>Message sent</h3>
+            <h3>{t('Message sent')}</h3>
             <p>
               Thank you{name ? `, ${name.split(' ')[0]}` : ''}. We have received your message
-              {reference && <> — your reference is <strong>{reference}</strong></>}. A confirmation has been sent to {email}.
+              {reference && <> {t('— your reference is')} <strong>{reference}</strong></>}. A confirmation has been sent to {email}.
             </p>
-            <button type="button" className="pp-btn pp-btn-outline" onClick={startAnother}>Send another message</button>
+            <button type="button" className="pp-btn pp-btn-outline" onClick={startAnother}>{t('Send another message')}</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate>
@@ -145,51 +145,51 @@ export default function ContactPage() {
             )}
             <div className="pp-field-row">
               <div className="pp-field">
-                <label htmlFor="contact-name">Full name <span className="pp-required" aria-hidden="true">*</span></label>
+                <label htmlFor="contact-name">{t('Full name')} <span className="pp-required" aria-hidden="true">*</span></label>
                 <input id="contact-name" type="text" autoComplete="name" placeholder="e.g. Dr. Ananya Iyer"
                   value={name} onChange={e => setName(e.target.value)} required disabled={busy} />
               </div>
               <div className="pp-field">
-                <label htmlFor="contact-email">Email <span className="pp-required" aria-hidden="true">*</span></label>
-                <input id="contact-email" type="email" autoComplete="email" placeholder="you@example.com"
+                <label htmlFor="contact-email">{t('Email')} <span className="pp-required" aria-hidden="true">*</span></label>
+                <input id="contact-email" type="email" autoComplete="email" placeholder={t('you@example.com')}
                   value={email} onChange={e => setEmail(e.target.value)} required disabled={busy} />
               </div>
             </div>
             <div className="pp-field">
-              <label htmlFor="contact-subject">Subject <span className="pp-required" aria-hidden="true">*</span></label>
-              <input id="contact-subject" type="text" placeholder="What is this about?"
+              <label htmlFor="contact-subject">{t('Subject')} <span className="pp-required" aria-hidden="true">*</span></label>
+              <input id="contact-subject" type="text" placeholder={t('What is this about?')}
                 value={subject} onChange={e => setSubject(e.target.value)} required disabled={busy} />
             </div>
             <div className="pp-field">
-              <label htmlFor="contact-message">Message <span className="pp-required" aria-hidden="true">*</span></label>
-              <textarea id="contact-message" rows={6} maxLength={MESSAGE_MAX} placeholder="How can we help?"
+              <label htmlFor="contact-message">{t('Message')} <span className="pp-required" aria-hidden="true">*</span></label>
+              <textarea id="contact-message" rows={6} maxLength={MESSAGE_MAX} placeholder={t('How can we help?')}
                 value={message} onChange={e => setMessage(e.target.value)} required disabled={busy} />
               <span className="pp-contact-count">{message.length} / {MESSAGE_MAX}</span>
             </div>
             <fieldset className="pp-contact-ae">
               <legend>
-                Did anyone become unwell, or have an unexpected medical problem, after using the product? <span className="pp-required" aria-hidden="true">*</span>
+                {t('Did anyone become unwell, or have an unexpected medical problem, after using the product?')} <span className="pp-required" aria-hidden="true">*</span>
               </legend>
-              <p className="pp-contact-ae-help">This includes anything you did not expect — however minor, and whether or not you think the product caused it.</p>
+              <p className="pp-contact-ae-help">{t('This includes anything you did not expect — however minor, and whether or not you think the product caused it.')}</p>
               <div className="pp-contact-ae-options">
                 {['No', 'Yes'].map(v => (
                   <label key={v} className={`pp-contact-ae-option${aeAnswer === v ? ' on' : ''}`}>
                     <input type="radio" name="ae_screen_answer" value={v} checked={aeAnswer === v}
                       onChange={() => setAeAnswer(v)} disabled={busy} />
-                    {v}
+                    {t(v)}
                   </label>
                 ))}
               </div>
               {aeAnswer === 'Yes' && (
                 <div className="pp-field" style={{ marginTop: 12 }}>
-                  <label htmlFor="contact-ae-detail">Please tell us what happened</label>
-                  <textarea id="contact-ae-detail" rows={3} placeholder="In your own words. Anything you can tell us helps."
+                  <label htmlFor="contact-ae-detail">{t('Please tell us what happened')}</label>
+                  <textarea id="contact-ae-detail" rows={3} placeholder={t('In your own words. Anything you can tell us helps.')}
                     value={aeDetail} onChange={e => setAeDetail(e.target.value)} disabled={busy} />
                 </div>
               )}
             </fieldset>
             <div className="pp-contact-form-foot">
-              <p>Reporting a side effect? Please use the <Link to={`${base}/submit?type=adverse_event`}>adverse event form</Link> so it reaches our safety team.</p>
+              <p>{t('Reporting a side effect? Please use the')} <Link to={`${base}/submit?type=adverse_event`}>{t('adverse event form')}</Link> {t('so it reaches our safety team.')}</p>
               <button type="submit" className="pp-btn pp-btn-primary pp-btn-lg" disabled={busy}>
                 {busy ? 'Sending…' : 'Send Message'}
               </button>

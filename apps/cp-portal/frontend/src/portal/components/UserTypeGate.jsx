@@ -3,7 +3,7 @@ import { usePortal } from '../context/PortalContext'
 import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
 
 export default function UserTypeGate() {
-  const { portalConfig, clientCode, login } = usePortal()
+  const { portalConfig, clientCode, login, t } = usePortal()
   const gate = portalConfig?.gate
   const [selected, setSelected]     = useState(null)
   const [accepted, setAccepted]     = useState(false)
@@ -51,7 +51,7 @@ export default function UserTypeGate() {
           )}
         </div>
 
-        <div className="pp-gate-type-grid" role="radiogroup" aria-label="Select your user type">
+        <div className="pp-gate-type-grid" role="radiogroup" aria-label={t('Select your user type')}>
           {gate.userTypes.map(t => (
             <button
               key={t.type_key}

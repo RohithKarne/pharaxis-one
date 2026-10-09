@@ -12,7 +12,7 @@ const NOTIF_TYPES = [
 ]
 
 export default function PreferencesPage() {
-  const { clientCode, portalHeaders } = usePortal()
+  const { clientCode, portalHeaders, t } = usePortal()
   const toast = useToast()
   const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true, digest: true })
   const [loading, setLoading] = useState(true)
@@ -20,7 +20,7 @@ export default function PreferencesPage() {
   const [saved, setSaved]     = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  usePageTitle('Preferences')
+  usePageTitle(t('Preferences'))
 
   useEffect(() => {
     if (!clientCode) return
@@ -50,13 +50,13 @@ export default function PreferencesPage() {
     }
   }
 
-  if (loading) return <div className="pp-loading">Loading preferences…</div>
+  if (loading) return <div className="pp-loading">{t('Loading preferences…')}</div>
 
   return (
     <div className="pp-container" style={{ maxWidth: 600, paddingTop: 40, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>Notification Preferences</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>{t('Notification Preferences')}</h1>
       <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
-        Choose which types of notifications you receive when new content is published.
+        {t('Choose which types of notifications you receive when new content is published.')}
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -65,7 +65,7 @@ export default function PreferencesPage() {
             key={key}
             role="switch"
             aria-checked={!!prefs[key]}
-            aria-label={label}
+            aria-label={t(label)}
             tabIndex={0}
             onClick={() => setPrefs(p => ({ ...p, [key]: !p[key] }))}
             onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setPrefs(p => ({ ...p, [key]: !p[key] })) } }}
@@ -77,8 +77,8 @@ export default function PreferencesPage() {
             }}
           >
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E' }}>{label}</div>
-              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 2 }}>{desc}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E' }}>{t(label)}</div>
+              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 2 }}>{t(desc)}</div>
             </div>
             <div style={{
               width: 44, height: 24, borderRadius: 12, position: 'relative',
@@ -104,7 +104,7 @@ export default function PreferencesPage() {
           {saving ? 'Saving…' : 'Save Preferences'}
         </button>
         {saved && (
-          <span style={{ color: '#166534', fontSize: 13, fontWeight: 500 }}>Saved</span>
+          <span style={{ color: '#166534', fontSize: 13, fontWeight: 500 }}>{t('Saved')}</span>
         )}
         {saveError && (
           <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{saveError}</span>

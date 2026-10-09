@@ -14,7 +14,7 @@ const TYPE_LABELS = {
 }
 
 export default function MySubmissionsPage() {
-  const { clientCode, user, portalHeaders } = usePortal()
+  const { clientCode, user, portalHeaders, t } = usePortal()
   const navigate     = useNavigate()
   const [subs, setSubs]   = useState([])
   const [screening, setScreening] = useState([])
@@ -77,39 +77,39 @@ export default function MySubmissionsPage() {
     <div className="pp-container pp-page-content">
       <div className="pp-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1>My Submissions</h1>
-          <p>Track the status of your submitted requests.</p>
+          <h1>{t('My Submissions')}</h1>
+          <p>{t('Track the status of your submitted requests.')}</p>
         </div>
         {subs.length > 0 && (
           <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={exportSummary} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-            <Icon name="file" size={15} /> Download summary
+            <Icon name="file" size={15} /> {t('Download summary')}
           </button>
         )}
       </div>
 
       {loading ? <SkeletonCards count={4} /> : loadError ? (
         <div className="pp-empty-state pp-load-error" role="alert">
-          <p>We could not load your requests just now. Please try again.</p>
-          <button type="button" className="pp-btn pp-btn-primary" onClick={() => { setLoading(true); load() }}>Try again</button>
+          <p>{t('We could not load your requests just now. Please try again.')}</p>
+          <button type="button" className="pp-btn pp-btn-primary" onClick={() => { setLoading(true); load() }}>{t('Try again')}</button>
         </div>
       ) : subs.length === 0 ? (
         <div className="pp-empty-state">
           <span><Icon name="inbox" size={40} /></span>
-          <p>You haven't submitted any requests yet.</p>
-          <Link to={`/portal/${clientCode}/submit`} className="pp-btn pp-btn-primary">Submit a Request</Link>
+          <p>{t('You haven\'t submitted any requests yet.')}</p>
+          <Link to={`/portal/${clientCode}/submit`} className="pp-btn pp-btn-primary">{t('Submit a Request')}</Link>
         </div>
       ) : (
         <>
         <div className="pp-filter-bar" role="search" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <input className="pp-search-input" type="search" value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="Search by reference or words" aria-label="Search your submissions" style={{ flex: '1 1 220px' }} />
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label="Filter by type">
-            <option value="">All types</option>
-            {typesPresent.map(t => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
+            placeholder={t('Search by reference or words')} aria-label={t('Search your submissions')} style={{ flex: '1 1 220px' }} />
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label={t('Filter by type')}>
+            <option value="">{t('All types')}</option>
+            {typesPresent.map(k => <option key={k} value={k}>{t(TYPE_LABELS[k] || k)}</option>)}
           </select>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filter by status">
-            <option value="">All statuses</option>
-            {statusesPresent.map(l => <option key={l} value={l}>{l}</option>)}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label={t('Filter by status')}>
+            <option value="">{t('All statuses')}</option>
+            {statusesPresent.map(l => <option key={l} value={l}>{t(l)}</option>)}
           </select>
         </div>
         {filtering && (
@@ -119,8 +119,8 @@ export default function MySubmissionsPage() {
         )}
         {shown.length === 0 ? (
           <div className="pp-empty-state">
-            <p>No submissions match your search.</p>
-            <button type="button" className="pp-btn pp-btn-outline" onClick={() => { setQuery(''); setTypeFilter(''); setStatusFilter('') }}>Clear search and filters</button>
+            <p>{t('No submissions match your search.')}</p>
+            <button type="button" className="pp-btn pp-btn-outline" onClick={() => { setQuery(''); setTypeFilter(''); setStatusFilter('') }}>{t('Clear search and filters')}</button>
           </div>
         ) : (
         <div className="pp-submissions-list">
@@ -132,9 +132,9 @@ export default function MySubmissionsPage() {
                 <div className="pp-submission-header">
                   <div>
                     <div className="pp-submission-ref" style={{ fontWeight: 700, fontSize: '1.1rem' }}>CP-{String(s.id).padStart(6, '0')}</div>
-                    <div className="pp-submission-type" style={{ color: '#475569' }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</div>
+                    <div className="pp-submission-type" style={{ color: '#475569' }}>{t(TYPE_LABELS[s.submission_type] || s.submission_type)}</div>
                   </div>
-                  <span className={`pp-status-badge ${status.cls}`}>{status.label}</span>
+                  <span className={`pp-status-badge ${status.cls}`}>{t(status.label)}</span>
                 </div>
                 <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#475569', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span>Submitted {formatDate(s.submitted_at)}</span>
@@ -147,7 +147,7 @@ export default function MySubmissionsPage() {
                   <ol className="pp-timeline">
                     {s.timeline.map((step, idx) => (
                       <li key={idx} className="pp-timeline-step">
-                        <span className="pp-timeline-label">{step.label}</span>
+                        <span className="pp-timeline-label">{t(step.label)}</span>
                         <span className="pp-timeline-date">{formatDayOnly(step.at)}</span>
                       </li>
                     ))}
@@ -158,11 +158,11 @@ export default function MySubmissionsPage() {
                 {s.answer && (
                   <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#166534', marginBottom: 6 }}>
-                      Our answer{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
+                      {t('Our answer')}{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
                     </div>
                     <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
                     <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
-                      A copy was emailed to you. If you need anything further, reply below.
+                      {t('A copy was emailed to you. If you need anything further, reply below.')}
                     </div>
                   </div>
                 )}
@@ -170,7 +170,7 @@ export default function MySubmissionsPage() {
                 {/* Bridge row 9: what the person added after sending, and a way to add more. */}
                 {s.followups?.length > 0 && (
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>Information you added</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>{t('Information you added')}</div>
                     {s.followups.map((f, i) => (
                       <div key={i} style={{ padding: '10px 12px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 6 }}>
                         <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>{formatDate(f.at)}</div>
@@ -194,10 +194,10 @@ export default function MySubmissionsPage() {
                 {/* Expandable Activity Details */}
                 <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
-                    View Request Details & Activity History
+                    {t('View Request Details & Activity History')}
                   </summary>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>What you wrote:</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>{t('What you wrote:')}</div>
                     {/* CPPM-86: the person's own words, from the server. */}
                     <p style={{ margin: 0, fontSize: '13px', color: '#475569', whiteSpace: 'pre-wrap' }}>
                       {s.request_text || 'No written details were included with this request.'}
@@ -223,6 +223,7 @@ export default function MySubmissionsPage() {
 // a file — instead of sending a second, unconnected request. Asks the same question as
 // the form and a reply (PD-2): did anyone become unwell; a Yes goes to the safety team.
 function AddInformation({ submission: s, screening, clientCode, onAdded }) {
+  const { t } = usePortal()
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [files, setFiles] = useState([])
@@ -265,18 +266,18 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
     return (
       <div style={{ marginTop: 12 }}>
         {done && <div role="status" style={{ fontSize: '0.85rem', color: '#166534', marginBottom: 8 }}>{done}</div>}
-        <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => { setOpen(true); setDone('') }}>Add information</button>
+        <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => { setOpen(true); setDone('') }}>{t('Add information')}</button>
       </div>
     )
   }
   return (
     <form onSubmit={send} style={{ marginTop: 12, padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
       <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }} htmlFor={`fu-${s.id}`}>
-        What would you like to add?
+        {t('What would you like to add?')}
       </label>
       <textarea id={`fu-${s.id}`} value={text} onChange={e => setText(e.target.value)} rows={4} maxLength={5000} disabled={busy}
         style={{ width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', font: 'inherit' }}
-        placeholder="For example: a new symptom, a date you remembered, a batch number." />
+        placeholder={t('For example: a new symptom, a date you remembered, a batch number.')} />
       {needsScreen && (
         <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
           <legend style={{ fontWeight: 600, fontSize: '0.85rem' }}>{ask.label} *</legend>
@@ -303,7 +304,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
       {error && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: 8 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" className="pp-btn pp-btn-primary pp-btn-sm" disabled={busy || text.trim().length < 2}>{busy ? 'Sending…' : 'Send'}</button>
-        <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>Cancel</button>
+        <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>{t('Cancel')}</button>
       </div>
     </form>
   )
@@ -314,6 +315,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
 // same question as the original form — "did anyone become unwell" — and it must be
 // answered; a Yes goes to the safety team.
 function Conversation({ submission: s, screening, clientCode, portalHeaders, formatDate, onSent }) {
+  const { t } = usePortal()
   const [open, setOpen]       = useState(false)
   const [body, setBody]       = useState('')
   const [unwell, setUnwell]   = useState('')
@@ -361,13 +363,13 @@ function Conversation({ submission: s, screening, clientCode, portalHeaders, for
 
       {!open ? (
         <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" style={{ marginTop: 10 }} onClick={() => { setOpen(true); setDone('') }}>
-          Reply to this answer
+          {t('Reply to this answer')}
         </button>
       ) : (
         <form onSubmit={send} style={{ marginTop: 10, padding: 14, border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff' }}>
-          <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', marginBottom: 6 }} htmlFor={`reply-${s.id}`}>Your reply</label>
+          <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', marginBottom: 6 }} htmlFor={`reply-${s.id}`}>{t('Your reply')}</label>
           <textarea id={`reply-${s.id}`} rows={4} value={body} maxLength={5000} disabled={busy} onChange={e => setBody(e.target.value)}
-            placeholder="Ask a follow-up question or tell us more."
+            placeholder={t('Ask a follow-up question or tell us more.')}
             style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontFamily: 'inherit', fontSize: '0.9rem' }} />
           {needsScreen && (
             <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
@@ -391,7 +393,7 @@ function Conversation({ submission: s, screening, clientCode, portalHeaders, for
           {error && <div role="alert" style={{ marginTop: 10, color: '#B91C1C', fontSize: '0.85rem', fontWeight: 600 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button type="submit" className="pp-btn pp-btn-primary pp-btn-sm" disabled={busy}>{busy ? 'Sending…' : 'Send reply'}</button>
-            <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>Cancel</button>
+            <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" disabled={busy} onClick={() => { setOpen(false); setError('') }}>{t('Cancel')}</button>
           </div>
         </form>
       )}

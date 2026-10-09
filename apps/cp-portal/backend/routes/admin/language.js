@@ -105,6 +105,55 @@ router.get('/:clientId/coverage', authenticateAdmin, requireClientAccess, async 
   }
 });
 
+// GET /api/admin/language/:clientId/translation/:type/:id — one item's original text and its
+// stored translations, for the team to type a translation (outside machine translation is off).
+router.get('/:clientId/translation/:type/:id', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const c = TRANSLATABLE_CONTENT.find(x => x.type === req.params.type);
+    if (!c) return res.status(400).json({ error: 'Unknown content type.' });
+    const cols = [...new Set(['id', c.labelField, ...c.fields])].map(f => `\`${f}\``).join(', ');
+    const [[row]] = await pool.execute(`SELECT ${cols}, translations_json FROM \`${c.table}\` WHERE id = ? AND client_id = ?`, [req.params.id, req.params.clientId]);
+    if (!row) return res.status(404).json({ error: 'Item not found.' });
+    let translations = {};
+    try { translations = JSON.parse(row.translations_json || '{}') || {}; } catch {}
+    const original = {}; for (const f of c.fields) original[f] = row[f];
+    res.json({ type: c.type, id: row.id, label: String(row[c.labelField] || '').slice(0, 120), fields: c.fields, original, translations });
+  } catch (err) {
+    log.error('admin.language.error', { err, route: 'GET /:clientId/translation', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/admin/language/:clientId/translation/:type/:id — { lang, fields: { title: '…', … } }
+// Stores the team's own translation for one language; an empty field removes that field's translation.
+router.put('/:clientId/translation/:type/:id', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const c = TRANSLATABLE_CONTENT.find(x => x.type === req.params.type);
+    if (!c) return res.status(400).json({ error: 'Unknown content type.' });
+    const lang = String(req.body.lang || '');
+    if (!SUPPORTED.includes(lang) || lang === 'en') return res.status(400).json({ error: 'lang must be one of the supported languages other than English.' });
+    const given = req.body.fields && typeof req.body.fields === 'object' ? req.body.fields : {};
+    const [[row]] = await pool.execute(`SELECT translations_json FROM \`${c.table}\` WHERE id = ? AND client_id = ?`, [req.params.id, req.params.clientId]);
+    if (!row) return res.status(404).json({ error: 'Item not found.' });
+    let all = {};
+    try { all = JSON.parse(row.translations_json || '{}') || {}; } catch {}
+    const entry = { ...(all[lang] || {}) };
+    for (const f of c.fields) {
+      if (!(f in given)) continue;
+      const v = String(given[f] || '').trim();
+      if (v) entry[f] = v; else delete entry[f];
+    }
+    if (Object.keys(entry).length) all[lang] = entry; else delete all[lang];
+    await pool.execute(`UPDATE \`${c.table}\` SET translations_json = ? WHERE id = ?`, [JSON.stringify(all), req.params.id]);
+    await audit(req.admin, req.params.clientId, 'TRANSLATE', c.type, Number(req.params.id), { lang, fields: Object.keys(given) });
+    const complete = c.fields.every(f => entry[f]);
+    res.json({ ok: true, lang, complete, message: complete ? `Saved. Readers in ${lang.toUpperCase()} now see this translation.` : `Saved. Until every field has a translation, readers in ${lang.toUpperCase()} see the original.` });
+  } catch (err) {
+    log.error('admin.language.error', { err, route: 'PUT /:clientId/translation', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/admin/language/:clientId/retranslate
 // Re-translates all existing content for this client into all enabled languages.
 // Fire-and-forget: responds immediately, translation runs in background.

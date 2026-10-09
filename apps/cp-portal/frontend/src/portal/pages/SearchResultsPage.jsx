@@ -4,7 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 export default function SearchResultsPage() {
-  const { clientCode, user } = usePortal()
+  const { clientCode, user, t } = usePortal()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const q = params.get('q') || ''
@@ -12,7 +12,7 @@ export default function SearchResultsPage() {
   const [loading, setLoading] = useState(false)
   const [typeFilter, setTypeFilter] = useState('all')
 
-  usePageTitle('Search')
+  usePageTitle(t('Search'))
 
   useEffect(() => {
     // CPPM-25: search is for signed-in users only, so results can respect audience.
@@ -38,23 +38,23 @@ export default function SearchResultsPage() {
 
   return (
     <div className="pp-container" style={{ maxWidth: 760, paddingTop: 32, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Search</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{t('Search')}</h1>
       <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
-        {q ? <>Results for “<strong>{q}</strong>”</> : 'Enter a search term.'}
+        {q ? <>{t('Results for “')}<strong>{q}</strong>”</> : 'Enter a search term.'}
       </p>
 
       {!user ? (
         <div className="pp-empty-state" style={{ textAlign: 'left' }}>
-          <p style={{ marginBottom: 12 }}>Sign in to search medical information, documents and news.</p>
-          <Link to={`${base}/login`} className="pp-btn pp-btn-primary">Sign In</Link>
+          <p style={{ marginBottom: 12 }}>{t('Sign in to search medical information, documents and news.')}</p>
+          <Link to={`${base}/login`} className="pp-btn pp-btn-primary">{t('Sign In')}</Link>
         </div>
-      ) : loading ? <div className="pp-loading">Searching…</div> : (
+      ) : loading ? <div className="pp-loading">{t('Searching…')}</div> : (
         results.length === 0 ? (
           <div style={{ color: '#4B5563', fontSize: 14 }}>{q.trim().length >= 2 ? 'No results found.' : 'Type at least 2 characters.'}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {facets.length > 1 && (
-              <div className="pp-sev-filter" role="group" aria-label="Filter results by type">
+              <div className="pp-sev-filter" role="group" aria-label={t('Filter results by type')}>
                 <button className={`pp-sev-chip${typeFilter === 'all' ? ' on' : ''}`} onClick={() => setTypeFilter('all')}>All ({results.length})</button>
                 {facets.map(f => (
                   <button key={f.type} className={`pp-sev-chip${typeFilter === f.type ? ' on' : ''}`} onClick={() => setTypeFilter(f.type)}>{f.label} ({f.count})</button>

@@ -4,6 +4,8 @@
  * Falls back to English if a key is missing in the selected language.
  */
 
+import { UI } from './translations.ui'
+
 const TRANSLATIONS = {
   en: {
     // Nav
@@ -241,7 +243,7 @@ export const SUPPORTED_LANGUAGES = [
 ]
 
 export function translate(lang, key) {
-  return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['en']?.[key] || key
+  return TRANSLATIONS[lang]?.[key] || UI[key]?.[lang] || TRANSLATIONS['en']?.[key] || key
 }
 
 export default TRANSLATIONS

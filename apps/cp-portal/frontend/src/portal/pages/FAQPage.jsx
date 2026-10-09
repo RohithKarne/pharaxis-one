@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 export default function FAQPortalPage() {
-  const { clientCode, language } = usePortal()
+  const { clientCode, language, t } = usePortal()
   const [faqs, setFaqs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId]   = useState(null)
@@ -27,18 +27,18 @@ export default function FAQPortalPage() {
     return acc
   }, {})
 
-  if (loading) return <div className="pp-loading">Loading…</div>
+  if (loading) return <div className="pp-loading">{t('Loading…')}</div>
 
   return (
     <div className="pp-page-container" style={{ maxWidth: 760, margin: '0 auto' }}>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>Frequently Asked Questions</h1>
-        <p style={{ color: '#4B5563', fontSize: 15 }}>Find answers to common questions below.</p>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>{t('Frequently Asked Questions')}</h1>
+        <p style={{ color: '#4B5563', fontSize: 15 }}>{t('Find answers to common questions below.')}</p>
       </div>
 
       {faqs.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#5F6B7A' }}>
-          <p>No FAQ items available yet.</p>
+          <p>{t('No FAQ items available yet.')}</p>
         </div>
       ) : (
         Object.entries(grouped).map(([cat, items]) => (

@@ -6,7 +6,7 @@ import Icon from '../../shared/components/Icon'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function PortalHomePage() {
-  const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders } = usePortal()
+  const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders, t } = usePortal()
   const navigate  = useNavigate()
   const branding  = portalConfig?.branding || {}
   const client    = portalConfig?.client   || {}
@@ -16,7 +16,7 @@ export default function PortalHomePage() {
   const [showSuggest, setShowSuggest] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
 
-  usePageTitle('Home')
+  usePageTitle(t('Home'))
 
   // CP-12: debounced typeahead suggestions for the hero search.
   useEffect(() => {
@@ -112,28 +112,28 @@ export default function PortalHomePage() {
     {
       key:   'medical_inquiry',
       icon:  'send',
-      title: 'Submit a Medical Inquiry',
-      desc:  'Ask a product question, report an event, or request medical information.',
+      title: t('Submit a Medical Inquiry'),
+      desc: t('Ask a product question, report an event, or request medical information.'),
       path:  'submit',
-      action: 'Start request',
+      action: t('Start request'),
       tone: 'primary',
     },
     {
       key:   'document_library',
       icon:  'file',
-      title: 'Find Approved Documents',
-      desc:  'Browse prescribing information, safety materials, and approved resources.',
+      title: t('Find Approved Documents'),
+      desc: t('Browse prescribing information, safety materials, and approved resources.'),
       path:  'documents',
-      action: 'Browse documents',
+      action: t('Browse documents'),
       tone: 'teal',
     },
     {
       key:   'find_msl',
       icon:  'users',
-      title: 'Contact an MSL',
-      desc:  'Connect with a Medical Science Liaison for your area.',
+      title: t('Contact an MSL'),
+      desc: t('Connect with a Medical Science Liaison for your area.'),
       path:  'find-msl',
-      action: 'Find an MSL',
+      action: t('Find an MSL'),
       tone: 'primary',
     },
   ].filter(c => isFeatureEnabled(c.key))
@@ -142,36 +142,36 @@ export default function PortalHomePage() {
     {
       key:   'therapeutic_areas',
       icon:  'beaker',
-      title: 'Therapeutic Areas',
-      desc:  'Information by disease area and treatment category.',
+      title: t('Therapeutic Areas'),
+      desc: t('Information by disease area and treatment category.'),
       path:  'therapeutic-areas',
     },
     {
       key:   'drug_info',
       icon:  'pill',
-      title: 'Drug Information',
-      desc:  'Review approved prescribing information and clinical summaries.',
+      title: t('Drug Information'),
+      desc: t('Review approved prescribing information and clinical summaries.'),
       path:  'drug-info',
     },
     {
       key:   'resources',
       icon:  'book',
-      title: 'Resources',
-      desc:  'Access publications, clinical data, and approved materials.',
+      title: t('Resources'),
+      desc: t('Access publications, clinical data, and approved materials.'),
       path:  'resources',
     },
   ].filter(c => isFeatureEnabled(c.key))
 
-  const quickSearches = [productTerm, 'Dosing', 'Clinical trials', 'Prescribing information', 'Safety'].filter(Boolean)
+  const quickSearches = [productTerm, t('Dosing'), t('Clinical trials'), t('Prescribing information'), t('Safety')].filter(Boolean)
   const quickDocs = latestDocs.length > 0
     ? latestDocs.slice(0, 2)
     : [
-        { id: 'prescribing-info', title: 'Prescribing Information' },
-        { id: 'medical-literature', title: 'Request Medical Literature' },
+        { id: 'prescribing-info', title: t('Prescribing Information') },
+        { id: 'medical-literature', title: t('Request Medical Literature') },
       ]
 
-  const heroTitle    = portalConfig?.welcome_title || 'Medical Information'
-  const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Ask a question about our products, report a side effect, or find approved documents.'
+  const heroTitle    = portalConfig?.welcome_title || t('Medical Information')
+  const heroSubtitle = portalConfig?.welcome_message || branding.tagline || t('Ask a question about our products, report a side effect, or find approved documents.')
 
   const formatEventDate = (str) => (str ? formatLongDate(str) : '')
 
@@ -201,15 +201,15 @@ export default function PortalHomePage() {
                   onFocus={() => setShowSuggest(true)}
                   onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
                   onKeyDown={onSearchKeyDown}
-                  placeholder="Search medical information, documents, events..."
-                  aria-label="Search the portal"
+                  placeholder={t('Search medical information, documents, events...')}
+                  aria-label={t('Search the portal')}
                   role="combobox"
                   aria-expanded={showSuggest && suggestions.length > 0}
                   aria-controls="pp-suggest-list"
                   aria-activedescendant={activeIdx >= 0 ? `pp-suggest-${activeIdx}` : undefined}
                   aria-autocomplete="list"
                 />
-                <button type="submit" className="pp-hero-search-btn">Search</button>
+                <button type="submit" className="pp-hero-search-btn">{t('Search')}</button>
               </form>
               {showSuggest && suggestions.length > 0 && (
                 <ul className="pp-suggest-dropdown" role="listbox" id="pp-suggest-list">
@@ -226,32 +226,32 @@ export default function PortalHomePage() {
                 </ul>
               )}
             </div>
-            <div className="pp-search-suggestions" aria-label="Popular searches">
-              <span>Popular searches:</span>
+            <div className="pp-search-suggestions" aria-label={t('Popular searches')}>
+              <span>{t('Popular searches:')}</span>
               {quickSearches.map(term => (
                 <button key={term} type="button" onClick={() => runSearch(term)}>{term}</button>
               ))}
             </div>
-            <div className="pp-search-suggestions pp-hero-shortcuts" aria-label="Shortcuts">
-              <span>Go to:</span>
+            <div className="pp-search-suggestions pp-hero-shortcuts" aria-label={t('Shortcuts')}>
+              <span>{t('Go to:')}</span>
               {/* CPPM-93: only the pages this client has switched on. */}
-              {isFeatureEnabled('document_library') && <Link to={`${base}/documents`}>Prescribing information</Link>}
-              {isFeatureEnabled('adverse_event') && <Link to={`${base}/submit?type=adverse_event`}>Report a side effect</Link>}
-              {isFeatureEnabled('find_msl') && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
-              {isFeatureEnabled('drug_info') && <Link to={`${base}/drug-info`}>Product catalogue</Link>}
+              {isFeatureEnabled('document_library') && <Link to={`${base}/documents`}>{t('Prescribing information')}</Link>}
+              {isFeatureEnabled('adverse_event') && <Link to={`${base}/submit?type=adverse_event`}>{t('Report a side effect')}</Link>}
+              {isFeatureEnabled('find_msl') && <Link to={`${base}/find-msl`}>{t('Find an MSL')}</Link>}
+              {isFeatureEnabled('drug_info') && <Link to={`${base}/drug-info`}>{t('Product catalogue')}</Link>}
             </div>
           </div>
-          <aside className="pp-hero-panel" aria-label="Portal shortcuts">
+          <aside className="pp-hero-panel" aria-label={t('Portal shortcuts')}>
             <div className="pp-safety-card">
               <div className="pp-safety-card-icon"><Icon name="shield" size={20} /></div>
               <div>
-                <div className="pp-safety-card-title">Safety Update</div>
-                <p>Review the latest safety information before using approved content.</p>
-                <Link to={`${base}/safety`}>View Safety Alerts</Link>
+                <div className="pp-safety-card-title">{t('Safety Update')}</div>
+                <p>{t('Review the latest safety information before using approved content.')}</p>
+                <Link to={`${base}/safety`}>{t('View Safety Alerts')}</Link>
               </div>
             </div>
             <div className="pp-quick-links">
-              <div className="pp-quick-links-title">Quick Links</div>
+              <div className="pp-quick-links-title">{t('Quick Links')}</div>
               {quickDocs.map(doc => (
                 <Link key={doc.id} to={`${base}/documents`} className="pp-quick-link-row">
                   <Icon name="file" size={18} />
@@ -261,7 +261,7 @@ export default function PortalHomePage() {
               ))}
               <Link to={`${base}/submit`} className="pp-quick-link-row">
                 <Icon name="shield" size={18} />
-                <span>Report a Product Complaint</span>
+                <span>{t('Report a Product Complaint')}</span>
                 <span aria-hidden="true">›</span>
               </Link>
             </div>
@@ -272,7 +272,7 @@ export default function PortalHomePage() {
       <section className="pp-top-tasks-section">
         <div className="pp-container">
           <div className="pp-section-heading">
-            <h2>Common requests</h2>
+            <h2>{t('Common requests')}</h2>
           </div>
           <div className="pp-top-task-grid">
             {topTasks.map(card => (
@@ -296,18 +296,18 @@ export default function PortalHomePage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: forYou ? 20 : 0 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1A1A2E' }}>
-                  Signed in as {user.first_name}
+                  {t('Signed in as')} {user.first_name}
                 </h2>
               </div>
               <div style={{ display: 'flex', gap: 16 }}>
-                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>My activity</Link>
-                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>Notification preferences</Link>
+                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>{t('My activity')}</Link>
+                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>{t('Notification preferences')}</Link>
               </div>
             </div>
 
             {followedTopics.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{t('Topics you follow')}</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {followedTopics.map(f => (
                     <Link key={f.id} to={`${base}/therapeutic-areas`} className="pp-chip" style={{ textDecoration: 'none', color: 'var(--pp-primary)' }}>
@@ -320,14 +320,14 @@ export default function PortalHomePage() {
 
             {forYou && (
               <div>
-                <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#1A1A2E' }}>For you</h3>
+                <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#1A1A2E' }}>{t('For you')}</h3>
                 <p style={{ margin: '0 0 10px', fontSize: 13, color: '#4B5563' }}>
                   {forYou.basis === 'latest'
-                    ? 'The latest from this portal. Choose your specialty or follow an area to see what matches you.'
-                    : `Matched to ${forYou.words.join(', ')}.`}
+                    ? t('The latest from this portal. Choose your specialty or follow an area to see what matches you.')
+                    : `${t('Matched to')} ${forYou.words.join(', ')}.`}
                 </p>
                 {forYou.items.length === 0 ? (
-                  <div className="pp-update-empty">Nothing new for {forYou.words.join(', ')} yet.</div>
+                  <div className="pp-update-empty">{t('Nothing new yet for')} {forYou.words.join(', ')}.</div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
                     {forYou.items.map(it => {
@@ -355,7 +355,7 @@ export default function PortalHomePage() {
         <section className="pp-features-section">
           <div className="pp-container">
             <div className="pp-section-heading compact">
-              <h2>More information</h2>
+              <h2>{t('More information')}</h2>
             </div>
             <div className="pp-feature-grid">
               {secondaryTasks.map(card => (
@@ -363,7 +363,7 @@ export default function PortalHomePage() {
                   <div className="pp-feature-icon"><Icon name={card.icon} size={24} /></div>
                   <h3 className="pp-feature-title">{card.title}</h3>
                   <p className="pp-feature-desc">{card.desc}</p>
-                  <span className="pp-feature-link">Open</span>
+                  <span className="pp-feature-link">{t('Open')}</span>
                 </Link>
               ))}
             </div>
@@ -377,8 +377,8 @@ export default function PortalHomePage() {
             {isFeatureEnabled('events') && (
               <section className="pp-update-panel">
                 <div className="pp-update-panel-head">
-                  <h2>Upcoming Events</h2>
-                  <Link to={`${base}/events`}>View all</Link>
+                  <h2>{t('Upcoming Events')}</h2>
+                  <Link to={`${base}/events`}>{t('View all')}</Link>
                 </div>
                 <div className="pp-update-list">
                   {upcomingEvents.length > 0 ? upcomingEvents.map(ev => (
@@ -391,7 +391,7 @@ export default function PortalHomePage() {
                       <span aria-hidden="true">›</span>
                     </Link>
                   )) : (
-                    <div className="pp-update-empty">No upcoming events are published yet.</div>
+                    <div className="pp-update-empty">{t('No upcoming events are published yet.')}</div>
                   )}
                 </div>
               </section>
@@ -399,8 +399,8 @@ export default function PortalHomePage() {
             {isFeatureEnabled('news_announcements') && (
               <section className="pp-update-panel">
                 <div className="pp-update-panel-head">
-                  <h2>Latest News</h2>
-                  <Link to={`${base}/news`}>View all</Link>
+                  <h2>{t('Latest News')}</h2>
+                  <Link to={`${base}/news`}>{t('View all')}</Link>
                 </div>
                 <div className="pp-update-list">
                   {latestNews.length > 0 ? latestNews.map(post => (
@@ -413,20 +413,20 @@ export default function PortalHomePage() {
                       <span aria-hidden="true">›</span>
                     </Link>
                   )) : (
-                    <div className="pp-update-empty">No news has been published yet.</div>
+                    <div className="pp-update-empty">{t('No news has been published yet.')}</div>
                   )}
                 </div>
               </section>
             )}
             <section className="pp-update-panel pp-safety-info-panel">
               <div className="pp-update-panel-head">
-                <h2>Safety Information</h2>
-                <Link to={`${base}/safety`}>View all</Link>
+                <h2>{t('Safety Information')}</h2>
+                <Link to={`${base}/safety`}>{t('View all')}</Link>
               </div>
               <div className="pp-safety-info-box">
                 <Icon name="shield" size={22} />
-                <p>Important safety information is available for healthcare professionals. Always refer to current prescribing information.</p>
-                <Link to={`${base}/safety`} className="pp-btn pp-btn-outline pp-btn-full">View Safety Information</Link>
+                <p>{t('Important safety information is available for healthcare professionals. Always refer to current prescribing information.')}</p>
+                <Link to={`${base}/safety`} className="pp-btn pp-btn-outline pp-btn-full">{t('View Safety Information')}</Link>
               </div>
             </section>
           </div>
@@ -438,11 +438,11 @@ export default function PortalHomePage() {
           <div className="pp-container">
             <div className="pp-cta-card">
               <div className="pp-cta-text">
-                <h2>Need Medical Information?</h2>
-                <p>Our medical affairs team is ready to assist healthcare professionals and patients with accurate, evidence-based information.</p>
+                <h2>{t('Need Medical Information?')}</h2>
+                <p>{t('Our medical affairs team is ready to assist healthcare professionals and patients with accurate, evidence-based information.')}</p>
               </div>
               <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
-                Submit a Request
+                {t('Submit a Request')}
               </button>
             </div>
           </div>

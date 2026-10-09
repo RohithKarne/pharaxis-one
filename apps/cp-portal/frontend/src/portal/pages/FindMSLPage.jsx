@@ -9,7 +9,7 @@ import { buildIcs, downloadIcs } from '../../shared/utils/ics'
 const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
 
 export default function FindMSLPage() {
-  const { clientCode, user } = usePortal()
+  const { clientCode, user, t } = usePortal()
   const toast = useToast()
   const [msls, setMSLs]       = useState([])
   const [loading, setLoading] = useState(true)
@@ -92,22 +92,22 @@ export default function FindMSLPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Find a Medical Science Liaison</h1>
-        <p>Connect with our MSL team for scientific exchange and medical information support.</p>
+        <h1>{t('Find a Medical Science Liaison')}</h1>
+        <p>{t('Connect with our MSL team for scientific exchange and medical information support.')}</p>
       </div>
 
       <div className="pp-filter-bar">
-        <input className="pp-search-input" placeholder="Search by name, specialty, or territory…" value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="pp-search-input" placeholder={t('Search by name, specialty, or territory…')} value={search} onChange={e => setSearch(e.target.value)} />
         {regions.length > 0 && (
-          <select aria-label="Region" value={region} onChange={e => setRegion(e.target.value)}>
-            <option value="">All Regions</option>
+          <select aria-label={t('Region')} value={region} onChange={e => setRegion(e.target.value)}>
+            <option value="">{t('All Regions')}</option>
             {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         )}
       </div>
 
       {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
-        <div className="pp-empty-state"><p>No MSLs found matching your search.</p></div>
+        <div className="pp-empty-state"><p>{t('No MSLs found matching your search.')}</p></div>
       ) : (
         <div className="pp-msl-grid">
           {filtered.map(m => (
@@ -124,7 +124,7 @@ export default function FindMSLPage() {
                   onClick={() => openBooking(m)}
                   style={{ marginTop: 10, padding: '6px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
                 >
-                  Request Meeting
+                  {t('Request Meeting')}
                 </button>
               </div>
             </div>
@@ -142,41 +142,41 @@ export default function FindMSLPage() {
             </div>
             {bookingDone ? (
               <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
-                <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
+                <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>{t('Meeting request sent!')}</div>
                 <div style={{ color: '#4B5563', fontSize: 14, marginBottom: 16 }}>
-                  Your request has been received. The MSL team will follow up with you shortly.
+                  {t('Your request has been received. The MSL team will follow up with you shortly.')}
                 </div>
                 <div style={{ marginBottom: 20 }}>
                   <button className="cp-btn cp-btn-outline" onClick={() => downloadIcsCalendar(bookingMSL, bookingForm)} style={{ fontSize: 13, fontWeight: 600 }}>
-                    Add to Calendar (.ics)
+                    {t('Add to Calendar (.ics)')}
                   </button>
                 </div>
-                <button className="cp-btn cp-btn-primary" onClick={() => setBookingMSL(null)}>Close</button>
+                <button className="cp-btn cp-btn-primary" onClick={() => setBookingMSL(null)}>{t('Close')}</button>
               </div>
             ) : (
               <form onSubmit={handleBookingSubmit} className="cp-modal-body">
                 {/* CPPM-105: every label is tied to its box, and the slot hint is read with the slot list. */}
                 <div className="cp-field-row">
                   <div className="cp-field">
-                    <label htmlFor="msl-name">Your Name *</label>
-                    <input id="msl-name" required value={bookingForm.requester_name} onChange={e => setBookingForm(f => ({ ...f, requester_name: e.target.value }))} placeholder="Full name" />
+                    <label htmlFor="msl-name">{t('Your Name *')}</label>
+                    <input id="msl-name" required value={bookingForm.requester_name} onChange={e => setBookingForm(f => ({ ...f, requester_name: e.target.value }))} placeholder={t('Full name')} />
                   </div>
                   <div className="cp-field">
-                    <label htmlFor="msl-email">Your Email *</label>
-                    <input id="msl-email" required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder="you@example.com" />
+                    <label htmlFor="msl-email">{t('Your Email *')}</label>
+                    <input id="msl-email" required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder={t('you@example.com')} />
                   </div>
                 </div>
                 {availableSlots.length > 0 && (
                   <div className="cp-field">
-                    <label htmlFor="msl-slot">Available Time Slots</label>
+                    <label htmlFor="msl-slot">{t('Available Time Slots')}</label>
                     <select id="msl-slot" aria-describedby="msl-slot-help" value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
-                      <option value="">— No specific slot (request general availability) —</option>
+                      <option value="">{t('— No specific slot (request general availability) —')}</option>
                       {availableSlots.map(s => {
                         const label = s.starts_at ? formatDateTime(s.starts_at) : ''
                         return <option key={s.id} value={s.id}>{label}</option>
                       })}
                     </select>
-                    <span id="msl-slot-help" style={{ fontSize: 11, color: '#4B5563' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
+                    <span id="msl-slot-help" style={{ fontSize: 11, color: '#4B5563' }}>{t('Pick a slot for faster confirmation, or leave blank for general availability.')}</span>
                   </div>
                 )}
                 <div className="cp-field-row">
@@ -185,20 +185,20 @@ export default function FindMSLPage() {
                     <input id="msl-date" type="date" disabled={!!selectedSlot} value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
                   </div>
                   <div className="cp-field">
-                    <label htmlFor="msl-topic">Topic / Area of Interest</label>
+                    <label htmlFor="msl-topic">{t('Topic / Area of Interest')}</label>
                     <input id="msl-topic" value={bookingForm.topic} onChange={e => setBookingForm(f => ({ ...f, topic: e.target.value }))} placeholder="e.g. Clinical data, pipeline product…" />
                   </div>
                 </div>
                 <div className="cp-field">
-                  <label htmlFor="msl-message">Additional Message</label>
-                  <textarea id="msl-message" rows={3} value={bookingForm.message} onChange={e => setBookingForm(f => ({ ...f, message: e.target.value }))} placeholder="Any additional context or questions…" maxLength={500} />
+                  <label htmlFor="msl-message">{t('Additional Message')}</label>
+                  <textarea id="msl-message" rows={3} value={bookingForm.message} onChange={e => setBookingForm(f => ({ ...f, message: e.target.value }))} placeholder={t('Any additional context or questions…')} maxLength={500} />
                 </div>
                 {bookingError && <div className="cp-error">{bookingError}</div>}
                 <div className="cp-modal-footer">
                   <button type="submit" className="cp-btn cp-btn-primary" disabled={bookingBusy}>
                     {bookingBusy ? 'Sending…' : 'Send Request'}
                   </button>
-                  <button type="button" className="cp-btn cp-btn-outline" onClick={() => setBookingMSL(null)}>Cancel</button>
+                  <button type="button" className="cp-btn cp-btn-outline" onClick={() => setBookingMSL(null)}>{t('Cancel')}</button>
                 </div>
               </form>
             )}

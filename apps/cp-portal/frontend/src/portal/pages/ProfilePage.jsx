@@ -12,12 +12,12 @@ const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #D1
 const cardStyle  = { background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 24, marginBottom: 24 }
 
 export default function ProfilePage() {
-  const { clientCode, user, login } = usePortal()
+  const { clientCode, user, login, t } = usePortal()
   const navigate = useNavigate()
   const toast = useToast()
   const base = `/portal/${clientCode}`
 
-  usePageTitle('My Account')
+  usePageTitle(t('My Account'))
 
   const [loading, setLoading] = useState(true)
   const [form, setForm]       = useState({ first_name: '', last_name: '', country: '', specialty: '' })
@@ -107,7 +107,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">Loading…</div></div>
+  if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">{t('Loading…')}</div></div>
 
   const memberSince = meta.created_at ? formatLongDate(meta.created_at) : '—'
 
@@ -141,48 +141,48 @@ export default function ProfilePage() {
 
   return (
     <div className="pp-container pp-page-content" style={{ maxWidth: 640, paddingTop: 40, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>My Account</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>{t('My Account')}</h1>
       <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
-        Update your personal details and manage your password.
+        {t('Update your personal details and manage your password.')}
       </p>
 
       {/* Profile details */}
       <form onSubmit={saveProfile} style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 18 }}>Profile Details</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 18 }}>{t('Profile Details')}</h2>
 
         <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-first">First name</label>
+            <label style={labelStyle} htmlFor="pf-first">{t('First name')}</label>
             <input id="pf-first" style={inputStyle} value={form.first_name}
               onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} maxLength={100} />
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-last">Last name</label>
+            <label style={labelStyle} htmlFor="pf-last">{t('Last name')}</label>
             <input id="pf-last" style={inputStyle} value={form.last_name}
               onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} maxLength={100} />
           </div>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle} htmlFor="pf-email">Email</label>
+          <label style={labelStyle} htmlFor="pf-email">{t('Email')}</label>
           <input id="pf-email" style={{ ...inputStyle, background: '#F3F4F6', color: '#4B5563', cursor: 'not-allowed' }}
             value={meta.email} disabled readOnly />
           <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>
-            Email can't be changed here. Contact your administrator if it needs updating.
+            {t('Email can\'t be changed here. Contact your administrator if it needs updating.')}
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-country">Country</label>
+            <label style={labelStyle} htmlFor="pf-country">{t('Country')}</label>
             <input id="pf-country" style={inputStyle} value={form.country}
               onChange={e => setForm(f => ({ ...f, country: e.target.value }))} maxLength={100} />
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-specialty">Specialty</label>
+            <label style={labelStyle} htmlFor="pf-specialty">{t('Specialty')}</label>
             <select id="pf-specialty" style={inputStyle} value={form.specialty}
               onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))}>
-              <option value="">Select…</option>
+              <option value="">{t('Select…')}</option>
               {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
@@ -201,22 +201,22 @@ export default function ProfilePage() {
 
       {/* Change password */}
       <form onSubmit={changePassword} style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 18 }}>Change Password</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 18 }}>{t('Change Password')}</h2>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle} htmlFor="pf-cur">Current password</label>
+          <label style={labelStyle} htmlFor="pf-cur">{t('Current password')}</label>
           <input id="pf-cur" type="password" autoComplete="current-password" style={inputStyle}
             value={pwd.current_password} onChange={e => setPwd(p => ({ ...p, current_password: e.target.value }))} />
         </div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-new">New password</label>
+            <label style={labelStyle} htmlFor="pf-new">{t('New password')}</label>
             <input id="pf-new" type="password" autoComplete="new-password" style={inputStyle}
               value={pwd.new_password} onChange={e => setPwd(p => ({ ...p, new_password: e.target.value }))} />
-            <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>At least 8 characters.</div>
+            <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>{t('At least 8 characters.')}</div>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={labelStyle} htmlFor="pf-confirm">Confirm new password</label>
+            <label style={labelStyle} htmlFor="pf-confirm">{t('Confirm new password')}</label>
             <input id="pf-confirm" type="password" autoComplete="new-password" style={inputStyle}
               value={pwd.confirm_password} onChange={e => setPwd(p => ({ ...p, confirm_password: e.target.value }))} />
           </div>
@@ -233,9 +233,9 @@ export default function ProfilePage() {
 
       {/* CP-63 — GDPR data-subject rights: self-service export + deletion request */}
       <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>Privacy &amp; Your Data</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>{t('Privacy & Your Data')}</h2>
         <p style={{ fontSize: 13, color: '#4B5563', marginBottom: 18 }}>
-          Under data-protection law you can download a copy of your personal data, or request that your account be deleted.
+          {t('Under data-protection law you can download a copy of your personal data, or request that your account be deleted.')}
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" className="pp-btn pp-btn-outline" onClick={handleExport} disabled={exporting}>
@@ -243,7 +243,7 @@ export default function ProfilePage() {
           </button>
           <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#B91C1C' }}
             onClick={() => setShowDelete(true)}>
-            Request account deletion
+            {t('Request account deletion')}
           </button>
         </div>
         <p style={{ fontSize: 12, color: '#5F6B7A', marginTop: 12 }}>
@@ -255,13 +255,13 @@ export default function ProfilePage() {
       {showDelete && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 440, width: '90%' }}>
-            <h3 style={{ margin: '0 0 8px', color: '#1A1A2E' }}>Request account deletion?</h3>
+            <h3 style={{ margin: '0 0 8px', color: '#1A1A2E' }}>{t('Request account deletion?')}</h3>
             <p style={{ fontSize: 14, color: '#4B5563', marginBottom: 20 }}>
               This submits a request for our team to delete your account and personal data. Records we're legally
               required to keep will be de-identified instead. You can't undo this request from here.
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button type="button" className="pp-btn pp-btn-outline" onClick={() => setShowDelete(false)}>Cancel</button>
+              <button type="button" className="pp-btn pp-btn-outline" onClick={() => setShowDelete(false)}>{t('Cancel')}</button>
               <button type="button" className="pp-btn pp-btn-primary" style={{ background: '#DC2626' }}
                 onClick={handleDeleteRequest} disabled={deleteRequesting}>
                 {deleteRequesting ? 'Submitting…' : 'Submit deletion request'}

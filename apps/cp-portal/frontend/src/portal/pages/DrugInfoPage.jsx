@@ -13,7 +13,7 @@ const COMPARE_ROWS = [
 ]
 
 export default function DrugInfoPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const [drugs, setDrugs]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -26,7 +26,7 @@ export default function DrugInfoPage() {
   }
   const compareDrugs = drugs.filter(d => compareList.includes(d.id))
 
-  usePageTitle('Drug Information')
+  usePageTitle(t('Drug Information'))
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/drugs`)
@@ -41,27 +41,27 @@ export default function DrugInfoPage() {
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
-        <h1>Drug Information</h1>
-        <p>Review approved prescribing information and clinical summaries for our products.</p>
+        <h1>{t('Drug Information')}</h1>
+        <p>{t('Review approved prescribing information and clinical summaries for our products.')}</p>
       </div>
 
       <div className="pp-filter-bar">
-        <input className="pp-search-input" placeholder="Search by brand or generic name…" value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="pp-search-input" placeholder={t('Search by brand or generic name…')} value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {compareList.length > 0 && (
         <div className="pp-compare-bar">
           <span><strong>{compareList.length}</strong> selected to compare{compareList.length < 2 ? ' (pick at least 2)' : ''}</span>
-          <button className="pp-btn pp-btn-primary pp-btn-sm" onClick={() => setShowCompare(true)} disabled={compareList.length < 2}>Compare</button>
-          <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setCompareList([])}>Clear</button>
+          <button className="pp-btn pp-btn-primary pp-btn-sm" onClick={() => setShowCompare(true)} disabled={compareList.length < 2}>{t('Compare')}</button>
+          <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setCompareList([])}>{t('Clear')}</button>
         </div>
       )}
 
-      {loading ? <div className="pp-loading">Loading…</div> : (
+      {loading ? <div className="pp-loading">{t('Loading…')}</div> : (
         <div className="pp-drug-layout">
           <div className="pp-drug-index">
             {filtered.length === 0 ? (
-              <div className="pp-empty-state"><span><Icon name="pill" size={40} /></span><p>No drugs found.</p></div>
+              <div className="pp-empty-state"><span><Icon name="pill" size={40} /></span><p>{t('No drugs found.')}</p></div>
             ) : filtered.map(d => (
               <div key={d.id} className="pp-drug-index-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -70,7 +70,7 @@ export default function DrugInfoPage() {
                   onChange={() => toggleCompare(d.id)}
                   disabled={!compareList.includes(d.id) && compareList.length >= 3}
                   aria-label={`Add ${d.brand_name || d.generic_name} to comparison`}
-                  title="Add to comparison"
+                  title={t('Add to comparison')}
                   style={{ flex: 'none' }}
                 />
                 <button className={`pp-drug-index-item ${selected?.id === d.id ? 'active' : ''}`} onClick={() => setSelected(d)} style={{ flex: 1, textAlign: 'left' }}>
@@ -82,7 +82,7 @@ export default function DrugInfoPage() {
           </div>
           <div className="pp-drug-detail">
             {!selected ? (
-              <div className="pp-ta-placeholder"><span><Icon name="pill" size={40} /></span><p>Select a product to view details, or tick products to compare.</p></div>
+              <div className="pp-ta-placeholder"><span><Icon name="pill" size={40} /></span><p>{t('Select a product to view details, or tick products to compare.')}</p></div>
             ) : (
               <div className="pp-drug-detail-content">
                 {selected.image_url && <img src={selected.image_url} alt={selected.brand_name} className="pp-drug-image" loading="lazy" />}
@@ -92,38 +92,38 @@ export default function DrugInfoPage() {
                 </div>
                 {selected.indication && (
                   <div className="pp-drug-section">
-                    <h4>Indication</h4>
+                    <h4>{t('Indication')}</h4>
                     <p>{selected.indication}</p>
                   </div>
                 )}
                 {selected.dosage_info && (
                   <div className="pp-drug-section">
-                    <h4>Dosage Information</h4>
+                    <h4>{t('Dosage Information')}</h4>
                     <p>{selected.dosage_info}</p>
                   </div>
                 )}
                 {selected.storage_conditions && (
                   <div className="pp-drug-section">
-                    <h4>Storage Conditions</h4>
+                    <h4>{t('Storage Conditions')}</h4>
                     <p>{selected.storage_conditions}</p>
                   </div>
                 )}
                 {selected.contraindications && (
                   <div className="pp-drug-section pp-drug-warnings">
-                    <h4>Contraindications</h4>
+                    <h4>{t('Contraindications')}</h4>
                     <p>{selected.contraindications}</p>
                   </div>
                 )}
                 {selected.side_effects && (
                   <div className="pp-drug-section pp-drug-warnings">
-                    <h4>Side Effects</h4>
+                    <h4>{t('Side Effects')}</h4>
                     <p>{selected.side_effects}</p>
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {selected.prescribing_info_url && (
                   <a href={selected.prescribing_info_url} target="_blank" rel="noopener noreferrer" className="pp-btn pp-btn-primary">
-                    View Full Prescribing Information
+                    {t('View Full Prescribing Information')}
                   </a>
                 )}
                 <AskAboutThis product={selected.brand_name || selected.generic_name} about={selected.brand_name || selected.generic_name} className="pp-btn pp-btn-outline" />
@@ -135,11 +135,11 @@ export default function DrugInfoPage() {
       )}
 
       {showCompare && compareDrugs.length >= 2 && (
-        <div className="pp-pdf-overlay" onClick={() => setShowCompare(false)} role="dialog" aria-modal="true" aria-label="Compare products">
+        <div className="pp-pdf-overlay" onClick={() => setShowCompare(false)} role="dialog" aria-modal="true" aria-label={t('Compare products')}>
           <div className="pp-compare-modal" onClick={e => e.stopPropagation()}>
             <div className="pp-compare-head">
-              <b>Compare products</b>
-              <button type="button" onClick={() => setShowCompare(false)}>Close</button>
+              <b>{t('Compare products')}</b>
+              <button type="button" onClick={() => setShowCompare(false)}>{t('Close')}</button>
             </div>
             <div className="pp-compare-scroll">
               <table className="pp-compare-table">
@@ -157,7 +157,7 @@ export default function DrugInfoPage() {
                 <tbody>
                   {COMPARE_ROWS.map(row => (
                     <tr key={row.key}>
-                      <th className="pp-compare-attr">{row.label}</th>
+                      <th className="pp-compare-attr">{t(row.label)}</th>
                       {compareDrugs.map(d => <td key={d.id}>{d[row.key] || '—'}</td>)}
                     </tr>
                   ))}

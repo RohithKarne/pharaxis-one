@@ -6,7 +6,7 @@ import usePageTitle from '../hooks/usePageTitle'
 import { formatDateTime } from '../../shared/utils/datetime'
 
 export default function SavedItemsPage() {
-  const { clientCode, user } = usePortal()
+  const { clientCode, user, t } = usePortal()
   const navigate = useNavigate()
   const [tab, setTab] = useState('news')
   const [saved, setSaved] = useState([])
@@ -16,7 +16,7 @@ export default function SavedItemsPage() {
 
   const base = `/portal/${clientCode}`
 
-  usePageTitle('Saved Items')
+  usePageTitle(t('Saved Items'))
 
   useEffect(() => {
     if (!user) return
@@ -58,7 +58,7 @@ export default function SavedItemsPage() {
       <div className="pp-docs-page">
         <div className="pp-empty-state">
           <p style={{ marginTop: 12, color: '#4B5563', fontSize: 15 }}>
-            <Link to={`${base}/login`} className="pp-btn pp-btn-outline" style={{ marginLeft: 0 }}>Sign in</Link>
+            <Link to={`${base}/login`} className="pp-btn pp-btn-outline" style={{ marginLeft: 0 }}>{t('Sign in')}</Link>
             {' '}to save items for quick access.
           </p>
         </div>
@@ -72,7 +72,7 @@ export default function SavedItemsPage() {
 
   return (
     <div className="pp-docs-page">
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>Saved Items</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>{t('Saved Items')}</h1>
 
       {/* Tabs */}
       <div className="pp-news-filters" style={{ marginBottom: 20 }}>
@@ -126,7 +126,7 @@ export default function SavedItemsPage() {
                       fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
                       background: '#FEE2E2', color: '#B91C1C', padding: '2px 8px', borderRadius: 99,
                     }}>
-                      Withdrawn
+                      {t('Withdrawn')}
                     </span>
                   )}
                 </div>
@@ -135,7 +135,7 @@ export default function SavedItemsPage() {
                 </div>
                 {item.withdrawn && (
                   <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 2 }}>
-                    This document is no longer available.
+                    {t('This document is no longer available.')}
                   </div>
                 )}
                 <div style={{ fontSize: 12, color: '#5F6B7A' }}>
@@ -148,14 +148,14 @@ export default function SavedItemsPage() {
                     to={`${base}/news/${item.item_id}`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item
+                    {t('Go to item')}
                   </Link>
                 ) : item.withdrawn ? null : (
                   <Link
                     to={`${base}/documents`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
                   >
-                    Go to item
+                    {t('Go to item')}
                   </Link>
                 )}
                 <button

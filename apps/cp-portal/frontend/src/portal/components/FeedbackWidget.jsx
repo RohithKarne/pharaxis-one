@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 export default function FeedbackWidget() {
-  const { clientCode } = usePortal()
+  const { clientCode, t } = usePortal()
   const [open, setOpen]       = useState(false)
   const [rating, setRating]   = useState(0)
   const [hovered, setHovered] = useState(0)
@@ -37,18 +37,18 @@ export default function FeedbackWidget() {
           width: 300, marginBottom: 12, overflow: 'hidden',
         }}>
           <div style={{ background: 'var(--pp-primary, #6B3FA0)', color: '#fff', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Share Feedback</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{t('Share Feedback')}</span>
             <button onClick={reset} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
           </div>
 
           {status === 'done' ? (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 14, color: '#374151', fontWeight: 500 }}>Thank you for your feedback!</p>
-              <button className="pp-btn pp-btn-primary" style={{ marginTop: 16, fontSize: 13 }} onClick={reset}>Close</button>
+              <p style={{ margin: 0, fontSize: 14, color: '#374151', fontWeight: 500 }}>{t('Thank you for your feedback!')}</p>
+              <button className="pp-btn pp-btn-primary" style={{ marginTop: 16, fontSize: 13 }} onClick={reset}>{t('Close')}</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ padding: 16 }}>
-              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#4B5563' }}>How would you rate your experience?</p>
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#4B5563' }}>{t('How would you rate your experience?')}</p>
               <div style={{ display: 'flex', gap: 6, marginBottom: 14, justifyContent: 'center' }}>
                 {[1, 2, 3, 4, 5].map(n => (
                   <button
@@ -69,11 +69,11 @@ export default function FeedbackWidget() {
                 rows={3}
                 value={message}
                 onChange={e => setMessage(e.target.value)}
-                placeholder="Tell us more (optional)…"
+                placeholder={t('Tell us more (optional)…')}
                 maxLength={1000}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #D1D5DB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
               />
-              {status === 'error' && <p style={{ color: '#B91C1C', fontSize: 12, margin: '6px 0 0' }}>Something went wrong. Please try again.</p>}
+              {status === 'error' && <p style={{ color: '#B91C1C', fontSize: 12, margin: '6px 0 0' }}>{t('Something went wrong. Please try again.')}</p>}
               <button
                 type="submit"
                 className="pp-btn pp-btn-primary"
@@ -96,10 +96,10 @@ export default function FeedbackWidget() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'transform 0.15s',
         }}
-        aria-label="Give feedback"
-        title="Share feedback"
+        aria-label={t('Give feedback')}
+        title={t('Share feedback')}
       >
-        Feedback
+        {t('Feedback')}
       </button>
     </div>
   )
