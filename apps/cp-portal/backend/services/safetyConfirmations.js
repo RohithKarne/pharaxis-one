@@ -99,7 +99,8 @@ async function sweepSafetyReminders() {
          FROM cp_portal_users u
          LEFT JOIN cp_safety_acknowledgements k ON k.alert_id = ? AND k.portal_user_id = u.id
          LEFT JOIN cp_safety_ack_reminders r    ON r.alert_id = ? AND r.portal_user_id = u.id
-        WHERE u.client_id = ? AND u.is_active = 1 AND u.access_status IS NULL AND k.id IS NULL AND r.id IS NULL`,
+        WHERE u.client_id = ? AND u.is_active = 1 AND u.access_status IS NULL AND k.id IS NULL AND r.id IS NULL
+          AND u.last_login_at IS NOT NULL`,
       [l.id, l.id, l.client_id]);
     const portalName = l.portal_name || l.client_name;
     const link = `${FRONTEND_BASE_URL}/portal/${l.code}/safety#alert-${l.id}`;
