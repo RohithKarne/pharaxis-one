@@ -390,7 +390,9 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
       .catch(err => log.error('admin.aeReviewTasks.confirmed_sync_error', { err, ae_submission_id: aeSubmissionId }));
     const [[ae]] = await pool.execute('SELECT status, external_ref FROM cp_submissions WHERE id = ?', [aeSubmissionId]);
     res.json({
-      message: ae.status === 'synced' ? `Confirmed and sent to MIMS as case ${ae.external_ref}.`
+      // CPPM-151 walk: MIMS files the case under the portal's reference, so say that, with
+      // MIMS's own id in brackets for anyone looking it up there.
+      message: ae.status === 'synced' ? `Confirmed and sent to MIMS as ${'CP-' + String(aeSubmissionId).padStart(6, '0')} (MIMS case ${ae.external_ref}).`
         : ae.status === 'failed_sync' ? 'Confirmed. MIMS could not be reached — it will be retried automatically.'
         : 'Confirmed. No MIMS connection is set up for this client, so the case is held in the portal.',
       ae_submission_id: aeSubmissionId, sync_status: ae.status, mims_case_id: ae.external_ref || null,
