@@ -24,6 +24,25 @@ export default function LanguagePage() {
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState('')
   const [saved, setSaved]       = useState('')
+  const [editing, setEditing]   = useState(null)   // { type, id, label, fields, original, translations, lang, draft }
+  const [editMsg, setEditMsg]   = useState('')
+
+  async function openEditor(type, id, lang) {
+    setEditMsg('')
+    const res = await fetch(`/api/admin/language/${clientId}/translation/${type}/${id}`, { headers: adminHeaders() })
+    const d = await res.json()
+    if (!res.ok) { setError(d.error || 'Could not open the item.'); return }
+    setEditing({ ...d, lang, draft: { ...(d.translations[lang] || {}) } })
+  }
+  async function saveTranslation() {
+    setEditMsg('')
+    const res = await fetch(`/api/admin/language/${clientId}/translation/${editing.type}/${editing.id}`, {
+      method: 'PUT', headers: adminHeaders(), body: JSON.stringify({ lang: editing.lang, fields: editing.draft }),
+    })
+    const d = await res.json()
+    if (!res.ok) { setEditMsg(d.error || 'Save failed.'); return }
+    setEditMsg(d.message); load()
+  }
 
   useEffect(() => { load() }, [clientId])
 
@@ -127,13 +146,41 @@ export default function LanguagePage() {
                   <td>{CONTENT_LABELS[c.type] || c.type}</td>
                   <td>{c.total}</td>
                   <td>{c.complete}</td>
-                  <td>{c.missing.length === 0 ? '—' : c.missing.slice(0, 5).map(m => m.label || `#${m.id}`).join('; ') + (c.missing.length > 5 ? ` and ${c.missing.length - 5} more` : '')}</td>
+                  <td>{c.missing.length === 0 ? '—' : (
+                    <>
+                      {c.missing.slice(0, 8).map(m => (
+                        <div key={m.id} style={{ marginBottom: 4 }}>
+                          {m.label || `#${m.id}`}{' '}
+                          {m.missing.map(l => (
+                            <button key={l} type="button" className="cp-btn cp-btn-sm cp-btn-outline" style={{ marginLeft: 4 }} onClick={() => openEditor(c.type, m.id, l)}>Translate into {l.toUpperCase()}</button>
+                          ))}
+                        </div>
+                      ))}
+                      {c.missing.length > 8 && <div style={{ fontSize: 12, color: '#5F6B7A' }}>and {c.missing.length - 8} more</div>}
+                    </>
+                  )}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {editing && (
+        <div className="cp-card" style={{ maxWidth: 760, marginTop: 24 }}>
+          <div className="cp-card-title">Translate “{editing.label}” into {SUPPORTED.find(s => s.code === editing.lang)?.label || editing.lang}</div>
+          <p style={{ fontSize: 13, color: '#5F6B7A', margin: '0 0 12px' }}>Readers in this language see the translation only once every field below has one; until then they see the original.</p>
+          {editing.fields.map(f => (
+            <div key={f} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{f.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 13, background: '#F8FAFC', border: '1px solid var(--cp-border)', borderRadius: 6, padding: '8px 10px', marginBottom: 6, maxHeight: 160, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{String(editing.original[f] || '').replace(/<[^>]+>/g, ' ')}</div>
+              <textarea rows={f.includes('html') || f === 'answer' ? 6 : 2} style={{ width: '100%' }} aria-label={`${f} in ${editing.lang}`} value={editing.draft[f] || ''} onChange={e => setEditing(ed => ({ ...ed, draft: { ...ed.draft, [f]: e.target.value } }))} placeholder={`${f.replace(/_/g, ' ')} in ${editing.lang.toUpperCase()}`} />
+            </div>
+          ))}
+          {editMsg && <div className={/^Saved/.test(editMsg) ? 'cp-success' : 'cp-error'}>{editMsg}</div>}
+          <button className="cp-btn cp-btn-primary" onClick={saveTranslation}>Save translation</button>
+          <button className="cp-btn cp-btn-outline" style={{ marginLeft: 8 }} onClick={() => setEditing(null)}>Close</button>
+        </div>
+      )}
       </ReadOnlyUnless>
     </AdminLayout>
   )
