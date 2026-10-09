@@ -418,8 +418,13 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
         await conn.commit();
         return res.status(200).json({ id: existing.id, idempotent: true });
       }
-      if (existing) {
-        reusedFrom = existing;
+      // A case deleted in MIMS still holds its reference under the unique key, so a
+      // report sent again after that deletion (Sync Health › Retry) used to fail with
+      // a 500 and could never arrive. It gets the next free suffix like a reused number.
+      const [[held]] = existing ? [[existing]] : await conn.execute(
+        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? LIMIT 1', [req.apiClient.id, reference]);
+      if (existing) reusedFrom = existing;
+      if (held) {
         // The reference stays unique per connection: the new report keeps it with a suffix.
         for (let n = 2; n <= 50; n++) {
           storedReference = `${reference.slice(0, 95)}~${n}`;
