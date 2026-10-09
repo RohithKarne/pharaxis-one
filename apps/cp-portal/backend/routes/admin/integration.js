@@ -184,7 +184,9 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
 router.get('/:clientId/mapping/:integrationId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id=? AND integration_id=? ORDER BY form_type, cp_field', [req.params.clientId, req.params.integrationId]);
-    res.json({ mappings: rows });
+    // A mapping saved before the target check existed may point at a field MIMS does
+    // not have; it is still sent and ignored, so the screen marks it instead of hiding it.
+    res.json({ mappings: rows.map(m => ({ ...m, is_known: !!(MIMS_TARGETS[m.form_type] || []).includes(m.target_field) })) });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'GET /:clientId/mapping/:integrationId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
