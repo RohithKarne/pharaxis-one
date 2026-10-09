@@ -345,6 +345,10 @@ router.post('/:clientId/:submissionId/retry', authenticateAdmin, requireClientAc
       'SELECT id, submission_type FROM cp_submissions WHERE id = ? AND client_id = ?',
       [req.params.submissionId, req.params.clientId]);
     if (!sub) return res.status(404).json({ error: 'Submission not found.' });
+    // CPPM-151 walk: with no integration switched on, Retry used to answer as if it had
+    // tried and repeat the old error. Say what is actually wrong instead.
+    const [[active]] = await pool.execute('SELECT id FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [req.params.clientId]);
+    if (!active) return res.status(409).json({ error: 'No integration is switched on for this client, so nothing was sent. Switch it on under Connections › Integration and try again.' });
     // Attributable to the admin who triggered it (Vasu's condition).
     await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'submission', sub.id, {});
     const { syncToIntegration } = require('../portal/submit');

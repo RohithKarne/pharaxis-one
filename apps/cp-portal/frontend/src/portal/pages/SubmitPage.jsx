@@ -28,10 +28,16 @@ export function optionList(raw) {
 export default function SubmitPage() {
   const { clientCode, portalHeaders, isFeatureEnabled, portalConfig, user } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   // ?type=adverse_event (e.g. from the Contact page) opens that form directly.
   const requestedType = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry'].includes(params.get('type')) ? params.get('type') : null
-  const [selectedType, setSelectedType] = useState(requestedType)
+  const [selectedType, setSelectedTypeState] = useState(requestedType)
+  // CPPM-151 walk: the chosen form lives in the address (?type=…), so a refresh
+  // reopens it with its draft instead of showing the four tiles again.
+  function setSelectedType(key) {
+    setSelectedTypeState(key)
+    setParams(key ? { type: key } : {}, { replace: true })
+  }
   const [formFields, setFormFields]     = useState([])
   const [formValues, setFormValues]     = useState({})
   const [submitting, setSubmitting]     = useState(false)

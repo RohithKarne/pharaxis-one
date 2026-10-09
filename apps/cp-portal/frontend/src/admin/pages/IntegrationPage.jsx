@@ -169,7 +169,9 @@ export default function IntegrationPage() {
     setError(''); setNotice('')
     try {
       const res = await fetch(`/api/admin/integration/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not update integration (error ${res.status}).`); return }
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || `Could not update integration (error ${res.status}).`); return }
+      if (d.message && d.message !== 'Integration updated.') setNotice(d.message)
     } catch {
       setError('Network error — please try again.')
       return

@@ -107,10 +107,13 @@ router.post('/request-access', async (req, res) => {
       });
     } catch (err) {
       // uq_portal_users is UNIQUE(client_id, email): an account or an earlier request.
+      // CPPM-151 walk: answered the same as a new request, so the form cannot be
+      // used to learn whether an email is registered — sign-in and forgot-password
+      // already give nothing away. The admins see the earlier request or account;
+      // nothing is created twice.
       if (err && err.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({
-          error: 'We already have a request or an account for this email address. If you have an account, sign in or use "Forgot password". If you asked before, your request is with the portal team.',
-        });
+        await systemAudit('portal access request', client.id, 'ACCESS_REQUEST_REPEATED', 'portal_user', null, { user_type });
+        return res.status(201).json({ message: 'Thank you. Your request has been sent to the portal team. You will get an email to set your password once it is approved.' });
       }
       throw err;
     }

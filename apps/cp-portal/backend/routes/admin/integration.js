@@ -78,7 +78,28 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
     // CPPM-10: which fields changed, never what they changed to.
     await audit(req.admin, req.params.clientId, 'UPDATE', 'integration', Number(req.params.integrationId),
       { fields: updates.map(u => u.split(' ')[0]).filter(f => f !== 'updated_at') });
-    res.json({ message: 'Integration updated.' });
+    // CPPM-151 walk: reports that arrived while no integration was on stayed in the
+    // portal for good — the retry job only looks at failed ones. Switching an
+    // integration on now sends them, one after another, in the background.
+    let queued = 0;
+    if (req.body.is_active === true || req.body.is_active === 1) {
+      const [waiting] = await pool.execute(
+        `SELECT id, submission_type FROM cp_submissions
+          WHERE client_id = ? AND external_ref IS NULL AND status = 'submitted'
+            AND submission_type IN ('medical_inquiry', 'adverse_event', 'product_complaint')
+          ORDER BY id`, [req.params.clientId]);
+      queued = waiting.length;
+      if (queued) {
+        const { syncToIntegration } = require('../portal/submit');
+        setImmediate(async () => {
+          for (const s of waiting) {
+            await syncToIntegration(Number(req.params.clientId), s.id, s.submission_type)
+              .catch(err => log.error('admin.integration.send_waiting_failed', { err, submission_id: s.id }));
+          }
+        });
+      }
+    }
+    res.json({ message: queued ? `Integration updated. ${queued} report(s) received while it was off are being sent to MIMS now.` : 'Integration updated.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'PATCH /:clientId/:integrationId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
