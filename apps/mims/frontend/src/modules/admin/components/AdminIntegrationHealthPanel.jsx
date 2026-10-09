@@ -27,7 +27,9 @@ export default function AdminIntegrationHealthPanel({ H }) {
     fetchHealth()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeCount = integrations.filter(i => i.status !== 'not_configured').length
+  // Connected systems count as integrations too: before, a working CP Portal read as "0 / 4".
+  const activeCount = integrations.filter(i => i.status !== 'not_configured').length + connections.filter(c => c.status === 'active').length
+  const totalCount = integrations.length + connections.length
 
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
@@ -41,7 +43,7 @@ export default function AdminIntegrationHealthPanel({ H }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
         <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Active Integrations</div>
-          <div style={{ fontSize: 24, fontWeight: 'bold' }}>{activeCount} / {integrations.length}</div>
+          <div style={{ fontSize: 24, fontWeight: 'bold' }}>{activeCount} / {totalCount}</div>
         </div>
       </div>
       <p style={{ margin: '-20px 0 24px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -119,6 +121,9 @@ export default function AdminIntegrationHealthPanel({ H }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Last call:</span><span>{c.last_call_at ? new Date(c.last_call_at).toLocaleString() : 'Never'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Calls (24 h):</span><span>{c.calls_24h}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Failed (24 h):</span><span>{c.failures_24h}</span></div>
+                  {c.last_failure && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span>Last failure:</span><span style={{ color: '#991b1b', textAlign: 'right' }}>{c.last_failure}{c.last_failure_at ? ` · ${new Date(c.last_failure_at).toLocaleString()}` : ''}</span></div>
+                  )}
                 </div>
               </div>
             )

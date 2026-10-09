@@ -64,7 +64,9 @@ router.get('/integrations/health', authenticate, requireRole('admin', 'platform_
       `SELECT c.id, c.name, c.status,
               (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
               (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
-              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h
+              (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h,
+              (SELECT CONCAT(l.status_code, ' ', l.method, ' ', l.path) FROM api_call_log l WHERE l.client_id = c.id AND l.status_code >= 400 ORDER BY l.id DESC LIMIT 1) AS last_failure,
+              (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id AND l.status_code >= 400) AS last_failure_at
          FROM api_clients c WHERE c.org_id = ? ORDER BY c.name`, [orgId]);
 
     res.json({ integrations, connections });
