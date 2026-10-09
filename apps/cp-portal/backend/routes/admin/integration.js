@@ -6,6 +6,21 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+
+// The MIMS intake fields a portal field can map onto, per form type — the same list the
+// Integration screen offers (IntegrationPage.jsx); dot paths address the /api/v1/cases payload.
+const MIMS_COMMON_FIELDS = [
+  'reporter.first_name', 'reporter.last_name', 'reporter.email', 'reporter.phone',
+  'reporter.organisation', 'reporter.reporter_type', 'description', 'priority',
+];
+const MIMS_TARGETS = {
+  medical_inquiry:   [...MIMS_COMMON_FIELDS, 'mi_intake.mi_category', 'mi_intake.question_summary', 'mi_intake.detailed_question'],
+  adverse_event:     [...MIMS_COMMON_FIELDS, 'patient.initials', 'patient.age', 'patient.gender',
+                      'ae_intake.suspect_drug_name', 'ae_intake.batch_lot_number', 'ae_intake.reaction_description',
+                      'ae_intake.reaction_onset_date', 'ae_intake.outcome'],
+  product_complaint: [...MIMS_COMMON_FIELDS, 'pc_intake.product_name', 'pc_intake.batch_lot_number',
+                      'pc_intake.complaint_category', 'pc_intake.complaint_description'],
+};
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { encryptSecret } = require('../../utils/secretCrypto');
@@ -181,6 +196,11 @@ router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, async 
   try {
     const { integration_id, form_type, cp_field, target_field, transform, default_value } = req.body;
     if (!integration_id || !form_type || !cp_field || !target_field) return res.status(400).json({ error: 'integration_id, form_type, cp_field and target_field are required.' });
+    // A target MIMS does not read was saved and silently ignored on every report. The
+    // screen offers only these; a mapping made any other way is refused with the list.
+    const targets = MIMS_TARGETS[form_type];
+    if (!targets) return res.status(400).json({ error: `form_type must be one of ${Object.keys(MIMS_TARGETS).join(', ')}.` });
+    if (!targets.includes(target_field)) return res.status(400).json({ error: `MIMS has no field "${target_field}" for a ${form_type.replace(/_/g, ' ')}, so the mapping was not saved. It can map onto: ${targets.join(', ')}.` });
     const [result] = await pool.execute(
       `REPLACE INTO cp_field_mapping (client_id, integration_id, form_type, cp_field, target_field, transform, default_value)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
