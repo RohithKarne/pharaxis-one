@@ -6,23 +6,86 @@ import { adminHeaders } from '../context/AdminAuthContext'
 import ColorPicker from '../components/ColorPicker'
 import LoadingButton from '../components/LoadingButton'
 
+// Phase 3 row 19 (CP ease-of-use plan): pick one of four ready looks; each colour
+// on its own sits under Advanced. Header background, header text, heading font and
+// header style were offered here but the portal reads none of them (its header is
+// white with a line in the main colour), so they are no longer shown.
 const COLOR_FIELDS = [
-  { key: 'primary_color',     label: 'Primary Color' },
-  { key: 'secondary_color',   label: 'Secondary Color' },
-  { key: 'accent_color',      label: 'Accent Color' },
-  { key: 'background_color',  label: 'Background' },
-  { key: 'surface_color',     label: 'Surface' },
-  { key: 'text_primary',      label: 'Text Primary' },
-  { key: 'text_secondary',    label: 'Text Secondary' },
-  { key: 'header_bg',         label: 'Header Background' },
-  { key: 'header_text',       label: 'Header Text' },
-  { key: 'footer_bg',         label: 'Footer Background' },
-  { key: 'footer_text',       label: 'Footer Text' },
-  { key: 'button_bg',         label: 'Button Color' },
-  { key: 'button_text',       label: 'Button Text' },
-  { key: 'link_color',        label: 'Link Color' },
-  { key: 'border_color',      label: 'Border Color' },
+  { key: 'primary_color',     label: 'Main colour' },
+  { key: 'secondary_color',   label: 'Second colour (banner)' },
+  { key: 'accent_color',      label: 'Accent' },
+  { key: 'background_color',  label: 'Box background (forms, cards)' },
+  { key: 'surface_color',     label: 'Panel background' },
+  { key: 'text_primary',      label: 'Text' },
+  { key: 'text_secondary',    label: 'Quieter text (menus, notes)' },
+  { key: 'button_bg',         label: 'Button' },
+  { key: 'button_text',       label: 'Button text' },
+  { key: 'link_color',        label: 'Links' },
+  { key: 'border_color',      label: 'Lines and borders' },
+  { key: 'footer_bg',         label: 'Footer background' },
+  { key: 'footer_text',       label: 'Footer text' },
 ]
+
+// Every theme passes the AA contrast check the server applies on save. Purple is
+// the same set "Reset to Defaults" writes.
+const THEMES = [
+  { name: 'Purple', colors: {
+    primary_color: '#6B3FA0', secondary_color: '#4A2D7A', accent_color: '#9B6FCC', background_color: '#FFFFFF',
+    surface_color: '#F8F8FB', text_primary: '#1A1A2E', text_secondary: '#6B7280', button_bg: '#6B3FA0',
+    button_text: '#FFFFFF', link_color: '#6B3FA0', border_color: '#E5E7EB', footer_bg: '#1A1A2E', footer_text: '#9CA3AF',
+    header_bg: '#6B3FA0', header_text: '#FFFFFF' } },
+  { name: 'Clinical blue', colors: {
+    primary_color: '#1D4ED8', secondary_color: '#1E3A8A', accent_color: '#3B82F6', background_color: '#FFFFFF',
+    surface_color: '#F5F8FC', text_primary: '#0F172A', text_secondary: '#475569', button_bg: '#1D4ED8',
+    button_text: '#FFFFFF', link_color: '#1D4ED8', border_color: '#E2E8F0', footer_bg: '#0F172A', footer_text: '#CBD5E1',
+    header_bg: '#1D4ED8', header_text: '#FFFFFF' } },
+  { name: 'Teal', colors: {
+    primary_color: '#0F766E', secondary_color: '#134E4A', accent_color: '#14B8A6', background_color: '#FFFFFF',
+    surface_color: '#F3FAF9', text_primary: '#102A27', text_secondary: '#4B5563', button_bg: '#0F766E',
+    button_text: '#FFFFFF', link_color: '#0F766E', border_color: '#D9E7E5', footer_bg: '#134E4A', footer_text: '#D1FAE5',
+    header_bg: '#0F766E', header_text: '#FFFFFF' } },
+  { name: 'Charcoal', colors: {
+    primary_color: '#374151', secondary_color: '#1F2937', accent_color: '#B45309', background_color: '#FFFFFF',
+    surface_color: '#F7F7F7', text_primary: '#111827', text_secondary: '#4B5563', button_bg: '#374151',
+    button_text: '#FFFFFF', link_color: '#B45309', border_color: '#E5E7EB', footer_bg: '#111827', footer_text: '#D1D5DB',
+    header_bg: '#374151', header_text: '#FFFFFF' } },
+]
+
+function themeOf(b) {
+  return THEMES.find(t => COLOR_FIELDS.every(f => String(b[f.key] || '').toUpperCase() === t.colors[f.key]))
+}
+
+// The portal as it draws these settings: white header with a line in the main
+// colour, menu, a panel with a button and a link, the banner, and the footer.
+function BrandPreview({ b, logo }) {
+  const radius = b.border_radius || '2px'
+  return (
+    <div className="cp-brand-preview" aria-hidden="true"
+      style={{ fontFamily: b.font_family || 'Arial, Helvetica, sans-serif', fontSize: b.base_font_size || '14px', color: b.text_primary, borderColor: b.border_color }}>
+      <div className="cp-brand-preview-header" style={{ borderTopColor: b.primary_color, borderBottomColor: b.border_color }}>
+        {logo ? <img src={logo} alt="" /> : <strong>{b.portal_name || 'Portal name'}</strong>}
+        <span style={{ color: b.primary_color, background: '#EEF5FF' }}>Home</span>
+        <span style={{ color: b.text_secondary }}>Ask a question</span>
+        <span style={{ color: b.text_secondary }}>Report a side effect</span>
+      </div>
+      <div className="cp-brand-preview-body">
+        <strong style={{ fontSize: '1.15em' }}>Welcome</strong>
+        <div style={{ color: b.text_secondary }}>{b.tagline || 'Trusted medical information'}</div>
+        <div className="cp-brand-preview-panel" style={{ background: b.surface_color, borderColor: b.border_color, borderRadius: radius }}>
+          <div style={{ fontWeight: 700 }}>Ask a medical question</div>
+          <div style={{ color: b.text_secondary, margin: '4px 0 8px' }}>Our medical team answers by email.</div>
+          <span className="cp-brand-preview-btn" style={{ background: b.button_bg, color: b.button_text, borderRadius: radius }}>Start</span>
+          <span style={{ color: b.link_color, textDecoration: 'underline', marginLeft: 10 }}>Read the FAQ</span>
+        </div>
+        <div className="cp-brand-preview-banner" style={{ background: b.secondary_color }}>Report a side effect</div>
+      </div>
+      <div className="cp-brand-preview-footer" style={{ background: b.footer_bg, color: b.footer_text }}>
+        <div>{b.footer_text_content || 'For medical information or to report side effects, contact us.'}</div>
+        <div>{b.copyright_text || `© ${new Date().getFullYear()} ${b.portal_name || 'Company Name'}`}{b.show_powered_by ? ' · Powered by CP Portal' : ''}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function BrandingPage() {
   const { clientId } = useParams()
@@ -109,10 +172,12 @@ export default function BrandingPage() {
   }
 
   if (!branding) return <AdminLayout title="Branding"><div className="cp-loading">Loading…</div></AdminLayout>
+  const current = themeOf(branding)
 
   return (
     <AdminLayout title="Branding & Theme">
       <ReadOnlyUnless area="branding" what="the branding">
+      <div className="cp-branding-layout">
       <div>
         {/* Identity */}
         <div className="cp-card">
@@ -183,38 +248,45 @@ export default function BrandingPage() {
           </div>
         </div>
 
-        {/* Colors */}
+        {/* Look: four ready themes; single colours under Advanced */}
         <div className="cp-card">
-          <div className="cp-card-title">Colors</div>
-          <div className="cp-color-grid">
-            {COLOR_FIELDS.map(f => (
-              <ColorPicker
-                key={f.key}
-                label={f.label}
-                value={branding[f.key] || '#6B3FA0'}
-                onChange={hex => set(f.key, hex)}
-              />
-            ))}
+          <div className="cp-card-title">Look</div>
+          <div className="cp-theme-grid" role="radiogroup" aria-label="Theme">
+            {THEMES.map(t => {
+              const on = current?.name === t.name
+              return (
+                <button key={t.name} type="button" role="radio" aria-checked={on}
+                  className={`cp-theme-tile${on ? ' on' : ''}`}
+                  onClick={() => { setBranding(b => ({ ...b, ...t.colors })); setSaved(false) }}>
+                  <span className="cp-theme-swatches">
+                    {['primary_color', 'secondary_color', 'button_bg', 'footer_bg'].map(k => <span key={k} style={{ background: t.colors[k] }} />)}
+                  </span>
+                  {t.name}
+                </button>
+              )
+            })}
           </div>
-        </div>
-
-        {/* Color Preview */}
-        <div className="cp-card">
-          <div className="cp-card-title">Color Preview</div>
-          <div className="cp-branding-preview" style={{
-            '--pp-primary':   branding.primary_color   || '#0066cc',
-            '--pp-secondary': branding.secondary_color || '#333333',
-            '--pp-accent':    branding.accent_color    || '#ff6600',
-          }}>
-            <div style={{ background: 'var(--pp-primary)', padding: '1rem', color: '#fff', borderRadius: 4, marginBottom: 8 }}>Primary Color Preview</div>
-            <div style={{ background: 'var(--pp-secondary)', padding: '1rem', color: '#fff', borderRadius: 4, marginBottom: 8 }}>Secondary Color Preview</div>
-            <div style={{ background: 'var(--pp-accent)', padding: '1rem', color: '#fff', borderRadius: 4 }}>Accent Color Preview</div>
+          <div className="cp-help-text" style={{ marginTop: 8 }}>
+            {current ? `Using the ${current.name} theme.` : 'Using your own colours.'} Nothing changes on the portal until you press Save Branding.
           </div>
+          <details className="cp-advanced" style={{ marginTop: 10 }}>
+            <summary>Advanced: choose each colour</summary>
+            <div className="cp-color-grid" style={{ marginTop: 10 }}>
+              {COLOR_FIELDS.map(f => (
+                <ColorPicker
+                  key={f.key}
+                  label={f.label}
+                  value={branding[f.key] || '#6B3FA0'}
+                  onChange={hex => set(f.key, hex)}
+                />
+              ))}
+            </div>
+          </details>
         </div>
 
         {/* Typography */}
         <div className="cp-card">
-          <div className="cp-card-title">Typography & Layout</div>
+          <div className="cp-card-title">Text and corners</div>
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Body Font</label>
@@ -230,17 +302,6 @@ export default function BrandingPage() {
                 <option value="'Source Sans Pro', sans-serif">Source Sans Pro</option>
                 <option value="Georgia, serif">Georgia (Serif)</option>
                 <option value="'Times New Roman', serif">Times New Roman (Serif)</option>
-              </select>
-            </div>
-            <div className="cp-field">
-              <label>Heading Font</label>
-              <select aria-label="Heading font" value={branding.heading_font || 'Arial, Helvetica, sans-serif'} onChange={e => set('heading_font', e.target.value)}>
-                <option value="Arial, Helvetica, sans-serif">Arial (Default)</option>
-                <option value="Inter, sans-serif">Inter</option>
-                <option value="'Roboto', sans-serif">Roboto</option>
-                <option value="'Open Sans', sans-serif">Open Sans</option>
-                <option value="'Montserrat', sans-serif">Montserrat</option>
-                <option value="Georgia, serif">Georgia (serif)</option>
               </select>
             </div>
             <div className="cp-field">
@@ -261,16 +322,6 @@ export default function BrandingPage() {
                 <option value="8px">8px (Soft)</option>
                 <option value="12px">12px (Rounded)</option>
                 <option value="16px">16px (Pill)</option>
-              </select>
-            </div>
-          </div>
-          <div className="cp-field-row">
-            <div className="cp-field">
-              <label>Header Style</label>
-              <select aria-label="Header style" value={branding.header_style || 'solid'} onChange={e => set('header_style', e.target.value)}>
-                <option value="solid">Solid</option>
-                <option value="transparent">Transparent</option>
-                <option value="gradient">Gradient</option>
               </select>
             </div>
           </div>
@@ -309,6 +360,13 @@ export default function BrandingPage() {
           <LoadingButton onClick={handleSave} disabled={saving}>Save Branding</LoadingButton>
           <button type="button" className="cp-btn cp-btn-outline" onClick={handleReset} disabled={saving}>Reset to Defaults</button>
         </div>
+      </div>
+
+      {/* Phase 3 row 19: the portal as these settings draw it, before saving. */}
+      <aside className="cp-card cp-branding-preview-card">
+        <div className="cp-card-title">Preview</div>
+        <BrandPreview b={branding} logo={logoPreview} />
+      </aside>
       </div>
       </ReadOnlyUnless>
     </AdminLayout>

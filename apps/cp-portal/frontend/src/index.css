@@ -1204,6 +1204,36 @@ body { background: var(--cp-bg); }
   .cp-inbox-panel { position: fixed; inset: 0; z-index: 60; max-height: none; border: 0; }
 }
 
+/* Phase 3 row 19 (CP ease-of-use plan): Branding themes and the live preview. */
+.cp-branding-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.cp-branding-preview-card { position: sticky; top: 0; }
+@media (max-width: 1100px) {
+  .cp-branding-layout { grid-template-columns: minmax(0, 1fr); }
+  .cp-branding-preview-card { position: static; order: -1; }
+}
+.cp-theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.cp-theme-tile {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 8px 10px;
+  border: 1px solid var(--cp-border); background: #fff; font: inherit; font-size: 13px; cursor: pointer; text-align: left;
+}
+.cp-theme-tile:hover { background: #FFF8E6; }
+.cp-theme-tile.on { border: 2px solid var(--cp-primary); padding: 7px 9px; font-weight: 700; }
+.cp-theme-swatches { display: flex; gap: 3px; }
+.cp-theme-swatches > span { width: 22px; height: 16px; border: 1px solid rgba(0,0,0,.15); }
+.cp-brand-preview { border: 1px solid; background: #fff; overflow: hidden; line-height: 1.4; }
+.cp-brand-preview-header {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px;
+  border-top: 4px solid; border-bottom: 1px solid; background: #fff; font-size: .9em;
+}
+.cp-brand-preview-header img { max-height: 26px; max-width: 90px; object-fit: contain; margin-right: 6px; }
+.cp-brand-preview-header strong { margin-right: 6px; }
+.cp-brand-preview-header span { padding: 2px 5px; font-weight: 600; }
+.cp-brand-preview-body { padding: 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.cp-brand-preview-panel { border: 1px solid; padding: 10px; margin-top: 4px; }
+.cp-brand-preview-btn { display: inline-block; padding: 5px 12px; font-weight: 700; }
+.cp-brand-preview-banner { color: #fff; padding: 10px; font-weight: 700; margin-top: 4px; }
+.cp-brand-preview-footer { padding: 10px; font-size: .85em; display: flex; flex-direction: column; gap: 4px; }
+
 /* ── Toggle Switch ────────────────────────────────────────────── */
 
 .cp-toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
