@@ -124,7 +124,9 @@ export default function CasesPage() {
       setBulkLoading(true)
       Promise.all([
         httpFetch(`${API}/users${orgId ? `?org_id=${orgId}` : ''}`, { headers }),
-        httpFetch(`${API}/admin/workflow-states`, { headers })
+        // The case route, not the admin one: the admin route refused agents (403)
+        // and put "This area is restricted" over the case list.
+        httpFetch(`${API}/cases/workflow-states`, { headers })
       ]).then(async ([uRes, sRes]) => {
         const u = await uRes.json()
         const s = await sRes.json()
@@ -780,7 +782,9 @@ export default function CasesPage() {
                 </select>
                 <button className="cf-cases-bulk-apply" onClick={() => applyBulkAction('update_priority')} disabled={bulkActionLoading}>Apply</button>
               </div>
-              <button className="cf-cases-bulk-delete" onClick={() => applyBulkAction('delete')} disabled={bulkActionLoading}>Delete Selected</button>
+              <button className="cf-cases-bulk-delete" onClick={() => applyBulkAction('delete')}
+                disabled={bulkActionLoading || !hasCapability('case.delete')}
+                title={!hasCapability('case.delete') ? 'Your security group does not allow deleting cases.' : undefined}>Delete Selected</button>
               <button className="cf-cases-bulk-cancel" onClick={() => setSelectedCaseIds([])}>Deselect All</button>
             </div>
           </div>
