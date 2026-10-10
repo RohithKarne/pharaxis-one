@@ -1307,11 +1307,14 @@ a.nav-item { text-decoration: none; color: inherit; }
   color: var(--text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  white-space: nowrap;
+  /* Name above its count, never cut off ("Pending…", "Non-Proce…"). */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  white-space: normal;
   text-align: center;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: color 0.15s, border-color 0.15s;
   font-family: var(--font);
 }
@@ -1326,7 +1329,6 @@ a.nav-item { text-decoration: none; color: inherit; }
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
-  margin-left: 4px;
 }
 
 .inbox-layout-controls {
@@ -1459,6 +1461,7 @@ a.nav-item { text-decoration: none; color: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
 }
 .inbox-row-sender {
   font-size: 12.5px;
@@ -1467,6 +1470,9 @@ a.nav-item { text-decoration: none; color: inherit; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Shrinks so the time stays inside the card. */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .inbox-row-subject {
   font-size: 12px;
