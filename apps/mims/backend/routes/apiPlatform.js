@@ -765,31 +765,9 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
   }
 });
 
-router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {
-  // M-20: optional optimistic concurrency. If the caller supplies an expected
-  // version, gate the UPDATE on it and return 409 on a stale write. Without it,
-  // behaviour is unchanged (last-write-wins) for backward compatibility.
-  const expected = req.body.expected_version_stamp;
-  if (expected !== undefined && expected !== null && expected !== '') {
-    const [result] = await pool.execute(
-      'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND source_api_client_id=? AND version_stamp=?',
-      [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, req.apiClient.id, expected]
-    );
-    if (result.affectedRows === 0) {
-      const [[own]] = await pool.execute('SELECT id FROM cases WHERE id=? AND org_id=? AND source_api_client_id=?', [req.params.id, req.apiClient.org_id, req.apiClient.id]);
-      if (!own) return res.status(404).json({ error: 'Case not found.' });
-      return res.status(409).json({ error: 'Version conflict: the case was modified since your expected version.' });
-    }
-    return res.json({ id: Number(req.params.id) });
-  }
-  // Only a case this connection created: another system could rewrite a portal case.
-  const [result] = await pool.execute(
-    'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND source_api_client_id=?',
-    [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, req.apiClient.id]
-  );
-  if (result.affectedRows === 0) return res.status(404).json({ error: 'Case not found.' });
-  res.json({ id: Number(req.params.id) });
-});
+// No PUT /api/v1/cases/:id. The portal never rewrote a case, and the route changed the
+// description and priority with no line in the case history (Rohith, 2026-10-10,
+// bridge plan decision 3). A case changes in MIMS; the portal adds follow-ups.
 
 router.get('/api/v1/picklists', scopeGuard('picklists:read'), async (req, res) => {
   const [rows] = await pool.execute('SELECT id, category, field_type, value, status FROM picklists WHERE org_id=? AND (? IS NULL OR category=?) AND (? IS NULL OR field_type=?) ORDER BY sort_order ASC, value ASC', [req.apiClient.org_id, req.query.category || null, req.query.category || null, req.query.field_type || null, req.query.field_type || null]);
