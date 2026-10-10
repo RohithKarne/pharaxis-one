@@ -99,6 +99,18 @@ router.get('/:id/sites', authenticate, requireRole('admin', 'platform_admin'), a
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
+// GET /api/admin/orgs/:id/readiness — the setup checks run when an organisation
+// is created, for the admin home page. An organisation's admin sees their own only.
+router.get('/:id/readiness', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    if (denyCrossOrg(req, res, req.params.id)) return;
+    res.json(await getOrgReadiness(Number(req.params.id)));
+  } catch (err) {
+    if (err.message === 'Organisation not found.') return res.status(404).json({ error: err.message });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/admin/orgs/:id/sites — create site (platform-admin only)
 router.post('/:id/sites', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {

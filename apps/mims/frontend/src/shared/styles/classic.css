@@ -161,10 +161,9 @@
 :root .cf-contact-card { border-radius: 0; box-shadow: none; background: #fff; }
 :root .cf-remove-btn { border-radius: 2px; }
 
-/* ─── Admin console tabs ───────────────────────────────────── */
-:root .mims-admin-topnav { border-radius: 0; box-shadow: none; margin: 0; background: var(--panel-head); border-bottom: 1px solid var(--border); }
-:root .mims-admin-tab { color: #333; font-size: 12px; border-radius: 0; }
-:root .mims-admin-tab.active { background: #fff; color: #000; font-weight: bold; box-shadow: inset 0 2px 0 var(--accent); }
+/* ─── Admin console settings list ───────────────────────────────────── */
+:root .mims-admin-sidenav { background: #f4f6f9; }
+:root .mims-admin-nav-group, :root .mims-admin-nav-leaf, :root .mims-admin-nav-result { font-size: 12px; padding-top: 4px; padding-bottom: 4px; }
 
 /* ─── Reports workspace navigation ─────────────────────────── */
 :root .workspace-page--reports { align-content: start; gap: 10px; padding: 10px; }
@@ -297,7 +296,7 @@
 /* Page titles set inline at 18–20px read like the grey-bar titles elsewhere */
 :root :is(h1, h2)[style*="font-size: 20px"], :root :is(h1, h2)[style*="font-size: 18px"] { font-size: 15px !important; font-weight: bold !important; color: var(--primary) !important; }
 /* The round "?" help button beside the admin tabs is a small square button */
-:root .mims-admin-topnav [title^="Help for"] { border-radius: 2px !important; width: 24px !important; height: 24px !important; }
+:root .mims-admin-trailbar [title^="Help for"] { border-radius: 2px !important; width: 24px !important; height: 24px !important; }
 
 /* Case Query toolbar: one row of short controls, date labels beside their boxes. */
 :root .cf-query-toolbar { align-items: center; gap: 6px; padding: 8px 10px; }

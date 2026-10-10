@@ -13,6 +13,9 @@ import CommandPalette from './CommandPalette'
 import ToastNotificationListener from './ToastNotificationListener'
 
 const SIDEBAR_PREF_KEY = 'mims_sidebar_collapsed'
+// Below this width the left menu squeezed the page to a strip about 190px wide
+// (MIMS screen review, row 8). There it folds away behind the header's menu button.
+const NARROW_QUERY = '(max-width: 900px)'
 
 export default function MIMSLayout({ children, showStatStrip = true, bodyClassName = '', surfaceVariant = 'default', compact = false }) {
   const [notifOpen, setNotifOpen] = useState(false)
@@ -21,6 +24,16 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_PREF_KEY) === 'true' } catch { return false }
   })
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.(NARROW_QUERY).matches ?? false)
+  const [navOpen, setNavOpen] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia?.(NARROW_QUERY)
+    if (!mq) return undefined
+    const onChange = e => { setNarrow(e.matches); if (!e.matches) setNavOpen(false) }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   // Global Cmd/Ctrl-K opens the command palette. Outside a text field, "/" moves to the
   // page's search box and "n" starts a new case (when the user may create one).
@@ -89,9 +102,18 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
       <MIMSHeader
         onBellClick={() => setNotifOpen(true)}
         onHelpClick={() => setHelpOpen(true)}
+        onMenuClick={narrow ? () => setNavOpen(o => !o) : undefined}
+        menuOpen={navOpen}
       />
-      <div className="mims-app-body">
-        <MIMSNavbar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      <div className={`mims-app-body${navOpen ? ' nav-open' : ''}`}>
+        {navOpen && <div className="mims-sidenav-backdrop" onClick={() => setNavOpen(false)} />}
+        {/* On a narrow screen, choosing a page closes the menu. */}
+        <div className="mims-sidenav-slot" onClick={e => { if (narrow && e.target.closest('a, .mims-new-case-btn')) setNavOpen(false) }}>
+          <MIMSNavbar
+            collapsed={narrow ? false : sidebarCollapsed}
+            onToggle={narrow ? () => setNavOpen(false) : toggleSidebar}
+          />
+        </div>
         <div className="mims-content-area">
           {showStatStrip && <MIMSStatStrip />}
           <div id="mims-main" tabIndex={-1} className={pageBodyClassName}>

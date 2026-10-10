@@ -1,5 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
-import ReactDOM from 'react-dom'
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -74,7 +73,7 @@ function AdminTenantPicker() {
 }
 
 const TABS = [
-  { key: 'dashboard',         label: 'Dashboard',         component: DashboardTab        },
+  { key: 'dashboard',         label: 'Admin home',        component: DashboardTab        },
   { key: 'organizations',     label: 'Organisations',     component: OrganizationsTab    },
   { key: 'service-log',       label: 'Service Log',       component: ServiceLogTab       },
   { key: 'system-activity',   label: 'System Activity',   component: SystemActivityTab   },
@@ -174,550 +173,129 @@ function filterSystemNav(nav, effectiveAccess) {
   }, [])
 }
 
-function getAnchorPosition(anchorEl, direction = 'bottom') {
-  if (!anchorEl) return null
-  const rect = anchorEl.getBoundingClientRect()
-  if (direction === 'right') {
-    return { top: rect.top, left: rect.right + 2 }
+// ── Admin left list ───────────────────────────────────────────────────────────
+// The admin screens sat behind hover menus up to four levels deep, with no search
+// and nothing saying where you were (MIMS screen review, row 6). They are now one
+// list that stays on screen, a "Find a setting" box over every screen in it, and a
+// trail above the page. Each entry opens the same address it always did.
+// The admin home's short list of the settings most admin visits are for.
+const COMMON_SETTINGS = ['sys-sec-users', 'sys-sec-group', 'sys-setup-case-fields', 'sys-setup-workflow', 'sys-setup-email-accounts']
+
+function buildAdminTree(tabs, systemNav) {
+  const navs = {
+    'service-log':     [SERVICE_LOG_NAV, 'service'],
+    'system-activity': [SYSTEM_ACTIVITY_NAV, 'activity'],
+    configuration:     [CONFIG_NAV, 'config'],
+    escalation:        [ESCALATION_NAV, 'escalation'],
+    documents:         [DOCUMENTS_NAV, 'documents'],
+    tables:            [TABLES_NAV, 'tables'],
+    system:            [systemNav, 'system'],
+    help:              [HELP_NAV, 'help'],
   }
-  return { top: rect.bottom + 2, left: rect.left }
+  const toNodes = (nav, tab, key, parentId) => nav.map(item => {
+    const id = `${parentId}/${item.value}`
+    return item.children
+      ? { id, label: item.label, children: toNodes(item.children, tab, key, id) }
+      : { id, label: item.label, tab, key, value: item.value }
+  })
+  return tabs.map(t => navs[t.key]
+    ? { id: t.key, label: t.label, children: toNodes(navs[t.key][0], t.key, navs[t.key][1], t.key) }
+    : { id: t.key, label: t.label, tab: t.key, key: null, value: '' })
 }
 
-// A menu level always opened to the right (or below) of its parent with no
-// check for room, so the System tab's third level — Setup › Integrations &
-// Platform — was drawn off the right edge of the window at 100% zoom (Rohith,
-// 2026-10-10). After the menu mounts, measure it: a level that would not fit
-// on the right opens to the left of its parent instead; one that would run
-// past the bottom is moved up. Returns the style to apply and a ref for the menu.
-const EDGE = 8
-function useMenuPosition(anchorEl, direction = 'bottom') {
-  const menuRef = useRef(null)
-  const [pos, setPos] = useState(() => getAnchorPosition(anchorEl, direction))
-  useLayoutEffect(() => {
-    const start = getAnchorPosition(anchorEl, direction)
-    const el = menuRef.current
-    if (!start || !el) return
-    const rect = anchorEl.getBoundingClientRect()
-    const { offsetWidth: w, offsetHeight: h } = el
-    let { top, left } = start
-    if (left + w > window.innerWidth - EDGE) {
-      left = direction === 'right' ? rect.left - w - 2 : window.innerWidth - w - EDGE
-    }
-    if (top + h > window.innerHeight - EDGE) top = window.innerHeight - h - EDGE
-    setPos({ top: Math.max(EDGE, top), left: Math.max(EDGE, left) })
-  }, [anchorEl, direction])
-  return { menuRef, pos }
+function flattenLeaves(nodes, trail = []) {
+  return nodes.flatMap(n => n.children
+    ? flattenLeaves(n.children, [...trail, n])
+    : [{ ...n, trail: [...trail, n] }])
 }
 
-// ── Flyout submenu rendered via portal ───────────────────────────────────────
-function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl, 'right')
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9999,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.14)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {items.map(child => (
-        <DropdownRow
-          key={child.value}
-          item={child}
-          onSelect={onSelect}
-          onCloseAll={onClose}
-        />
-      ))}
-    </div>,
-    document.body
-  )
-}
-
-// ── Single row item inside the main dropdown ──────────────────────────────────
-function DropdownRow({ item, onSelect, onCloseAll }) {
-  const rowRef  = useRef(null)
-  const [showFlyout, setShowFlyout] = useState(false)
-  const [flyoutAnchor, setFlyoutAnchor] = useState(null)
-  const closeTimer = useRef(null)
-
-  const hasChildren = !!item.children
-
-  function openFlyout()  {
-    clearTimeout(closeTimer.current)
-    setFlyoutAnchor(rowRef.current)
-    setShowFlyout(true)
-  }
-  function closeFlyout() {
-    closeTimer.current = setTimeout(() => {
-      setShowFlyout(false)
-      setFlyoutAnchor(null)
-    }, 120)
-  }
-
-  return (
-    <div
-      ref={rowRef}
-      onClick={() => { if (!hasChildren) { onSelect(item.value); onCloseAll() } }}
-      style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'space-between',
-        padding:        '8px 16px',
-        cursor:         'pointer',
-        fontSize:       13,
-        color:          'var(--text-primary)',
-        whiteSpace:     'nowrap',
-        userSelect:     'none',
-        gap:            24,
-      }}
-      onMouseEnter={e => { openFlyout(); e.currentTarget.style.background = '#f3f4f6' }}
-      onMouseLeave={e => { closeFlyout(); e.currentTarget.style.background = 'transparent' }}
-    >
-      <span>{item.label}</span>
-      {hasChildren && <span style={{ fontSize: 10, opacity: 0.45 }}>▶</span>}
-
-      {hasChildren && showFlyout && (
-        <FlyoutMenu
-          items={item.children}
-          anchorEl={flyoutAnchor}
-          onSelect={onSelect}
-          onClose={() => { setShowFlyout(false); setFlyoutAnchor(null); onCloseAll() }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Main config dropdown rendered via portal ──────────────────────────────────
-function ConfigDropdown({ anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl)
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9998,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {CONFIG_NAV.map(item => (
-        <DropdownRow
-          key={item.value}
-          item={item}
-          onSelect={onSelect}
-          onCloseAll={onClose}
-        />
-      ))}
-    </div>,
-    document.body
-  )
-}
-
-// ── Tables dropdown rendered via portal (uses DropdownRow for Shift flyout) ───
-function TablesDropdown({ anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl)
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9998,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {TABLES_NAV.map(item => (
-        <DropdownRow
-          key={item.value}
-          item={item}
-          onSelect={onSelect}
-          onCloseAll={onClose}
-        />
-      ))}
-    </div>,
-    document.body
-  )
-}
-
-// ── Tables tab button ─────────────────────────────────────────────────────────
-function TablesTab({ isActive, onTabClick, onSelect }) {
-  const btnRef  = useRef(null)
-  const [open, setOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState(null)
-  const closeTimer = useRef(null)
-
-  function openMenu()  {
-    clearTimeout(closeTimer.current)
-    setMenuAnchor(btnRef.current)
-    setOpen(true)
-  }
-  function closeMenu() {
-    closeTimer.current = setTimeout(() => {
-      setOpen(false)
-      setMenuAnchor(null)
-    }, 150)
-  }
-
-  return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={openMenu}
-      onMouseLeave={closeMenu}
-    >
+function AdminNavNode({ node, depth, currentId, isOpen, onToggle, onPick }) {
+  if (!node.children) {
+    const current = node.id === currentId
+    return (
       <button
-        ref={btnRef}
-        className={`mims-admin-tab${isActive ? ' active' : ''}`}
-        onClick={onTabClick}
+        type="button"
+        className={`mims-admin-nav-leaf${current ? ' current' : ''}`}
+        style={{ paddingLeft: 12 + depth * 14 }}
+        aria-current={current ? 'page' : undefined}
+        onClick={() => onPick(node)}
       >
-        Tables
+        {node.label}
       </button>
-
-      {open && (
-        <TablesDropdown
-          anchorEl={menuAnchor}
-          onSelect={(value) => { onSelect(value); setOpen(false) }}
-          onClose={closeMenu}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Documents dropdown rendered via portal ────────────────────────────────────
-function DocumentsDropdown({ anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl)
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9998,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {DOCUMENTS_NAV.map(item => (
-        <div
-          key={item.value}
-          onClick={() => { onSelect(item.value); onClose() }}
-          style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', userSelect: 'none' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-        >
-          {item.label}
-        </div>
+    )
+  }
+  const open = isOpen(node.id)
+  return (
+    <>
+      <button
+        type="button"
+        className={`mims-admin-nav-group${depth === 0 ? ' top' : ''}`}
+        style={{ paddingLeft: 12 + depth * 14 }}
+        aria-expanded={open}
+        onClick={() => onToggle(node.id, !open)}
+      >
+        <span className="mims-admin-nav-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {node.label}
+      </button>
+      {open && node.children.map(child => (
+        <AdminNavNode key={child.id} node={child} depth={depth + 1} currentId={currentId} isOpen={isOpen} onToggle={onToggle} onPick={onPick} />
       ))}
-    </div>,
-    document.body
+    </>
   )
 }
 
-// ── Documents tab button ──────────────────────────────────────────────────────
-function DocumentsTab({ isActive, onTabClick, onSelect }) {
-  const btnRef  = useRef(null)
-  const [open, setOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState(null)
-  const closeTimer = useRef(null)
+function AdminSideNav({ tree, leaves, current, open, onSelect }) {
+  const [query, setQuery] = useState('')
+  // Groups on the way to the current screen start open; a click on a group wins.
+  const [toggled, setToggled] = useState({})
+  const trailIds = new Set((current?.trail || []).map(n => n.id))
+  const isOpen = id => (id in toggled ? toggled[id] : trailIds.has(id))
+  const onToggle = (id, value) => setToggled(prev => ({ ...prev, [id]: value }))
 
-  function openMenu()  {
-    clearTimeout(closeTimer.current)
-    setMenuAnchor(btnRef.current)
-    setOpen(true)
-  }
-  function closeMenu() {
-    closeTimer.current = setTimeout(() => {
-      setOpen(false)
-      setMenuAnchor(null)
-    }, 150)
+  const q = query.trim().toLowerCase()
+  const results = q
+    ? leaves
+        .filter(l => l.trail.some(n => n.label.toLowerCase().includes(q)))
+        .sort((a, b) => Number(!a.label.toLowerCase().includes(q)) - Number(!b.label.toLowerCase().includes(q)))
+    : []
+
+  function pick(leaf) {
+    setQuery('')
+    setToggled({})
+    onSelect(leaf)
   }
 
   return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={openMenu}
-      onMouseLeave={closeMenu}
-    >
-      <button
-        ref={btnRef}
-        className={`mims-admin-tab${isActive ? ' active' : ''}`}
-        onClick={onTabClick}
-      >
-        Documents
-      </button>
-
-      {open && (
-        <DocumentsDropdown
-          anchorEl={menuAnchor}
-          onSelect={(value) => { onSelect(value); setOpen(false) }}
-          onClose={closeMenu}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Escalation dropdown rendered via portal ───────────────────────────────────
-function EscalationDropdown({ anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl)
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9998,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {ESCALATION_NAV.map(item => (
-        <div
-          key={item.value}
-          onClick={() => { onSelect(item.value); onClose() }}
-          style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', userSelect: 'none' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-        >
-          {item.label}
-        </div>
-      ))}
-    </div>,
-    document.body
-  )
-}
-
-// ── Escalation tab button ─────────────────────────────────────────────────────
-function EscalationTab({ isActive, onTabClick, onSelect }) {
-  const btnRef  = useRef(null)
-  const [open, setOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState(null)
-  const closeTimer = useRef(null)
-
-  function openMenu()  {
-    clearTimeout(closeTimer.current)
-    setMenuAnchor(btnRef.current)
-    setOpen(true)
-  }
-  function closeMenu() {
-    closeTimer.current = setTimeout(() => {
-      setOpen(false)
-      setMenuAnchor(null)
-    }, 150)
-  }
-
-  return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={openMenu}
-      onMouseLeave={closeMenu}
-    >
-      <button
-        ref={btnRef}
-        className={`mims-admin-tab${isActive ? ' active' : ''}`}
-        onClick={onTabClick}
-      >
-        Escalation
-      </button>
-
-      {open && (
-        <EscalationDropdown
-          anchorEl={menuAnchor}
-          onSelect={(value) => { onSelect(value); setOpen(false) }}
-          onClose={closeMenu}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Generic portal dropdown (leaf + nested via DropdownRow) ──────────────────
-function NavDropdown({ nav, anchorEl, onSelect, onClose }) {
-  const { menuRef, pos } = useMenuPosition(anchorEl)
-  if (!pos) return null
-
-  return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      onMouseEnter={() => {}}
-      onMouseLeave={onClose}
-      style={{
-        position:      'fixed',
-        top:           pos.top,
-        left:          pos.left,
-        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
-        overflowY:     'auto',
-        zIndex:        9998,
-        background:    'var(--surface)',
-        border:        '1px solid var(--border)',
-        borderRadius:  7,
-        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
-        minWidth:      210,
-        paddingTop:    4,
-        paddingBottom: 4,
-      }}
-    >
-      {nav.map(item => (
-        <DropdownRow
-          key={item.value}
-          item={item}
-          onSelect={onSelect}
-          onCloseAll={onClose}
-        />
-      ))}
-    </div>,
-    document.body
-  )
-}
-
-// ── Generic hover tab ─────────────────────────────────────────────────────────
-function HoverTab({ label, nav, isActive, onTabClick, onSelect }) {
-  const btnRef     = useRef(null)
-  const [open, setOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState(null)
-  const closeTimer = useRef(null)
-
-  function openMenu()  {
-    clearTimeout(closeTimer.current)
-    setMenuAnchor(btnRef.current)
-    setOpen(true)
-  }
-  function closeMenu() {
-    closeTimer.current = setTimeout(() => {
-      setOpen(false)
-      setMenuAnchor(null)
-    }, 150)
-  }
-
-  return (
-    <div style={{ position: 'relative' }} onMouseEnter={openMenu} onMouseLeave={closeMenu}>
-      <button
-        ref={btnRef}
-        className={`mims-admin-tab${isActive ? ' active' : ''}`}
-        onClick={onTabClick}
-      >
-        {label}
-      </button>
-
-      {open && (
-        <NavDropdown
-          nav={nav}
-          anchorEl={menuAnchor}
-          onSelect={(value) => { onSelect(value); setOpen(false) }}
-          onClose={closeMenu}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Configuration tab button ──────────────────────────────────────────────────
-function ConfigTab({ isActive, onTabClick, onSelect }) {
-  const btnRef     = useRef(null)
-  const [open, setOpen] = useState(false)
-  const [menuAnchor, setMenuAnchor] = useState(null)
-  const closeTimer = useRef(null)
-
-  function openMenu()  {
-    clearTimeout(closeTimer.current)
-    setMenuAnchor(btnRef.current)
-    setOpen(true)
-  }
-  function closeMenu() {
-    closeTimer.current = setTimeout(() => {
-      setOpen(false)
-      setMenuAnchor(null)
-    }, 150)
-  }
-
-  return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={openMenu}
-      onMouseLeave={closeMenu}
-    >
-      <button
-        ref={btnRef}
-        className={`mims-admin-tab${isActive ? ' active' : ''}`}
-        onClick={onTabClick}
-      >
-        Configuration
-      </button>
-
-      {open && (
-        <ConfigDropdown
-          anchorEl={menuAnchor}
-          onSelect={(value) => { onSelect(value); setOpen(false) }}
-          onClose={closeMenu}
-        />
-      )}
-    </div>
+    <nav className={`mims-admin-sidenav${open ? ' open' : ''}`} aria-label="Admin settings">
+      <input
+        type="search"
+        className="mims-admin-nav-search"
+        placeholder="Find a setting…"
+        aria-label="Find a setting"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && results[0]) pick(results[0])
+          if (e.key === 'Escape') setQuery('')
+        }}
+      />
+      <div className="mims-admin-nav-list">
+        {q ? (
+          results.length ? results.map(leaf => (
+            <button key={leaf.id} type="button" className="mims-admin-nav-result" onClick={() => pick(leaf)}>
+              <span>{leaf.label}</span>
+              {leaf.trail.length > 1 && (
+                <span className="mims-admin-nav-result-trail">{leaf.trail.slice(0, -1).map(n => n.label).join(' › ')}</span>
+              )}
+            </button>
+          )) : (
+            <div className="mims-admin-nav-empty">No setting matches “{query.trim()}”.</div>
+          )
+        ) : tree.map(node => (
+          <AdminNavNode key={node.id} node={node} depth={0} currentId={current?.id} isOpen={isOpen} onToggle={onToggle} onPick={pick} />
+        ))}
+      </div>
+    </nav>
   )
 }
 
@@ -755,6 +333,7 @@ function MIMSAdminShellInner() {
   const [auditItem,      setAuditItem]      = useState(initialAuditItem)
   const [helpItem,       setHelpItem]       = useState(initialParams.get('help') || '')
   const [effectiveAccess, setEffectiveAccess] = useState(() => createUnresolvedAdminAccess())
+  const [narrowNavOpen,  setNarrowNavOpen]  = useState(false)
 
   const loadEffectiveAccess = useCallback(async () => {
     if (!token || !user) return
@@ -941,43 +520,11 @@ function MIMSAdminShellInner() {
     effectiveAccess,
   ])
 
-  function handleConfigSelect(value) {
-    activateTab('configuration', 'config', value)
-  }
-
-  function handleServiceSelect(value) {
-    activateTab('service-log', 'service', value)
-  }
-
-  function handleSystemActivitySelect(value) {
-    activateTab('system-activity', 'activity', value)
-  }
-
-  function handleEscalationSelect(value) {
-    activateTab('escalation', 'escalation', value)
-  }
-
-  function handleDocumentsSelect(value) {
-    activateTab('documents', 'documents', value)
-  }
-
-  function handleTablesSelect(value) {
-    activateTab('tables', 'tables', value)
-  }
-
-  function handleSystemSelect(value) {
-    activateTab('system', 'system', value)
-  }
-
   function handleAuditSelect(value) {
     setAuditItem(value)
     setSystemItem('sys-view-data')
     setActiveTab('system')
     syncAdminState({ tab: 'system', system: 'sys-view-data', audit: value })
-  }
-
-  function handleHelpSelect(value) {
-    activateTab('help', 'help', value)
   }
 
   const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
@@ -1025,122 +572,72 @@ function MIMSAdminShellInner() {
     tablesItem,
   ])
 
+  const adminTree = buildAdminTree(visibleTabs, systemNav)
+  const adminLeaves = flattenLeaves(adminTree)
+  const currentItems = { service: serviceItem, activity: activityItem, config: configItem, escalation: escalationItem, documents: documentsItem, tables: tablesItem, system: systemItem, help: helpItem }
+  const currentLeaf = adminLeaves.find(l => l.tab === activeTab && (!l.key || l.value === currentItems[l.key]))
+    || adminLeaves.find(l => l.tab === activeTab)
+
   return (
     <div className="mims-admin-shell">
-      <div className="mims-admin-topnav">
-        {visibleTabs.map(t =>
-          t.key === 'service-log' ? (
-            <HoverTab
-              key="service-log"
-              label="Service Log"
-              nav={SERVICE_LOG_NAV}
-              isActive={activeTab === 'service-log'}
-              onTabClick={() => activateTab('service-log')}
-              onSelect={handleServiceSelect}
+      <AdminSideNav
+        tree={adminTree}
+        leaves={adminLeaves}
+        current={currentLeaf}
+        open={narrowNavOpen}
+        onSelect={leaf => { setNarrowNavOpen(false); activateTab(leaf.tab, leaf.key, leaf.value) }}
+      />
+      <div className="mims-admin-main">
+        <div className="mims-admin-trailbar">
+          <button type="button" className="mims-admin-nav-toggle" aria-expanded={narrowNavOpen} onClick={() => setNarrowNavOpen(o => !o)}>
+            {narrowNavOpen ? 'Close settings list' : 'All settings'}
+          </button>
+          <div className="mims-admin-trail" aria-label="You are here">
+            {(currentLeaf?.trail || []).map((n, i, all) => (
+              <span key={n.id} className={i === all.length - 1 ? 'here' : undefined}>
+                {n.label}{i < all.length - 1 && <span className="mims-admin-trail-sep" aria-hidden="true"> › </span>}
+              </span>
+            ))}
+          </div>
+          {/* One unit, so when the bar wraps the picker and its help button move together. */}
+          <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <AdminTenantPicker />
+            <HelpHint
+              featureKey={helpKeyFor({ activeTab, systemItem, tablesItem })}
+              label={helpLabelFor({ activeTab, systemItem })}
+              placement="topbar"
             />
-          ) : t.key === 'system-activity' ? (
-            <HoverTab
-              key="system-activity"
-              label="System Activity"
-              nav={SYSTEM_ACTIVITY_NAV}
-              isActive={activeTab === 'system-activity'}
-              onTabClick={() => activateTab('system-activity')}
-              onSelect={handleSystemActivitySelect}
-            />
-          ) : t.key === 'configuration' ? (
-            <ConfigTab
-              key="configuration"
-              isActive={activeTab === 'configuration'}
-              onTabClick={() => activateTab('configuration')}
-              onSelect={handleConfigSelect}
-            />
-          ) : t.key === 'escalation' ? (
-            <EscalationTab
-              key="escalation"
-              isActive={activeTab === 'escalation'}
-              onTabClick={() => activateTab('escalation')}
-              onSelect={handleEscalationSelect}
-            />
-          ) : t.key === 'documents' ? (
-            <DocumentsTab
-              key="documents"
-              isActive={activeTab === 'documents'}
-              onTabClick={() => activateTab('documents')}
-              onSelect={handleDocumentsSelect}
-            />
-          ) : t.key === 'tables' ? (
-            <TablesTab
-              key="tables"
-              isActive={activeTab === 'tables'}
-              onTabClick={() => activateTab('tables')}
-              onSelect={handleTablesSelect}
-            />
-          ) : t.key === 'system' ? (
-            <HoverTab
-              key="system"
-              label="System"
-              nav={systemNav}
-              isActive={activeTab === 'system'}
-              onTabClick={() => activateTab('system')}
-              onSelect={handleSystemSelect}
-            />
-          ) : t.key === 'help' ? (
-            <HoverTab
-              key="help"
-              label="Help"
-              nav={HELP_NAV}
-              isActive={activeTab === 'help'}
-              onTabClick={() => activateTab('help')}
-              onSelect={handleHelpSelect}
-            />
-          ) : (
-            <button
-              key={t.key}
-              className={`mims-admin-tab${activeTab === t.key ? ' active' : ''}`}
-              onClick={() => activateTab(t.key)}
-            >
-              {t.label}
-            </button>
-          )
-        )}
-        {/* One unit, so when the bar wraps the picker and its help button move together. */}
-        <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', marginRight: 12 }}>
-          <AdminTenantPicker />
-          <HelpHint
-            featureKey={helpKeyFor({ activeTab, systemItem, tablesItem })}
-            label={helpLabelFor({ activeTab, systemItem })}
-            placement="topbar"
-          />
+          </div>
         </div>
-      </div>
 
-      <div className="mims-admin-tab-content">
-        <Suspense fallback={<AdminTabLoader />}>
-          {activeTab === 'system' && systemItem && (!isSystemItemAllowed(effectiveAccess, systemItem)
-              // Reached by link or address: the menu hides these, the screen should too.
-              || (PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)))
-            ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem] || helpLabelFor({ activeTab, systemItem }) || 'this system option'} platformOnly={PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem)} />
-            : activeTab === 'service-log'
-            ? <ServiceLogTab selectedItem={serviceItem} />
-            : activeTab === 'system-activity'
-            ? <SystemActivityTab selectedItem={activityItem} />
-            : activeTab === 'configuration'
-            ? <ConfigurationTab selectedItem={configItem} onSelect={(value) => activateTab('configuration', 'config', value)} />
-            : activeTab === 'escalation'
-            ? <EscalationTabContent selectedItem={escalationItem} onSelect={(value) => activateTab('escalation', 'escalation', value)} />
-            : activeTab === 'documents'
-            ? <DocumentsTabContent selectedItem={documentsItem} onSelect={(value) => activateTab('documents', 'documents', value)} />
-            : activeTab === 'tables'
-            ? <TablesTabContent selectedItem={tablesItem} onSelect={(value) => activateTab('tables', 'tables', value)} />
-            : activeTab === 'system'
-            ? <SystemTab selectedItem={systemItem} auditItem={auditItem} onAuditSelect={handleAuditSelect} />
-            : activeTab === 'help'
-            ? <HelpTab selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
-            : activeTab === 'dashboard'
-            ? <DashboardTab onNavigateTab={activateTab} />
-            : <ActiveComponent />
-          }
-        </Suspense>
+        <div className="mims-admin-tab-content">
+          <Suspense fallback={<AdminTabLoader />}>
+            {activeTab === 'system' && systemItem && (!isSystemItemAllowed(effectiveAccess, systemItem)
+                // Reached by link or address: the menu hides these, the screen should too.
+                || (PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)))
+              ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem] || helpLabelFor({ activeTab, systemItem }) || 'this system option'} platformOnly={PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem)} />
+              : activeTab === 'service-log'
+              ? <ServiceLogTab selectedItem={serviceItem} />
+              : activeTab === 'system-activity'
+              ? <SystemActivityTab selectedItem={activityItem} />
+              : activeTab === 'configuration'
+              ? <ConfigurationTab selectedItem={configItem} onSelect={(value) => activateTab('configuration', 'config', value)} />
+              : activeTab === 'escalation'
+              ? <EscalationTabContent selectedItem={escalationItem} onSelect={(value) => activateTab('escalation', 'escalation', value)} />
+              : activeTab === 'documents'
+              ? <DocumentsTabContent selectedItem={documentsItem} onSelect={(value) => activateTab('documents', 'documents', value)} />
+              : activeTab === 'tables'
+              ? <TablesTabContent selectedItem={tablesItem} onSelect={(value) => activateTab('tables', 'tables', value)} />
+              : activeTab === 'system'
+              ? <SystemTab selectedItem={systemItem} auditItem={auditItem} onAuditSelect={handleAuditSelect} />
+              : activeTab === 'help'
+              ? <HelpTab selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
+              : activeTab === 'dashboard'
+              ? <DashboardTab onNavigateTab={activateTab} commonSettings={COMMON_SETTINGS.map(v => adminLeaves.find(l => l.value === v)).filter(Boolean)} />
+              : <ActiveComponent />
+            }
+          </Suspense>
+        </div>
       </div>
     </div>
   )
