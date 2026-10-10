@@ -45,7 +45,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     // in the list they already work from rather than only in the safety queue.
     let query = `
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
-             s.submitter_type, s.status, s.external_ref, s.submitted_at,
+             s.submitter_type, s.status, s.external_ref, s.mims_case_number, s.mims_fingerprint, s.submitted_at,
              s.sync_attempts, s.form_data,
              u.first_name, u.last_name, u.email AS user_email,
              -- CPPM-63: an enquiry can now hold more than one safety task (one per

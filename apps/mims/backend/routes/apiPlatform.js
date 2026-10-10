@@ -17,6 +17,7 @@ const { publicApiRateLimiter } = require('../services/api-platform/rateLimiter')
 const { signPayload } = require('../services/api-platform/webhookDispatcher');
 const { deliverPendingWebhooks } = require('../services/api-platform/webhookDeliveryWorker');
 const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
+const { reportFingerprint } = require('../services/api-platform/reportFingerprint');
 const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
@@ -413,6 +414,13 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
   const orgId = req.apiClient.org_id;
+  // Bridge plan P5: the fingerprint of the report as it arrived, taken before anything
+  // is shortened. A sender that gives its own value must match it, or the report
+  // changed on the way and is refused rather than stored.
+  const fingerprint = reportFingerprint(req.body);
+  if (req.body?.payload_sha256 && String(req.body.payload_sha256).toLowerCase() !== fingerprint) {
+    return res.status(400).json({ error: 'The report changed on its way to MIMS: its fingerprint does not match. Send it again.' });
+  }
   const shortened = fitIntakeToLimits(req.body || {});
   const conn = await pool.getConnection();
   try {
@@ -464,16 +472,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let reusedFrom = null;
     if (sourceKey) {
       const [[same]] = await conn.execute(
-        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1',
+        'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1',
         [req.apiClient.id, sourceKey]);
       if (same) {
         await conn.commit();
-        return res.status(200).json({ id: same.id, idempotent: true });
+        return res.status(200).json({ id: same.id, case_number: same.case_number, fingerprint: same.source_fingerprint, idempotent: true });
       }
     }
     if (reference) {
       const [[existing]] = await conn.execute(
-        `SELECT id, case_number, source_key, created_at >= NOW() - INTERVAL 2 HOUR AS recent
+        `SELECT id, case_number, source_key, source_fingerprint, created_at >= NOW() - INTERVAL 2 HOUR AS recent
            FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1`,
         [req.apiClient.id, reference]
       );
@@ -486,7 +494,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
           await conn.execute('UPDATE cases SET source_key = ?, updated_at = updated_at WHERE id = ?', [sourceKey, existing.id]);
         }
         await conn.commit();
-        return res.status(200).json({ id: existing.id, idempotent: true });
+        return res.status(200).json({ id: existing.id, case_number: existing.case_number, fingerprint: existing.source_fingerprint, idempotent: true });
       }
       // A case deleted in MIMS still holds its reference under the unique key, so a
       // report sent again after that deletion (Sync Health › Retry) used to fail with
@@ -507,7 +515,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
         // number, no recorded creator, same intake channel. Claimed, then treated as
         // ours. Only for a sender without keys — one with keys sent nothing that old.
         const [[legacy]] = await conn.execute(
-          `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
+          `SELECT id, case_number FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
               AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
           [orgId, reference, intakeChannel]
         );
@@ -516,7 +524,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
             'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
             [req.apiClient.id, reference, legacy.id]);
           await conn.commit();
-          return res.status(200).json({ id: legacy.id, idempotent: true });
+          return res.status(200).json({ id: legacy.id, case_number: legacy.case_number, fingerprint: null, idempotent: true });
         }
       }
     }
@@ -536,9 +544,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference, source_key)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, storedReference, sourceKey]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference, source_key, source_fingerprint)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, storedReference, sourceKey, fingerprint]
       );
     } catch (err) {
       // Race: the same report pushed twice at once — the second loses on the
@@ -546,11 +554,11 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       if (err.code === 'ER_DUP_ENTRY' && (sourceKey || reference)) {
         const [[dup]] = await conn.execute(
           sourceKey
-            ? 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
-            : 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+            ? 'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
+            : 'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
           [req.apiClient.id, sourceKey || storedReference]
         );
-        if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
+        if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, case_number: dup.case_number, fingerprint: dup.source_fingerprint, idempotent: true }); }
       }
       throw err;
     }
@@ -759,7 +767,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     }
 
     await conn.commit();
-    res.status(201).json({ id: caseId, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
+    res.status(201).json({ id: caseId, case_number: caseNumber, fingerprint, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
     // Bridge row 7: an unassigned side-effect or complaint case tells the supervisors.
     notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName: req.apiClient.name });
   } catch (err) {

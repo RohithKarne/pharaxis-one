@@ -494,10 +494,14 @@ export default function SubmissionsPage() {
                         s.mims_case_url ? (
                           <a href={s.mims_case_url} target="_blank" rel="noopener noreferrer"
                              onClick={e => e.stopPropagation()}
-                             style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS #{s.external_ref} ↗</a>
+                             style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS {s.mims_case_number || `#${s.external_ref}`} ↗</a>
                         ) : (
-                          <span style={{ color: '#4B5563' }}>MIMS #{s.external_ref}</span>
+                          <span style={{ color: '#4B5563' }}>MIMS {s.mims_case_number || `#${s.external_ref}`}</span>
                         )
+                      ) : null}
+                      {/* Bridge plan P5: MIMS confirmed it received exactly what was sent. */}
+                      {s.external_ref && s.mims_fingerprint ? (
+                        <div style={{ color: '#047857' }} title={`Received by MIMS as case ${s.mims_case_number || s.external_ref}, exactly as sent. Fingerprint ${s.mims_fingerprint.slice(0, 12)}…`}>✓ Receipt</div>
                       ) : null}
                     </td>
                     <td style={{ fontSize: 12 }}>{s.status === 'closed' && !s.owner_id ? '—' : <OwnerCell item={s} />}</td>
