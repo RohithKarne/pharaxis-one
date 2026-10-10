@@ -468,7 +468,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={runEvidenceCompile} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Content Type</label>
-                <select className="form-control" value={evidenceForm.content_type} onChange={(e) => setEvidenceForm((p) => ({ ...p, content_type: e.target.value }))}>
+                <select aria-label="Content Type" className="form-control" value={evidenceForm.content_type} onChange={(e) => setEvidenceForm((p) => ({ ...p, content_type: e.target.value }))}>
                   <option value="document">Document</option>
                   <option value="faq">FAQ</option>
                   <option value="template">Template</option>
@@ -476,11 +476,11 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Content ID</label>
-                <input className="form-control" value={evidenceForm.content_id} onChange={(e) => setEvidenceForm((p) => ({ ...p, content_id: e.target.value }))} placeholder="e.g. 42" />
+                <input aria-label="Content ID" className="form-control" value={evidenceForm.content_id} onChange={(e) => setEvidenceForm((p) => ({ ...p, content_id: e.target.value }))} placeholder="e.g. 42" />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Mode</label>
-                <select className="form-control" value={evidenceForm.mode} onChange={(e) => setEvidenceForm((p) => ({ ...p, mode: e.target.value }))}>
+                <select aria-label="Mode" className="form-control" value={evidenceForm.mode} onChange={(e) => setEvidenceForm((p) => ({ ...p, mode: e.target.value }))}>
                   <option value="publish">Publish</option>
                   <option value="response">Response</option>
                   <option value="release">Release</option>
@@ -510,11 +510,11 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={saveEvidenceRule} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Rule Name</label>
-                <input className="form-control" value={evidenceRuleForm.rule_name} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, rule_name: e.target.value }))} />
+                <input aria-label="Rule Name" className="form-control" value={evidenceRuleForm.rule_name} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, rule_name: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Applies To</label>
-                <select className="form-control" value={evidenceRuleForm.applies_to} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, applies_to: e.target.value }))}>
+                <select aria-label="Applies To" className="form-control" value={evidenceRuleForm.applies_to} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, applies_to: e.target.value }))}>
                   <option value="all">All</option>
                   <option value="document">Document</option>
                   <option value="faq">FAQ</option>
@@ -524,7 +524,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Mode Scope</label>
-                <select className="form-control" value={evidenceRuleForm.mode_scope} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, mode_scope: e.target.value }))}>
+                <select aria-label="Mode Scope" className="form-control" value={evidenceRuleForm.mode_scope} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, mode_scope: e.target.value }))}>
                   <option value="both">Both</option>
                   <option value="publish">Publish</option>
                   <option value="response">Response</option>
@@ -533,7 +533,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Check Type</label>
-                <select className="form-control" value={evidenceRuleForm.check_type} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, check_type: e.target.value }))}>
+                <select aria-label="Check Type" className="form-control" value={evidenceRuleForm.check_type} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, check_type: e.target.value }))}>
                   <option value="status_in">status_in</option>
                   <option value="not_expired">not_expired</option>
                   <option value="min_content_length">min_content_length</option>
@@ -544,19 +544,19 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Severity</label>
-                <select className="form-control" value={evidenceRuleForm.severity} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, severity: e.target.value }))}>
+                <select aria-label="Severity" className="form-control" value={evidenceRuleForm.severity} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, severity: e.target.value }))}>
                   <option value="block">Block</option>
                   <option value="warning">Warning</option>
                 </select>
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Priority</label>
-                <input className="form-control" type="number" value={evidenceRuleForm.priority} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, priority: e.target.value }))} />
+                <input aria-label="Priority" className="form-control" type="number" value={evidenceRuleForm.priority} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, priority: e.target.value }))} />
               </div>
 
               <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
                 <label>check_config (JSON)</label>
-                <textarea className="form-control" rows={4} value={evidenceRuleForm.check_config_text} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, check_config_text: e.target.value }))} />
+                <textarea aria-label="check_config (JSON)" className="form-control" rows={4} value={evidenceRuleForm.check_config_text} onChange={(e) => setEvidenceRuleForm((p) => ({ ...p, check_config_text: e.target.value }))} />
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / 3' }}>
@@ -650,11 +650,11 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={runContradictionScan} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 10, alignItems: 'end' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Min Token Overlap</label>
-                <input className="form-control" type="number" min="2" max="8" value={scanForm.min_token_overlap} onChange={(e) => setScanForm((p) => ({ ...p, min_token_overlap: e.target.value }))} />
+                <input aria-label="Min Token Overlap" className="form-control" type="number" min="2" max="8" value={scanForm.min_token_overlap} onChange={(e) => setScanForm((p) => ({ ...p, min_token_overlap: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Limit</label>
-                <input className="form-control" type="number" min="1" max="200" value={scanForm.limit} onChange={(e) => setScanForm((p) => ({ ...p, limit: e.target.value }))} />
+                <input aria-label="Limit" className="form-control" type="number" min="1" max="200" value={scanForm.limit} onChange={(e) => setScanForm((p) => ({ ...p, limit: e.target.value }))} />
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" checked={scanForm.include_non_published} onChange={(e) => setScanForm((p) => ({ ...p, include_non_published: e.target.checked }))} />
@@ -727,15 +727,15 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={runDigitalTwinSimulation} style={{ display: 'grid', gap: 10 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Scenario Name</label>
-                <input className="form-control" value={digitalTwinForm.scenario_name} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, scenario_name: e.target.value }))} />
+                <input aria-label="Scenario Name" className="form-control" value={digitalTwinForm.scenario_name} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, scenario_name: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Changes (JSON Array)</label>
-                <textarea className="form-control" rows={7} value={digitalTwinForm.changes_text} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, changes_text: e.target.value }))} />
+                <textarea aria-label="Changes (JSON Array)" className="form-control" rows={7} value={digitalTwinForm.changes_text} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, changes_text: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0, maxWidth: 240 }}>
                 <label>Change Window (hours)</label>
-                <input className="form-control" type="number" min="1" value={digitalTwinForm.change_window_hours} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, change_window_hours: e.target.value }))} />
+                <input aria-label="Change Window (hours)" className="form-control" type="number" min="1" value={digitalTwinForm.change_window_hours} onChange={(e) => setDigitalTwinForm((p) => ({ ...p, change_window_hours: e.target.value }))} />
               </div>
               <div>
                 <button className="btn btn-primary" type="submit" disabled={digitalTwinLoading}>{digitalTwinLoading ? 'Simulating…' : 'Simulate'}</button>
@@ -801,35 +801,35 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={evaluateRisk} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Context Type</label>
-                <input className="form-control" value={riskEvalForm.context_type} onChange={(e) => setRiskEvalForm((p) => ({ ...p, context_type: e.target.value }))} />
+                <input aria-label="Context Type" className="form-control" value={riskEvalForm.context_type} onChange={(e) => setRiskEvalForm((p) => ({ ...p, context_type: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Context ID</label>
-                <input className="form-control" value={riskEvalForm.context_id} onChange={(e) => setRiskEvalForm((p) => ({ ...p, context_id: e.target.value }))} />
+                <input aria-label="Context ID" className="form-control" value={riskEvalForm.context_id} onChange={(e) => setRiskEvalForm((p) => ({ ...p, context_id: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Evidence Blockers</label>
-                <input className="form-control" type="number" value={riskEvalForm.evidence_blockers} onChange={(e) => setRiskEvalForm((p) => ({ ...p, evidence_blockers: e.target.value }))} />
+                <input aria-label="Evidence Blockers" className="form-control" type="number" value={riskEvalForm.evidence_blockers} onChange={(e) => setRiskEvalForm((p) => ({ ...p, evidence_blockers: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Contradictions</label>
-                <input className="form-control" type="number" value={riskEvalForm.contradiction_findings} onChange={(e) => setRiskEvalForm((p) => ({ ...p, contradiction_findings: e.target.value }))} />
+                <input aria-label="Contradictions" className="form-control" type="number" value={riskEvalForm.contradiction_findings} onChange={(e) => setRiskEvalForm((p) => ({ ...p, contradiction_findings: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Projected Usage</label>
-                <input className="form-control" type="number" value={riskEvalForm.projected_usage} onChange={(e) => setRiskEvalForm((p) => ({ ...p, projected_usage: e.target.value }))} />
+                <input aria-label="Projected Usage" className="form-control" type="number" value={riskEvalForm.projected_usage} onChange={(e) => setRiskEvalForm((p) => ({ ...p, projected_usage: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Policy Denies (30d)</label>
-                <input className="form-control" type="number" value={riskEvalForm.policy_denies_30d} onChange={(e) => setRiskEvalForm((p) => ({ ...p, policy_denies_30d: e.target.value }))} />
+                <input aria-label="Policy Denies (30d)" className="form-control" type="number" value={riskEvalForm.policy_denies_30d} onChange={(e) => setRiskEvalForm((p) => ({ ...p, policy_denies_30d: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Change Window Hours</label>
-                <input className="form-control" type="number" value={riskEvalForm.change_window_hours} onChange={(e) => setRiskEvalForm((p) => ({ ...p, change_window_hours: e.target.value }))} />
+                <input aria-label="Change Window Hours" className="form-control" type="number" value={riskEvalForm.change_window_hours} onChange={(e) => setRiskEvalForm((p) => ({ ...p, change_window_hours: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Manual Adjustment</label>
-                <input className="form-control" type="number" value={riskEvalForm.manual_risk_adjustment} onChange={(e) => setRiskEvalForm((p) => ({ ...p, manual_risk_adjustment: e.target.value }))} />
+                <input aria-label="Manual Adjustment" className="form-control" type="number" value={riskEvalForm.manual_risk_adjustment} onChange={(e) => setRiskEvalForm((p) => ({ ...p, manual_risk_adjustment: e.target.value }))} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <button className="btn btn-primary" type="submit" disabled={riskEvalLoading}>{riskEvalLoading ? 'Evaluating…' : 'Evaluate Risk'}</button>
@@ -855,19 +855,19 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
             <form onSubmit={saveRiskRule} style={{ display: 'grid', gridTemplateColumns: '2fr repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'end' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Rule Name</label>
-                <input className="form-control" value={riskRuleForm.rule_name} onChange={(e) => setRiskRuleForm((p) => ({ ...p, rule_name: e.target.value }))} />
+                <input aria-label="Rule Name" className="form-control" value={riskRuleForm.rule_name} onChange={(e) => setRiskRuleForm((p) => ({ ...p, rule_name: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Min</label>
-                <input className="form-control" type="number" value={riskRuleForm.min_score} onChange={(e) => setRiskRuleForm((p) => ({ ...p, min_score: e.target.value }))} />
+                <input aria-label="Min" className="form-control" type="number" value={riskRuleForm.min_score} onChange={(e) => setRiskRuleForm((p) => ({ ...p, min_score: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Max</label>
-                <input className="form-control" type="number" value={riskRuleForm.max_score} onChange={(e) => setRiskRuleForm((p) => ({ ...p, max_score: e.target.value }))} />
+                <input aria-label="Max" className="form-control" type="number" value={riskRuleForm.max_score} onChange={(e) => setRiskRuleForm((p) => ({ ...p, max_score: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Action</label>
-                <select className="form-control" value={riskRuleForm.decision_action} onChange={(e) => setRiskRuleForm((p) => ({ ...p, decision_action: e.target.value }))}>
+                <select aria-label="Action" className="form-control" value={riskRuleForm.decision_action} onChange={(e) => setRiskRuleForm((p) => ({ ...p, decision_action: e.target.value }))}>
                   <option value="auto_approve">auto_approve</option>
                   <option value="manager_review">manager_review</option>
                   <option value="medical_review">medical_review</option>
@@ -877,15 +877,15 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Escalation Role</label>
-                <input className="form-control" value={riskRuleForm.escalation_role} onChange={(e) => setRiskRuleForm((p) => ({ ...p, escalation_role: e.target.value }))} />
+                <input aria-label="Escalation Role" className="form-control" value={riskRuleForm.escalation_role} onChange={(e) => setRiskRuleForm((p) => ({ ...p, escalation_role: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>SLA (h)</label>
-                <input className="form-control" type="number" value={riskRuleForm.sla_hours} onChange={(e) => setRiskRuleForm((p) => ({ ...p, sla_hours: e.target.value }))} />
+                <input aria-label="SLA (h)" className="form-control" type="number" value={riskRuleForm.sla_hours} onChange={(e) => setRiskRuleForm((p) => ({ ...p, sla_hours: e.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Priority</label>
-                <input className="form-control" type="number" value={riskRuleForm.priority} onChange={(e) => setRiskRuleForm((p) => ({ ...p, priority: e.target.value }))} />
+                <input aria-label="Priority" className="form-control" type="number" value={riskRuleForm.priority} onChange={(e) => setRiskRuleForm((p) => ({ ...p, priority: e.target.value }))} />
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" checked={riskRuleForm.is_active} onChange={(e) => setRiskRuleForm((p) => ({ ...p, is_active: e.target.checked }))} />

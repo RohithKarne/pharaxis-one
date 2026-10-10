@@ -92,6 +92,7 @@ export default function CaseQueryPage() {
         <div className="cf-query-toolbar">
           <input
             className="cf-cases-search"
+            aria-label="Search cases"
             data-shortcut="search"
             placeholder="Global search: case #, notes, contacts, products…"
             value={filters.search}
@@ -119,6 +120,7 @@ export default function CaseQueryPage() {
           </select>
           <input
             className="cf-query-input"
+            aria-label="Sender or recipient keyword"
             placeholder="Sender/Recipient keyword…"
             value={filters.corr_party}
             onChange={e => setFilters(prev => ({ ...prev, corr_party: e.target.value }))}

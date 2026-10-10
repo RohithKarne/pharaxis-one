@@ -67,7 +67,7 @@ export default function FieldActionsAdmin() {
       <Header flash={flash} title="Field Actions / Recalls"
         sub="Regulator-notified market actions: recalls, withdrawals, safety notices, field corrections." />
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10 }}>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...ipt, maxWidth: 200 }}>
+        <select aria-label="Filter by status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...ipt, maxWidth: 200 }}>
           <option value="">All statuses</option>
           {['drafted','submitted','acknowledged','in_progress','effectiveness_check','closed','terminated'].map(s =>
             <option key={s}>{s}</option>

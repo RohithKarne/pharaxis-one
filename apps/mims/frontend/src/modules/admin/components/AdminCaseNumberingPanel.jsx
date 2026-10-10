@@ -72,27 +72,27 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
             <form onSubmit={saveCaseNumConfig}>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Organisation (leave blank for global default)</label>
-                <select className="form-control" value={caseNumOrgId} onChange={e => setCaseNumOrgId(e.target.value)}>
+                <select aria-label="Organisation (leave blank for global default)" className="form-control" value={caseNumOrgId} onChange={e => setCaseNumOrgId(e.target.value)}>
                   <option value="">— Global Default —</option>
                   {orgs.filter(o => o.is_active).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Case Type</label>
-                <select className="form-control" value={caseNumForm.case_type} onChange={e => setCaseNumForm(f => ({ ...f, case_type: e.target.value }))}>
+                <select aria-label="Case Type" className="form-control" value={caseNumForm.case_type} onChange={e => setCaseNumForm(f => ({ ...f, case_type: e.target.value }))}>
                   {CASE_TYPES.map(t => <option key={t} value={t}>{t === 'ALL' ? 'All Case Types (Unified)' : t}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Prefix *</label>
-                  <input className="form-control" placeholder="e.g. CASE, MI, AE" value={caseNumForm.prefix} required
+                  <input aria-label="Prefix" className="form-control" placeholder="e.g. CASE, MI, AE" value={caseNumForm.prefix} required
                     onChange={e => setCaseNumForm(f => ({ ...f, prefix: e.target.value.toUpperCase() }))}
                     onBlur={refreshCaseNumPreview} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Separator</label>
-                  <select className="form-control" value={caseNumForm.separator} onChange={e => { setCaseNumForm(f => ({ ...f, separator: e.target.value })); setTimeout(refreshCaseNumPreview, 50) }}>
+                  <select aria-label="Separator" className="form-control" value={caseNumForm.separator} onChange={e => { setCaseNumForm(f => ({ ...f, separator: e.target.value })); setTimeout(refreshCaseNumPreview, 50) }}>
                     <option value="-">Hyphen (-)</option>
                     <option value="/">Slash (/)</option>
                     <option value=".">Dot (.)</option>
@@ -103,7 +103,7 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Sequence Length</label>
-                  <input className="form-control" type="number" min={3} max={10} value={caseNumForm.seq_length}
+                  <input aria-label="Sequence Length" className="form-control" type="number" min={3} max={10} value={caseNumForm.seq_length}
                     onChange={e => setCaseNumForm(f => ({ ...f, seq_length: parseInt(e.target.value, 10) }))}
                     onBlur={refreshCaseNumPreview} />
                 </div>

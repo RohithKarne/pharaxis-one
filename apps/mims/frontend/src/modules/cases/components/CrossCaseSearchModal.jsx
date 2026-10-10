@@ -75,7 +75,7 @@ export default function CrossCaseSearchModal({ onClose }) {
           <form onSubmit={handleSearch} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--surface, #f9fafb)', padding: '16px', borderRadius: '8px' }}>
             <div className="cf-form-field" style={{ margin: 0 }}>
               <label className="cf-modal-label">Patient Initials</label>
-              <input 
+              <input aria-label="Patient Initials" 
                 className="cf-modal-select" 
                 value={searchParams.initials} 
                 onChange={e => setSearchParams({...searchParams, initials: e.target.value})} 
@@ -84,7 +84,7 @@ export default function CrossCaseSearchModal({ onClose }) {
             </div>
             <div className="cf-form-field" style={{ margin: 0 }}>
               <label className="cf-modal-label">Reporter Name</label>
-              <input 
+              <input aria-label="Reporter Name" 
                 className="cf-modal-select" 
                 value={searchParams.name} 
                 onChange={e => setSearchParams({...searchParams, name: e.target.value})} 
@@ -93,7 +93,7 @@ export default function CrossCaseSearchModal({ onClose }) {
             </div>
             <div className="cf-form-field" style={{ margin: 0 }}>
               <label className="cf-modal-label">Email</label>
-              <input 
+              <input aria-label="Email" 
                 type="email"
                 className="cf-modal-select" 
                 value={searchParams.email} 
@@ -103,7 +103,7 @@ export default function CrossCaseSearchModal({ onClose }) {
             </div>
             <div className="cf-form-field" style={{ margin: 0 }}>
               <label className="cf-modal-label">Phone</label>
-              <input 
+              <input aria-label="Phone" 
                 className="cf-modal-select" 
                 value={searchParams.phone} 
                 onChange={e => setSearchParams({...searchParams, phone: e.target.value})} 

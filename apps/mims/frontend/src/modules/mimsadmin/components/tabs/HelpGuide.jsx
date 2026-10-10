@@ -301,22 +301,22 @@ export default function HelpGuide() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Feature Key *</label>
-                <input className="form-input" value={editing.feature_key} onChange={e => setEditing(p => ({ ...p, feature_key: e.target.value }))} placeholder="e.g. cm.documents" />
+                <input aria-label="Feature Key" className="form-input" value={editing.feature_key} onChange={e => setEditing(p => ({ ...p, feature_key: e.target.value }))} placeholder="e.g. cm.documents" />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Feature Group</label>
-                <input className="form-input" value={editing.feature_group || ''} onChange={e => setEditing(p => ({ ...p, feature_group: e.target.value }))} placeholder="e.g. cm" />
+                <input aria-label="Feature Group" className="form-input" value={editing.feature_group || ''} onChange={e => setEditing(p => ({ ...p, feature_group: e.target.value }))} placeholder="e.g. cm" />
               </div>
             </div>
 
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Title *</label>
-              <input className="form-input" value={editing.title} onChange={e => setEditing(p => ({ ...p, title: e.target.value }))} placeholder="Article title" />
+              <input aria-label="Title" className="form-input" value={editing.title} onChange={e => setEditing(p => ({ ...p, title: e.target.value }))} placeholder="Article title" />
             </div>
 
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Summary</label>
-              <input className="form-input" value={editing.summary || ''} onChange={e => setEditing(p => ({ ...p, summary: e.target.value }))} placeholder="1-2 sentence summary for search results" />
+              <input aria-label="Summary" className="form-input" value={editing.summary || ''} onChange={e => setEditing(p => ({ ...p, summary: e.target.value }))} placeholder="1-2 sentence summary for search results" />
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -339,7 +339,7 @@ export default function HelpGuide() {
 
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Content HTML *</label>
-              <textarea
+              <textarea aria-label="Content HTML"
                 style={{ width: '100%', minHeight: 260, padding: 10, border: '1px solid #cbd5e1', borderRadius: 8, fontFamily: 'monospace', fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }}
                 value={editing.content_html}
                 onChange={e => setEditing(p => ({ ...p, content_html: e.target.value }))}
@@ -350,7 +350,7 @@ export default function HelpGuide() {
             <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>Sort Order</label>
-                <input type="number" className="form-input" value={editing.sort_order} onChange={e => setEditing(p => ({ ...p, sort_order: parseInt(e.target.value, 10) || 100 }))} />
+                <input aria-label="Sort Order" type="number" className="form-input" value={editing.sort_order} onChange={e => setEditing(p => ({ ...p, sort_order: parseInt(e.target.value, 10) || 100 }))} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 22 }}>
                 <input type="checkbox" id="hg-active" checked={!!editing.is_active} onChange={e => setEditing(p => ({ ...p, is_active: e.target.checked }))} />

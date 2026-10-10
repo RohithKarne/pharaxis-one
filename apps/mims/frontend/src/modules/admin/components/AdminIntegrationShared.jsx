@@ -25,7 +25,7 @@ export function useIntegrationHelpers(config, setConfig) {
           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{label}</div>
           {helpText && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{helpText}</div>}
         </div>
-        <input className="form-input" type="text" placeholder={placeholder} value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }} />
+        <input className="form-input" type="text" aria-label={label} placeholder={placeholder} value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }} />
       </div>
     )
   }
@@ -37,7 +37,7 @@ export function useIntegrationHelpers(config, setConfig) {
           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{label}</div>
           {helpText && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{helpText}</div>}
         </div>
-        <select className="form-input" value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }}>
+        <select className="form-input" aria-label={label} value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }}>
           <option value="">— Select —</option>
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -52,7 +52,7 @@ export function useIntegrationHelpers(config, setConfig) {
           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{label}</div>
           {helpText && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{helpText}</div>}
         </div>
-        <input className="form-input" type="password" placeholder={placeholder} autoComplete="new-password" value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }} />
+        <input className="form-input" type="password" aria-label={label} placeholder={placeholder} autoComplete="new-password" value={config[field] || ''} onChange={e => setConfig({ ...config, [field]: e.target.value })} style={{ maxWidth: 480 }} />
       </div>
     )
   }
@@ -66,7 +66,11 @@ export function useIntegrationHelpers(config, setConfig) {
           {helpText && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{helpText}</div>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div onClick={() => setConfig({ ...config, [field]: !isOn })} style={{ width: 44, height: 24, borderRadius: 12, background: isOn ? 'var(--accent, #2563eb)' : 'var(--border)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+          <div
+            role="switch" aria-checked={isOn} aria-label={label} tabIndex={0}
+            onClick={() => setConfig({ ...config, [field]: !isOn })}
+            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setConfig({ ...config, [field]: !isOn }) } }}
+            style={{ width: 44, height: 24, borderRadius: 12, background: isOn ? 'var(--accent, #2563eb)' : 'var(--border)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
             <div style={{ position: 'absolute', top: 2, left: isOn ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
           </div>
           <span style={{ fontSize: 13, color: isOn ? 'var(--accent, #2563eb)' : 'var(--text-muted)' }}>{isOn ? 'Enabled' : 'Disabled'}</span>

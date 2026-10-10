@@ -325,8 +325,8 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
               <option value="microsoft365">Microsoft 365</option>
               <option value="module">Module</option>
             </select>
-            <input className="cm-form-input" style={{ width: 180 }} placeholder="Category…" value={filters.category} onChange={e => { setFilters(p => ({ ...p, category: e.target.value })); setPage(1) }} />
-            <input className="cm-form-input" style={{ width: 220 }} placeholder="Search documents…" value={filters.search} onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
+            <input aria-label="Category" className="cm-form-input" style={{ width: 180 }} placeholder="Category…" value={filters.category} onChange={e => { setFilters(p => ({ ...p, category: e.target.value })); setPage(1) }} />
+            <input aria-label="Search documents" className="cm-form-input" style={{ width: 220 }} placeholder="Search documents…" value={filters.search} onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
               <input type="checkbox" checked={filters.include_expired} onChange={e => { setFilters(p => ({ ...p, include_expired: e.target.checked })); setPage(1) }} />
               Include expired
@@ -337,7 +337,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
             }}>Filter</button>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-            <input className="cm-form-input" style={{ width: 300 }} placeholder="Full-text content search…" value={ftQuery}
+            <input aria-label="Full-text content search" className="cm-form-input" style={{ width: 300 }} placeholder="Full-text content search…" value={ftQuery}
               onChange={e => { setFtQuery(e.target.value); if (!e.target.value) setFtResults(null) }}
               onKeyDown={async e => {
                 if (e.key === 'Enter' && ftQuery.trim().length >= 2) {

@@ -95,7 +95,7 @@ export default function ESignModal({
           </div>
           <div style={{ marginBottom: 10 }}>
             <label style={lbl}>Confirm password</label>
-            <input
+            <input aria-label="Confirm password"
               autoFocus type="password" value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sign()}
@@ -104,7 +104,7 @@ export default function ESignModal({
           </div>
           <div style={{ marginBottom: 10 }}>
             <label style={lbl}>Reason (optional)</label>
-            <textarea
+            <textarea aria-label="Reason (optional)"
               value={reason} onChange={e => setReason(e.target.value)}
               rows={2} style={{ ...ipt, fontFamily: 'inherit', resize: 'vertical' }}
             />

@@ -313,9 +313,9 @@ export default function AdminProductsPanel({ H, flash }) {
             <div className="card-header"><h3>Add Product Family</h3></div>
             <div className="card-body">
               <form onSubmit={createFamily} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr auto', gap: 10 }}>
-                <input className="form-control" placeholder="Family name" value={familyForm.name} onChange={e => setFamilyForm(f => ({ ...f, name: e.target.value }))} required />
-                <input className="form-control" placeholder="Ingredients, comma separated" value={familyForm.ingredients_text} onChange={e => setFamilyForm(f => ({ ...f, ingredients_text: e.target.value }))} />
-                <select className="form-control" value={familyForm.org_id} onChange={e => setFamilyForm(f => ({ ...f, org_id: e.target.value }))}>
+                <input aria-label="Family name" className="form-control" placeholder="Family name" value={familyForm.name} onChange={e => setFamilyForm(f => ({ ...f, name: e.target.value }))} required />
+                <input aria-label="Ingredients" className="form-control" placeholder="Ingredients, comma separated" value={familyForm.ingredients_text} onChange={e => setFamilyForm(f => ({ ...f, ingredients_text: e.target.value }))} />
+                <select aria-label="Organisation" className="form-control" value={familyForm.org_id} onChange={e => setFamilyForm(f => ({ ...f, org_id: e.target.value }))}>
                   <option value="">Organisation (optional)</option>
                   {orgs.filter(o => o.is_active).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>

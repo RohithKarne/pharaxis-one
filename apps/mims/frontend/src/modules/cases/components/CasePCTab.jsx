@@ -451,14 +451,14 @@ export default function CasePCTab({
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (Quality Team)</label>
-              <select value={pcTxForm.assigned_to_id} onChange={e => setPcTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
+              <select aria-label="Assign To (Quality Team)" value={pcTxForm.assigned_to_id} onChange={e => setPcTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
                 <option value="">— Select Assignee —</option>
                 {handoffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
             <div className="cf-form-field">
               <label>Priority</label>
-              <select value={pcTxForm.priority} onChange={e => setPcTxForm(p => ({ ...p, priority: e.target.value }))}>
+              <select aria-label="Priority" value={pcTxForm.priority} onChange={e => setPcTxForm(p => ({ ...p, priority: e.target.value }))}>
                 <option value="routine">Routine</option>
                 <option value="expedited">Expedited</option>
                 <option value="urgent">Urgent</option>
@@ -466,7 +466,7 @@ export default function CasePCTab({
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Notes for Quality Team</label>
-              <textarea rows={3} value={pcTxForm.notes} onChange={e => setPcTxForm(p => ({ ...p, notes: e.target.value }))} placeholder="Context and notes for quality team…" />
+              <textarea aria-label="Notes for Quality Team" rows={3} value={pcTxForm.notes} onChange={e => setPcTxForm(p => ({ ...p, notes: e.target.value }))} placeholder="Context and notes for quality team…" />
             </div>
           </div>
           <div className="cf-form-actions">

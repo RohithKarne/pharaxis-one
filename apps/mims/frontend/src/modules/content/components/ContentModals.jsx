@@ -140,7 +140,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Description</label>
-          <textarea className="cm-form-textarea" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
+          <textarea aria-label="Description" className="cm-form-textarea" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
         </div>
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
@@ -177,7 +177,7 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Approving: <strong>{doc.name}</strong></p>
         <div className="cm-form-group">
           <label className="cm-form-label">User ID</label>
-          <input className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
+          <input aria-label="User ID" className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Password <span className="required">*</span></label>
@@ -222,7 +222,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Publishing: <strong>{doc.name}</strong></p>
         <div className="cm-form-group">
           <label className="cm-form-label">User ID</label>
-          <input className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
+          <input aria-label="User ID" className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Password <span className="required">*</span></label>
@@ -230,11 +230,11 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">System Version</label>
-          <input className="cm-form-input" value={doc.version || '1.0'} readOnly style={{ background: 'var(--bg)' }} />
+          <input aria-label="System Version" className="cm-form-input" value={doc.version || '1.0'} readOnly style={{ background: 'var(--bg)' }} />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Org Version</label>
-          <input className="cm-form-input" value={form.org_version} onChange={e => setForm(p => ({ ...p, org_version: e.target.value }))} placeholder="Optional (e.g. v2.1-CORP)" />
+          <input aria-label="Org Version" className="cm-form-input" value={form.org_version} onChange={e => setForm(p => ({ ...p, org_version: e.target.value }))} placeholder="Optional (e.g. v2.1-CORP)" />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Reason for Publishing <span className="required">*</span></label>

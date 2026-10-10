@@ -726,38 +726,38 @@ export default function CaseMITab({
                       <div className="cf-form-grid">
                         <div className="cf-form-field">
                           <label>MI Component</label>
-                          <select value={miRespForm.mi_tab_id} onChange={e => { const tab = miTabs.find(t => Number(t.id) === Number(e.target.value)); const next = { mi_tab_id: e.target.value, product_id: tab?.product_id || '' }; setMiRespForm(p => ({ ...p, ...next })); loadBuilderContext(next) }} disabled={miRespSaving}>
+                          <select aria-label="MI Component" value={miRespForm.mi_tab_id} onChange={e => { const tab = miTabs.find(t => Number(t.id) === Number(e.target.value)); const next = { mi_tab_id: e.target.value, product_id: tab?.product_id || '' }; setMiRespForm(p => ({ ...p, ...next })); loadBuilderContext(next) }} disabled={miRespSaving}>
                             {miTabs.map((tab, idx) => <option key={tab.id} value={tab.id}>MI {idx + 1} - {tab.question_summary || tab.product_name || 'Open inquiry'}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Reporter / Recipient</label>
-                          <select value={miRespForm.recipient_contact_id} onChange={e => setRecipientFromContact(e.target.value)} disabled={miRespSaving}>
+                          <select aria-label="Reporter / Recipient" value={miRespForm.recipient_contact_id} onChange={e => setRecipientFromContact(e.target.value)} disabled={miRespSaving}>
                             <option value="">Manual recipient</option>
                             {(builderContext?.recipients || []).map(contact => <option key={contact.case_contact_id} value={contact.case_contact_id}>{contact.name} - {contact.email || 'No email'}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Recipient Email</label>
-                          <input value={miRespForm.recipient_email} onChange={e => setMiRespForm(p => ({ ...p, recipient_email: e.target.value, recipient_contact_id: '' }))} disabled={miRespSaving} />
+                          <input aria-label="Recipient Email" value={miRespForm.recipient_email} onChange={e => setMiRespForm(p => ({ ...p, recipient_email: e.target.value, recipient_contact_id: '' }))} disabled={miRespSaving} />
                         </div>
                         <div className="cf-form-field">
                           <label>Product</label>
-                          <select value={miRespForm.product_id || ''} onChange={e => { const next = { product_id: e.target.value || '' }; setMiRespForm(p => ({ ...p, ...next })); loadBuilderContext(next) }} disabled={miRespSaving}>
+                          <select aria-label="Product" value={miRespForm.product_id || ''} onChange={e => { const next = { product_id: e.target.value || '' }; setMiRespForm(p => ({ ...p, ...next })); loadBuilderContext(next) }} disabled={miRespSaving}>
                             <option value="">- None -</option>
                             {miProducts.map(p => <option key={p.id} value={p.id}>{formatProductOption(p)}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Language</label>
-                          <select value={miRespForm.language} onChange={e => setMiRespForm(p => ({ ...p, language: e.target.value, is_customized: true }))} disabled={miRespSaving}>
+                          <select aria-label="Language" value={miRespForm.language} onChange={e => setMiRespForm(p => ({ ...p, language: e.target.value, is_customized: true }))} disabled={miRespSaving}>
                             <option value="en">English</option>
                             <option value="fr">French</option>
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Response Channel</label>
-                          <select value={miRespForm.channel} onChange={e => setMiRespForm(p => ({ ...p, channel: e.target.value }))} disabled={miRespSaving}>
+                          <select aria-label="Response Channel" value={miRespForm.channel} onChange={e => setMiRespForm(p => ({ ...p, channel: e.target.value }))} disabled={miRespSaving}>
                             {['email', 'phone', 'letter', 'portal', 'fax', 'in-person'].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                           </select>
                         </div>
@@ -766,21 +766,21 @@ export default function CaseMITab({
                       <div className="cf-form-grid">
                         <div className="cf-form-field cf-form-field--full">
                           <label>French / Scenario Bundle</label>
-                          <select value="" onChange={e => applyBundle(e.target.value)} disabled={miRespSaving || bundles.length === 0}>
+                          <select aria-label="French / Scenario Bundle" value="" onChange={e => applyBundle(e.target.value)} disabled={miRespSaving || bundles.length === 0}>
                             <option value="">Select optional bundle...</option>
                             {bundles.map(bundle => <option key={bundle.id} value={bundle.id}>{bundle.name} ({bundle.language})</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field cf-form-field--full">
                           <label>Email / Response Template</label>
-                          <select value={miRespForm.template_id} onChange={e => setTemplate(e.target.value)} disabled={miRespSaving}>
+                          <select aria-label="Email / Response Template" value={miRespForm.template_id} onChange={e => setTemplate(e.target.value)} disabled={miRespSaving}>
                             <option value="">Select template...</option>
                             {templates.map(t => <option key={t.id} value={t.id}>{t.product_group_match ? '[Product Match] ' : ''}{t.name} - {t.type}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field cf-form-field--full">
                           <label>Subject</label>
-                          <input value={miRespForm.response_subject} onChange={e => setMiRespForm(p => ({ ...p, response_subject: e.target.value, is_customized: true }))} placeholder="Medical Information Response - Case {{case_number}}" disabled={miRespSaving} />
+                          <input aria-label="Subject" value={miRespForm.response_subject} onChange={e => setMiRespForm(p => ({ ...p, response_subject: e.target.value, is_customized: true }))} placeholder="Medical Information Response - Case {{case_number}}" disabled={miRespSaving} />
                         </div>
                       </div>
 
@@ -792,7 +792,7 @@ export default function CaseMITab({
                       </div>
                       <div className="cf-form-field cf-form-field--full">
                         <label>Additional Custom Text</label>
-                        <textarea rows={3} value={miRespForm.custom_text} onChange={e => { setMiRespForm(p => ({ ...p, custom_text: e.target.value, is_customized: true })); setBuilderPreview(null) }} placeholder="Optional response-specific text. This will be stored only on this response." disabled={miRespSaving} />
+                        <textarea aria-label="Additional Custom Text" rows={3} value={miRespForm.custom_text} onChange={e => { setMiRespForm(p => ({ ...p, custom_text: e.target.value, is_customized: true })); setBuilderPreview(null) }} placeholder="Optional response-specific text. This will be stored only on this response." disabled={miRespSaving} />
                       </div>
                     </div>
 
@@ -829,7 +829,7 @@ export default function CaseMITab({
                         </label>
                         <div className="cf-form-field" style={{ marginTop: 10 }}>
                           <label>Response Date</label>
-                          <input type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
+                          <input aria-label="Response Date" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
                         </div>
                         {miRespForm.is_customized && <div className="cf-builder-customized">Customized response flag will be saved.</div>}
                       </div>

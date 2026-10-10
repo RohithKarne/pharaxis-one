@@ -88,14 +88,14 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
         </tbody>
       </table>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 8 }}>
-        <select className="form-input" style={{ width: 120 }} value={emirSenderForm.rule_type} onChange={e => setEmirSenderForm(f => ({ ...f, rule_type: e.target.value }))}>
+        <select aria-label="Rule type" className="form-input" style={{ width: 120 }} value={emirSenderForm.rule_type} onChange={e => setEmirSenderForm(f => ({ ...f, rule_type: e.target.value }))}>
           <option value="whitelist">Whitelist</option><option value="blacklist">Blacklist</option>
         </select>
-        <select className="form-input" style={{ width: 130 }} value={emirSenderForm.match_type} onChange={e => setEmirSenderForm(f => ({ ...f, match_type: e.target.value }))}>
+        <select aria-label="Match type" className="form-input" style={{ width: 130 }} value={emirSenderForm.match_type} onChange={e => setEmirSenderForm(f => ({ ...f, match_type: e.target.value }))}>
           <option value="exact_email">Exact Email</option><option value="domain">Domain</option><option value="regex">Regex</option>
         </select>
-        <input className="form-input" style={{ width: 200 }} placeholder="e.g. @ema.europa.eu" value={emirSenderForm.value} onChange={e => setEmirSenderForm(f => ({ ...f, value: e.target.value }))} />
-        <select className="form-input" style={{ width: 160 }} value={emirSenderForm.action} onChange={e => setEmirSenderForm(f => ({ ...f, action: e.target.value }))}>
+        <input aria-label="Sender to match" className="form-input" style={{ width: 200 }} placeholder="e.g. @ema.europa.eu" value={emirSenderForm.value} onChange={e => setEmirSenderForm(f => ({ ...f, value: e.target.value }))} />
+        <select aria-label="Action" className="form-input" style={{ width: 160 }} value={emirSenderForm.action} onChange={e => setEmirSenderForm(f => ({ ...f, action: e.target.value }))}>
           <option value="reject_silently">Reject Silently</option><option value="send_rejection_reply">Send Rejection Reply</option><option value="quarantine">Quarantine</option>
         </select>
         <button className="btn btn-secondary" onClick={async () => {
@@ -162,25 +162,25 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
       </table>
       <div style={{ background: 'var(--bg-subtle, #f8f9fa)', border: '1px solid var(--border)', borderRadius: 6, padding: 16, marginBottom: 8 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Rule Name</label><input className="form-input" value={emirRouteForm.rule_name} onChange={e => setEmirRouteForm(f => ({ ...f, rule_name: e.target.value }))} /></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Rule Name</label><input aria-label="Rule Name" className="form-input" value={emirRouteForm.rule_name} onChange={e => setEmirRouteForm(f => ({ ...f, rule_name: e.target.value }))} /></div>
           <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Match Field</label>
-            <select className="form-input" value={emirRouteForm.match_field} onChange={e => setEmirRouteForm(f => ({ ...f, match_field: e.target.value }))}>
+            <select aria-label="Match Field" className="form-input" value={emirRouteForm.match_field} onChange={e => setEmirRouteForm(f => ({ ...f, match_field: e.target.value }))}>
               <option value="subject">Subject</option><option value="body">Body</option><option value="sender_domain">Sender Domain</option><option value="sender_email">Sender Email</option><option value="attachment_name">Attachment Name</option>
             </select>
           </div>
           <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Match Type</label>
-            <select className="form-input" value={emirRouteForm.match_type} onChange={e => setEmirRouteForm(f => ({ ...f, match_type: e.target.value }))}>
+            <select aria-label="Match Type" className="form-input" value={emirRouteForm.match_type} onChange={e => setEmirRouteForm(f => ({ ...f, match_type: e.target.value }))}>
               <option value="contains">Contains</option><option value="regex">Regex</option><option value="exact">Exact</option><option value="starts_with">Starts With</option>
             </select>
           </div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Match Value</label><input className="form-input" value={emirRouteForm.match_value} onChange={e => setEmirRouteForm(f => ({ ...f, match_value: e.target.value }))} /></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Match Value</label><input aria-label="Match Value" className="form-input" value={emirRouteForm.match_value} onChange={e => setEmirRouteForm(f => ({ ...f, match_value: e.target.value }))} /></div>
           <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Case Type</label>
-            <select className="form-input" value={emirRouteForm.case_type} onChange={e => setEmirRouteForm(f => ({ ...f, case_type: e.target.value }))}>
+            <select aria-label="Case Type" className="form-input" value={emirRouteForm.case_type} onChange={e => setEmirRouteForm(f => ({ ...f, case_type: e.target.value }))}>
               <option value="MI">MI</option><option value="AE">AE</option><option value="PC">PC</option>
             </select>
           </div>
           <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 13 }}>Priority</label>
-            <select className="form-input" value={emirRouteForm.default_priority} onChange={e => setEmirRouteForm(f => ({ ...f, default_priority: e.target.value }))}>
+            <select aria-label="Priority" className="form-input" value={emirRouteForm.default_priority} onChange={e => setEmirRouteForm(f => ({ ...f, default_priority: e.target.value }))}>
               <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
             </select>
           </div>
@@ -205,7 +205,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
       {renderConfigField('ack_subject_template', 'Subject Template', 'Your request {{reference_number}} has been received')}
       <div style={{ marginBottom: 16 }}>
         <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Acknowledgement Body (HTML)</label>
-        <textarea className="form-input" rows={6} placeholder={'<p>Dear Requester,</p>\n<p>We have received your medical information request (Ref: {{reference_number}}).</p>\n<p>Our team at {{org_name}} will respond within 3 business days.</p>'} value={config.ack_body_html || ''} onChange={e => setConfig({ ...config, ack_body_html: e.target.value })} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
+        <textarea aria-label="Acknowledgement Body (HTML)" className="form-input" rows={6} placeholder={'<p>Dear Requester,</p>\n<p>We have received your medical information request (Ref: {{reference_number}}).</p>\n<p>Our team at {{org_name}} will respond within 3 business days.</p>'} value={config.ack_body_html || ''} onChange={e => setConfig({ ...config, ack_body_html: e.target.value })} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
       </div>
       {renderConfigField('ack_cc', 'CC (comma-separated)', '')}
       {renderConfigField('ack_bcc', 'BCC (comma-separated)', '')}

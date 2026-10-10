@@ -556,6 +556,7 @@ export default function CasesPage() {
         <div className="cf-cases-search-row">
           <input
             className="cf-cases-search"
+            aria-label="Search cases"
             placeholder="Global search: case #, notes, contacts, products…"
             value={search}
             onChange={e => { setSearch(e.target.value); setActiveViewId(null) }}
@@ -677,7 +678,7 @@ export default function CasesPage() {
             <thead>
               <tr>
                 <th style={{ width: '40px', textAlign: 'center' }}>
-                  <input type="checkbox" className="cf-cases-checkbox" 
+                  <input type="checkbox" className="cf-cases-checkbox" aria-label="Select all cases"
                     checked={filteredCases.length > 0 && selectedCaseIds.length === filteredCases.length}
                     onChange={handleSelectAll} 
                   />
@@ -685,7 +686,7 @@ export default function CasesPage() {
                 <th>Case #</th>
                 <th>
                   Type
-                  <select className="cf-th-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
                     <option value="all">All</option>
                     <option value="MI">MI</option>
                     <option value="AE">AE</option>
@@ -695,14 +696,14 @@ export default function CasesPage() {
                 <th>Organisation</th>
                 <th>
                   Status
-                  <select className="cf-th-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                     <option value="all">All</option>
                     {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </th>
                 <th>
                   Priority
-                  <select className="cf-th-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
                     <option value="all">All</option>
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
@@ -721,6 +722,7 @@ export default function CasesPage() {
                 <tr key={c.id} className={`cf-cases-row ${selectedCaseIds.includes(c.id) ? 'selected' : ''}`} onClick={() => navigate(`/cases/${c.id}`, { state: { from: '/cases' } })}>
                   <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                     <input type="checkbox" className="cf-cases-checkbox"
+                      aria-label={`Select case ${c.case_number || 'draft'}`}
                       checked={selectedCaseIds.includes(c.id)}
                       onChange={e => handleSelectRow(c.id, e.target.checked)}
                     />
@@ -785,7 +787,7 @@ export default function CasesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div className="cf-form-field">
                     <label className="cf-modal-label">Organisation *</label>
-                    <select className="cf-modal-select" value={newCase.org_id} onChange={e => selectOrg(e.target.value)}>
+                    <select aria-label="Organisation" className="cf-modal-select" value={newCase.org_id} onChange={e => selectOrg(e.target.value)}>
                       <option value="">— Select Organisation —</option>
                       {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                     </select>
@@ -819,34 +821,34 @@ export default function CasesPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">First Name *</label>
-                      <input className="cf-modal-select" value={reporter.first_name} onChange={e => setReporter(p => ({ ...p, first_name: e.target.value }))} placeholder="First name" />
+                      <input aria-label="First Name" className="cf-modal-select" value={reporter.first_name} onChange={e => setReporter(p => ({ ...p, first_name: e.target.value }))} placeholder="First name" />
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Last Name *</label>
-                      <input className="cf-modal-select" value={reporter.last_name} onChange={e => setReporter(p => ({ ...p, last_name: e.target.value }))} placeholder="Last name" />
+                      <input aria-label="Last Name" className="cf-modal-select" value={reporter.last_name} onChange={e => setReporter(p => ({ ...p, last_name: e.target.value }))} placeholder="Last name" />
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Email</label>
-                      <input className="cf-modal-select" type="email" value={reporter.email} onChange={e => setReporter(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
+                      <input aria-label="Email" className="cf-modal-select" type="email" value={reporter.email} onChange={e => setReporter(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Phone</label>
-                      <input className="cf-modal-select" value={reporter.phone} onChange={e => setReporter(p => ({ ...p, phone: e.target.value }))} placeholder="+1 555 000 0000" />
+                      <input aria-label="Phone" className="cf-modal-select" value={reporter.phone} onChange={e => setReporter(p => ({ ...p, phone: e.target.value }))} placeholder="+1 555 000 0000" />
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Reporter Type</label>
-                      <select className="cf-modal-select" value={reporter.reporter_type} onChange={e => setReporter(p => ({ ...p, reporter_type: e.target.value }))}>
+                      <select aria-label="Reporter Type" className="cf-modal-select" value={reporter.reporter_type} onChange={e => setReporter(p => ({ ...p, reporter_type: e.target.value }))}>
                         <option value="">— Select —</option>
                         {listOptions('reporter_type')}
                       </select>
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Country</label>
-                      <input className="cf-modal-select" value={reporter.country} onChange={e => setReporter(p => ({ ...p, country: e.target.value }))} placeholder="Country" />
+                      <input aria-label="Country" className="cf-modal-select" value={reporter.country} onChange={e => setReporter(p => ({ ...p, country: e.target.value }))} placeholder="Country" />
                     </div>
                     <div className="cf-form-field" style={{ margin: 0, gridColumn: '1/-1' }}>
                       <label className="cf-modal-label">Organisation / Institution</label>
-                      <input className="cf-modal-select" value={reporter.organisation} onChange={e => setReporter(p => ({ ...p, organisation: e.target.value }))} placeholder="Hospital, clinic, company…" />
+                      <input aria-label="Organisation / Institution" className="cf-modal-select" value={reporter.organisation} onChange={e => setReporter(p => ({ ...p, organisation: e.target.value }))} placeholder="Hospital, clinic, company…" />
                     </div>
                   </div>
 
@@ -857,29 +859,29 @@ export default function CasesPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Initials</label>
-                          <input className="cf-modal-select" value={patient.initials} onChange={e => setPatient(p => ({ ...p, initials: e.target.value }))} placeholder="e.g. J.D." maxLength={10} />
+                          <input aria-label="Initials" className="cf-modal-select" value={patient.initials} onChange={e => setPatient(p => ({ ...p, initials: e.target.value }))} placeholder="e.g. J.D." maxLength={10} />
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Age</label>
-                          <input className="cf-modal-select" type="number" min="0" value={patient.age} onChange={e => setPatient(p => ({ ...p, age: e.target.value }))} placeholder="Age" />
+                          <input aria-label="Age" className="cf-modal-select" type="number" min="0" value={patient.age} onChange={e => setPatient(p => ({ ...p, age: e.target.value }))} placeholder="Age" />
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Age Unit</label>
-                          <select className="cf-modal-select" value={patient.age_unit} onChange={e => setPatient(p => ({ ...p, age_unit: e.target.value }))}>
+                          <select aria-label="Age Unit" className="cf-modal-select" value={patient.age_unit} onChange={e => setPatient(p => ({ ...p, age_unit: e.target.value }))}>
                             <option value="">— Select —</option>
                             {listOptions('age_unit')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Gender</label>
-                          <select className="cf-modal-select" value={patient.gender} onChange={e => setPatient(p => ({ ...p, gender: e.target.value }))}>
+                          <select aria-label="Gender" className="cf-modal-select" value={patient.gender} onChange={e => setPatient(p => ({ ...p, gender: e.target.value }))}>
                             <option value="">— Select —</option>
                             {listOptions('gender')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Weight (kg)</label>
-                          <input className="cf-modal-select" type="number" min="0" step="0.1" value={patient.weight_kg} onChange={e => setPatient(p => ({ ...p, weight_kg: e.target.value }))} placeholder="kg" />
+                          <input aria-label="Weight (kg)" className="cf-modal-select" type="number" min="0" step="0.1" value={patient.weight_kg} onChange={e => setPatient(p => ({ ...p, weight_kg: e.target.value }))} placeholder="kg" />
                         </div>
                       </div>
                     </>
@@ -915,7 +917,7 @@ export default function CasesPage() {
                     ))}
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Outcome</label>
-                      <select className="cf-modal-select" value={aeIntake.outcome} onChange={e => setAeIntake(p => ({ ...p, outcome: e.target.value }))}>
+                      <select aria-label="Outcome" className="cf-modal-select" value={aeIntake.outcome} onChange={e => setAeIntake(p => ({ ...p, outcome: e.target.value }))}>
                         <option value="">— Select —</option>
                         {listOptions('ae_outcome')}
                       </select>
@@ -923,7 +925,7 @@ export default function CasesPage() {
                   </div>
                   <div className="cf-form-field" style={{ margin: '4px 0' }}>
                     <label className="cf-modal-label">Reaction / Event Description</label>
-                    <textarea className="cf-modal-select" rows={3} value={aeIntake.reaction_description} onChange={e => setAeIntake(p => ({ ...p, reaction_description: e.target.value }))} placeholder="Describe the adverse event or reaction…" style={{ resize: 'vertical' }} />
+                    <textarea aria-label="Reaction / Event Description" className="cf-modal-select" rows={3} value={aeIntake.reaction_description} onChange={e => setAeIntake(p => ({ ...p, reaction_description: e.target.value }))} placeholder="Describe the adverse event or reaction…" style={{ resize: 'vertical' }} />
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6, marginBottom: 4 }}>Seriousness Criteria</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -955,7 +957,7 @@ export default function CasesPage() {
                     ))}
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Complaint Category</label>
-                      <select className="cf-modal-select" value={pcIntake.complaint_category} onChange={e => setPcIntake(p => ({ ...p, complaint_category: e.target.value }))}>
+                      <select aria-label="Complaint Category" className="cf-modal-select" value={pcIntake.complaint_category} onChange={e => setPcIntake(p => ({ ...p, complaint_category: e.target.value }))}>
                         <option value="">— Select —</option>
                         {listOptions('pc_category')}
                       </select>
@@ -963,7 +965,7 @@ export default function CasesPage() {
                   </div>
                   <div className="cf-form-field" style={{ margin: '4px 0' }}>
                     <label className="cf-modal-label">Complaint Description</label>
-                    <textarea className="cf-modal-select" rows={3} value={pcIntake.complaint_description} onChange={e => setPcIntake(p => ({ ...p, complaint_description: e.target.value }))} placeholder="Describe the product complaint in detail…" style={{ resize: 'vertical' }} />
+                    <textarea aria-label="Complaint Description" className="cf-modal-select" rows={3} value={pcIntake.complaint_description} onChange={e => setPcIntake(p => ({ ...p, complaint_description: e.target.value }))} placeholder="Describe the product complaint in detail…" style={{ resize: 'vertical' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                     {[['sample_available','Sample Available'],['sample_return_requested','Sample Return Requested']].map(([key, label]) => (

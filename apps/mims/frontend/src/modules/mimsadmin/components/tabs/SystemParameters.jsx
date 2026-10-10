@@ -160,7 +160,7 @@ function GeneralTab({ initial, H, onSaved, onError, flash }) {
             </span>
           </div>
           <div className="ma-sp-control">
-            <input
+            <input aria-label="Password expires after, in days"
               type="number"
               min={1} max={3650}
               className="ma-sp-num-input"
@@ -220,7 +220,7 @@ function GeneralTab({ initial, H, onSaved, onError, flash }) {
             </span>
           </div>
           <div className="ma-sp-control">
-            <input
+            <input aria-label="Password cannot be one of the last, number of passwords"
               type="number"
               min={1} max={24}
               className="ma-sp-num-input"

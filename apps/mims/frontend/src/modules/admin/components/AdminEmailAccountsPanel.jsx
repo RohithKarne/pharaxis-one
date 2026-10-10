@@ -323,17 +323,17 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Account Name *</label>
-                    <input className="form-control" value={emailForm.account_name} onChange={e => setEmailForm(f => ({ ...f, account_name: e.target.value }))} required />
+                    <input aria-label="Account Name" className="form-control" value={emailForm.account_name} onChange={e => setEmailForm(f => ({ ...f, account_name: e.target.value }))} required />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Provider *</label>
-                    <select className="form-control" value={emailForm.provider} onChange={e => applyProviderPreset(e.target.value)} required>
+                    <select aria-label="Provider" className="form-control" value={emailForm.provider} onChange={e => applyProviderPreset(e.target.value)} required>
                       <option>Gmail</option><option>Microsoft365</option><option>Generic</option>
                     </select>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Direction *</label>
-                    <select className="form-control" value={emailForm.direction} onChange={e => setEmailForm(f => ({ ...f, direction: e.target.value }))} required>
+                    <select aria-label="Direction" className="form-control" value={emailForm.direction} onChange={e => setEmailForm(f => ({ ...f, direction: e.target.value }))} required>
                       <option>Inbound</option><option>Outbound</option><option>Both</option>
                     </select>
                   </div>
@@ -350,18 +350,18 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   {['Inbound', 'Both'].includes(emailForm.direction) && (
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Mailbox Email *</label>
-                      <input className="form-control" type="email" value={emailForm.mailbox_email} onChange={e => setEmailForm(f => ({ ...f, mailbox_email: e.target.value }))} required />
+                      <input aria-label="Mailbox Email" className="form-control" type="email" value={emailForm.mailbox_email} onChange={e => setEmailForm(f => ({ ...f, mailbox_email: e.target.value }))} required />
                     </div>
                   )}
                   {['Outbound', 'Both'].includes(emailForm.direction) && (
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>From Email *</label>
-                      <input className="form-control" type="email" value={emailForm.from_email} onChange={e => setEmailForm(f => ({ ...f, from_email: e.target.value }))} required />
+                      <input aria-label="From Email" className="form-control" type="email" value={emailForm.from_email} onChange={e => setEmailForm(f => ({ ...f, from_email: e.target.value }))} required />
                     </div>
                   )}
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Display Name</label>
-                    <input className="form-control" value={emailForm.display_name} onChange={e => setEmailForm(f => ({ ...f, display_name: e.target.value }))} />
+                    <input aria-label="Display Name" className="form-control" value={emailForm.display_name} onChange={e => setEmailForm(f => ({ ...f, display_name: e.target.value }))} />
                   </div>
                 </div>
                 {['Outbound', 'Both'].includes(emailForm.direction) && (
@@ -376,10 +376,10 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Inbound (IMAP)</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>IMAP Host *</label><input className="form-control" value={emailForm.imap_host} onChange={e => setEmailForm(f => ({ ...f, imap_host: e.target.value }))} required /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>IMAP Port *</label><input className="form-control" type="number" value={emailForm.imap_port} onChange={e => setEmailForm(f => ({ ...f, imap_port: e.target.value }))} required /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Encryption *</label><select className="form-control" value={emailForm.imap_encryption} onChange={e => setEmailForm(f => ({ ...f, imap_encryption: e.target.value }))}><option>SSL/TLS</option><option>STARTTLS</option><option>None</option></select></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Username *</label><input className="form-control" value={emailForm.imap_username} onChange={e => setEmailForm(f => ({ ...f, imap_username: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>IMAP Host *</label><input aria-label="IMAP Host" className="form-control" value={emailForm.imap_host} onChange={e => setEmailForm(f => ({ ...f, imap_host: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>IMAP Port *</label><input aria-label="IMAP Port" className="form-control" type="number" value={emailForm.imap_port} onChange={e => setEmailForm(f => ({ ...f, imap_port: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Encryption *</label><select aria-label="Encryption" className="form-control" value={emailForm.imap_encryption} onChange={e => setEmailForm(f => ({ ...f, imap_encryption: e.target.value }))}><option>SSL/TLS</option><option>STARTTLS</option><option>None</option></select></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Username *</label><input aria-label="Username" className="form-control" value={emailForm.imap_username} onChange={e => setEmailForm(f => ({ ...f, imap_username: e.target.value }))} required /></div>
                     <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Password {emailModal === 'edit' ? '(leave blank to keep existing)' : '*'}</label><input className="form-control" type="password" value={emailForm.imap_password} onChange={e => setEmailForm(f => ({ ...f, imap_password: e.target.value }))} required={emailModal === 'add'} /></div>
                   </div>
                 </div>
@@ -389,10 +389,10 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Outbound (SMTP)</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>SMTP Host *</label><input className="form-control" value={emailForm.smtp_host} onChange={e => setEmailForm(f => ({ ...f, smtp_host: e.target.value }))} required /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>SMTP Port *</label><input className="form-control" type="number" value={emailForm.smtp_port} onChange={e => setEmailForm(f => ({ ...f, smtp_port: e.target.value }))} required /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Encryption *</label><select className="form-control" value={emailForm.smtp_encryption} onChange={e => setEmailForm(f => ({ ...f, smtp_encryption: e.target.value }))}><option>SSL/TLS</option><option>STARTTLS</option><option>None</option></select></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Username *</label><input className="form-control" value={emailForm.smtp_username} onChange={e => setEmailForm(f => ({ ...f, smtp_username: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>SMTP Host *</label><input aria-label="SMTP Host" className="form-control" value={emailForm.smtp_host} onChange={e => setEmailForm(f => ({ ...f, smtp_host: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>SMTP Port *</label><input aria-label="SMTP Port" className="form-control" type="number" value={emailForm.smtp_port} onChange={e => setEmailForm(f => ({ ...f, smtp_port: e.target.value }))} required /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Encryption *</label><select aria-label="Encryption" className="form-control" value={emailForm.smtp_encryption} onChange={e => setEmailForm(f => ({ ...f, smtp_encryption: e.target.value }))}><option>SSL/TLS</option><option>STARTTLS</option><option>None</option></select></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Username *</label><input aria-label="Username" className="form-control" value={emailForm.smtp_username} onChange={e => setEmailForm(f => ({ ...f, smtp_username: e.target.value }))} required /></div>
                     <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Password {emailModal === 'edit' ? '(leave blank to keep existing)' : '*'}</label><input className="form-control" type="password" value={emailForm.smtp_password} onChange={e => setEmailForm(f => ({ ...f, smtp_password: e.target.value }))} required={emailModal === 'add'} /></div>
                   </div>
                 </div>
@@ -402,9 +402,9 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Ingestion Controls</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Polling Interval (min)</label><input className="form-control" type="number" min={1} value={emailForm.polling_interval_min} onChange={e => setEmailForm(f => ({ ...f, polling_interval_min: Number(e.target.value) }))} /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Initial Fetch Window (days)</label><input className="form-control" type="number" min={1} value={emailForm.initial_fetch_days} onChange={e => setEmailForm(f => ({ ...f, initial_fetch_days: Number(e.target.value) }))} /></div>
-                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Mailbox Folder</label><input className="form-control" value={emailForm.mailbox_folder} onChange={e => setEmailForm(f => ({ ...f, mailbox_folder: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Polling Interval (min)</label><input aria-label="Polling Interval (min)" className="form-control" type="number" min={1} value={emailForm.polling_interval_min} onChange={e => setEmailForm(f => ({ ...f, polling_interval_min: Number(e.target.value) }))} /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Initial Fetch Window (days)</label><input aria-label="Initial Fetch Window (days)" className="form-control" type="number" min={1} value={emailForm.initial_fetch_days} onChange={e => setEmailForm(f => ({ ...f, initial_fetch_days: Number(e.target.value) }))} /></div>
+                    <div><label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Mailbox Folder</label><input aria-label="Mailbox Folder" className="form-control" value={emailForm.mailbox_folder} onChange={e => setEmailForm(f => ({ ...f, mailbox_folder: e.target.value }))} /></div>
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={emailForm.ingest_attachments} onChange={e => setEmailForm(f => ({ ...f, ingest_attachments: e.target.checked }))} />
@@ -413,7 +413,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                   {!!emailForm.ingest_attachments && ( // the database sends 0, which React drew as a stray "0"
                     <div style={{ marginTop: 10, maxWidth: 200 }}>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Max Attachment Size (MB)</label>
-                      <input className="form-control" type="number" min={1} value={emailForm.max_attachment_mb} onChange={e => setEmailForm(f => ({ ...f, max_attachment_mb: Number(e.target.value) }))} />
+                      <input aria-label="Max Attachment Size (MB)" className="form-control" type="number" min={1} value={emailForm.max_attachment_mb} onChange={e => setEmailForm(f => ({ ...f, max_attachment_mb: Number(e.target.value) }))} />
                     </div>
                   )}
                 </div>
@@ -447,7 +447,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Account: <strong>{emailAccounts.find(a => a.id === sendTestModalId)?.account_name}</strong></p>
             <form onSubmit={submitSendTest}>
               <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Recipient Email *</label>
-              <input className="form-control" type="email" placeholder="test@example.com" value={sendTestRecipient} onChange={e => setSendTestRecipient(e.target.value)} required style={{ marginBottom: 16 }} />
+              <input aria-label="Recipient Email" className="form-control" type="email" placeholder="test@example.com" value={sendTestRecipient} onChange={e => setSendTestRecipient(e.target.value)} required style={{ marginBottom: 16 }} />
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-outline" onClick={() => setSendTestModalId(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={emailTestingId === `send-${sendTestModalId}`}>

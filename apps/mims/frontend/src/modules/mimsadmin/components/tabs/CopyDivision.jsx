@@ -94,14 +94,14 @@ export default function CopyDivision() {
         <div style={{ display:'flex', alignItems:'flex-end', gap:20, flexWrap:'wrap' }}>
           <div>
             <label style={labelS}>Copy from</label>
-            <select style={selectS} value={sourceOrg} onChange={e => { setSourceOrg(e.target.value); setPreview(null); setResult(null); setConfirmed(false) }}>
+            <select aria-label="Copy from" style={selectS} value={sourceOrg} onChange={e => { setSourceOrg(e.target.value); setPreview(null); setResult(null); setConfirmed(false) }}>
               <option value="">— Select source org —</option>
               {orgs.map(o => <option key={o.id} value={o.id} disabled={String(o.id)===String(targetOrg)}>{o.name}</option>)}
             </select>
           </div>
           <div>
             <label style={labelS}>Copy to</label>
-            <select style={selectS} value={targetOrg} onChange={e => { setTargetOrg(e.target.value); setPreview(null); setResult(null); setConfirmed(false) }}>
+            <select aria-label="Copy to" style={selectS} value={targetOrg} onChange={e => { setTargetOrg(e.target.value); setPreview(null); setResult(null); setConfirmed(false) }}>
               <option value="">— Select target org —</option>
               {orgs.map(o => <option key={o.id} value={o.id} disabled={String(o.id)===String(sourceOrg)}>{o.name}</option>)}
             </select>

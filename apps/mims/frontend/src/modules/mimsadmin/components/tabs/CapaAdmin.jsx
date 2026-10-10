@@ -95,7 +95,7 @@ export default function CapaAdmin() {
       <Header flash={flash} title="CAPA Workflow"
         sub="ISO 13485 + 21 CFR 820.100 corrective + preventive actions." />
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10 }}>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...ipt, maxWidth: 240 }}>
+        <select aria-label="Filter by status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...ipt, maxWidth: 240 }}>
           <option value="">All statuses</option>
           {['open','root_cause_identified','action_proposed','action_approved','action_implemented','effectiveness_check','closed','terminated'].map(s => <option key={s}>{s}</option>)}
         </select>

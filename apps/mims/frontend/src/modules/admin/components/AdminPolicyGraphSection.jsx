@@ -650,19 +650,19 @@ export default function AdminPolicyGraphSection({ H, flash }) {
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'center', gap: 8 }}>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Action</label>
-              <input className="form-control" value={evalForm.action} onChange={(e) => setEvalForm((prev) => ({ ...prev, action: e.target.value }))} />
+              <input aria-label="Action" className="form-control" value={evalForm.action} onChange={(e) => setEvalForm((prev) => ({ ...prev, action: e.target.value }))} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'start', gap: 8 }}>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)', paddingTop: 8 }}>Actor JSON</label>
-              <textarea className="form-control" rows={5} value={evalForm.actor} onChange={(e) => setEvalForm((prev) => ({ ...prev, actor: e.target.value }))} />
+              <textarea aria-label="Actor JSON" className="form-control" rows={5} value={evalForm.actor} onChange={(e) => setEvalForm((prev) => ({ ...prev, actor: e.target.value }))} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'start', gap: 8 }}>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)', paddingTop: 8 }}>Content JSON</label>
-              <textarea className="form-control" rows={5} value={evalForm.content} onChange={(e) => setEvalForm((prev) => ({ ...prev, content: e.target.value }))} />
+              <textarea aria-label="Content JSON" className="form-control" rows={5} value={evalForm.content} onChange={(e) => setEvalForm((prev) => ({ ...prev, content: e.target.value }))} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'start', gap: 8 }}>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)', paddingTop: 8 }}>Context JSON</label>
-              <textarea className="form-control" rows={4} value={evalForm.context} onChange={(e) => setEvalForm((prev) => ({ ...prev, context: e.target.value }))} />
+              <textarea aria-label="Context JSON" className="form-control" rows={4} value={evalForm.context} onChange={(e) => setEvalForm((prev) => ({ ...prev, context: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={handleEvaluate} disabled={evaluating}>

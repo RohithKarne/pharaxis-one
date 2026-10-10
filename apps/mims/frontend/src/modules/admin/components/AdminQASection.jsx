@@ -215,7 +215,7 @@ function QAReportsPanel() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) auto', gap: 10, alignItems: 'end' }}>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Report Name *</label>
-            <input
+            <input aria-label="Report Name"
               style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
               value={form.report_name}
               onChange={e => setForm(p => ({ ...p, report_name: e.target.value }))}
@@ -224,17 +224,17 @@ function QAReportsPanel() {
           </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From Date</label>
-            <input type="date" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            <input aria-label="From Date" type="date" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
               value={form.date_range_start} onChange={e => setForm(p => ({ ...p, date_range_start: e.target.value }))} />
           </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To Date</label>
-            <input type="date" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            <input aria-label="To Date" type="date" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
               value={form.date_range_end} onChange={e => setForm(p => ({ ...p, date_range_end: e.target.value }))} />
           </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Case Type</label>
-            <select style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            <select aria-label="Case Type" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
               value={form.case_type_filter} onChange={e => setForm(p => ({ ...p, case_type_filter: e.target.value }))}>
               <option value="">All Types</option>
               <option value="AE">Adverse Event (AE)</option>
@@ -457,12 +457,12 @@ function QAOverridesPanel() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'flex-end' }}>
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From</label>
-          <input type="date" style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
+          <input aria-label="From" type="date" style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
             value={filter.from_date} onChange={e => setFilter(p => ({ ...p, from_date: e.target.value }))} />
         </div>
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To</label>
-          <input type="date" style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
+          <input aria-label="To" type="date" style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
             value={filter.to_date} onChange={e => setFilter(p => ({ ...p, to_date: e.target.value }))} />
         </div>
         <button className="btn btn-primary" onClick={() => { setPage(1); load() }}>Filter</button>

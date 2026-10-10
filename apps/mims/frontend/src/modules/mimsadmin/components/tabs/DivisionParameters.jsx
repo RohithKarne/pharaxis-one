@@ -296,7 +296,7 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
         {text('postal_code', 'Zip / Postal')}
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>Country</label>
-          <select className="form-control" value={form.country ?? ''} onChange={e => set('country', e.target.value)}>
+          <select aria-label="Country" className="form-control" value={form.country ?? ''} onChange={e => set('country', e.target.value)}>
             <option value="">— Select —</option>
             {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
           </select>
@@ -306,7 +306,7 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
         {!creating && (
           <div style={{ marginBottom: 0 }}>
             <label style={lbl}>Division Logo</label>
-            <input type="file" accept="image/*" onChange={e => uploadLogo(e.target.files?.[0])} style={{ fontSize: 12 }} />
+            <input aria-label="Division Logo" type="file" accept="image/*" onChange={e => uploadLogo(e.target.files?.[0])} style={{ fontSize: 12 }} />
           </div>
         )}
       </div>
@@ -343,7 +343,7 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
         </div>
         <div style={{ marginBottom: 0 }}>
           <label style={lbl}>Session Timeout (minutes)</label>
-          <input className="form-control" type="number" min={1} value={form.session_timeout_minutes ?? 30}
+          <input aria-label="Session Timeout (minutes)" className="form-control" type="number" min={1} value={form.session_timeout_minutes ?? 30}
             onChange={e => set('session_timeout_minutes', e.target.value)} />
         </div>
       </div>

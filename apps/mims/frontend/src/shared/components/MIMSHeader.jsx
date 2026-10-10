@@ -229,7 +229,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menu
 
             <div className="form-group">
               <label>Current Password</label>
-              <input
+              <input aria-label="Current Password"
                 className="form-control"
                 type="password"
                 value={passwordForm.currentPassword}
@@ -238,7 +238,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menu
             </div>
             <div className="form-group">
               <label>New Password</label>
-              <input
+              <input aria-label="New Password"
                 className="form-control"
                 type="password"
                 minLength={8}
@@ -248,7 +248,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menu
             </div>
             <div className="form-group">
               <label>Confirm Password</label>
-              <input
+              <input aria-label="Confirm Password"
                 className="form-control"
                 type="password"
                 minLength={8}

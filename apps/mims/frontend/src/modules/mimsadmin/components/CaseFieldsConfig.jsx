@@ -135,6 +135,7 @@ export default function CaseFieldsConfig() {
                     <td>
                       <input
                         type="text"
+                        aria-label={`Label shown for ${f.field_name}`}
                         defaultValue={f.custom_label || ''}
                         placeholder={f.field_name}
                         disabled={savingId === f.id}
@@ -147,6 +148,7 @@ export default function CaseFieldsConfig() {
                     <td className="cf-fieldcfg-centre">
                       <input
                         type="checkbox"
+                        aria-label={`${f.field_name} required`}
                         checked={f.is_required}
                         disabled={savingId === f.id || f.is_hidden}
                         title={f.is_hidden ? 'Show the field before making it required' : ''}
@@ -156,6 +158,7 @@ export default function CaseFieldsConfig() {
                     <td className="cf-fieldcfg-centre">
                       <input
                         type="checkbox"
+                        aria-label={`${f.field_name} visible`}
                         checked={!f.is_hidden}
                         disabled={savingId === f.id}
                         onChange={e => patchField(f, { is_hidden: !e.target.checked, ...(!e.target.checked && f.is_required ? { is_required: false } : {}) })}
@@ -164,6 +167,7 @@ export default function CaseFieldsConfig() {
                     <td>
                       <input
                         type="number"
+                        aria-label={`${f.field_name} order`}
                         min="0"
                         max="9999"
                         defaultValue={f.sort_order ?? 0}

@@ -148,13 +148,13 @@ function BugReportsTab({ token }) {
     <div>
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
+        <input aria-label="Search bug reports"
           style={{ padding: '7px 12px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13, minWidth: 200 }}
           placeholder="Search description / email / page…"
           value={filter.search}
           onChange={e => { setFilter(f => ({ ...f, search: e.target.value })); setPage(1) }}
         />
-        <select
+        <select aria-label="Filter by status"
           style={{ padding: '7px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13 }}
           value={filter.status}
           onChange={e => { setFilter(f => ({ ...f, status: e.target.value })); setPage(1) }}
@@ -164,7 +164,7 @@ function BugReportsTab({ token }) {
             <option key={s} value={s}>{s}</option>
           )}
         </select>
-        <select
+        <select aria-label="Filter by severity"
           style={{ padding: '7px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13 }}
           value={filter.severity}
           onChange={e => { setFilter(f => ({ ...f, severity: e.target.value })); setPage(1) }}
@@ -280,7 +280,7 @@ function BugReportsTab({ token }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Update Status</label>
-                  <select
+                  <select aria-label="Update Status"
                     value={editForm.status}
                     onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13 }}
@@ -292,7 +292,7 @@ function BugReportsTab({ token }) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Assign To</label>
-                  <input
+                  <input aria-label="Assign To"
                     value={editForm.assigned_to}
                     onChange={e => setEditForm(f => ({ ...f, assigned_to: e.target.value }))}
                     placeholder="e.g. Varun, Saad"
@@ -302,7 +302,7 @@ function BugReportsTab({ token }) {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Dev Notes</label>
-                <textarea
+                <textarea aria-label="Dev Notes"
                   value={editForm.dev_notes}
                   onChange={e => setEditForm(f => ({ ...f, dev_notes: e.target.value }))}
                   rows={3}
@@ -390,13 +390,13 @@ function FeatureRequestsTab({ token }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
+        <input aria-label="Search suggestions"
           style={{ padding: '7px 12px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13, minWidth: 200 }}
           placeholder="Search suggestions…"
           value={filter.search}
           onChange={e => { setFilter(f => ({ ...f, search: e.target.value })); setPage(1) }}
         />
-        <select
+        <select aria-label="Filter by status"
           style={{ padding: '7px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13 }}
           value={filter.status}
           onChange={e => { setFilter(f => ({ ...f, status: e.target.value })); setPage(1) }}
@@ -504,7 +504,7 @@ function FeatureRequestsTab({ token }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Status</label>
-                  <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                  <select aria-label="Status" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13 }}>
                     {['new','under-review','planned','in-progress','shipped','declined'].map(s =>
                       <option key={s} value={s}>{s}</option>
@@ -513,7 +513,7 @@ function FeatureRequestsTab({ token }) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Sprint Target</label>
-                  <input value={editForm.sprint_target} onChange={e => setEditForm(f => ({ ...f, sprint_target: e.target.value }))}
+                  <input aria-label="Sprint Target" value={editForm.sprint_target} onChange={e => setEditForm(f => ({ ...f, sprint_target: e.target.value }))}
                     placeholder="e.g. Sprint 22"
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
@@ -521,14 +521,14 @@ function FeatureRequestsTab({ token }) {
               {editForm.status === 'declined' && (
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Decline Reason</label>
-                  <textarea value={editForm.decline_reason} onChange={e => setEditForm(f => ({ ...f, decline_reason: e.target.value }))}
+                  <textarea aria-label="Decline Reason" value={editForm.decline_reason} onChange={e => setEditForm(f => ({ ...f, decline_reason: e.target.value }))}
                     rows={2} placeholder="Reason for declining..."
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
                 </div>
               )}
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: 5, textTransform: 'uppercase' }}>Dev Notes</label>
-                <textarea value={editForm.dev_notes} onChange={e => setEditForm(f => ({ ...f, dev_notes: e.target.value }))}
+                <textarea aria-label="Dev Notes" value={editForm.dev_notes} onChange={e => setEditForm(f => ({ ...f, dev_notes: e.target.value }))}
                   rows={3} placeholder="Internal notes..."
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border, #e2e8f0)', borderRadius: 7, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
               </div>

@@ -216,15 +216,15 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
             <form onSubmit={saveRule}>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Transition Name</label>
-                <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. Submit for Review" value={editingRule.transition_name || ''} onChange={e => setEditingRule(r => ({ ...r, transition_name: e.target.value }))} />
+                <input aria-label="Transition Name" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. Submit for Review" value={editingRule.transition_name || ''} onChange={e => setEditingRule(r => ({ ...r, transition_name: e.target.value }))} />
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Required Role </label>
-                <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. QA Manager" value={editingRule.required_role || ''} onChange={e => setEditingRule(r => ({ ...r, required_role: e.target.value, require_checklist: !!e.target.value }))} />
+                <input aria-label="Required Role" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. QA Manager" value={editingRule.required_role || ''} onChange={e => setEditingRule(r => ({ ...r, required_role: e.target.value, require_checklist: !!e.target.value }))} />
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>SLA Hours </label>
-                <input type="number" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. 24" value={editingRule.sla_hours || ''} onChange={e => setEditingRule(r => ({ ...r, sla_hours: e.target.value, require_comment: !!e.target.value }))} />
+                <input aria-label="SLA Hours" type="number" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. 24" value={editingRule.sla_hours || ''} onChange={e => setEditingRule(r => ({ ...r, sla_hours: e.target.value, require_comment: !!e.target.value }))} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
@@ -549,14 +549,14 @@ export default function AdminWorkflowPanel({ H, flash }) {
                   <div style={{ display: 'grid', gap: 12 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>If Activity *</label>
-                      <select className="form-control" value={triggerForm.activity_id} onChange={e => setTriggerForm(f => ({ ...f, activity_id: e.target.value }))} required>
+                      <select aria-label="If Activity" className="form-control" value={triggerForm.activity_id} onChange={e => setTriggerForm(f => ({ ...f, activity_id: e.target.value }))} required>
                         <option value="">— Select activity —</option>
                         {wfActivities.filter(a => a.is_active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Then *</label>
-                      <select className="form-control" value={triggerForm.trigger_type} onChange={e => setTriggerForm(f => ({ ...f, trigger_type: e.target.value }))}>
+                      <select aria-label="Then" className="form-control" value={triggerForm.trigger_type} onChange={e => setTriggerForm(f => ({ ...f, trigger_type: e.target.value }))}>
                         <option value="change_state">Change State</option>
                         <option value="send_alert">Send Alert</option>
                         <option value="assign_to">Assign To</option>
@@ -565,7 +565,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
                     {triggerForm.trigger_type === 'change_state' && (
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Target State</label>
-                        <select className="form-control" value={triggerForm.target_state_id} onChange={e => setTriggerForm(f => ({ ...f, target_state_id: e.target.value }))}>
+                        <select aria-label="Target State" className="form-control" value={triggerForm.target_state_id} onChange={e => setTriggerForm(f => ({ ...f, target_state_id: e.target.value }))}>
                           <option value="">— Select state —</option>
                           {workflowStates.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
@@ -574,13 +574,13 @@ export default function AdminWorkflowPanel({ H, flash }) {
                     {triggerForm.trigger_type === 'send_alert' && (
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Alert Rule</label>
-                        <input className="form-control" placeholder="e.g. Notify compliance team" value={triggerForm.alert_rule} onChange={e => setTriggerForm(f => ({ ...f, alert_rule: e.target.value }))} />
+                        <input aria-label="Alert Rule" className="form-control" placeholder="e.g. Notify compliance team" value={triggerForm.alert_rule} onChange={e => setTriggerForm(f => ({ ...f, alert_rule: e.target.value }))} />
                       </div>
                     )}
                     {triggerForm.trigger_type === 'assign_to' && (
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Assign To</label>
-                        <input className="form-control" placeholder="e.g. QA Reviewer" value={triggerForm.assign_to} onChange={e => setTriggerForm(f => ({ ...f, assign_to: e.target.value }))} />
+                        <input aria-label="Assign To" className="form-control" placeholder="e.g. QA Reviewer" value={triggerForm.assign_to} onChange={e => setTriggerForm(f => ({ ...f, assign_to: e.target.value }))} />
                       </div>
                     )}
                   </div>
@@ -603,14 +603,14 @@ export default function AdminWorkflowPanel({ H, flash }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 520, marginBottom: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>From State *</label>
-                  <select className="form-control" value={wfRuleForm.from_state_id} onChange={e => setWfRuleForm(f => ({ ...f, from_state_id: e.target.value }))}>
+                  <select aria-label="From State" className="form-control" value={wfRuleForm.from_state_id} onChange={e => setWfRuleForm(f => ({ ...f, from_state_id: e.target.value }))}>
                     <option value="">— select —</option>
                     {workflowStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>To State *</label>
-                  <select className="form-control" value={wfRuleForm.to_state_id} onChange={e => setWfRuleForm(f => ({ ...f, to_state_id: e.target.value }))}>
+                  <select aria-label="To State" className="form-control" value={wfRuleForm.to_state_id} onChange={e => setWfRuleForm(f => ({ ...f, to_state_id: e.target.value }))}>
                     <option value="">— select —</option>
                     {workflowStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>

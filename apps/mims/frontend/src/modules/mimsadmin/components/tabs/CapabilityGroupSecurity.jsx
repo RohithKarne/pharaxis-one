@@ -429,13 +429,13 @@ export default function CapabilityGroupSecurity() {
               placeholder="e.g. Regional Reviewers" style={{ width: '100%', marginBottom: 12 }} />
 
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Description</label>
-            <textarea className="form-control" value={createDesc} onChange={e => setCreateDesc(e.target.value)}
+            <textarea aria-label="Description" className="form-control" value={createDesc} onChange={e => setCreateDesc(e.target.value)}
               placeholder="Optional" rows={2} style={{ width: '100%', marginBottom: 12, resize: 'vertical' }} />
 
             {templates.length > 0 && (
               <>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Start from template</label>
-                <select className="form-control" value={createTemplateId} onChange={e => {
+                <select aria-label="Start from template" className="form-control" value={createTemplateId} onChange={e => {
                   setCreateTemplateId(e.target.value)
                   const t = templates.find(x => String(x.id ?? x.name) === e.target.value)
                   if (t?.role) setCreateRole(t.role)

@@ -64,7 +64,7 @@ export default function GridTemplates() {
       <Header flash={flash} title="Grid Section Templates"
         sub="Reusable rows for multi-row grid sections (concomitant meds, MedDRA codes, etc.)" />
       <div style={{ padding: '12px 24px', display: 'flex', gap: 10, alignItems: 'center' }}>
-        <input value={filterSection} onChange={e => setFilterSection(e.target.value)}
+        <input aria-label="Filter by section name" value={filterSection} onChange={e => setFilterSection(e.target.value)}
           placeholder="Filter by section name…" style={{ ...ipt, maxWidth: 260 }} />
         <span style={{ flex: 1 }} />
         <button onClick={newTpl} style={primaryBtn}>+ New template</button>

@@ -157,19 +157,19 @@ export default function EmailCaseImportConfig() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 8 }}>
           <div>
             <label style={label}>Confidence threshold (0.5 – 1)</label>
-            <input style={input} type="number" step="0.01" min="0.5" max="1" value={config.confidence_threshold}
+            <input aria-label="Confidence threshold (0.5 – 1)" style={input} type="number" step="0.01" min="0.5" max="1" value={config.confidence_threshold}
               onChange={(e) => setConfig({ ...config, confidence_threshold: e.target.value })}
               onBlur={() => saveConfig({ confidence_threshold: Number(config.confidence_threshold) })} />
           </div>
           <div>
             <label style={label}>Review SLA (business hours)</label>
-            <input style={input} type="number" min="1" max="720" value={config.sla_hours}
+            <input aria-label="Review SLA (business hours)" style={input} type="number" min="1" max="720" value={config.sla_hours}
               onChange={(e) => setConfig({ ...config, sla_hours: e.target.value })}
               onBlur={() => saveConfig({ sla_hours: Number(config.sla_hours) })} />
           </div>
           <div>
             <label style={label}>Alert recipients</label>
-            <select style={input} value={config.alert_recipients}
+            <select aria-label="Alert recipients" style={input} value={config.alert_recipients}
               onChange={(e) => saveConfig({ alert_recipients: e.target.value })}>
               <option value="agent_lead">Assigned agent + leads</option>
               <option value="agent_only">Assigned agent only</option>
@@ -273,12 +273,12 @@ export default function EmailCaseImportConfig() {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 1fr auto auto', gap: 8, marginTop: 12, alignItems: 'end' }}>
           <div>
             <label style={label}>Label</label>
-            <input style={input} placeholder="Reporter Name" value={newField.label}
+            <input aria-label="Label" style={input} placeholder="Reporter Name" value={newField.label}
               onChange={(e) => setNewField({ ...newField, label: e.target.value, field_key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') })} />
           </div>
           <div>
             <label style={label}>Maps to</label>
-            <select style={input} value={`${newField.target_entity}.${newField.target_field}`}
+            <select aria-label="Maps to" style={input} value={`${newField.target_entity}.${newField.target_field}`}
               onChange={(e) => {
                 const [target_entity, target_field] = e.target.value.split('.')
                 setNewField({ ...newField, target_entity, target_field })
@@ -290,7 +290,7 @@ export default function EmailCaseImportConfig() {
           </div>
           <div>
             <label style={label}>Aliases (comma-sep)</label>
-            <input style={input} placeholder="Name, Your Name" value={newField.aliases}
+            <input aria-label="Aliases (comma-sep)" style={input} placeholder="Name, Your Name" value={newField.aliases}
               onChange={(e) => setNewField({ ...newField, aliases: e.target.value })} />
           </div>
           <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5, paddingBottom: 8 }}>
@@ -317,13 +317,13 @@ export default function EmailCaseImportConfig() {
         <div style={{ display: 'grid', gap: 10 }}>
           <div>
             <label style={label}>Standard template (blank = platform default)</label>
-            <textarea style={{ ...input, minHeight: 64 }} value={config.ack_template || ''}
+            <textarea aria-label="Standard template (blank = platform default)" style={{ ...input, minHeight: 64 }} value={config.ack_template || ''}
               onChange={(e) => setConfig({ ...config, ack_template: e.target.value })}
               onBlur={() => saveConfig({ ack_template: config.ack_template })} />
           </div>
           <div>
             <label style={label}>Missing-information template (blank = platform default)</label>
-            <textarea style={{ ...input, minHeight: 64 }} value={config.ack_missing_fields_template || ''}
+            <textarea aria-label="Missing-information template (blank = platform default)" style={{ ...input, minHeight: 64 }} value={config.ack_missing_fields_template || ''}
               onChange={(e) => setConfig({ ...config, ack_missing_fields_template: e.target.value })}
               onBlur={() => saveConfig({ ack_missing_fields_template: config.ack_missing_fields_template })} />
           </div>

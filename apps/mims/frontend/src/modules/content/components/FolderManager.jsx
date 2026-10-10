@@ -144,28 +144,28 @@ export default function FolderManager({ show, onClose, token }) {
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Status</label>
-                <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+                <select aria-label="Status" className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
                   <option>Active</option>
                   <option>Inactive</option>
                 </select>
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Product</label>
-                <select className="cm-form-select" value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
+                <select aria-label="Product" className="cm-form-select" value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
                   <option value="">— None —</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
                 </select>
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Site</label>
-                <select className="cm-form-select" value={form.site_id} onChange={e => setForm(p => ({ ...p, site_id: e.target.value }))}>
+                <select aria-label="Site" className="cm-form-select" value={form.site_id} onChange={e => setForm(p => ({ ...p, site_id: e.target.value }))}>
                   <option value="">— None —</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="cm-form-group" style={{ margin: 0, gridColumn: '1/-1' }}>
                 <label className="cm-form-label">Description</label>
-                <textarea className="cm-form-textarea" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} />
+                <textarea aria-label="Description" className="cm-form-textarea" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>

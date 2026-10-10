@@ -335,8 +335,9 @@ export default function PicklistsTable() {
       {/* Filters + Add */}
       <div className="ma-pt-filters">
         <div className="ma-pt-filter">
-          <label>Table Name</label>
+          <label htmlFor="ma-pt-f-category">Table Name</label>
           <select
+            id="ma-pt-f-category"
             className="ma-pt-select"
             value={filter.category}
             onChange={e => setF('category', e.target.value)}
@@ -349,8 +350,9 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-filter">
-          <label>Field</label>
+          <label htmlFor="ma-pt-f-field">Field</label>
           <select
+            id="ma-pt-f-field"
             className="ma-pt-select"
             value={filter.field_type}
             onChange={e => setF('field_type', e.target.value)}
@@ -365,8 +367,9 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-filter">
-          <label>Tenant</label>
+          <label htmlFor="ma-pt-f-tenant">Tenant</label>
           <select
+            id="ma-pt-f-tenant"
             className="ma-pt-select"
             value={filter.tenant_id}
             onChange={e => setF('tenant_id', e.target.value)}
@@ -379,8 +382,9 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-filter">
-          <label>Department</label>
+          <label htmlFor="ma-pt-f-department">Department</label>
           <select
+            id="ma-pt-f-department"
             className="ma-pt-select"
             value={filter.department}
             onChange={e => setF('department', e.target.value)}
@@ -393,8 +397,9 @@ export default function PicklistsTable() {
         </div>
 
         <div className="ma-pt-filter">
-          <label>Search Value</label>
+          <label htmlFor="ma-pt-f-search">Search Value</label>
           <input
+            id="ma-pt-f-search"
             className="ma-pt-input"
             placeholder="search…"
             value={filter.search}
@@ -433,7 +438,7 @@ export default function PicklistsTable() {
           <table className="ma-pt-table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} /></th>
+                <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all values on this page" checked={allVisibleSelected} onChange={toggleAllVisible} /></th>
                 <th style={{ width: 36 }} title="Drag to reorder">Sort</th>
                 <th>Value</th>
                 <th>Parent</th>
@@ -457,7 +462,7 @@ export default function PicklistsTable() {
                   }}
                   onDrop={() => dropRow(row)}
                 >
-                  <td><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelected(row.id)} /></td>
+                  <td><input type="checkbox" aria-label={`Select ${row.value}`} checked={selected.includes(row.id)} onChange={() => toggleSelected(row.id)} /></td>
                   {wholeGroupOnPage(row)
                     ? <td className="ma-pt-drag-cell" title="Drag within the same tenant, category, and field">⋮⋮</td>
                     : <td className="ma-pt-drag-cell off" title="This field's values carry on onto another page. Pick it in the Field filter to reorder.">⋮⋮</td>}
@@ -623,7 +628,7 @@ function ImportCsvModal({ H, onClose, onDone }) {
 
           <div className="ma-pt-field">
             <label>CSV File</label>
-            <input type="file" accept=".csv,text/csv" onChange={onFile} />
+            <input aria-label="CSV File" type="file" accept=".csv,text/csv" onChange={onFile} />
             {fileName && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Loaded: <strong>{fileName}</strong> ({csv.length} chars)</div>}
           </div>
 
@@ -847,14 +852,14 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
               <div className="ma-pt-code-grid">
                 <div className="ma-pt-field">
                   <label>Status</label>
-                  <select className="ma-pt-select" value={form.status} onChange={e => set('status', e.target.value)}>
+                  <select aria-label="Status" className="ma-pt-select" value={form.status} onChange={e => set('status', e.target.value)}>
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
                 <div className="ma-pt-field">
                   <label>Sort Order</label>
-                  <input type="number" className="ma-pt-input" value={form.sort_order} onChange={e => set('sort_order', e.target.value)} />
+                  <input aria-label="Sort Order" type="number" className="ma-pt-input" value={form.sort_order} onChange={e => set('sort_order', e.target.value)} />
                 </div>
               </div>
             </>
@@ -873,16 +878,16 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
 
           {tab === 'translations' && (
             <div className="ma-pt-code-grid">
-              <div className="ma-pt-field"><label>Spanish (es)</label><input className="ma-pt-input" value={form.translations.es || ''} onChange={e => setTranslation('es', e.target.value)} /></div>
-              <div className="ma-pt-field"><label>French (fr)</label><input className="ma-pt-input" value={form.translations.fr || ''} onChange={e => setTranslation('fr', e.target.value)} /></div>
-              <div className="ma-pt-field"><label>German (de)</label><input className="ma-pt-input" value={form.translations.de || ''} onChange={e => setTranslation('de', e.target.value)} /></div>
+              <div className="ma-pt-field"><label>Spanish (es)</label><input aria-label="Spanish (es)" className="ma-pt-input" value={form.translations.es || ''} onChange={e => setTranslation('es', e.target.value)} /></div>
+              <div className="ma-pt-field"><label>French (fr)</label><input aria-label="French (fr)" className="ma-pt-input" value={form.translations.fr || ''} onChange={e => setTranslation('fr', e.target.value)} /></div>
+              <div className="ma-pt-field"><label>German (de)</label><input aria-label="German (de)" className="ma-pt-input" value={form.translations.de || ''} onChange={e => setTranslation('de', e.target.value)} /></div>
             </div>
           )}
 
           {tab === 'cascading' && (
             <div className="ma-pt-field">
               <label>Parent Value</label>
-              <select className="ma-pt-select" value={form.parent_value_id} onChange={e => set('parent_value_id', e.target.value)}>
+              <select aria-label="Parent Value" className="ma-pt-select" value={form.parent_value_id} onChange={e => set('parent_value_id', e.target.value)}>
                 <option value="">No parent</option>
                 {parentOptions.map(parent => (
                   <option key={parent.id} value={parent.id}>{parent.value} ({parent.category} / {parent.field_type})</option>

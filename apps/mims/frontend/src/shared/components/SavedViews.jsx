@@ -66,7 +66,7 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <select
+      <select aria-label="Saved views"
         style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
         onChange={e => {
           const v = views.find(x => String(x.id) === e.target.value)
