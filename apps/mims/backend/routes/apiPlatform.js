@@ -270,9 +270,12 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
 router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    // Only a case this connection created, as for follow-ups: another system in the
+    // same organisation could erase the reporter on a portal case, recorded as the
+    // portal's own erasure request.
     const [[c]] = await conn.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
-      [req.params.id, req.apiClient.org_id]
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? AND is_deleted = 0 LIMIT 1',
+      [req.params.id, req.apiClient.org_id, req.apiClient.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
@@ -725,9 +728,10 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
 router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUpload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file is required.' });
+    // Only on a case this connection created, as for follow-ups.
     const [[c]] = await pool.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
-      [req.params.id, req.apiClient.org_id]
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? AND is_deleted = 0 LIMIT 1',
+      [req.params.id, req.apiClient.org_id, req.apiClient.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
@@ -768,18 +772,22 @@ router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {
   const expected = req.body.expected_version_stamp;
   if (expected !== undefined && expected !== null && expected !== '') {
     const [result] = await pool.execute(
-      'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND version_stamp=?',
-      [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, expected]
+      'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND source_api_client_id=? AND version_stamp=?',
+      [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, req.apiClient.id, expected]
     );
     if (result.affectedRows === 0) {
+      const [[own]] = await pool.execute('SELECT id FROM cases WHERE id=? AND org_id=? AND source_api_client_id=?', [req.params.id, req.apiClient.org_id, req.apiClient.id]);
+      if (!own) return res.status(404).json({ error: 'Case not found.' });
       return res.status(409).json({ error: 'Version conflict: the case was modified since your expected version.' });
     }
     return res.json({ id: Number(req.params.id) });
   }
-  await pool.execute(
-    'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=?',
-    [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id]
+  // Only a case this connection created: another system could rewrite a portal case.
+  const [result] = await pool.execute(
+    'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND source_api_client_id=?',
+    [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, req.apiClient.id]
   );
+  if (result.affectedRows === 0) return res.status(404).json({ error: 'Case not found.' });
   res.json({ id: Number(req.params.id) });
 });
 
