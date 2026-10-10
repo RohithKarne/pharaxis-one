@@ -68,7 +68,9 @@ const GROUP_TEMPLATES = [
   {
     key: 'readonly_auditor',
     name: 'Read-only Auditor',
-    role: 'reviewer',
+    // Not 'reviewer': a role's defaults are added to the group's grants, and the
+    // reviewer's include changing cases (migration 167).
+    role: 'auditor',
     description: 'Read-only inspection support with reports and audit visibility, no mutation privileges.',
     privileges: ['reports.view'],
   },

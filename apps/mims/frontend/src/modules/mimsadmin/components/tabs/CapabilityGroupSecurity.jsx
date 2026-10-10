@@ -464,6 +464,7 @@ export default function CapabilityGroupSecurity() {
               <option value="agent">Agent</option>
               <option value="reviewer">Reviewer</option>
               <option value="content_manager">Content Manager</option>
+              <option value="auditor">Auditor (read only)</option>
               <option value="admin">Administrator</option>
             </select>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>Anyone added to this group on Add / Edit Users gets this role.</div>

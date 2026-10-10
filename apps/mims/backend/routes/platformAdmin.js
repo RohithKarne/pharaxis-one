@@ -28,7 +28,7 @@ const {
 } = require('../services/orgBootstrapService');
 
 const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization', 'reports'];
-const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
+const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager', 'auditor'];
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 const PLATFORM_ADMIN_EXCLUSION_SQL =
   "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
@@ -629,6 +629,7 @@ router.post('/users/create', authenticate, requireRole('platform_admin'), accoun
       agent:           ['mims_core'],
       reviewer:        ['mims_core', 'data_visualization', 'reports'],
       content_manager: ['mims_core', 'content_mgmt'],
+      auditor:         ['mims_core', 'reports'],
     };
     const modules = defaultModules[userRole] || ['mims_core'];
     for (const mod of modules) {

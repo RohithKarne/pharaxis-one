@@ -12,6 +12,7 @@ function roleLabel(role) {
   if (isAdminUser(role)) return formatAdminRoleLabel(role)
   if (role === 'reviewer') return 'Reviewer'
   if (role === 'content_manager') return 'Content Manager'
+  if (role === 'auditor') return 'Auditor'
   return 'Case Operator'
 }
 

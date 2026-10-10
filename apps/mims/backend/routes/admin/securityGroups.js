@@ -17,7 +17,7 @@ const { logAudit } = require('../../utils/auditLog');
 
 // Roles a group may hand to its members (MIPM-134). Platform administration is
 // never given through a group made here.
-const GROUP_ROLES = new Set(['agent', 'reviewer', 'content_manager', 'admin']);
+const GROUP_ROLES = new Set(['agent', 'reviewer', 'content_manager', 'auditor', 'admin']);
 
 // O-6: goes through the shared writer, which logs a failed write instead of
 // discarding it. Outside a transaction it does not block the admin action.
@@ -278,7 +278,7 @@ router.post('/security-groups', authenticate, requireRole('admin', 'platform_adm
     // MIPM-134: the role members get on Add / Edit Users.
     const groupRole = privileges?.role;
     if (groupRole !== undefined && !GROUP_ROLES.has(groupRole)) {
-      return res.status(400).json({ error: 'Role for members must be agent, reviewer, content_manager or admin.' });
+      return res.status(400).json({ error: 'Role for members must be agent, reviewer, content_manager, auditor or admin.' });
     }
     const privilegesJson = privileges !== undefined ? JSON.stringify(privileges) : null;
     const tenantIds = normalizeTenantIds(privileges);

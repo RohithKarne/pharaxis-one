@@ -170,6 +170,7 @@ export default function Users() {
             <option value="agent">Agent</option>
             <option value="reviewer">Reviewer</option>
             <option value="content_manager">Content Manager</option>
+            <option value="auditor">Auditor (read only)</option>
           </select>
           <select aria-label="Filter by status"
             value={fltStatus}
