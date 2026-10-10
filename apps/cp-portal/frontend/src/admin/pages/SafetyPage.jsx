@@ -156,27 +156,33 @@ export default function SafetyPage() {
     <AdminLayout title="Safety Alerts">
       <div className="cp-section-header">
         <h2>Safety Alerts</h2>
-        {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Alert</button>}
+        {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New alert</button>}
       </div>
+      {/* Rohith, 10 Oct 2026: safety alerts stay direct, with no review step, so a
+          warning is never held up waiting for a second person (trials have one). */}
+      <p className="cp-page-desc">
+        A safety alert reaches doctors as soon as it is saved as live, or at the time you schedule. There is no review
+        step, so read it through before you save. Doctors are asked to confirm they have read high and critical alerts.
+      </p>
 
       {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {showForm && (
         <div className="cp-modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="cp-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+          <div className="cp-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()} role="dialog" aria-label={editAlert ? 'Edit alert' : 'New safety alert'}>
             <div className="cp-modal-header">
-              <span>{editAlert ? 'Edit Alert' : 'New Safety Alert'}</span>
-              <button className="cp-modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <span>{editAlert ? 'Edit alert' : 'New safety alert'}</span>
+              <button className="cp-modal-close" onClick={() => setShowForm(false)} aria-label="Close">✕</button>
             </div>
             <form onSubmit={handleSubmit} className="cp-modal-body">
               <div className="cp-field">
-                <label>Title *</label>
-                <input required value={form.title} onChange={e => setField('title', e.target.value)} />
+                <label htmlFor="alert-title">Title *</label>
+                <input id="alert-title" required value={form.title} onChange={e => setField('title', e.target.value)} />
               </div>
               <div className="cp-field-row">
                 <div className="cp-field">
-                  <label>Alert Type</label>
-                  <select value={form.alert_type} onChange={e => setField('alert_type', e.target.value)}>
+                  <label htmlFor="alert-type">Alert type</label>
+                  <select id="alert-type" value={form.alert_type} onChange={e => setField('alert_type', e.target.value)}>
                     <option value="dhcp_letter">DHCP Letter</option>
                     <option value="product_recall">Product Recall</option>
                     <option value="urgent_safety_restriction">Urgent Safety Restriction</option>
@@ -186,8 +192,8 @@ export default function SafetyPage() {
                   </select>
                 </div>
                 <div className="cp-field">
-                  <label>Severity</label>
-                  <select value={form.severity} onChange={e => setField('severity', e.target.value)}>
+                  <label htmlFor="alert-severity">Severity</label>
+                  <select id="alert-severity" value={form.severity} onChange={e => setField('severity', e.target.value)}>
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
@@ -197,43 +203,44 @@ export default function SafetyPage() {
               </div>
               <div className="cp-field-row">
                 <div className="cp-field">
-                  <label>Product Name</label>
-                  <select value={productManual ? '__manual__' : (form.product_name || '')} onChange={e => {
+                  <label htmlFor="alert-product">Product</label>
+                  <select id="alert-product" value={productManual ? '__manual__' : (form.product_name || '')} onChange={e => {
                     if (e.target.value === '__manual__') { setProductManual(true); setField('product_name', '') }
                     else { setProductManual(false); setField('product_name', e.target.value) }
                   }}>
-                    <option value="">— Select Drug —</option>
+                    <option value="">— Choose a product —</option>
                     {drugs.map(d => <option key={d.id} value={d.brand_name}>{d.brand_name}</option>)}
-                    <option value="__manual__">Other (manual)</option>
+                    <option value="__manual__">Other (type it in)</option>
                   </select>
-                  {productManual && <input style={{ marginTop: 6 }} value={form.product_name} onChange={e => setField('product_name', e.target.value)} placeholder="Enter product name…" />}
+                  {productManual && <input style={{ marginTop: 6 }} aria-label="Product name" value={form.product_name} onChange={e => setField('product_name', e.target.value)} placeholder="Product name" />}
                 </div>
                 <div className="cp-field">
-                  <label>Reference Number</label>
-                  <input value={form.ref_number} onChange={e => setField('ref_number', e.target.value)} />
+                  <label htmlFor="alert-ref">Reference number</label>
+                  <input id="alert-ref" value={form.ref_number} onChange={e => setField('ref_number', e.target.value)} />
                 </div>
               </div>
               <div className="cp-field">
-                <label>Body (HTML supported)</label>
-                <textarea rows={5} value={form.body_html} onChange={e => setField('body_html', e.target.value)} />
+                <label htmlFor="alert-body">What doctors read (HTML allowed)</label>
+                <textarea id="alert-body" rows={5} value={form.body_html} onChange={e => setField('body_html', e.target.value)} />
               </div>
               <div className="cp-field-row">
                 <div className="cp-field">
-                  <label>Effective Date</label>
-                  <input type="date" value={form.effective_date} onChange={e => setField('effective_date', e.target.value)} />
+                  <label htmlFor="alert-effective">Effective date</label>
+                  <input id="alert-effective" type="date" value={form.effective_date} onChange={e => setField('effective_date', e.target.value)} />
                 </div>
                 <div className="cp-field">
-                  <label>Status</label>
-                  <select value={form.status} onChange={e => setField('status', e.target.value)}>
+                  <label htmlFor="alert-status">Status</label>
+                  <select id="alert-status" value={form.status} onChange={e => setField('status', e.target.value)}>
                     <option value="active">{label('contentStatus', 'active')}</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="archived">Archived</option>
+                    <option value="resolved">{label('contentStatus', 'resolved')}</option>
+                    <option value="archived">{label('contentStatus', 'archived')}</option>
                   </select>
                 </div>
               </div>
               <div className="cp-field">
-                <label>Schedule Publish At (optional)</label>
+                <label htmlFor="alert-publish-at">Go live later at (optional, your local time)</label>
                 <input
+                  id="alert-publish-at"
                   type="datetime-local"
                   value={form.publish_at}
                   onChange={e => {
@@ -251,23 +258,23 @@ export default function SafetyPage() {
                 )}
               </div>
               <div className="cp-field">
-                <label>Target Types (empty = all)</label>
+                <label>Who sees it (none ticked = everyone)</label>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
                   {TARGET_TYPES.map(tt => (
-                    <label key={tt} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
+                    <label key={tt} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 400, whiteSpace: 'nowrap', width: 'auto', margin: 0 }}>
                       <input type="checkbox" checked={(form.target_types || []).includes(tt)} onChange={() => toggleTargetType(tt)} />
-                      {tt}
+                      {label('userType', tt)}
                     </label>
                   ))}
                 </div>
               </div>
               <div className="cp-field">
-                <label>Attachment (PDF optional)</label>
-                <input type="file" accept=".pdf" onChange={e => setFileInput(e.target.files[0] || null)} />
+                <label htmlFor="alert-file">Attachment (PDF, optional)</label>
+                <input id="alert-file" type="file" accept=".pdf" onChange={e => setFileInput(e.target.files[0] || null)} />
               </div>
               {error && <div className="cp-error">{error}</div>}
               <div className="cp-modal-footer">
-                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : editAlert ? 'Save Changes' : 'Create Alert'}</button>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : editAlert ? 'Save changes' : form.status === 'active' && !form.publish_at ? 'Publish to doctors now' : 'Save alert'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               </div>
             </form>
@@ -286,7 +293,7 @@ export default function SafetyPage() {
                 <th>Type</th>
                 <th>Severity</th>
                 <th>Product</th>
-                <th>Effective Date</th>
+                <th>Effective date</th>
                 <th>Status</th>
                 <th>Views</th>
                 <th></th>
@@ -299,7 +306,7 @@ export default function SafetyPage() {
                   <td>{label('alertType', a.alert_type)}</td>
                   <td>
                     <span className={`cp-badge ${severityBadgeClass(a.severity)}`} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-                      {a.severity}
+                      {label('severity', a.severity)}
                     </span>
                   </td>
                   <td>{a.product_name || '—'}</td>
