@@ -83,7 +83,7 @@ export default function ContentPage() {
 
   async function deactivate(endpoint, id) {
     // Every other remove in the console asks first; taking an item off the portal should too.
-    if (!confirm('Deactivate this item? It leaves the portal immediately. You can bring it back with "Show hidden".')) return
+    if (!confirm('Hide this item? It leaves the portal immediately. You can bring it back with "Show hidden".')) return
     setError('')
     try {
       const res = await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, { method: 'DELETE', headers: adminHeaders() })
@@ -152,7 +152,7 @@ export default function ContentPage() {
             Show hidden
           </label>
           <CanChange area="content">
-          <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setSlugManuallyEdited(false); setShowForm(true) }}>+ Add</button>
+          <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setSlugManuallyEdited(false); setShowForm(true) }}>+ New</button>
           </CanChange>
         </div>
       </div>
@@ -294,8 +294,8 @@ export default function ContentPage() {
                 </CanChange>
                 <CanChange area="content">
                 {item.is_active !== 0
-                  ? <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(endpoints[tab], item.id)}>Deactivate</button>
-                  : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#166534', borderColor: '#16A34A' }} onClick={() => reactivate(endpoints[tab], item.id)}>Reactivate</button>
+                  ? <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(endpoints[tab], item.id)}>Hide</button>
+                  : <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ color: '#166534', borderColor: '#16A34A' }} onClick={() => reactivate(endpoints[tab], item.id)}>Show again</button>
                 }
                 </CanChange>
               </div>

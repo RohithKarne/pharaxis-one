@@ -71,7 +71,7 @@ export default function FAQPage() {
       <div className="cp-section-header">
         <h2>FAQ</h2>
         <CanChange area="faq">
-        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add FAQ Item</button>
+        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New question</button>
         </CanChange>
       </div>
       {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
