@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const log = require('../../utils/logger');
+const { PEOPLE_ONLY } = require('../../utils/audit');
 
 // GET /api/admin/analytics/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -35,9 +36,9 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     // Recent audit activity — last 10 events
     const [recentActivity] = await pool.execute(
-      `SELECT action, entity, entity_id, admin_name, created_at
-       FROM cp_audit_logs WHERE client_id = ?
-       ORDER BY created_at DESC LIMIT 10`,
+      `SELECT l.action, l.entity, l.entity_id, l.admin_id, l.admin_name, l.created_at
+       FROM cp_audit_logs l WHERE l.client_id = ?${req.query.include_system === '1' ? '' : ` AND ${PEOPLE_ONLY}`}
+       ORDER BY l.created_at DESC LIMIT 10`,
       [id]
     );
 

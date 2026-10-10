@@ -6,6 +6,7 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
 import Icon from '../../shared/components/Icon'
 import QRCode from 'qrcode'
+import { activityActor } from '../../shared/utils/activityActor'
 
 // ── Cards ─────────────────────────────────────────────────────────────────────
 // CPPM-135: the cards follow the menu's main screens and tabs (menuSections), so
@@ -187,11 +188,17 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/integration/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setIntegrationData(d))
       .catch(() => {})
-    fetch(`/api/admin/audit/${clientId}?limit=5`, { headers: adminHeaders() })
+  }, [clientId])
+
+  // MIMS retries filled Recent Activity, each labelled "Admin" (CP screen review, 10 Oct 2026).
+  // People's actions by default; the automatic ones on request.
+  const [includeSystem, setIncludeSystem] = useState(false)
+  useEffect(() => {
+    fetch(`/api/admin/audit/${clientId}?limit=5${includeSystem ? '' : '&people=1'}`, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.records) setRecentActivity(d.records) })
       .catch(() => {})
-  }, [clientId])
+  }, [clientId, includeSystem])
 
   if (loading) return <AdminLayout title="Client"><div className="cp-loading">Loading…</div></AdminLayout>
   if (!data?.client) return <AdminLayout title="Client"><div className="cp-error">Client not found.</div></AdminLayout>
@@ -400,7 +407,13 @@ export default function ClientDetailPage() {
 
           {/* Recent Activity */}
           <div className="ck-panel-block">
-            <div className="ck-panel-title"><span>Recent Activity</span></div>
+            <div className="ck-panel-title">
+              <span>Recent Activity</span>
+              <label style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <input type="checkbox" checked={includeSystem} onChange={e => setIncludeSystem(e.target.checked)} />
+                Include automatic actions
+              </label>
+            </div>
             <div className="ck-activity-list">
               {recentActivity.length === 0 ? (
                 <div style={{ fontSize: 12, color: '#5F6B7A', padding: '4px 0' }}>No activity yet.</div>
@@ -409,7 +422,7 @@ export default function ClientDetailPage() {
                   <span className="ck-activity-icon"><Icon name={activityIcon(item.entity)} size={14} /></span>
                   <div className="ck-activity-body">
                     <div className="ck-activity-text">{activityText(item.action, item.entity)}</div>
-                    <div className="ck-activity-meta">{item.admin_email || 'Admin'} · {relativeTime(item.created_at)}</div>
+                    <div className="ck-activity-meta">{activityActor(item)} · {relativeTime(item.created_at)}</div>
                   </div>
                 </div>
               ))}

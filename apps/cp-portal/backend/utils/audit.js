@@ -149,4 +149,10 @@ function auditWrites(entity) {
   };
 }
 
-module.exports = { audit, auditWithin, systemAudit, auditWrites, changesBetween };
+// The automatic actors — background jobs, not a person. Recent activity hides them
+// unless asked, because MIMS retries filled the list (CP screen review, 10 Oct 2026).
+// Doctors' portal actions are recorded by systemAudit too, but they are people.
+const SYSTEM_ACTORS = ['MIMS integration', 'virus scan', 'Portal alerts', 'system'];
+const PEOPLE_ONLY = `NOT (l.admin_id IS NULL AND l.admin_name IN (${SYSTEM_ACTORS.map(a => `'${a}'`).join(', ')}))`;
+
+module.exports = { audit, auditWithin, systemAudit, auditWrites, changesBetween, SYSTEM_ACTORS, PEOPLE_ONLY };
