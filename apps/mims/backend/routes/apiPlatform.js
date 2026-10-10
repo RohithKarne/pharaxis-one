@@ -167,6 +167,25 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
 });
 
 // Fetch a single case's current status — used by the CP portal close-sync poller.
+// Bridge plan P4: a case this connection created that MIMS merged into another is
+// followed to the case that absorbed it (up to three merges), within the organisation.
+// Returns the live case and, when it is not the one asked for, the merged-away case;
+// null when the case is not this connection's, or was deleted without a merge.
+async function ownCaseOrSurvivor(db, caseId, apiClient) {
+  const [[asked]] = await db.execute(
+    'SELECT id, case_number, is_deleted, merged_into_case_id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? LIMIT 1',
+    [caseId, apiClient.org_id, apiClient.id]);
+  let cur = asked;
+  for (let hop = 0; cur && Number(cur.is_deleted) === 1 && hop < 3; hop++) {
+    if (!cur.merged_into_case_id) return null;
+    [[cur]] = await db.execute(
+      'SELECT id, case_number, is_deleted, merged_into_case_id FROM cases WHERE id = ? AND org_id = ? LIMIT 1',
+      [cur.merged_into_case_id, apiClient.org_id]);
+  }
+  if (!cur || Number(cur.is_deleted) === 1) return null;
+  return { id: cur.id, case_number: cur.case_number, mergedFrom: cur.id === asked.id ? null : asked };
+}
+
 // Org-scoped by the API key so a client can only read its own cases.
 // Bridge row 4: what changed among THIS connection's cases since a point in time —
 // one call instead of one per case. `closed` is the state's fixed marker, not a
@@ -178,46 +197,65 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
   const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(req.query.since) ? req.query.since : null;
   if (req.query.since && !since) return res.status(400).json({ error: "since must be 'YYYY-MM-DD HH:MM:SS' (UTC)." });
   const afterId = Math.max(parseInt(req.query.after_id, 10) || 0, 0);
+  // Bridge plan P4: deleted cases come through too. One merged into another case is
+  // reported under its own id with the state, owner and answer of the case that
+  // absorbed it (up to two merges), and changes when either case changes. One deleted
+  // without a merge is reported as removed. Before, both simply vanished from this
+  // list and the portal request waited "with the medical team" for good.
   const [rows] = await pool.execute(
-    `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
-            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
-            c.case_owner_id IS NOT NULL AS owner_assigned,
-            c.reporter_erased_at IS NOT NULL AS reporter_erased,
-            -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
-            -- or a superseded one), and whether it was addressed to the person who
-            -- reported — only then does its text travel back to them.
-            (SELECT r.id FROM case_mi_responses r
-              WHERE r.case_id = c.id AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
-              ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
-       FROM cases c
-       LEFT JOIN workflow_states ws ON ws.id = c.status_id
-      WHERE c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0
-        -- A change stamped in the future (a writer on the wrong clock) is not handed out
-        -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
-        -- every real change after it is skipped, with no error anywhere.
-        AND c.updated_at <= NOW() + INTERVAL 1 MINUTE
-        ${since ? 'AND (c.updated_at > ? OR (c.updated_at = ? AND c.id > ?))' : ''}
-      ORDER BY c.updated_at ASC, c.id ASC
+    `SELECT x.*, DATE_FORMAT(x.changed_at, '%Y-%m-%d %H:%i:%s') AS updated_at FROM (
+       SELECT c.id, c.case_number, c.is_deleted, live.id AS live_id, live.case_number AS live_number,
+              ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
+              GREATEST(c.updated_at, COALESCE(live.updated_at, c.updated_at)) AS changed_at,
+              COALESCE(live.case_owner_id, c.case_owner_id) IS NOT NULL AS owner_assigned,
+              c.reporter_erased_at IS NOT NULL AS reporter_erased,
+              -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
+              -- or a superseded one), and whether it was addressed to the person who
+              -- reported — only then does its text travel back to them.
+              (SELECT r.id FROM case_mi_responses r
+                WHERE r.case_id = COALESCE(live.id, c.id) AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
+                ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
+         FROM cases c
+         LEFT JOIN cases s1 ON c.is_deleted = 1 AND s1.id = c.merged_into_case_id AND s1.org_id = c.org_id
+         LEFT JOIN cases s2 ON s1.is_deleted = 1 AND s2.id = s1.merged_into_case_id AND s2.org_id = c.org_id
+         LEFT JOIN cases live ON live.id = CASE WHEN s1.is_deleted = 0 THEN s1.id WHEN s2.is_deleted = 0 THEN s2.id END
+         LEFT JOIN workflow_states ws ON ws.id = COALESCE(live.status_id, c.status_id)
+        WHERE c.org_id = ? AND c.source_api_client_id = ?
+     ) x
+      -- A change stamped in the future (a writer on the wrong clock) is not handed out
+      -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
+      -- every real change after it is skipped, with no error anywhere.
+      WHERE x.changed_at <= NOW() + INTERVAL 1 MINUTE
+        ${since ? 'AND (x.changed_at > ? OR (x.changed_at = ? AND x.id > ?))' : ''}
+      ORDER BY x.changed_at ASC, x.id ASC
       LIMIT ${limit + 1}`,
     since ? [req.apiClient.org_id, req.apiClient.id, since, since, afterId] : [req.apiClient.org_id, req.apiClient.id]
   );
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   const answers = {};
-  const answerIds = page.map(r => r.answer_id).filter(Boolean);
+  const answerIds = [...new Set(page.map(r => r.answer_id).filter(Boolean))];
   if (answerIds.length) {
     const [ans] = await pool.execute(
-      `SELECT r.id, r.case_id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
-              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at,
-              (SELECT cr.email FROM case_reporter cr WHERE cr.case_id = r.case_id ORDER BY cr.id LIMIT 1) AS reporter_email
+      `SELECT r.id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
+              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at
          FROM case_mi_responses r WHERE r.id IN (${answerIds.map(() => '?').join(',')})`, answerIds);
-    for (const a of ans) {
-      const toReporter = !!a.recipient_email && !!a.reporter_email
-        && a.recipient_email.trim().toLowerCase() === a.reporter_email.trim().toLowerCase();
+    const answerById = Object.fromEntries(ans.map(a => [a.id, a]));
+    // The person who reported is the one on the portal's own case, also when the
+    // answer was written on the case it was merged into (bridge plan P4).
+    const [reporters] = await pool.execute(
+      `SELECT case_id, email FROM case_reporter WHERE case_id IN (${page.map(() => '?').join(',')}) ORDER BY id DESC`, page.map(r => r.id));
+    const reporterOf = Object.fromEntries(reporters.map(o => [o.case_id, o.email]));
+    for (const r of page) {
+      const a = answerById[r.answer_id];
+      if (!a) continue;
+      const reporterEmail = reporterOf[r.id];
+      const toReporter = !!a.recipient_email && !!reporterEmail
+        && a.recipient_email.trim().toLowerCase() === reporterEmail.trim().toLowerCase();
       const text = a.response_text || String(a.response_body_html || '')
         .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '')
         .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-      answers[a.case_id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
+      answers[r.id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
     }
   }
   res.json({
@@ -226,6 +264,8 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
       owner_assigned: !!Number(r.owner_assigned), answer: answers[r.id] || null,
       // Bridge row 10: the reporter's identity has been erased on this case.
       reporter_erased: !!Number(r.reporter_erased),
+      ...(r.live_id ? { merged_into: { id: r.live_id, case_number: r.live_number } } : {}),
+      ...(Number(r.is_deleted) && !r.live_id ? { removed: true, closed: true } : {}),
     })),
     has_more: rows.length > limit,
     next: last ? { since: last.updated_at, after_id: last.id } : null,
@@ -272,9 +312,10 @@ router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), asyn
   try {
     // Only a case this connection created, as for follow-ups: another system in the
     // same organisation could erase the reporter on a portal case, recorded as the
-    // portal's own erasure request.
+    // portal's own erasure request. A merged or deleted case too (bridge plan P4): it
+    // still holds the reporter's name and contact details, and a merge does not move them.
     const [[c]] = await conn.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? AND is_deleted = 0 LIMIT 1',
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? LIMIT 1',
       [req.params.id, req.apiClient.org_id, req.apiClient.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
@@ -740,11 +781,14 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
   if (!followupId) return res.status(400).json({ error: 'followup_id is required.' });
   const conn = await pool.getConnection();
   try {
+    // Bridge plan P4: information added to a case MIMS merged into another goes to that case.
+    const live = await ownCaseOrSurvivor(conn, req.params.id, req.apiClient);
+    if (!live) return res.status(404).json({ error: 'Case not found.' });
     const [[c]] = await conn.execute(
       `SELECT c.id, c.case_number, c.case_type, c.org_id, c.case_owner_id, COALESCE(ws.is_closed, 0) AS closed
          FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id
-        WHERE c.id = ? AND c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0 LIMIT 1`,
-      [req.params.id, req.apiClient.org_id, req.apiClient.id]);
+        WHERE c.id = ? AND c.org_id = ? LIMIT 1`,
+      [live.id, req.apiClient.org_id]);
     if (!c) return res.status(404).json({ error: 'Case not found.' });
     const [[done]] = await conn.execute(
       'SELECT comment_id FROM api_case_followups WHERE api_client_id = ? AND external_followup_id = ?', [req.apiClient.id, followupId]);
@@ -752,8 +796,9 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
 
     await conn.beginTransaction();
     const reference = req.body?.reference ? String(req.body.reference).slice(0, 100) : c.case_number;
+    const merged = live.mergedFrom ? `; ${live.mergedFrom.case_number} was merged into this case` : '';
     const [cm] = await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
-      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}):\n${text}`]);
+      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}${merged}):\n${text}`]);
     await conn.execute('UPDATE cases SET follow_up_received_date = CURDATE(), updated_at = NOW() WHERE id = ?', [c.id]);
     await conn.execute(
       'INSERT INTO api_case_followups (api_client_id, external_followup_id, case_id, comment_id) VALUES (?, ?, ?, ?)',
@@ -787,11 +832,9 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
 router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUpload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file is required.' });
-    // Only on a case this connection created, as for follow-ups.
-    const [[c]] = await pool.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? AND is_deleted = 0 LIMIT 1',
-      [req.params.id, req.apiClient.org_id, req.apiClient.id]
-    );
+    // Only on a case this connection created, as for follow-ups; a merged one's file
+    // goes to the case it was merged into (bridge plan P4).
+    const c = await ownCaseOrSurvivor(pool, req.params.id, req.apiClient);
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
     // The sending portal retries a file it could not confirm (a timeout, a crash after
@@ -817,7 +860,7 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
        String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, checksum]
     );
     await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
-      'ATTACHMENT_ADDED_VIA_API', 'attachment', null, `${String(req.file.originalname || '').slice(0, 200)} (${req.file.size} bytes)`);
+      'ATTACHMENT_ADDED_VIA_API', 'attachment', null, `${String(req.file.originalname || '').slice(0, 200)} (${req.file.size} bytes)${c.mergedFrom ? `, sent to ${c.mergedFrom.case_number}, which was merged into this case` : ''}`);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     res.status(500).json(intakeFailure(err, req, 'Failed to store attachment.'));

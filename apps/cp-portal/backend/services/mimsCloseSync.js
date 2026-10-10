@@ -22,7 +22,7 @@ const { eraseSubmissionIdentity } = require('./dataSubject');
 const { recordStatusEvent } = require('../utils/submissionStatus');
 const { queueEmail } = require('../utils/emailOutbox');
 const log = require('../utils/logger');
-const { recordConnectionResult } = require('./adminAlerts');
+const { recordConnectionResult, raiseAlert } = require('./adminAlerts');
 
 const PAGE = 200;
 const MAX_PAGES_PER_TICK = 10;
@@ -114,8 +114,44 @@ async function applyChange(integ, change) {
     systemAudit('MIMS integration', integ.client_id, 'REPORTER_ERASED_FROM_MIMS', 'submission', sub.id,
       { mims_case_id: change.id, source: 'mims-close-sync' });
   }
+  // Bridge plan P4: MIMS merged the case into another (a duplicate report). The change
+  // already carries that case's state and answer; the admin trail says where it went,
+  // once per target. The request keeps its own MIMS id, which MIMS follows.
+  if (change.merged_into) {
+    const into = String(change.merged_into.case_number || change.merged_into.id);
+    const [[seen]] = await pool.execute(
+      `SELECT details FROM cp_audit_logs WHERE client_id = ? AND action = 'MERGED_IN_MIMS' AND entity = 'submission' AND entity_id = ?
+        ORDER BY id DESC LIMIT 1`, [integ.client_id, sub.id]);
+    if (!seen || !String(seen.details).includes(JSON.stringify(into))) {
+      await systemAudit('MIMS integration', integ.client_id, 'MERGED_IN_MIMS', 'submission', sub.id,
+        { mims_case_id: change.id, merged_into_case_number: into, source: 'mims-close-sync' });
+    }
+  }
+
   // Answers always travel — an amended answer can go out after the case closed.
   await applyProgress(integ, sub, change);
+
+  // Bridge plan P4: the case was deleted in MIMS without a merge. The request closes,
+  // and the team is told: a deleted safety case is something a person must look at.
+  if (change.removed) {
+    if (sub.status !== 'synced' && sub.status !== 'closed') return null;
+    const ref = `CP-${String(sub.id).padStart(6, '0')}`;
+    await raiseAlert(integ.client_id, {
+      kind: 'mims_case_removed', audience: 'integration',
+      title: `${ref}: its MIMS case${change.case_number && change.case_number !== ref ? ` ${change.case_number}` : ''} was deleted in MIMS`,
+      body: `The request has been closed on the portal. If the case was deleted by mistake, ask the MIMS team to restore it; the request reopens when it is back. Otherwise nothing is needed.`,
+      linkPath: `/admin/clients/${integ.client_id}/submissions`,
+      relatedType: 'submission', relatedId: sub.id, dedupeKey: `removed:${sub.id}:${change.id}`,
+    });
+    if (sub.status === 'closed') return null;
+    const [upd] = await pool.execute(
+      `UPDATE cp_submissions SET status='closed', updated_at=NOW() WHERE id=? AND status='synced'`, [sub.id]);
+    if (!upd.affectedRows) return null;
+    await recordStatusEvent({ submissionId: sub.id, clientId: integ.client_id, status: 'closed', source: 'mims-close-sync' });
+    systemAudit('MIMS integration', integ.client_id, 'CLOSED_AUTO', 'submission', sub.id,
+      { mims_case_id: change.id, mims_removed: true, source: 'mims-close-sync' });
+    return 'closed';
+  }
 
   if (change.closed && sub.status === 'synced') {
     const [upd] = await pool.execute(
