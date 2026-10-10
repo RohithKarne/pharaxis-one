@@ -28,7 +28,7 @@ router.get('/:clientCode', async (req, res) => {
     // switched on AND the client has something in them, so an empty page is never
     // offered to a doctor.
     if (featuresMap.clinical_trials) {
-      const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM cp_clinical_trials WHERE client_id = ? AND is_active = 1', [client.id]);
+      const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM cp_clinical_trials WHERE client_id = ? AND is_active = 1 AND publish_status = \'published\'', [client.id]);
       featuresMap.clinical_trials = Number(n) > 0;
     }
     if (featuresMap.cme_training) {

@@ -816,6 +816,8 @@ async function initializeDatabase() {
       site_location VARCHAR(500) NULL,
       pi            VARCHAR(255) NULL,
       is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+      publish_status VARCHAR(20) NOT NULL DEFAULT 'published',
+      submitted_by  INT          NULL,
       created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),

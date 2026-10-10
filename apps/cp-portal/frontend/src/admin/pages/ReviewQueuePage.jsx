@@ -3,20 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
+import { labelsOf } from '../../shared/utils/labels'
 
 const STATUS_STYLE = {
   review:   { background: '#FEF3C7', color: '#92400E' },
   approved: { background: '#CCFBF1', color: '#0D9488' },
 }
 
-const STATUS_LABELS = {
-  review: 'Needs review',
-  approved: 'Approved to publish',
-}
+const STATUS_LABELS = labelsOf('contentStatus')
 
 const TYPE_STYLE = {
   news:     { background: '#DBEAFE', color: '#1D4ED8', label: 'News' },
   document: { background: '#F3E8FF', color: '#7C3AED', label: 'Document' },
+  trial:    { background: '#ECFDF5', color: '#047857', label: 'Clinical trial' },
 }
 
 export default function ReviewQueuePage() {
@@ -65,10 +64,7 @@ export default function ReviewQueuePage() {
   }
 
   function goToItem(item) {
-    const path = item.item_type === 'news'
-      ? `/admin/clients/${clientId}/news`
-      : `/admin/clients/${clientId}/documents`
-    navigate(path)
+    navigate(`/admin/clients/${clientId}/${{ news: 'news', document: 'documents', trial: 'trials' }[item.item_type]}`)
   }
 
   const mineCount     = items.filter(i => i.owned_by_me).length
@@ -125,6 +121,14 @@ export default function ReviewQueuePage() {
                     <td style={{ fontSize: 12, color: '#4B5563' }}>
                       {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
                     </td>
+                    {/* Phase 3 row 21: a trial is published on the Clinical Trials screen, which
+                        knows who sent it; nobody holds one. */}
+                    {item.item_type === 'trial' ? <>
+                    <td style={{ fontSize: 13 }}>{item.submitted_by_name ? `Sent by ${item.submitted_by_name}` : '—'}</td>
+                    <td>
+                      <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => goToItem(item)}>Open in Clinical Trials</button>
+                    </td>
+                    </> : <>
                     <td style={{ fontSize: 13 }}><OwnerCell item={item} /></td>
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <OwnerButtons item={item}
@@ -171,6 +175,7 @@ export default function ReviewQueuePage() {
                         </button>
                       )}
                     </td>
+                    </>}
                   </tr>
                 )
               })}

@@ -152,6 +152,10 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
 
     const [rows] = await pool.execute(query, params);
     const stamp = new Date().toISOString().slice(0, 10);
+    // Exports are in UTC, whatever clock the server runs on (CP ease-of-use plan,
+    // phase 3 row 18). The PDF printed the server's local time and the CSV wrapped
+    // the date in extra quote marks.
+    const utc = d => (d ? new Date(d).toISOString().replace('T', ' ').slice(0, 19) : '');
 
     if (format === 'pdf') {
       const PDFDocument = require('pdfkit');
@@ -167,7 +171,7 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
       rows.forEach(r => {
         doc.fillColor('#000').font('Helvetica-Bold').fontSize(10).text(`#${r.id}  ${r.submission_type}  [${r.status}]`);
         doc.font('Helvetica').fontSize(9).fillColor('#333').text(
-          `${r.submitter_name || '—'} <${r.submitter_email || '—'}>  •  ${r.submitter_type || '—'}  •  ${r.submitted_at || ''}  •  Ref ${r.external_ref || '—'}`
+          `${r.submitter_name || '—'} <${r.submitter_email || '—'}>  •  ${r.submitter_type || '—'}  •  ${r.submitted_at ? utc(r.submitted_at) + ' UTC' : ''}  •  Ref ${r.external_ref || '—'}`
         );
         doc.moveDown(0.5);
       });
@@ -180,9 +184,9 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
       const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
       return `"${s.replace(/"/g, '""')}"`;
     };
-    const header = ['ID', 'Date', 'Type', 'Submitter', 'Email', 'User Type', 'Status', 'Ref', 'Form Data'];
+    const header = ['ID', 'Date (UTC)', 'Type', 'Submitter', 'Email', 'User Type', 'Status', 'Ref', 'Form Data'];
     const lines = rows.map(r => [
-      r.id, r.submitted_at || '', r.submission_type, r.submitter_name || '', r.submitter_email || '',
+      r.id, utc(r.submitted_at), r.submission_type, r.submitter_name || '', r.submitter_email || '',
       r.submitter_type || '', r.status, r.external_ref || '', r.form_data || '',
     ].map(esc).join(','));
     const csv = [header.map(esc).join(','), ...lines].join('\r\n');

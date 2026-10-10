@@ -1085,6 +1085,13 @@ body { background: var(--cp-bg); }
 }
 .cp-table-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 .cp-pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #4B5563; } /* CPPM-98: 4.5:1 on the grey pager */
+/* One menu per row instead of a row of buttons (CP ease-of-use plan, phase 3 row 17). */
+.cp-row-menu { position: relative; display: inline-block; }
+.cp-row-menu > button { white-space: nowrap; }
+.cp-row-menu-list { position: absolute; right: 0; top: calc(100% + 2px); z-index: 20; min-width: 160px; background: #fff; border: 1px solid var(--cp-border); box-shadow: 0 4px 12px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+.cp-row-menu-list button { text-align: left; background: none; border: 0; padding: 7px 12px; font-size: 13px; cursor: pointer; color: var(--cp-text, #1d2733); }
+.cp-row-menu-list button:hover, .cp-row-menu-list button:focus-visible { background: #eef2f6; }
+.cp-row-menu-list button.danger { color: #B91C1C; }
 
 /* ── Badges ───────────────────────────────────────────────────── */
 
@@ -1150,6 +1157,83 @@ body { background: var(--cp-bg); }
 }
 .cp-subnav-tab .cp-nav-badge { margin-left: 0; }
 
+/* Phase 3 row 14 (CP ease-of-use plan): the sidebar is the one map. A main screen
+   opens in place to list its screens; the tabs above the page show only when the
+   sidebar is collapsed to icons. */
+.cp-nav-group-head { width: 100%; border: 0; background: none; font: inherit; cursor: pointer; text-align: left; }
+.cp-nav-group-head.current { font-weight: 700; }
+.cp-nav-caret { margin-left: auto; font-size: 10px; opacity: .7; }
+.cp-nav-group-head .cp-nav-badge { margin-left: auto; }
+.cp-nav-group-head .cp-nav-badge + .cp-nav-caret { margin-left: 6px; }
+.cp-nav-sub { display: flex; flex-direction: column; margin-bottom: 4px; }
+.cp-nav-subitem {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 38px;
+  font-size: 12.5px; color: var(--cp-sidebar-text); text-decoration: none; border-radius: var(--cp-radius-sm);
+}
+.cp-nav-subitem:hover { background: rgba(255,255,255,.07); color: #F1F5F9; }
+.cp-nav-subitem.active { color: #fff; font-weight: 700; background: var(--cp-sidebar-act); }
+
+/* Phase 3 row 18 (CP ease-of-use plan): Submissions as an inbox. A row opens its
+   case beside the list; on a narrow screen the case fills the screen. */
+.cp-inbox.with-panel {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 48%); gap: 12px; align-items: start;
+}
+.cp-inbox-row { cursor: pointer; }
+.cp-inbox-row:focus-visible { outline: 2px solid var(--cp-primary); outline-offset: -2px; }
+.cp-inbox-row.selected > td { background: #FFF8E6 !important; }
+.cp-row-ae > td:first-child { box-shadow: inset 4px 0 0 #DC2626; }
+.cp-ae-type { color: #B91C1C; }
+.cp-inbox-panel {
+  position: sticky; top: 0; max-height: calc(100vh - 110px); overflow: auto;
+  background: var(--cp-surface); border: 1px solid var(--cp-border); padding: 12px 14px;
+}
+.cp-inbox-panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.cp-inbox-panel-title { font-size: 15px; font-weight: 700; }
+.cp-inbox-panel-sub { font-size: 12px; color: #4B5563; margin-top: 2px; overflow-wrap: anywhere; }
+.cp-inbox-panel-nav { display: flex; gap: 4px; flex-shrink: 0; }
+.cp-inbox-panel-flags { margin-top: 10px; }
+.cp-inbox-panel-flags > :first-child { margin-left: 0; }
+.cp-inbox-ae-note {
+  margin-top: 10px; padding: 8px 10px; font-size: 13px; font-weight: 600;
+  background: #FEF2F2; border-left: 4px solid #DC2626; color: #991B1B;
+}
+.cp-inbox-panel-row { margin-top: 10px; font-size: 12px; }
+.cp-inbox-detail { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--cp-border); }
+@media (max-width: 1000px) {
+  .cp-inbox.with-panel { display: block; }
+  .cp-inbox-panel { position: fixed; inset: 0; z-index: 60; max-height: none; border: 0; }
+}
+
+/* Phase 3 row 19 (CP ease-of-use plan): Branding themes and the live preview. */
+.cp-branding-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.cp-branding-preview-card { position: sticky; top: 0; }
+@media (max-width: 1100px) {
+  .cp-branding-layout { grid-template-columns: minmax(0, 1fr); }
+  .cp-branding-preview-card { position: static; order: -1; }
+}
+.cp-theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.cp-theme-tile {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 8px 10px;
+  border: 1px solid var(--cp-border); background: #fff; font: inherit; font-size: 13px; cursor: pointer; text-align: left;
+}
+.cp-theme-tile:hover { background: #FFF8E6; }
+.cp-theme-tile.on { border: 2px solid var(--cp-primary); padding: 7px 9px; font-weight: 700; }
+.cp-theme-swatches { display: flex; gap: 3px; }
+.cp-theme-swatches > span { width: 22px; height: 16px; border: 1px solid rgba(0,0,0,.15); }
+.cp-brand-preview { border: 1px solid; background: #fff; overflow: hidden; line-height: 1.4; }
+.cp-brand-preview-header {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px;
+  border-top: 4px solid; border-bottom: 1px solid; background: #fff; font-size: .9em;
+}
+.cp-brand-preview-header img { max-height: 26px; max-width: 90px; object-fit: contain; margin-right: 6px; }
+.cp-brand-preview-header strong { margin-right: 6px; }
+.cp-brand-preview-header span { padding: 2px 5px; font-weight: 600; }
+.cp-brand-preview-body { padding: 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.cp-brand-preview-panel { border: 1px solid; padding: 10px; margin-top: 4px; }
+.cp-brand-preview-btn { display: inline-block; padding: 5px 12px; font-weight: 700; }
+.cp-brand-preview-banner { color: #fff; padding: 10px; font-weight: 700; margin-top: 4px; }
+.cp-brand-preview-footer { padding: 10px; font-size: .85em; display: flex; flex-direction: column; gap: 4px; }
+
 /* ── Toggle Switch ────────────────────────────────────────────── */
 
 .cp-toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
@@ -1172,6 +1256,9 @@ body { background: var(--cp-bg); }
 /* ── Features ─────────────────────────────────────────────────── */
 
 .cp-features-summary { display: flex; gap: 8px; margin-bottom: 16px; }
+/* Technical settings folded away (CP ease-of-use plan, phase 3 row 22). */
+.cp-advanced { margin-top: 12px; border-top: 1px solid var(--cp-border); padding-top: 10px; }
+.cp-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--cp-primary, #1d3557); margin-bottom: 8px; }
 .cp-features-list { display: flex; flex-direction: column; gap: 6px; }
 .cp-feature-row {
   display: flex; align-items: center; gap: 14px;
@@ -1188,6 +1275,16 @@ body { background: var(--cp-bg); }
 }
 .cp-feature-label-input:focus { border-bottom-color: var(--cp-primary); }
 .cp-feature-order { font-size: 11px; color: var(--cp-text-muted); width: 60px; }
+/* Phase 3 row 20: switches grouped in cards; the plain name leads each row and the
+   User Gate name box sits at the right. */
+.cp-feature-group .cp-card-title { display: flex; justify-content: space-between; align-items: center; }
+.cp-feature-group-count { font-size: 12px; font-weight: 400; color: var(--cp-text-muted); }
+.cp-feature-group .cp-feature-key { font-size: 13px; font-weight: 600; color: var(--cp-text); font-family: inherit; }
+.cp-feature-group .cp-feature-label-input { width: 220px; flex-shrink: 0; font-weight: 400; }
+@media (max-width: 640px) {
+  .cp-feature-group .cp-feature-row { flex-wrap: wrap; }
+  .cp-feature-group .cp-feature-label-input { width: 100%; }
+}
 
 /* ── Content List ─────────────────────────────────────────────── */
 
@@ -1805,6 +1902,21 @@ body { background: var(--cp-bg); }
   gap: 8px;
   padding: 4px 0;
 }
+
+/* Phase 3 row 14 (CP ease-of-use plan): the Overview's "To do today" list. */
+.ck-todo .ck-panel-title { margin-top: 0; }
+.ck-todo-list { list-style: none; margin: 0; padding: 0; }
+.ck-todo-list .ck-issue {
+  width: 100%; border: 0; text-align: left; font: inherit; font-size: 13px; color: inherit;
+}
+.ck-issue-blue { background: #EFF6FF; border-left: 3px solid #3B82F6 !important; }
+.ck-issue-blue:hover { background: #DBEAFE; }
+.ck-issue-blue .ck-issue-dot { background: #3B82F6; }
+.ck-todo-list .ck-issue-red   { border-left: 3px solid #EF4444; }
+.ck-todo-list .ck-issue-amber { border-left: 3px solid #F59E0B; }
+.ck-todo-hint { display: block; font-weight: 400; font-size: 12px; color: #4B5563; }
+.ck-todo-checked { font-size: 12px; color: #4B5563; margin: 10px 0 0; }
+.ck-todo-unread { color: #B91C1C; font-weight: 600; }
 
 /* ── Activity ────────────────────────────────────────────────── */
 

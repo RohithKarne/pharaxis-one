@@ -56,6 +56,16 @@ export function formatDateTime(value) {
 }
 
 /**
+ * The same instant in UTC, for a hover title beside a local time (CP ease-of-use
+ * plan, phase 3 row 18): "2026-10-10 15:30 UTC".
+ */
+export function formatUtc(value) {
+  const d = toDate(value)
+  if (!d) return ''
+  return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+}
+
+/**
  * For <input type="datetime-local"> (CPPM-58). That box holds the admin's own
  * wall-clock time with no timezone; the API holds a UTC instant. These two convert
  * between them, so the time typed is the time meant, and the time shown back is

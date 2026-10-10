@@ -726,6 +726,8 @@ CREATE TABLE IF NOT EXISTS cp_clinical_trials (
   site_location VARCHAR(500) NULL,
   pi            VARCHAR(255) NULL,
   is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+  publish_status VARCHAR(20) NOT NULL DEFAULT 'published', -- 0047: draft, review or published
+  submitted_by  INT          NULL,                         -- 0047: who sent it for review
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -1322,4 +1324,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0043_add_safety_ack_reminders.sql',         NULL),
   ('0044_add_mims_delivery_receipt.sql',        NULL),
   ('0045_add_mims_reconciliation.sql',          NULL),
-  ('0046_add_mims_bridge_features.sql',         NULL);
+  ('0046_add_mims_bridge_features.sql',         NULL),
+  ('0047_add_trial_review.sql',                 NULL);

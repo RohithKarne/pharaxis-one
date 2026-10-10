@@ -59,40 +59,36 @@ export default function ChatboxConfigPage() {
     <AdminLayout title="Chatbox AI Configuration">
       <ReadOnlyUnless area="chatbox" what="the chatbox settings">
       <form onSubmit={handleSave}>
+        {/* CP ease-of-use plan, phase 3 row 22: what a doctor sees first, then the AI
+            service and its key; model, answer length and instructions under Advanced. */}
         <div className="cp-card">
-          <div className="cp-card-title">AI Provider</div>
+          <div className="cp-card-title">Chat box on the portal</div>
+          <div className="cp-field cp-field-checkbox">
+            <input type="checkbox" id="chatActive" checked={!!config.is_active} onChange={e => set('is_active', e.target.checked ? 1 : 0)} />
+            <label htmlFor="chatActive">Show the chat box on the portal</label>
+          </div>
+          <div className="cp-field">
+            <label htmlFor="chatWelcome">Welcome message</label>
+            <input id="chatWelcome" value={config.welcome_message || ''} onChange={e => set('welcome_message', e.target.value)}
+              placeholder="Hello! How can I help you today?" />
+          </div>
+        </div>
+
+        <div className="cp-card">
+          <div className="cp-card-title">AI service</div>
           <div className="cp-field-row">
             <div className="cp-field">
-              <label>Provider</label>
-              <select value={config.ai_provider || 'anthropic'} onChange={e => setProvider(e.target.value)}>
+              <label htmlFor="chatProvider">Provider</label>
+              <select id="chatProvider" value={config.ai_provider || 'anthropic'} onChange={e => setProvider(e.target.value)}>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai">OpenAI (GPT)</option>
               </select>
             </div>
-            <div className="cp-field">
-              <label>Model</label>
-              {config.ai_provider === 'openai' ? (
-                <select value={modelMismatch ? '' : (config.model || 'gpt-5.6-luna')} onChange={e => set('model', e.target.value)}>
-                  {modelMismatch && <option value="" disabled>Choose a model…</option>}
-                  <option value="gpt-5.6-luna">GPT-5.6 Luna (Fast, lowest cost)</option>
-                  <option value="gpt-5.6-terra">GPT-5.6 Terra (Balanced)</option>
-                  <option value="gpt-5.6-sol">GPT-5.6 Sol (Most capable GPT-5.6)</option>
-                  <option value="gpt-6-astra">GPT-6 Astra (Flagship, highest cost)</option>
-                </select>
-              ) : (
-                <select value={modelMismatch ? '' : (config.model || 'claude-opus-5')} onChange={e => set('model', e.target.value)}>
-                  {modelMismatch && <option value="" disabled>Choose a model…</option>}
-                  <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast, lowest cost)</option>
-                  <option value="claude-sonnet-5">Claude Sonnet 5 (Balanced)</option>
-                  <option value="claude-opus-5">Claude Opus 5 (Most capable Opus)</option>
-                  <option value="claude-fable-5-1">Claude Fable 5.1 (Flagship, highest cost)</option>
-                </select>
-              )}
-            </div>
-            <div className="cp-field">
-              <label>Max Tokens</label>
-              <input type="number" value={config.max_tokens || 1024} min={256} max={4096}
-                onChange={e => set('max_tokens', Number(e.target.value))} />
+            <div className="cp-field" style={{ flex: 2 }}>
+              {/* Was keyed on is_active, so an enabled chatbox with no key claimed one was set. */}
+              <label htmlFor="chatKey">API Key {config.has_api_key ? '(set — leave blank to keep current)' : <span style={{ color: '#B91C1C' }}>(not set — the assistant cannot answer until you add one)</span>}</label>
+              <input id="chatKey" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+                placeholder={config.has_api_key ? '••••••••' : 'Paste API key…'} />
             </div>
           </div>
           {modelMismatch && (
@@ -100,31 +96,43 @@ export default function ChatboxConfigPage() {
               The saved model, {config.model}, is not {provider === 'openai' ? 'an OpenAI' : 'an Anthropic'} model, so the chat box cannot answer. Choose a model and save.
             </div>
           )}
-          <div className="cp-field">
-            {/* Was keyed on is_active, so an enabled chatbox with no key claimed one was set. */}
-            <label>API Key {config.has_api_key ? '(set — leave blank to keep current)' : <span style={{ color: '#B91C1C' }}>(not set — the assistant cannot answer until you add one)</span>}</label>
-            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-              placeholder={config.has_api_key ? '••••••••' : 'Paste API key…'} />
-          </div>
-        </div>
 
-        <div className="cp-card">
-          <div className="cp-card-title">Chatbox Behaviour</div>
-          <div className="cp-field">
-            <label>System Prompt</label>
-            <textarea rows={5} value={config.system_prompt || ''} onChange={e => set('system_prompt', e.target.value)}
-              placeholder="You are a helpful medical information assistant for [Company Name]. You provide accurate information about our products and therapeutic areas..." />
-            <small>This sets the AI's persona and boundaries. Therapeutic area and drug context from this client's content is automatically included.</small>
-          </div>
-          <div className="cp-field">
-            <label>Welcome Message</label>
-            <input value={config.welcome_message || ''} onChange={e => set('welcome_message', e.target.value)}
-              placeholder="Hello! How can I help you today?" />
-          </div>
-          <div className="cp-field cp-field-checkbox">
-            <input type="checkbox" id="chatActive" checked={!!config.is_active} onChange={e => set('is_active', e.target.checked ? 1 : 0)} />
-            <label htmlFor="chatActive">Enable chatbox on portal</label>
-          </div>
+          <details className="cp-advanced" open={modelMismatch || undefined}>
+            <summary>Advanced: model, answer length and instructions</summary>
+            <div className="cp-field-row">
+              <div className="cp-field">
+                <label htmlFor="chatModel">Model</label>
+                {config.ai_provider === 'openai' ? (
+                  <select id="chatModel" value={modelMismatch ? '' : (config.model || 'gpt-5.6-luna')} onChange={e => set('model', e.target.value)}>
+                    {modelMismatch && <option value="" disabled>Choose a model…</option>}
+                    <option value="gpt-5.6-luna">GPT-5.6 Luna (Fast, lowest cost)</option>
+                    <option value="gpt-5.6-terra">GPT-5.6 Terra (Balanced)</option>
+                    <option value="gpt-5.6-sol">GPT-5.6 Sol (Most capable GPT-5.6)</option>
+                    <option value="gpt-6-astra">GPT-6 Astra (Flagship, highest cost)</option>
+                  </select>
+                ) : (
+                  <select id="chatModel" value={modelMismatch ? '' : (config.model || 'claude-opus-5')} onChange={e => set('model', e.target.value)}>
+                    {modelMismatch && <option value="" disabled>Choose a model…</option>}
+                    <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast, lowest cost)</option>
+                    <option value="claude-sonnet-5">Claude Sonnet 5 (Balanced)</option>
+                    <option value="claude-opus-5">Claude Opus 5 (Most capable Opus)</option>
+                    <option value="claude-fable-5-1">Claude Fable 5.1 (Flagship, highest cost)</option>
+                  </select>
+                )}
+              </div>
+              <div className="cp-field">
+                <label htmlFor="chatMaxTokens">Longest answer (tokens)</label>
+                <input id="chatMaxTokens" type="number" value={config.max_tokens || 1024} min={256} max={4096}
+                  onChange={e => set('max_tokens', Number(e.target.value))} />
+              </div>
+            </div>
+            <div className="cp-field">
+              <label htmlFor="chatPrompt">Instructions for the assistant</label>
+              <textarea id="chatPrompt" rows={5} value={config.system_prompt || ''} onChange={e => set('system_prompt', e.target.value)}
+                placeholder="You are a helpful medical information assistant for [Company Name]. You provide accurate information about our products and therapeutic areas..." />
+              <small>This sets the AI's persona and boundaries. Therapeutic area and drug context from this client's content is automatically included.</small>
+            </div>
+          </details>
         </div>
 
         {error && <div className="cp-error">{error}</div>}

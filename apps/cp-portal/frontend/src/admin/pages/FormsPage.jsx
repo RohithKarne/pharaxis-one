@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import FormPreview from '../components/FormPreview'
+import { label } from '../../shared/utils/labels'
 
 const FORM_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
 const FIELD_TYPES = ['text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'multiselect', 'radio', 'checkbox', 'file', 'hidden']
@@ -150,7 +151,7 @@ export default function FormsPage() {
                 <div className="cp-field">
                   <label>Field Type <span className="cp-required" aria-hidden="true">*</span></label>
                   <select value={newField.field_type} onChange={e => setNewField(f => ({ ...f, field_type: e.target.value }))}>
-                    {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    {FIELD_TYPES.map(t => <option key={t} value={t}>{label('fieldType', t)}</option>)}
                   </select>
                 </div>
                 <div className="cp-field cp-field-checkbox" style={{ alignSelf: 'flex-end', paddingBottom: 8 }}>
@@ -189,16 +190,16 @@ export default function FormsPage() {
 
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">
-          <thead><tr><th>Order</th><th>Key</th><th>Label</th><th>Placeholder</th><th>Type</th><th>Required</th><th>Active</th></tr></thead>
+          <thead><tr><th>Order</th><th>Label</th><th>Placeholder</th><th>Type</th><th>Required</th><th>Active</th></tr></thead>
           <tbody>
             {fields.map(f => (
               <tr key={`${f.id}-${f.field_label}-${f.placeholder || ''}`} className={!f.is_active ? 'row-inactive' : ''}>
                 <td>{f.display_order}</td>
-                <td><code>{f.field_key}</code></td>
                 <td>
                   <input
                     className="cp-inline-edit"
-                    aria-label={`Label for ${f.field_key}`}
+                    aria-label={`Label for ${f.field_label || f.field_key}`}
+                    title={`Saved as ${f.field_key}`}
                     defaultValue={f.field_label}
                     onBlur={e => { if (e.target.value !== f.field_label) saveFieldInline(f.id, 'field_label', e.target.value) }}
                   />
@@ -206,14 +207,14 @@ export default function FormsPage() {
                 <td>
                   <input
                     className="cp-inline-edit cp-inline-edit-muted"
-                    aria-label={`Placeholder for ${f.field_key}`}
+                    aria-label={`Placeholder for ${f.field_label || f.field_key}`}
                     defaultValue={f.placeholder || ''}
                     placeholder="—"
                     onBlur={e => { if (e.target.value !== (f.placeholder || '')) saveFieldInline(f.id, 'placeholder', e.target.value) }}
                   />
                 </td>
                 <td>
-                  <span className="cp-type-badge">{f.field_type}</span>
+                  <span className="cp-type-badge">{label('fieldType', f.field_type)}</span>
                   {(f.field_type === 'select' || f.field_type === 'multiselect' || f.field_type === 'radio') && parseOptions(f.field_options).length > 0 && (
                     <span className="cp-options-hint" title={parseOptions(f.field_options).join(', ')} style={{ marginLeft: 4, fontSize: 11, color: 'var(--cp-text-muted)' }}>
                       ({parseOptions(f.field_options).length} opts)

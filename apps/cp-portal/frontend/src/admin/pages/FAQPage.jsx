@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { label } from '../../shared/utils/labels'
 
 const EMPTY = { question: '', answer: '', category: '', sort_order: 0, is_published: true }
 
@@ -70,7 +71,7 @@ export default function FAQPage() {
       <div className="cp-section-header">
         <h2>FAQ</h2>
         <CanChange area="faq">
-        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add FAQ Item</button>
+        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New question</button>
         </CanChange>
       </div>
       {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -104,7 +105,7 @@ export default function FAQPage() {
               <div className="cp-field">
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input type="checkbox" checked={form.is_published} onChange={e => setForm(f => ({ ...f, is_published: e.target.checked }))} />
-                  Published (visible on portal)
+                  Live in portal (doctors can see it)
                 </label>
               </div>
               {error && <div className="cp-error">{error}</div>}
@@ -130,7 +131,7 @@ export default function FAQPage() {
                   <div style={{ fontSize: 13, color: '#4B5563', whiteSpace: 'pre-wrap' }}>{f.answer}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-                  {!f.is_published && <span style={{ fontSize: 11, background: '#F3F4F6', color: '#5F6B7A', padding: '2px 6px', borderRadius: 10 }}>Draft</span>}
+                  <span style={{ fontSize: 11, background: f.is_published ? '#DCFCE7' : '#F3F4F6', color: f.is_published ? '#166534' : '#5F6B7A', padding: '2px 6px', borderRadius: 10 }}>{label('contentStatus', f.is_published ? 'published' : 'draft')}</span>
                   <CanChange area="faq">
                   <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(f)}>Edit</button>
                   </CanChange>

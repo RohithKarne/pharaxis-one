@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
+import { label } from '../../shared/utils/labels'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -224,7 +225,7 @@ export default function SafetyPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
-                    <option value="active">Active</option>
+                    <option value="active">{label('contentStatus', 'active')}</option>
                     <option value="resolved">Resolved</option>
                     <option value="archived">Archived</option>
                   </select>
@@ -295,7 +296,7 @@ export default function SafetyPage() {
               {alerts.map(a => (
                 <tr key={a.id}>
                   <td>{a.title}</td>
-                  <td>{a.alert_type}</td>
+                  <td>{label('alertType', a.alert_type)}</td>
                   <td>
                     <span className={`cp-badge ${severityBadgeClass(a.severity)}`} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
                       {a.severity}
@@ -305,7 +306,7 @@ export default function SafetyPage() {
                   <td>{a.effective_date ? a.effective_date.slice(0, 10) : '—'}</td>
                   <td>
                     <span className="cp-badge" style={{ ...statusBadgeStyle(a.status), padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                      {a.status}
+                      {label('contentStatus', a.status)}
                     </span>
                   </td>
                   <td>{a.view_count || 0}</td>

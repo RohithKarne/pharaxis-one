@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput } from '../../shared/utils/datetime'
+import { labelsOf } from '../../shared/utils/labels'
 
 const VISIBLE_TO_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -27,14 +28,7 @@ const EMPTY_UPLOAD = {
   is_active: true,
 }
 
-const DOC_STATUS_LABELS = {
-  draft: 'Draft',
-  review: 'Needs review',
-  approved: 'Approved to publish',
-  published: 'Live in portal',
-  scheduled: 'Scheduled',
-  archived: 'Archived',
-}
+const DOC_STATUS_LABELS = labelsOf('contentStatus')
 
 // CPPM-55: a published document the portal is not showing is not "Live in portal".
 // It is hidden once its expiry date passes, and until its publish date arrives.

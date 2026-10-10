@@ -31,6 +31,7 @@ export default function TrainingAdminPage() {
   const [form, setForm]           = useState(EMPTY)
   const [msg, setMsg]             = useState('')
   const [editingId, setEditingId] = useState(null)   // CPPM-33: correcting an existing entry
+  const [showForm, setShowForm]   = useState(false)  // phase 3 row 21: the form opens on "+ New module" or Edit
 
   const [qModule, setQModule]     = useState(null)   // module whose questions are open
   const [questions, setQuestions] = useState([])
@@ -75,6 +76,7 @@ export default function TrainingAdminPage() {
     try {
       await call(editingId ? `${api}/${editingId}` : api, editingId ? 'PUT' : 'POST', form)
       setMsg(editingId ? 'Changes saved.' : 'Module created. Add its questions, then set it to Available.')
+      setShowForm(false)
       setEditingId(null)
       setForm(EMPTY)
       const list = await loadModules()
@@ -84,13 +86,22 @@ export default function TrainingAdminPage() {
     }
   }
 
+  function startNew() {
+    setEditingId(null)
+    setForm(EMPTY)
+    setMsg('')
+    setShowForm(true)
+  }
+
   function startEdit(m) {
+    setShowForm(true)
     setEditingId(m.id)
     setForm(Object.fromEntries(Object.keys(EMPTY).map(k => [k, m[k] ?? EMPTY[k]])))
     setMsg('')
   }
 
   function cancelEdit() {
+    setShowForm(false)
     setEditingId(null)
     setForm(EMPTY)
     setMsg('')
@@ -185,17 +196,25 @@ export default function TrainingAdminPage() {
   }
 
   return (
-    <AdminLayout>
-      <div className="cp-admin-page" style={{ padding: 24 }}>
-      <div className="cp-page-header" style={{ marginBottom: 20 }}>
-        <h1>CME & REMS Educational Training Manager</h1>
-        <p>Set up training modules: the document to read, the questions and the pass mark. Every attempt a doctor makes is recorded below.</p>
+    <AdminLayout title="CME & Training">
+      {/* CP ease-of-use plan, phase 3 row 21: the same shape as News, Safety Alerts and
+          Clinical Trials. The list first; the form opens on "+ New module" or Edit. */}
+      <div className="cp-section-header">
+        <h2>CME & Training</h2>
+        <CanChange area="training"><button className="cp-btn cp-btn-primary" onClick={startNew}>+ New module</button></CanChange>
       </div>
+      <p className="cp-page-desc">Set up training modules: the document to read, the questions and the pass mark. Every attempt a doctor makes is recorded below.</p>
+      {msg && !showForm && <div className={msg.startsWith('✕') ? 'cp-error' : 'cp-success'} role="status" style={{ marginBottom: 12 }}>{msg.replace(/^✕ /, '')}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
+      {showForm && (
+        <div className="cp-modal-overlay" onClick={cancelEdit}>
+        <div className="cp-modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()} role="dialog" aria-label={editingId ? 'Edit module' : 'New module'}>
+        <div className="cp-modal-header">
+          <span>{editingId ? 'Edit module' : 'New module'}</span>
+          <button className="cp-modal-close" onClick={cancelEdit} aria-label="Close">✕</button>
+        </div>
         <ReadOnlyUnless area="training" what="the training modules">
-        <form onSubmit={handleSave} className="cp-card" style={card}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{editingId ? 'Edit Training Module' : 'Create Training Module'}</h3>
+        <form onSubmit={handleSave} className="cp-modal-body">
           <div style={{ marginBottom: 12 }}>
             <label style={label}>Module Title *</label>
             <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title of training module" style={input} />
@@ -231,17 +250,16 @@ export default function TrainingAdminPage() {
               <option value="Retired">Retired</option>
             </select>
           </div>
-          {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
-          <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: 'var(--cp-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
-            {editingId ? 'Save changes' : 'Create module'}
-          </button>
-          {editingId && (
-            <button type="button" onClick={cancelEdit} style={{ width: '100%', marginTop: 8, padding: '8px 14px', background: '#fff', color: '#374151', border: '1px solid #CBD5E1', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
-              Cancel editing
-            </button>
-          )}
+          {msg && <div className="cp-error" style={{ marginBottom: 12 }}>{msg.replace(/^✕ /, '')}</div>}
+          <div className="cp-modal-footer">
+            <button type="submit" className="cp-btn cp-btn-primary">{editingId ? 'Save changes' : 'Create module'}</button>
+            <button type="button" className="cp-btn cp-btn-outline" onClick={cancelEdit}>Cancel</button>
+          </div>
         </form>
         </ReadOnlyUnless>
+        </div>
+        </div>
+      )}
 
         <div className="cp-card" style={card}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Training Modules ({modules.length})</h3>
@@ -283,7 +301,6 @@ export default function TrainingAdminPage() {
             </table>
           )}
         </div>
-      </div>
 
       {qModule && (
         <div className="cp-card" style={{ ...card, marginTop: 24 }}>
@@ -382,7 +399,6 @@ export default function TrainingAdminPage() {
           </table>
         )}
       </div>
-    </div>
     </AdminLayout>
   )
 }

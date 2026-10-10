@@ -4,12 +4,16 @@ import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import BulkPortalUserImport from '../components/BulkPortalUserImport'
+import Pager, { PAGE_SIZE } from '../components/Pager'
+import RowMenu from '../components/RowMenu'
 
 // CPPM-128: as Inbox › Access Requests, the page lists only doctors waiting for access.
 export default function PortalUsersPage({ requestsOnly = false }) {
   const { canChange } = useAdminAuth() // CPPM-60
   const { clientId }    = useParams()
   const [users, setUsers]   = useState([])
+  const [page, setPage]     = useState(1)
+  const [total, setTotal]   = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [userType, setUserType] = useState('')
@@ -26,7 +30,9 @@ export default function PortalUsersPage({ requestsOnly = false }) {
   const [selectedIds, setSelectedIds]   = useState([])
   const [showBulkAdd, setShowBulkAdd]   = useState(false)
 
-  useEffect(() => { load() }, [clientId, userType, access])
+  useEffect(() => { load() }, [clientId, userType, access, page])
+  // A new search or filter starts again at page 1.
+  function searchNow() { if (page === 1) load(); else setPage(1) }
 
   // The type lists were typed into the page, so a client's own types could be missing
   // (CP screen review, 10 Oct 2026). They now come from the client's access gate setup.
@@ -50,10 +56,14 @@ export default function PortalUsersPage({ requestsOnly = false }) {
       if (userType) params.set('user_type', userType)
       if (access) params.set('access', access)
       if (search) params.set('search', search)
+      params.set('limit', PAGE_SIZE)
+      params.set('page', page)
       const res = await fetch(`/api/admin/users/${clientId}?${params}`, { headers: adminHeaders() })
       if (!res.ok) throw new Error('Failed to load users.')
       const d   = await res.json()
       setUsers(d.users || [])
+      setTotal(d.total ?? (d.users || []).length)
+      setSelectedIds([])
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -177,19 +187,19 @@ export default function PortalUsersPage({ requestsOnly = false }) {
       <div className="cp-filter-bar">
         <input className="cp-search-input" placeholder="Search name or email…" value={search}
           onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && load()} />
+          onKeyDown={e => e.key === 'Enter' && searchNow()} />
         {!requestsOnly && (
-          <select value={access} onChange={e => setAccess(e.target.value)} aria-label="Show access requests">
+          <select value={access} onChange={e => { setAccess(e.target.value); setPage(1) }} aria-label="Show access requests">
             <option value="">All users</option>
             <option value="requested">Requested</option>
             <option value="declined">Declined</option>
           </select>
         )}
-        <select aria-label="User type" value={userType} onChange={e => setUserType(e.target.value)}>
+        <select aria-label="User type" value={userType} onChange={e => { setUserType(e.target.value); setPage(1) }}>
           <option value="">All Types</option>
           {types.map(t => <option key={t.type_key} value={t.type_key}>{t.label}</option>)}
         </select>
-        <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
+        <button className="cp-btn cp-btn-outline" onClick={searchNow}>Search</button>
         <CanChange area="users">
         <button className="cp-btn cp-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowBulkAdd(true)}>
           Bulk Add Users
@@ -276,7 +286,7 @@ export default function PortalUsersPage({ requestsOnly = false }) {
         <div className="cp-table-card">
           <table className="cp-table">
             <thead><tr>
-              <th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
+              <th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={toggleSelectAll} aria-label="Select all on this page" /></th>
               <th>Name</th><th>Email</th><th>Type</th><th>Country</th><th>Verified</th><th>Status</th><th>Last Login</th><th>Joined</th><th></th>
             </tr></thead>
             <tbody>
@@ -306,21 +316,20 @@ export default function PortalUsersPage({ requestsOnly = false }) {
                       <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => decideAccess(u, 'approve')}>Approve</button>
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => decideAccess(u, 'decline')}>Decline</button>
                       </CanChange>
-                    ) : u.access_status === 'declined' ? null : (<>
-                    <CanChange area="users">
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
-                    </CanChange>
-                    <CanChange area="users">
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
-                    </CanChange>
-                    {u.is_active && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => resendInvite(u)}>Resend invite</button>}
-                    {u.locked_until && canChange('users') && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>}
-                    </>)}
+                    ) : u.access_status === 'declined' ? null : (
+                      <RowMenu name={u.email} items={[
+                        canChange('users') && { label: 'Edit', onClick: () => openEdit(u) },
+                        canChange('users') && { label: u.is_active ? 'Deactivate' : 'Activate', onClick: () => toggleActive(u.id, u.is_active), danger: !!u.is_active },
+                        u.is_active && canChange('users') && { label: 'Resend invite', onClick: () => resendInvite(u) },
+                        u.locked_until && canChange('users') && { label: 'Unlock sign-in', onClick: () => unlock(u) },
+                      ]} />
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <Pager page={page} shown={users.length} total={total} onPage={setPage} />
         </div>
       )}
     </AdminLayout>

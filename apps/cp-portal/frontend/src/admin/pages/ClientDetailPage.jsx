@@ -8,50 +8,20 @@ import Icon from '../../shared/components/Icon'
 import QRCode from 'qrcode'
 import { activityActor } from '../../shared/utils/activityActor'
 
-// ── Cards ─────────────────────────────────────────────────────────────────────
-// CPPM-135: the cards follow the menu's main screens and tabs (menuSections), so
-// the Overview and the sidebar never disagree. This only adds a line of help and an
-// icon to each screen.
-const CARD_INFO = {
-  submissions:     { icon: 'inbox',   desc: 'Questions and reports sent from the portal' },
-  'safety-queue':  { icon: 'shield',  desc: 'Someone reported becoming unwell' },
-  'review-queue':  { icon: 'search',  desc: 'News and documents waiting for approval' },
-  'access-requests': { icon: 'users', desc: 'Doctors asking for an account' },
-  feedback:        { icon: 'message', desc: 'Ratings and comments from visitors' },
-  'chat-records':  { icon: 'message', desc: 'Chat box conversations' },
-  'data-requests': { icon: 'shield',  desc: 'Requests to export or delete personal data' },
-  content:         { icon: 'file',    desc: 'Therapeutic areas, drugs, events, and resources' },
-  news:            { icon: 'news',    desc: 'Publish news posts and updates' },
-  documents:       { icon: 'folder',  desc: 'Upload and manage clinical documents' },
-  safety:          { icon: 'shield',  desc: 'Drug safety communications and recalls' },
-  trials:          { icon: 'beaker',  desc: 'Studies shown on the portal' },
-  training:        { icon: 'book',    desc: 'Modules, attempts, and certificates' },
-  msls:            { icon: 'users',   desc: 'Medical Science Liaisons' },
-  faq:             { icon: 'help',    desc: 'Questions and answers on the portal' },
-  branding:        { icon: 'palette', desc: 'Logo, colors, fonts, and portal name' },
-  features:        { icon: 'sliders', desc: 'Turn portal pages on and off' },
-  gate:            { icon: 'gate',    desc: 'User type confirmation and access control' },
-  forms:           { icon: 'form',    desc: 'Submission form fields per inquiry type' },
-  'email-settings': { icon: 'mail',   desc: 'Mail server, sender, and the email outbox' },
-  chatbox:         { icon: 'message', desc: 'AI provider and system prompt' },
-  users:           { icon: 'users',   desc: 'Doctors and other registered portal users' },
-  'admin-users':   { icon: 'key',     desc: 'Staff accounts and roles' },
-  integration:     { icon: 'link',    desc: 'MIMS or third-party system connection' },
-  'sync-health':   { icon: 'chart',   desc: 'Deliveries to MIMS, failures, and retries' },
-  sso:             { icon: 'lock',    desc: 'OIDC login with Microsoft or Google' },
-  analytics:       { icon: 'chart',   desc: 'Portal usage, downloads, and submission trends' },
-  audit:           { icon: 'list',    desc: 'Full admin activity log' },
-  'safety-confirmations': { icon: 'shield', desc: 'Who has confirmed each high and critical letter' },
-  compliance:      { icon: 'lock',    desc: 'Consent, cookie policy, and regulatory settings' },
-}
-const SECTION_DESC = {
-  inbox:       'Everything waiting for someone to act',
-  content:     'Everything published on the portal',
-  setup:       'How the portal looks and behaves',
-  people:      'Portal users and staff accounts',
-  connections: 'MIMS, deliveries, and single sign-on',
-  reports:     'Usage, audit, safety confirmations, and compliance',
-}
+// ── To do today ───────────────────────────────────────────────────────────────
+// Phase 3 row 14 (CP ease-of-use plan): the sidebar is now the one map of screens,
+// so the Overview no longer repeats it as cards. It lists what is waiting instead,
+// from the same counts the sidebar shows, and only for screens this person's menu
+// offers. A count that could not be read is named, never shown as "nothing waiting".
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+const WAITING = [
+  { key: 'safety',      path: 'safety-queue',    sev: 'red',   check: 'side-effect reports',  text: n => `${plural(n, 'side-effect report', 'side-effect reports')} to review`, hint: 'Someone reported becoming unwell' },
+  { key: 'failed',      path: 'sync-health',     sev: 'red',   check: 'deliveries to MIMS',   text: n => `${plural(n, 'submission', 'submissions')} did not reach MIMS`, hint: 'Send them again from Sync Health' },
+  { key: 'access',      path: 'access-requests', sev: 'amber', check: 'access requests',      text: n => `${plural(n, 'doctor', 'doctors')} waiting for an account` },
+  { key: 'review',      path: 'review-queue',    sev: 'amber', check: 'approvals',            text: n => `${plural(n, 'item', 'items')} waiting for approval` },
+  { key: 'data',        path: 'data-requests',   sev: 'amber', check: 'personal data requests', text: n => `${plural(n, 'personal data request', 'personal data requests')} to answer` },
+  { key: 'submissions', path: 'submissions',     sev: 'blue',  check: 'new submissions',      text: n => `${plural(n, 'new submission', 'new submissions')}` },
+]
 
 // ── Readiness ─────────────────────────────────────────────────────────────────
 // CPPM-136: the hero shows the server's eight readiness checks (the Setup Checklist
@@ -61,37 +31,6 @@ function readinessMeta(label) {
   if (label === 'Ready')        return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
   if (label === 'Almost Ready') return { label: 'Almost ready',    color: '#92400E', bg: '#FEF3C7', ring: '#F59E0B' }
   return                               { label: 'Not ready',       color: '#B91C1C', bg: '#FEE2E2', ring: '#EF4444' }
-}
-
-// ── Badges ────────────────────────────────────────────────────────────────────
-const BADGE_STYLES = {
-  success:   { background: '#DCFCE7', color: '#166534' },
-  warning:   { background: '#FEF3C7', color: '#B45309' },
-  danger:    { background: '#FEE2E2', color: '#B91C1C' },
-  info:      { background: '#DBEAFE', color: '#1D4ED8' },
-  attention: { background: '#FEF9C3', color: '#92400E' },
-}
-
-// CPPM-136: a badge only where it comes from real data. Fixed labels such as "No
-// active alerts" (shown while alerts were active) and "Ready to use" were removed.
-function getBadge(path, data, submissionStats, integrationData) {
-  const { branding, features } = data || {}
-  const n = features?.filter(f => f.is_enabled).length || 0
-  if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready to use',    s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
-  if (path === 'features')    return n > 0  ? { label: `${n} active`,      s: 'info'      } : { label: 'Not configured', s: 'danger'    }
-  if (path === 'integration') {
-    const integrations = integrationData?.integrations || []
-    if (integrations.length === 0) return { label: 'Not configured', s: 'warning' }
-    if (integrations.some(i => i.last_sync_status === 'failure'))  return { label: 'Sync failed',    s: 'danger'  }
-    if (integrations.some(i => i.last_sync_status === 'success'))  return { label: 'Connected',      s: 'success' }
-    return { label: 'Not tested', s: 'attention' }
-  }
-  if (path === 'submissions' && submissionStats) {
-    return submissionStats.total > 0
-      ? { label: `${submissionStats.total} total`, s: 'info' }
-      : { label: 'No queue yet', s: 'attention' }
-  }
-  return null
 }
 
 // ── Urgent Issues ─────────────────────────────────────────────────────────────
@@ -156,6 +95,7 @@ export default function ClientDetailPage() {
   const [integrationData, setIntegrationData] = useState(null)
   const [recentActivity, setRecentActivity]   = useState([])
   const [openAlerts, setOpenAlerts]           = useState([])
+  const [waiting, setWaiting]                 = useState({})
   const [urlCopied, setUrlCopied]     = useState(false)
   const [qrDataUrl, setQrDataUrl]     = useState('')
 
@@ -188,6 +128,16 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/integration/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setIntegrationData(d))
       .catch(() => {})
+    const count = (url, pick) => fetch(url, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : null).then(d => d ? pick(d) : undefined).catch(() => undefined)
+    Promise.all([
+      count(`/api/admin/submissions/${clientId}?limit=1&status=submitted`, d => d.matched),
+      count(`/api/admin/ae-review/${clientId}/count`, d => d.count),
+      count(`/api/admin/review-queue/${clientId}/count`, d => d.count),
+      count(`/api/admin/users/${clientId}/access-requests/count`, d => d.count),
+      count(`/api/admin/submissions/${clientId}?limit=1&status=failed_sync`, d => d.matched),
+      count(`/api/admin/data-requests/${clientId}`, d => d.requests?.filter(r => r.status === 'pending').length),
+    ]).then(([submissions, safety, review, access, failed, data]) => setWaiting({ submissions, safety, review, access, failed, data, done: true }))
   }, [clientId])
 
   // MIMS retries filled Recent Activity, each labelled "Admin" (CP screen review, 10 Oct 2026).
@@ -206,25 +156,25 @@ export default function ClientDetailPage() {
   const { client, branding, features } = data
   const enabledCount = features?.filter(f => f.is_enabled).length || 0
   const health       = readinessMeta(readiness?.label)
-  // Bridge row 2: open alerts belong in "Attention Required" — it said "No issues
+  // Bridge row 2: open alerts belong in the to-do list — it said "No issues
   // detected" while reports were failing to reach MIMS.
   const alertIssues = ['integration', 'safety'].flatMap(aud => {
     const n = openAlerts.filter(a => a.audience === aud).length
     if (!n) return []
     return [{ sev: 'red', text: `${n} ${aud} alert${n === 1 ? '' : 's'} open`, path: aud === 'safety' ? 'safety-queue' : 'sync-health' }]
   })
-  const urgentIssues = [...alertIssues, ...getUrgentIssues(data, integrationData)]
+  const shownPaths = new Set(menuSections({ hasRole, canChange }).flatMap(sec => sec.tabs.map(t => t.path)))
+  const waitingRows = WAITING.filter(w => shownPaths.has(w.path))
+  const todo = [
+    ...alertIssues,
+    ...waitingRows.filter(w => waiting[w.key] > 0).map(w => ({ sev: w.sev, text: w.text(waiting[w.key]), hint: w.hint, path: w.path })),
+    ...getUrgentIssues(data, integrationData),
+  ].filter(item => shownPaths.has(item.path))
+  const unread  = waitingRows.filter(w => waiting.done && waiting[w.key] === undefined).map(w => w.check)
+  const checked = waitingRows.filter(w => waiting[w.key] !== undefined).map(w => w.check)
 
   const checklist     = readiness?.checks || []
   const checklistDone = readiness?.done   || 0
-
-
-  // CPPM-135: one group per main screen of this person's menu (Overview itself aside);
-  // the first tab is the wide card. "Go to…" in the top bar replaces the old search.
-  const groups = menuSections({ hasRole, canChange }).filter(sec => sec.key !== 'overview').map(sec => ({
-    key: sec.key, label: sec.label, desc: SECTION_DESC[sec.key], sectionIcon: sec.icon,
-    cards: sec.tabs.map((t, i) => ({ path: t.path, label: t.label, ...CARD_INFO[t.path], cta: 'Open', primary: i === 0 })),
-  }))
 
   return (
     <AdminLayout title={client.name}>
@@ -303,111 +253,46 @@ export default function ClientDetailPage() {
       {/* ── BODY ─────────────────────────────────────────────────────── */}
       <div className="ck-body">
 
-        {/* ── LEFT: Config Groups ─────────────────────────────────── */}
-        <div className="ck-groups">
-          {groups.map(group => {
-            const primary   = group.cards.find(c => c.primary)
-            const secondary = group.cards.filter(c => !c.primary)
-            return (
-              <div key={group.key} className="ck-group" data-key={group.key}>
-                <div className="ck-group-hdr">
-                  <span className="ck-group-hdr-icon"><Icon name={group.sectionIcon} size={17} /></span>
-                  <span className="ck-group-hdr-text">
-                    <span className="ck-group-hdr-label">{group.label}</span>
-                    <span className="ck-group-hdr-desc">{group.desc}</span>
-                  </span>
-                </div>
-
-                <div className="ck-group-body">
-
-                    {/* Primary card — full-width, landscape */}
-                    {primary && (() => {
-                      const badge = getBadge(primary.path, data, submissionStats, integrationData)
-                      return (
-                        <div
-                          className="ck-card-primary"
-                          onClick={() => navigate(`/admin/clients/${clientId}/${primary.path}`)}
-                        >
-                          <div className="ck-card-primary-left">
-                            <span className="ck-card-primary-icon"><Icon name={primary.icon} size={22} /></span>
-                            <div>
-                              <div className="ck-card-primary-label">{primary.label}</div>
-                              <div className="ck-card-primary-desc">{primary.desc}</div>
-                            </div>
-                          </div>
-                          <div className="ck-card-primary-right">
-                            {badge && (
-                              <span className="ck-badge" style={BADGE_STYLES[badge.s] || {}}>{badge.label}</span>
-                            )}
-                            <span className="ck-card-cta">{primary.cta}</span>
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {/* Secondary cards — compact grid */}
-                    {secondary.length > 0 && (
-                      <div className="ck-sub-grid">
-                        {secondary.map(card => {
-                          const badge = getBadge(card.path, data, submissionStats, integrationData)
-                          return (
-                            <div
-                              key={card.path}
-                              className="ck-card-sub"
-                              onClick={() => navigate(`/admin/clients/${clientId}/${card.path}`)}
-                            >
-                              <div className="ck-sub-top">
-                                <span className="ck-sub-icon"><Icon name={card.icon} size={17} /></span>
-                                {badge && (
-                                  <span className="ck-badge ck-badge-sm" style={BADGE_STYLES[badge.s] || {}}>{badge.label}</span>
-                                )}
-                              </div>
-                              <div className="ck-sub-label">{card.label}</div>
-                              <div className="ck-sub-cta">{card.cta}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                  </div>
-
-              </div>
-            )
-          })}
-        </div>
+        {/* ── LEFT: To do today ───────────────────────────────────── */}
+        <section className="ck-panel-block ck-todo" aria-labelledby="ck-todo-title">
+          <h2 className="ck-panel-title" id="ck-todo-title">
+            <span>To do today</span>
+            {todo.length > 0 && <span className="ck-issue-count">{todo.length}</span>}
+          </h2>
+          {!waiting.done ? (
+            <div className="ck-panel-empty">Checking what is waiting…</div>
+          ) : todo.length === 0 ? (
+            <div className="ck-panel-empty">
+              <span style={{ color: '#166534', display: 'inline-flex' }}><Icon name="check" size={18} /></span>
+              <span style={{ color: '#166534', fontWeight: 600 }}>Nothing is waiting for you.</span>
+            </div>
+          ) : (
+            <ul className="ck-issues-list ck-todo-list">
+              {todo.map((item, i) => (
+                <li key={i}>
+                  <button type="button" className={`ck-issue ck-issue-${item.sev}`}
+                    onClick={() => navigate(`/admin/clients/${clientId}/${item.path}`)}>
+                    <span className="ck-issue-dot" />
+                    <span className="ck-issue-text">
+                      {item.text}
+                      {item.hint && <span className="ck-todo-hint">{item.hint}</span>}
+                    </span>
+                    <span className="ck-issue-arrow">Open</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {waiting.done && (
+            <p className="ck-todo-checked">
+              {unread.length > 0 && <span role="alert" className="ck-todo-unread">Could not check {unread.join(', ')}. Look on {unread.length === 1 ? 'that screen' : 'those screens'} directly. </span>}
+              {checked.length > 0 && `Checked ${checked.join(', ')}. `}Every screen is in the menu on the left.
+            </p>
+          )}
+        </section>
 
         {/* ── RIGHT: Decision Panel ───────────────────────────────── */}
         <aside className="ck-panel">
-
-          {/* Urgent Issues */}
-          <div className="ck-panel-block ck-panel-block--urgent">
-            <div className="ck-panel-title">
-              <span>Attention Required</span>
-              {urgentIssues.length > 0 && (
-                <span className="ck-issue-count">{urgentIssues.length}</span>
-              )}
-            </div>
-            {urgentIssues.length === 0 ? (
-              <div className="ck-panel-empty">
-                <span style={{ color: '#166534', display: 'inline-flex' }}><Icon name="check" size={18} /></span>
-                <span style={{ color: '#166534', fontWeight: 600, fontSize: 12 }}>No issues detected</span>
-              </div>
-            ) : (
-              <div className="ck-issues-list">
-                {urgentIssues.map((issue, i) => (
-                  <div
-                    key={i}
-                    className={`ck-issue ck-issue-${issue.sev}`}
-                    onClick={() => navigate(`/admin/clients/${clientId}/${issue.path}`)}
-                  >
-                    <span className="ck-issue-dot" />
-                    <span className="ck-issue-text">{issue.text}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Recent Activity */}
           <div className="ck-panel-block">

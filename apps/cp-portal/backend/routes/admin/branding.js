@@ -117,7 +117,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
         const r = ratio(color, bg);
         if (r !== null && r < AA_NORMAL) {
           return res.status(400).json({
-            error: `${field} (${color}) fails accessibility contrast against the background (${bg}) — ${r.toFixed(2)}:1, needs at least ${AA_NORMAL}:1. Pick a darker or lighter text color.`,
+            error: `The ${field === 'text_primary' ? 'text' : 'quieter text'} colour (${color}) is too hard to read on the box background (${bg}): ${r.toFixed(2)} to 1, and it needs at least ${AA_NORMAL} to 1. Pick a darker or lighter colour.`,
           });
         }
       }
