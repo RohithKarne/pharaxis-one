@@ -74,7 +74,14 @@ const BADGE_STYLES = {
 
 // CPPM-136: a badge only where it comes from real data. Fixed labels such as "No
 // active alerts" (shown while alerts were active) and "Ready to use" were removed.
-function getBadge(path, data, submissionStats, integrationData) {
+// Phase 3 row 15 (CP ease-of-use plan): a tile in Inbox says how many items wait,
+// from the same counts the sidebar shows. A count the person may not read stays blank.
+function waitingBadge(n) {
+  if (n === undefined || n === null) return null
+  return n > 0 ? { label: `${n} waiting`, s: 'attention' } : { label: 'None waiting', s: 'success' }
+}
+
+function getBadge(path, data, submissionStats, integrationData, waiting = {}) {
   const { branding, features } = data || {}
   const n = features?.filter(f => f.is_enabled).length || 0
   if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready to use',    s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
@@ -87,10 +94,14 @@ function getBadge(path, data, submissionStats, integrationData) {
     return { label: 'Not tested', s: 'attention' }
   }
   if (path === 'submissions' && submissionStats) {
+    if (waiting.submissions > 0) return { label: `${waiting.submissions} new`, s: 'attention' }
     return submissionStats.total > 0
       ? { label: `${submissionStats.total} total`, s: 'info' }
       : { label: 'No queue yet', s: 'attention' }
   }
+  if (path === 'safety-queue')    return waitingBadge(waiting.safety)
+  if (path === 'review-queue')    return waitingBadge(waiting.review)
+  if (path === 'access-requests') return waitingBadge(waiting.access)
   return null
 }
 
@@ -156,6 +167,7 @@ export default function ClientDetailPage() {
   const [integrationData, setIntegrationData] = useState(null)
   const [recentActivity, setRecentActivity]   = useState([])
   const [openAlerts, setOpenAlerts]           = useState([])
+  const [waiting, setWaiting]                 = useState({})
   const [urlCopied, setUrlCopied]     = useState(false)
   const [qrDataUrl, setQrDataUrl]     = useState('')
 
@@ -188,6 +200,14 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/integration/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setIntegrationData(d))
       .catch(() => {})
+    const count = (url, pick) => fetch(url, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : null).then(d => d ? pick(d) : undefined).catch(() => undefined)
+    Promise.all([
+      count(`/api/admin/submissions/${clientId}?limit=1&status=submitted`, d => d.matched),
+      count(`/api/admin/ae-review/${clientId}/count`, d => d.count),
+      count(`/api/admin/review-queue/${clientId}/count`, d => d.count),
+      count(`/api/admin/users/${clientId}/access-requests/count`, d => d.count),
+    ]).then(([submissions, safety, review, access]) => setWaiting({ submissions, safety, review, access }))
   }, [clientId])
 
   // MIMS retries filled Recent Activity, each labelled "Admin" (CP screen review, 10 Oct 2026).
@@ -322,7 +342,7 @@ export default function ClientDetailPage() {
 
                     {/* Primary card — full-width, landscape */}
                     {primary && (() => {
-                      const badge = getBadge(primary.path, data, submissionStats, integrationData)
+                      const badge = getBadge(primary.path, data, submissionStats, integrationData, waiting)
                       return (
                         <div
                           className="ck-card-primary"
@@ -349,7 +369,7 @@ export default function ClientDetailPage() {
                     {secondary.length > 0 && (
                       <div className="ck-sub-grid">
                         {secondary.map(card => {
-                          const badge = getBadge(card.path, data, submissionStats, integrationData)
+                          const badge = getBadge(card.path, data, submissionStats, integrationData, waiting)
                           return (
                             <div
                               key={card.path}
