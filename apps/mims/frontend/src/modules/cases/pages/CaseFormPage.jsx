@@ -127,6 +127,25 @@ export default function CaseFormPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // From the header strip: open step 3 and put the cursor in that field. Step 3
+  // loads on demand, so the field is looked for until it appears.
+  function editFieldInStep3(field) {
+    setActiveStep(3)
+    let tries = 0
+    const find = () => {
+      const el = document.querySelector(`.cf-form-field[data-field="${field}"] select`)
+      if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); return }
+      if (++tries < 40) setTimeout(find, 50)
+    }
+    find()
+  }
+
+  const currentUserId = user?.id || user?.userId || null
+  function assignToMe() {
+    setInfoForm(p => ({ ...p, case_owner_id: currentUserId }))
+    scheduleAutoSave()
+  }
+
   function handleBackNavigation() {
     const from = location.state?.from
     if (from && typeof from === 'string') { navigate(from); return }
@@ -200,6 +219,9 @@ export default function CaseFormPage() {
         users={users}
         caseId={id}
         headers={headers}
+        currentUserId={currentUserId}
+        onEditField={editFieldInStep3}
+        onAssignToMe={assignToMe}
       />
       <CaseBridgePanel caseId={id} headers={headers} />
 
@@ -310,7 +332,7 @@ export default function CaseFormPage() {
               id={id}
               headers={headers}
               token={token}
-              currentUserId={user?.id || user?.userId || null}
+              currentUserId={currentUserId}
               setSavedMsg={setSavedMsg}
               infoForm={infoForm}
               setInfoForm={setInfoForm}
