@@ -325,6 +325,10 @@
   margin-top: 48px;
 }
 
+.cf-cases-empty-action {
+  margin-top: 12px;
+}
+
 .cf-cases-table {
   width: 100%;
   border-collapse: collapse;
