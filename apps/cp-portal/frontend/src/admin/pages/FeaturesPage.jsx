@@ -20,7 +20,7 @@ const FEATURE_DESCRIPTIONS = {
   hcp_gate:             'HCP identity confirmation on first visit',
   // CPPM-109
   clinical_trials:      'Clinical trials list — shown to doctors only once a trial is published',
-  cme_training:         'CME & training modules — shown to doctors only once a module is published',
+  cme_training:         'CME & training modules — a module shows to doctors as "Not open yet" until it is made Available',
   homepage_quicklinks:  'Shortcut links on the portal home page',
   adverse_event:        'The form for reporting a side effect',
   product_complaint:    'The form for reporting a product problem',

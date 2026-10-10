@@ -210,7 +210,7 @@ export default function DashboardPage() {
                 <th>Client</th>
                 <th>Status</th>
                 <th>Readiness</th>
-                <th>Submissions</th>
+                <th>Open submissions</th>
                 <th>Content Health</th>
                 <th>Last Updated</th>
                 <th></th>
