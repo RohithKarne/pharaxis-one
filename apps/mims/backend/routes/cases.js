@@ -209,7 +209,7 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     const {
       type, status_id, owner_id, deleted, search,
       has_correspondence, corr_from, corr_to, corr_box, corr_party,
-      reporter, patient_initials,
+      reporter, patient_initials, priority,
       sort_by, sort_dir, include_meta,
     } = req.query;
     const limit  = clamp(parseIntSafe(req.query.limit, 50), 1, 500);
@@ -226,6 +226,12 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     }
     if (has_correspondence && !['yes', 'no', 'true', 'false'].includes(String(has_correspondence))) {
       return res.status(400).json({ error: "has_correspondence must be one of: yes, no, true, false." });
+    }
+    // Comma-separated, e.g. 'high,urgent'. Stored values are mixed case ("High"
+    // from the case form, "high" from imports), so compare in lower case.
+    const priorities = priority ? String(priority).toLowerCase().split(',').map(p => p.trim()).filter(Boolean) : [];
+    if (priorities.some(p => !['low', 'normal', 'high', 'urgent'].includes(p))) {
+      return res.status(400).json({ error: 'priority must be a comma-separated list of: low, normal, high, urgent.' });
     }
     const sortBy = CASE_SORT_MAP[sort_by] || CASE_SORT_MAP.created_at;
     const sortDir = String(sort_dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
@@ -316,6 +322,15 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     if (owner_id)  {
       query += ' AND c.case_owner_id = ?'; params.push(owner_id);
       countQuery += ' AND c.case_owner_id = ?'; countParams.push(owner_id);
+    }
+    if (priorities.length) {
+      // A case with no priority is shown as Normal, so 'normal' matches it too.
+      const inList = `LOWER(c.priority) IN (${priorities.map(() => '?').join(', ')})`;
+      const clause = priorities.includes('normal')
+        ? ` AND (${inList} OR c.priority IS NULL OR c.priority = '')`
+        : ` AND ${inList}`;
+      query += clause; params.push(...priorities);
+      countQuery += clause; countParams.push(...priorities);
     }
     const globalSearch = buildGlobalCaseSearchClause(search, 'c');
     if (globalSearch.clause) {

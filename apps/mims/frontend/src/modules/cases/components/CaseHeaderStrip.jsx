@@ -12,7 +12,7 @@ const CaseTimelineView = lazy(() => import('./CaseTimelineView'))
 // that field, and "Assign to me" fills the owner field there, unsaved, like a
 // change made in the field itself (MIMS screen review, row 10).
 
-const PRIORITY_LABEL = { normal: 'Normal', high: 'High', urgent: 'Urgent' }
+const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' }
 
 function formatDate(value) {
   if (!value) return '—'

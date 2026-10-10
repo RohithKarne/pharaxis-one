@@ -59,6 +59,8 @@ export default function CasesPage() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  // Every status, so a search of all cases can filter by one this page lacks.
+  const [workflowStates, setWorkflowStates] = useState([])
 
   // ?view=correspondence (where old Case Query links land) opens the Correspondence view.
   const openCorrespondence = searchParams.get('view') === 'correspondence'
@@ -243,6 +245,11 @@ export default function CasesPage() {
         const q = new URLSearchParams({ include_meta: 'true', limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE), sort_by: sortBy })
         if (searchTerm) q.set('search', searchTerm)
         if (typeFilter !== 'all') q.set('type', typeFilter)
+        // The column filters go to the server too, so they cover every page of
+        // the result, not only the one on screen.
+        if (priorityFilter !== 'all') q.set('priority', priorityFilter === 'high_urgent' ? 'high,urgent' : priorityFilter)
+        const statusId = workflowStates.find(w => w.name === statusFilter)?.id
+        if (statusFilter !== 'all' && statusId) q.set('status_id', String(statusId))
         for (const [key, value] of Object.entries(more)) if (String(value).trim()) q.set(key, String(value).trim())
         const res  = await httpFetch(`${API}/cases?${q}`, { headers })
         const data = await res.json()
@@ -274,7 +281,14 @@ export default function CasesPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, headers, search, searchScope, moreActive, more, page, sortBy, typeFilter])
+  }, [activeTab, headers, search, searchScope, moreActive, more, page, sortBy, typeFilter, priorityFilter, statusFilter, workflowStates])
+
+  useEffect(() => {
+    httpFetch(`${API}/cases/workflow-states`, { headers })
+      .then(r => (r.ok ? r.json() : { states: [] }))
+      .then(d => setWorkflowStates((d.states || []).filter(w => w.is_active !== false)))
+      .catch(() => {})
+  }, [headers])
 
   useEffect(() => { loadCases() }, [loadCases])
 
@@ -577,10 +591,11 @@ export default function CasesPage() {
   }, [cases, typeFilter, priorityFilter, statusFilter])
 
   const uniqueStatuses = useMemo(() => {
-    return [...new Set(cases.map(c => c.status_name || 'New'))].sort()
-  }, [cases])
+    return [...new Set([...workflowStates.map(w => w.name), ...cases.map(c => c.status_name || 'New')])].sort()
+  }, [cases, workflowStates])
 
   const hasSearch = search.trim().length > 0
+  const columnFilterActive = typeFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all'
   const isGlobalSearch = (hasSearch && searchScope === 'all') || moreActive
   const openCase = (c) => navigate(`/cases/${c.id}${corrActive ? '?section=correspondence' : ''}`, { state: { from: '/cases' } })
 
@@ -776,6 +791,7 @@ export default function CasesPage() {
               <div className="cf-cases-bulk-group">
                 <select className="cf-cases-bulk-select" value={bulkPriority} onChange={e => setBulkPriority(e.target.value)}>
                   <option value="">— Change Priority —</option>
+                  <option value="low">Low</option>
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
@@ -794,7 +810,7 @@ export default function CasesPage() {
           <div className="cf-cases-loading">Loading…</div>
         ) : loadError ? (
           <div className="cf-form-error">{loadError}</div>
-        ) : filteredCases.length === 0 ? (
+        ) : filteredCases.length === 0 && !columnFilterActive ? (
           <div className="cf-cases-empty">
             {search || moreActive || typeFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all'
               ? (isGlobalSearch
@@ -832,15 +848,16 @@ export default function CasesPage() {
                 <th>Organisation</th>
                 <th>
                   Status
-                  <select className="cf-th-filter-select" aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by status" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0) }}>
                     <option value="all">All</option>
                     {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </th>
                 <th>
                   Priority
-                  <select className="cf-th-filter-select" aria-label="Filter by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by priority" value={priorityFilter} onChange={e => { setPriorityFilter(e.target.value); setPage(0) }}>
                     <option value="all">All</option>
+                    <option value="low">Low</option>
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
@@ -856,6 +873,11 @@ export default function CasesPage() {
               </tr>
             </thead>
             <tbody>
+              {/* With a column filter on, the table stays so the filter can be
+                  changed back; it used to vanish along with its own controls. */}
+              {filteredCases.length === 0 && (
+                <tr><td colSpan={corrActive ? 12 : 10} className="cf-cases-empty">No cases match these filters.</td></tr>
+              )}
               {filteredCases.map(c => (
                 <tr key={c.id} className={`cf-cases-row ${selectedCaseIds.includes(c.id) ? 'selected' : ''}`} onClick={() => openCase(c)}>
                   <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -907,7 +929,6 @@ export default function CasesPage() {
           <div className="cf-query-pagination">
             <div className="cf-query-page-meta">
               Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + cases.length} of {total}
-              {(statusFilter !== 'all' || priorityFilter !== 'all') && ' (the Status and Priority column filters narrow this page only)'}
             </div>
             {total > PAGE_SIZE && (
               <div className="cf-query-page-actions">
