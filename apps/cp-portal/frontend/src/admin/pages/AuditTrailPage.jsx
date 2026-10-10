@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { label } from '../../shared/utils/labels'
 import Pager, { PAGE_SIZE } from '../components/Pager'
 
@@ -18,6 +18,10 @@ const ACTION_BADGE_STYLES = {
 }
 
 const LIMIT = PAGE_SIZE
+
+// The audit trail stays in UTC, to the second, on screen as in the export
+// (Rohith, 10 Oct 2026: screens show local time, the audit trail and exports UTC).
+const utc = v => (v ? new Date(v).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—')
 
 // CPPM-43: an edit records { changes: { field: { from, to } } }. Shown as
 // "status: Recruiting → Active, not recruiting"; long values are shortened here
@@ -54,6 +58,7 @@ export default function AuditTrailPage() {
   // CPPM-62: with no client in the address this is the platform audit trail —
   // records that belong to no client, for the platform admin only.
   const scope = clientId || 'platform'
+  const { hasRole } = useAdminAuth()
 
   const [records, setRecords]   = useState([])
   const [total, setTotal]       = useState(0)
@@ -155,6 +160,13 @@ export default function AuditTrailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterEntity, filterAction, filterFrom, filterTo])
 
+  // A client admin who types the address gets the reason, not empty filters.
+  if (scope === 'platform' && !hasRole('superadmin')) return (
+    <AdminLayout title="Audit Trail">
+      <div className="cp-empty"><p>Only the platform admin can see the platform audit trail. Your portal's own audit trail is under Reports.</p></div>
+    </AdminLayout>
+  )
+
   return (
     <AdminLayout title="Audit Trail">
 
@@ -171,7 +183,7 @@ export default function AuditTrailPage() {
                 <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Action</span><div>{label('auditAction', detailRecord.action) || '—'}</div></div>
                 <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Entity ID</span><div style={{ fontFamily: 'monospace' }}>{detailRecord.entity_id != null ? detailRecord.entity_id : '—'}</div></div>
                 <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Performed by</span><div>{detailRecord.admin_name || detailRecord.admin_email || '—'}</div></div>
-                <div style={{ gridColumn: '1 / -1' }}><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Timestamp</span><div>{detailRecord.created_at ? new Date(detailRecord.created_at).toLocaleString() : '—'}</div></div>
+                <div style={{ gridColumn: '1 / -1' }}><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Time (UTC)</span><div>{utc(detailRecord.created_at)}</div></div>
               </div>
               <div style={{ fontWeight: 600, fontSize: 12, color: '#475569', marginBottom: 6 }}>Details</div>
               <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, background: '#F8FAFC', padding: 12, borderRadius: 6, border: '1px solid #E2E8F0', maxHeight: 400, overflowY: 'auto' }}>
@@ -253,7 +265,7 @@ export default function AuditTrailPage() {
             <table className="cp-table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
+                  <th>Time (UTC)</th>
                   <th>Admin</th>
                   <th>Action</th>
                   <th>Entity</th>
@@ -266,7 +278,7 @@ export default function AuditTrailPage() {
                 {records.map((r, i) => (
                   <tr key={i}>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                      {utc(r.created_at)}
                     </td>
                     <td>{r.admin_email || r.admin_name || '—'}</td>
                     <td>
