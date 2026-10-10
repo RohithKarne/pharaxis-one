@@ -173,16 +173,26 @@ export default function CapabilityGroupSecurity() {
 
       // Optional "start from template": apply the chosen template's capabilities to the new group.
       const tpl = templates.find(t => String(t.id ?? t.name) === createTemplateId)
-      const tplKeys = tpl ? (tpl.privilege_keys || tpl.privileges || []) : []
+      let tplKeys = tpl ? (tpl.privilege_keys || tpl.privileges || []) : []
+      // The template's capabilities are a second save. If the server refuses
+      // them (a Segregation of Duties rule, say), the group exists with none, so
+      // say so and show it empty, not as if the template had been applied.
+      let tplError = ''
       if (data.id && tplKeys.length) {
-        await httpFetch(`${API}/groups/${data.id}/privileges`, {
+        const pr = await httpFetch(`${API}/groups/${data.id}/privileges`, {
           method: 'PUT', headers: H,
           body: JSON.stringify({ privilege_keys: tplKeys, org_id: tenantId || null }),
         })
+        if (!pr.ok) {
+          const pd = await pr.json().catch(() => ({}))
+          tplError = pd.error || `request failed (${pr.status})`
+          tplKeys = []
+        }
       }
 
       setShowCreate(false)
-      flash(tpl ? `Group created from ${tpl.name}.` : 'Group created.', 'success')
+      if (tplError) flash(`Group created, but the ${tpl.name} capabilities were not applied: ${tplError}`, 'error')
+      else flash(tpl ? `Group created from ${tpl.name}.` : 'Group created.', 'success')
       await loadOverview()
       // Select the new group immediately (don't wait for the user to click it).
       if (data.id) {
