@@ -286,10 +286,14 @@ export default function ClientDetailPage() {
 
         <div className="ck-health-block">
           <div className="ck-health-ring" style={{ color: health.color, background: health.bg, boxShadow: `0 0 0 3px ${health.ring}30, inset 0 2px 6px rgba(0,0,0,.08)` }}>
-            {readiness ? readiness.score : '—'}
+            {/* The ring said "50" while the checklist said 4/8 — one measure now (CP screen review, 10 Oct 2026). */}
+            {readiness ? `${checklistDone} of ${checklist.length} steps done` : '—'}
           </div>
-          <div className="ck-health-label" style={{ color: health.color }}>{readiness ? health.label : ''}</div>
-          <div className="ck-health-sub">Readiness</div>
+          <div className="ck-health-label" style={{ color: health.color }}>{readiness ? `${health.label},` : ''}</div>
+          <button type="button" className="cp-link-btn ck-health-sub"
+            onClick={() => document.getElementById('ck-setup-checklist')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+            Setup
+          </button>
         </div>
 
       </div>
@@ -437,7 +441,7 @@ export default function ClientDetailPage() {
           </div>
 
           {/* Setup Checklist */}
-          <div className="ck-panel-block">
+          <div className="ck-panel-block" id="ck-setup-checklist">
             <div className="ck-panel-title">
               <span>Setup Checklist</span>
               <span style={{
