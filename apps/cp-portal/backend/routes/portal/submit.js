@@ -200,7 +200,12 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
 
     // A visitor who gives an email gets a private link to follow the request, since
     // they have no My Submissions page. A signed-in person uses that page instead.
-    const visitor = !req.portalUser && submitter_email ? newVisitorToken() : null;
+    // Never at the cost of the report: if the link cannot be made (no encryption key
+    // on a production server), the report is kept and the email goes without a link.
+    let visitor = null;
+    if (!req.portalUser && submitter_email) {
+      try { visitor = newVisitorToken(); } catch (linkErr) { log.error('portal.submit.visitor_link_failed', { err: linkErr }); }
+    }
 
     const [info] = await pool.execute(`
       INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data, ip_address,
