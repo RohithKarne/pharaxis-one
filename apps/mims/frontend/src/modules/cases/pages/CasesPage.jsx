@@ -209,6 +209,16 @@ export default function CasesPage() {
     }
   }, [searchParams])
 
+  // The sidebar's New Case button lands here with ?new=1. It used to open only
+  // the case list, so the button did not do what it says.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return
+    const next = new URLSearchParams(searchParams)
+    next.delete('new')
+    setSearchParams(next, { replace: true })
+    if (hasCapability('case.create')) openModal()
+  }, [searchParams])
+
   function handleTabChange(tab, options = {}) {
     setActiveTab(tab)
     setPage(0)
