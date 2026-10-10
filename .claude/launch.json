@@ -40,6 +40,119 @@
       ],
       "cwd": "apps/cp-portal/frontend",
       "port": 5174
+    },
+    {
+      "name": "CPPM-6 CP Frontend",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "CP_API_PROXY=http://localhost:4010",
+        "/private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/732cbd82-485d-47ce-9308-741ef16e9999/scratchpad/wt-cppm6/apps/cp-portal/frontend/node_modules/.bin/vite",
+        "/private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/732cbd82-485d-47ce-9308-741ef16e9999/scratchpad/wt-cppm6/apps/cp-portal/frontend",
+        "--port",
+        "5184",
+        "--strictPort"
+      ],
+      "cwd": "apps/cp-portal/frontend",
+      "port": 5184
+    },
+    {
+      "name": "B5 MIMS Backend (walk)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/6f5ec179-5644-45e8-a506-2df680fc82e1/scratchpad/wt-b5/apps/mims && exec node --env-file=.env backend/server.js"
+      ],
+      "cwd": "apps/mims",
+      "port": 3011
+    },
+    {
+      "name": "B5 MIMS Frontend (walk)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/6f5ec179-5644-45e8-a506-2df680fc82e1/scratchpad/wt-b5/apps/mims/frontend && MIMS_DEV_PORT=5283 MIMS_API_PROXY=http://127.0.0.1:3011 exec node_modules/.bin/vite --host ::1 --port 5283 --strictPort"
+      ],
+      "cwd": "apps/mims/frontend",
+      "port": 5283
+    },
+    {
+      "name": "B5 MIMS Backend (baseline)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/6f5ec179-5644-45e8-a506-2df680fc82e1/scratchpad/wt-base/apps/mims && exec node --env-file=.env backend/server.js"
+      ],
+      "cwd": "apps/mims",
+      "port": 3012
+    },
+    {
+      "name": "B5 CP Backend (walk)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/6f5ec179-5644-45e8-a506-2df680fc82e1/scratchpad/wt-fix/apps/cp-portal/backend && exec node --env-file=.env server.js"
+      ],
+      "cwd": "apps/cp-portal/backend",
+      "port": 4011
+    },
+    {
+      "name": "B5 CP Frontend (walk)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/6f5ec179-5644-45e8-a506-2df680fc82e1/scratchpad/wt-fix/apps/cp-portal/frontend && CP_API_PROXY=http://127.0.0.1:4011 CP_FRONTEND_PORT=5284 exec node_modules/.bin/vite --host ::1 --port 5284 --strictPort"
+      ],
+      "cwd": "apps/cp-portal/frontend",
+      "port": 5284
+    },
+    {
+      "name": "CPPM-68 MIMS Backend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/a7548641-8a8b-4b29-884b-4af0dcc7846f/scratchpad/wt-cppm68/apps/mims && exec node --env-file=.env backend/server.js"
+      ],
+      "cwd": "apps/mims",
+      "port": 3020
+    },
+    {
+      "name": "CPPM-68 MIMS Frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/a7548641-8a8b-4b29-884b-4af0dcc7846f/scratchpad/wt-cppm68/apps/mims/frontend && MIMS_DEV_PORT=5190 MIMS_API_PROXY=http://127.0.0.1:3020 exec node_modules/.bin/vite --port 5190 --strictPort"
+      ],
+      "cwd": "apps/mims/frontend",
+      "port": 5190
+    },
+    {
+      "name": "CPPM-68 CP Backend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/a7548641-8a8b-4b29-884b-4af0dcc7846f/scratchpad/wt-cppm68/apps/cp-portal/backend && exec node --env-file=.env server.js"
+      ],
+      "cwd": "apps/cp-portal/backend",
+      "port": 4020
+    },
+    {
+      "name": "CPPM-68 CP Frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/a7548641-8a8b-4b29-884b-4af0dcc7846f/scratchpad/wt-cppm68/apps/cp-portal/frontend && CP_API_PROXY=http://127.0.0.1:4020 CP_FRONTEND_PORT=5185 exec node_modules/.bin/vite --host ::1 --port 5185 --strictPort"
+      ],
+      "cwd": "apps/cp-portal/frontend",
+      "port": 5185
+    },
+    {
+      "name": "CPPM-68 Mail Catcher",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/a7548641-8a8b-4b29-884b-4af0dcc7846f/scratchpad/mail-sink-cppm68.js"
+      ],
+      "cwd": "apps/cp-portal/backend",
+      "port": 2526
     }
   ]
 }
