@@ -256,7 +256,13 @@ export default function PortalUsersPage({ requestsOnly = false }) {
       )}
 
       {loading ? <div className="cp-loading">Loading…</div> : users.length === 0 ? (
-        <div className="cp-empty"><p>No portal users have registered yet.</p></div>
+        <div className="cp-empty"><p>{
+          // Access Requests said "No portal users have registered yet." with 300 users on file (CP screen review, 10 Oct 2026).
+          access === 'requested' ? 'No access requests are waiting.'
+            : access === 'declined' ? 'No declined access requests.'
+            : search.trim() || userType ? 'No portal users match this search.'
+            : 'No portal users have registered yet.'
+        }</p></div>
       ) : (
         <div className="cp-table-card">
           <table className="cp-table">
