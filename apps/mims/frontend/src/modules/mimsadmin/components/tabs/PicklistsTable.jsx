@@ -4,8 +4,9 @@
  * Cross-tenant picklist value management. Drives the dropdowns that appear
  * in the Case Form (via field_setup.picklist_type -> picklists.field_type).
  *
- * 3 filter dropdowns: Table name (category), Tenant, Department
- * 5-column grid: Value, Division (tenant), Inactive, Edit, Delete
+ * Filters: Table name (category), Field, Tenant, Department, Search
+ * Grid, 50 values a page: Value, Parent, Division (tenant), Status, and a "…"
+ * menu per row for Edit, Where used, History and Delete.
  *
  * CSS namespace: ma-pt-
  */
@@ -17,6 +18,7 @@ import { useAdminTenant } from '../../utils/AdminTenantContext'
 import './PicklistsTable.css'
 
 const API = '/api/admin/picklists-table'
+const PAGE_SIZE = 50
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PicklistsTable() {
@@ -52,6 +54,8 @@ export default function PicklistsTable() {
   const [loading,  setLoading]  = useState(false)
   const [flash,    setFlash]    = useState(null)
   const [selected, setSelected] = useState([])
+  const [page,     setPage]     = useState(0)
+  const [menu,     setMenu]     = useState(null)   // null | { row, top, left } — the open "…" menu
 
   // Modal state
   const [modal,    setModal]    = useState(null)   // null | { mode:'create' } | { mode:'edit', row }
@@ -92,8 +96,11 @@ export default function PicklistsTable() {
       if (filter.tenant_id)  qs.set('tenant_id',  filter.tenant_id)
       if (filter.department) qs.set('department', filter.department)
       if (filter.search)     qs.set('search',     filter.search)
-      qs.set('limit', 500)
+      qs.set('limit', PAGE_SIZE)
+      qs.set('offset', page * PAGE_SIZE)
       const d = await httpFetch(`${API}/values?${qs}`, { headers: H }).then(r => r.json())
+      // The last value on the last page was deleted: step back a page.
+      if (page > 0 && !(d.values || []).length && d.total > 0) { setPage(p => p - 1); return }
       setValues(d.values || [])
       setTotal(d.total || 0)
       setSelected([])
@@ -102,9 +109,34 @@ export default function PicklistsTable() {
     } finally {
       setLoading(false)
     }
-  }, [filter, H])
+  }, [filter, page, H])
 
   useEffect(() => { loadValues() }, [loadValues])
+
+  // Close the "…" menu on a click elsewhere, Escape, or a scroll (it is placed
+  // against the window, so it would drift away from its row).
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const onKey = e => { if (e.key === 'Escape') close() }
+    document.addEventListener('click', close)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('click', close)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [menu])
+
+  function openMenu(e, row) {
+    e.stopPropagation()
+    if (menu?.row.id === row.id) { setMenu(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    const MENU_H = 136   // four items; opens upward when the row is near the bottom
+    const top = r.bottom + 4 + MENU_H > window.innerHeight ? r.top - 4 - MENU_H : r.bottom + 4
+    setMenu({ row, top, left: r.right - 160 })
+  }
 
   function showFlash(msg, type = 'success') {
     setFlash({ msg, type })
@@ -112,6 +144,7 @@ export default function PicklistsTable() {
   }
 
   function setF(key, val) {
+    setPage(0)
     setFilter(f => ({
       ...f,
       [key]: val,
@@ -223,6 +256,16 @@ export default function PicklistsTable() {
 
   function sameSortGroup(a, b) {
     return a && b && a.category === b.category && a.field_type === b.field_type && Number(a.org_id || 0) === Number(b.org_id || 0)
+  }
+
+  // Reordering renumbers the rows of one group, so it is only offered when the
+  // whole group is on this page. A group touching the top or bottom edge of a
+  // page may carry on onto the next one.
+  const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)
+  function wholeGroupOnPage(row) {
+    if (page > 0 && sameSortGroup(values[0], row)) return false
+    if (page < lastPage && sameSortGroup(values[values.length - 1], row)) return false
+    return true
   }
 
   async function dropRow(targetRow) {
@@ -395,21 +438,19 @@ export default function PicklistsTable() {
                 <th>Value</th>
                 <th>Parent</th>
                 <th>Division (Tenant)</th>
-                <th style={{ width: 130 }}>Inactive</th>
-                <th style={{ width: 80, textAlign: 'center' }}>Edit</th>
-                <th style={{ width: 160, textAlign: 'center' }}>Analysis</th>
-                <th style={{ width: 80, textAlign: 'center' }}>Delete</th>
+                <th style={{ width: 130 }}>Status</th>
+                <th style={{ width: 44 }}><span className="ma-pt-sr">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={9} className="ma-pt-loading">Loading…</td></tr>}
+              {loading && <tr><td colSpan={7} className="ma-pt-loading">Loading…</td></tr>}
               {!loading && values.length === 0 && (
-                <tr><td colSpan={9} className="ma-pt-empty">No picklist values match the current filters.</td></tr>
+                <tr><td colSpan={7} className="ma-pt-empty">No picklist values match the current filters.</td></tr>
               )}
               {!loading && values.map(row => (
                 <tr
                   key={row.id}
-                  draggable
+                  draggable={wholeGroupOnPage(row)}
                   onDragStart={() => { dragRowRef.current = row }}
                   onDragOver={e => {
                     if (sameSortGroup(dragRowRef.current, row)) e.preventDefault()
@@ -417,7 +458,9 @@ export default function PicklistsTable() {
                   onDrop={() => dropRow(row)}
                 >
                   <td><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelected(row.id)} /></td>
-                  <td className="ma-pt-drag-cell" title="Drag within the same tenant, category, and field">⋮⋮</td>
+                  {wholeGroupOnPage(row)
+                    ? <td className="ma-pt-drag-cell" title="Drag within the same tenant, category, and field">⋮⋮</td>
+                    : <td className="ma-pt-drag-cell off" title="This field's values carry on onto another page. Pick it in the Field filter to reorder.">⋮⋮</td>}
                   <td>
                     <div className="ma-pt-value-cell" title={row.description || ''}>{row.value}</div>
                     <div className="ma-pt-meta-cell">
@@ -429,29 +472,28 @@ export default function PicklistsTable() {
                   <td>{row.parent_value || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                   <td>{row.tenant_name || <span style={{ color: 'var(--text-muted)' }}>(unassigned)</span>}</td>
                   <td>
-                    <label className="ma-pt-toggle" title={row.status === 'Active' ? 'Active — toggle to make inactive' : 'Inactive — toggle to make active'}>
-                      <input
-                        type="checkbox"
-                        checked={row.status !== 'Active'}
-                        onChange={() => toggleStatus(row)}
-                      />
-                      <span className="slider" />
-                    </label>
-                    <span style={{ marginLeft: 8, fontSize: 11 }}>
-                      <span className={`ma-pt-pill ${row.status === 'Active' ? 'ma-pt-pill-active' : 'ma-pt-pill-inactive'}`}>
-                        {row.status}
+                    {/* One column: the switch is on when the value is Active. */}
+                    <label className="ma-pt-status" title={row.status === 'Active' ? 'Shown in dropdowns. Switch off to hide it.' : 'Hidden from dropdowns. Switch on to show it.'}>
+                      <span className="ma-pt-toggle">
+                        <input
+                          type="checkbox"
+                          checked={row.status === 'Active'}
+                          onChange={() => toggleStatus(row)}
+                          aria-label={`${row.value} is ${row.status}`}
+                        />
+                        <span className="slider" />
                       </span>
-                    </span>
+                      <span className={row.status === 'Active' ? 'ma-pt-status-on' : 'ma-pt-status-off'}>{row.status}</span>
+                    </label>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button className="ma-pt-action-btn" onClick={() => setModal({ mode: 'edit', row })}>Edit</button>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button className="ma-pt-action-btn" onClick={() => openWhereUsed(row)}>Where used</button>{' '}
-                    <button className="ma-pt-action-btn" onClick={() => openHistory(row)}>History</button>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button className="ma-pt-action-btn danger" onClick={() => deleteValue(row)}>Delete</button>
+                    <button
+                      className="ma-pt-more-btn"
+                      aria-label={`Actions for ${row.value}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.row.id === row.id}
+                      onClick={e => openMenu(e, row)}
+                    >…</button>
                   </td>
                 </tr>
               ))}
@@ -459,10 +501,30 @@ export default function PicklistsTable() {
           </table>
         </div>
 
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-          {!loading && `Showing ${values.length} of ${total} values`}
-        </div>
+        {!loading && (
+          <div className="ma-pt-pager">
+            <span>
+              {total === 0 ? 'No values' : `Showing ${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + values.length} of ${total} values`}
+            </span>
+            {total > PAGE_SIZE && (
+              <>
+                <button className="ma-pt-action-btn" disabled={page === 0} onClick={() => setPage(p => p - 1)}>‹ Previous</button>
+                <span>Page {page + 1} of {lastPage + 1}</span>
+                <button className="ma-pt-action-btn" disabled={page >= lastPage} onClick={() => setPage(p => p + 1)}>Next ›</button>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      {menu && (
+        <div className="ma-pt-menu" role="menu" style={{ top: menu.top, left: menu.left }}>
+          <button role="menuitem" onClick={() => setModal({ mode: 'edit', row: menu.row })}>Edit</button>
+          <button role="menuitem" onClick={() => openWhereUsed(menu.row)}>Where used</button>
+          <button role="menuitem" onClick={() => openHistory(menu.row)}>History</button>
+          <button role="menuitem" className="danger" onClick={() => deleteValue(menu.row)}>Delete</button>
+        </div>
+      )}
 
       {/* Modal */}
       {modal && modal.mode !== 'import' && (
