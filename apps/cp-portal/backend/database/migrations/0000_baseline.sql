@@ -247,6 +247,8 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   owner_since     DATETIME     NULL,
   identity_erased_at DATETIME  NULL,
   sync_key        CHAR(36)     NULL,
+  mims_case_number VARCHAR(100) NULL,  -- bridge plan P5 (0044): MIMS's receipt
+  mims_fingerprint CHAR(64)    NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_cp_submissions_sync_key (sync_key),
   KEY idx_cp_submissions_client (client_id),
@@ -1218,6 +1220,35 @@ CREATE TABLE IF NOT EXISTS cp_safety_ack_reminders (
   CONSTRAINT fk_safety_reminder_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── COMPARISON WITH MIMS (from 0045, bridge plan P6) ───────────
+CREATE TABLE IF NOT EXISTS cp_mims_reconciliations (
+  id              INT          NOT NULL AUTO_INCREMENT,
+  client_id       INT          NOT NULL,
+  integration_id  INT          NOT NULL,
+  scope           VARCHAR(20)  NOT NULL,
+  started_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at     DATETIME     NULL,
+  checked         INT          NOT NULL DEFAULT 0,
+  missing         INT          NOT NULL DEFAULT 0,
+  different       INT          NOT NULL DEFAULT 0,
+  resent          INT          NOT NULL DEFAULT 0,
+  error           VARCHAR(1000) NULL,
+  PRIMARY KEY (id),
+  KEY idx_reconcile_client (client_id, scope, started_at),
+  CONSTRAINT fk_reconcile_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cp_mims_reconciliation_items (
+  id              INT          NOT NULL AUTO_INCREMENT,
+  run_id          INT          NOT NULL,
+  submission_id   INT          NOT NULL,
+  problem         VARCHAR(20)  NOT NULL,
+  action          VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  KEY idx_reconcile_item_run (run_id),
+  CONSTRAINT fk_reconcile_item_run FOREIGN KEY (run_id) REFERENCES cp_mims_reconciliations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 0039 (CPPM-109) only adds two feature rows to clients that already exist; a fresh
 -- database has none, and new clients get both rows when they are created.
 
@@ -1268,4 +1299,6 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0040_add_portal_access_requests.sql',       NULL),
   ('0041_add_safety_acknowledgements.sql',      NULL),
   ('0042_add_content_area_tags.sql',            NULL),
-  ('0043_add_safety_ack_reminders.sql',         NULL);
+  ('0043_add_safety_ack_reminders.sql',         NULL),
+  ('0044_add_mims_delivery_receipt.sql',        NULL),
+  ('0045_add_mims_reconciliation.sql',          NULL);
