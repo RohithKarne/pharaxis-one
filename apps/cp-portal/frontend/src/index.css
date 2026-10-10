@@ -1275,6 +1275,16 @@ body { background: var(--cp-bg); }
 }
 .cp-feature-label-input:focus { border-bottom-color: var(--cp-primary); }
 .cp-feature-order { font-size: 11px; color: var(--cp-text-muted); width: 60px; }
+/* Phase 3 row 20: switches grouped in cards; the plain name leads each row and the
+   User Gate name box sits at the right. */
+.cp-feature-group .cp-card-title { display: flex; justify-content: space-between; align-items: center; }
+.cp-feature-group-count { font-size: 12px; font-weight: 400; color: var(--cp-text-muted); }
+.cp-feature-group .cp-feature-key { font-size: 13px; font-weight: 600; color: var(--cp-text); font-family: inherit; }
+.cp-feature-group .cp-feature-label-input { width: 220px; flex-shrink: 0; font-weight: 400; }
+@media (max-width: 640px) {
+  .cp-feature-group .cp-feature-row { flex-wrap: wrap; }
+  .cp-feature-group .cp-feature-label-input { width: 100%; }
+}
 
 /* ── Content List ─────────────────────────────────────────────── */
 

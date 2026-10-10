@@ -21,7 +21,20 @@ const FEATURE_DESCRIPTIONS = {
   // CPPM-109
   clinical_trials:      'Clinical trials list — shown to doctors only once a trial is published',
   cme_training:         'CME & training modules — shown to doctors only once a module is published',
+  homepage_quicklinks:  'Shortcut links on the portal home page',
+  adverse_event:        'The form for reporting a side effect',
+  product_complaint:    'The form for reporting a product problem',
+  other_inquiry:        'The form for any other question',
 }
+
+// Phase 3 row 20 (CP ease-of-use plan): the switches in three groups. A key not
+// listed here shows under "Other", so a new feature is never hidden.
+const GROUPS = [
+  { name: 'Content', keys: ['homepage_quicklinks', 'therapeutic_areas', 'drug_info', 'news_announcements', 'document_library',
+    'safety_communications', 'clinical_trials', 'cme_training', 'events', 'resources', 'find_msl'] },
+  { name: 'Asking and reporting', keys: ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry', 'chatbox'] },
+  { name: 'Accounts', keys: ['user_auth', 'hcp_gate'] },
+]
 
 export default function FeaturesPage() {
   const { clientId } = useParams()
@@ -80,48 +93,60 @@ export default function FeaturesPage() {
 
   const enabled  = features.filter(f => f.is_enabled)
   const disabled = features.filter(f => !f.is_enabled)
+  const known    = GROUPS.flatMap(g => g.keys)
+  const groups   = [
+    ...GROUPS.map(g => ({ name: g.name, items: g.keys.map(k => features.find(f => f.feature_key === k)).filter(Boolean) })),
+    { name: 'Other', items: features.filter(f => !known.includes(f.feature_key)) },
+  ].filter(g => g.items.length > 0)
 
   return (
     <AdminLayout title="Features">
       <ReadOnlyUnless area="features" what="which features are on">
-      <p className="cp-page-desc">Control which sections of the portal are visible and accessible to users.</p>
+      {/* CPPM-152: the name box feeds the User Gate access matrix, not the doctor portal,
+          whose menu has its own wording. Said once here instead of under every row. */}
+      <p className="cp-page-desc">
+        Turn sections of the portal on or off for doctors. The name box beside each one is the
+        row name in Portal setup › User Gate; the portal's own menu keeps its wording.
+      </p>
       <div className="cp-features-summary">
-        <span className="cp-badge badge-active">{enabled.length} enabled</span>
-        <span className="cp-badge badge-inactive">{disabled.length} disabled</span>
+        <span className="cp-badge badge-active">{enabled.length} on</span>
+        <span className="cp-badge badge-inactive">{disabled.length} off</span>
       </div>
 
       {error && <div className="cp-error">{error}</div>}
       {saved && <div className="cp-success">Feature updated.</div>}
 
-      <div className="cp-features-list">
-        {features.map(f => (
-          <div key={f.feature_key} className={`cp-feature-row ${f.is_enabled ? 'enabled' : 'disabled'}`}>
-            <div className="cp-feature-toggle">
-              <label className="cp-toggle-switch">
-                <input type="checkbox" aria-label={`Turn ${label('feature', f.feature_key)} on or off`} checked={!!f.is_enabled} disabled={saving === f.feature_key}
-                  onChange={() => toggle(f.feature_key, f.is_enabled)} />
-                <span className="cp-toggle-slider" />
-              </label>
-            </div>
-            <div className="cp-feature-info">
-              <div className="cp-feature-key">{label('feature', f.feature_key)}</div>
-              {FEATURE_DESCRIPTIONS[f.feature_key] && (
-                <div style={{ fontSize: 11, color: '#5F6B7A', marginTop: 2 }}>{FEATURE_DESCRIPTIONS[f.feature_key]}</div>
-              )}
-              <input className="cp-feature-label-input" defaultValue={f.display_name || ''}
-                onBlur={e => updateLabel(f.feature_key, e.target.value)}
-                aria-label={`Name for ${label('feature', f.feature_key)} in the admin console`}
-                placeholder="Name in the admin console…" />
-              {/* CPPM-152: the name is used by the User Gate access matrix, not by the doctor portal, whose menu has its own wording. */}
-              <div style={{ fontSize: 11, color: '#5F6B7A', marginTop: 2 }}>Used as the row name in Portal setup › User Gate. The doctor portal's menu keeps its own wording.</div>
-            </div>
-            <div className="cp-feature-order" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>Order: {f.display_order}</span>
-              <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: f.is_enabled ? '#DCFCE7' : '#F3F4F6', color: f.is_enabled ? '#166534' : '#4B5563' }}>{f.is_enabled ? 'Enabled' : 'Disabled'}</span>
-            </div>
+      {groups.map(g => (
+        <section key={g.name} className="cp-card cp-feature-group" aria-label={g.name}>
+          <div className="cp-card-title">
+            {g.name}
+            <span className="cp-feature-group-count">{g.items.filter(f => f.is_enabled).length} of {g.items.length} on</span>
           </div>
-        ))}
-      </div>
+          <div className="cp-features-list">
+            {g.items.map(f => (
+              <div key={f.feature_key} className={`cp-feature-row ${f.is_enabled ? 'enabled' : 'disabled'}`}>
+                <div className="cp-feature-toggle">
+                  <label className="cp-toggle-switch">
+                    <input type="checkbox" aria-label={`Turn ${label('feature', f.feature_key)} on or off`} checked={!!f.is_enabled} disabled={saving === f.feature_key}
+                      onChange={() => toggle(f.feature_key, f.is_enabled)} />
+                    <span className="cp-toggle-slider" />
+                  </label>
+                </div>
+                <div className="cp-feature-info">
+                  <div className="cp-feature-key">{label('feature', f.feature_key)}</div>
+                  {FEATURE_DESCRIPTIONS[f.feature_key] && (
+                    <div style={{ fontSize: 11, color: '#5F6B7A', marginTop: 2 }}>{FEATURE_DESCRIPTIONS[f.feature_key]}</div>
+                  )}
+                </div>
+                <input className="cp-feature-label-input" defaultValue={f.display_name || ''}
+                  onBlur={e => updateLabel(f.feature_key, e.target.value)}
+                  aria-label={`Name for ${label('feature', f.feature_key)} in User Gate`}
+                  placeholder="Name in User Gate…" />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
       </ReadOnlyUnless>
     </AdminLayout>
   )
