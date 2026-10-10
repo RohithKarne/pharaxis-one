@@ -1123,7 +1123,9 @@ router.get('/:id/notes', authenticate, async (req, res) => {
 });
 
 // POST /api/inbox/:id/notes — add internal note (F5)
-router.post('/:id/notes', authenticate, async (req, res) => {
+// Changing an email (triage, notes, linking it to a case) needs the Inbox
+// module, as fetching mail does; signing in alone let a read-only auditor do it.
+router.post('/:id/notes', authenticate, requireModule('inbox'), async (req, res) => {
   try {
     const { id } = req.params;
     const { note } = req.body;
@@ -1361,7 +1363,7 @@ router.post('/:id/forward', authenticate, requireCapability('inbox.forward'), as
 
 // PATCH /api/inbox/:id — update status, lock state, or color (DB-backed inquiries only)
 // H4 FIX: wrapped in a DB transaction with SELECT FOR UPDATE to prevent concurrent-write races
-router.patch('/:id', authenticate, async (req, res) => {
+router.patch('/:id', authenticate, requireModule('inbox'), async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -1522,7 +1524,7 @@ router.patch('/:id', authenticate, async (req, res) => {
 });
 
 // POST /api/inbox/:id/link-case — link inquiry to a case and move to processed
-router.post('/:id/link-case', authenticate, async (req, res) => {
+router.post('/:id/link-case', authenticate, requireModule('inbox'), async (req, res) => {
   try {
     const inquiryId = Number(req.params.id);
     const caseId = Number(req.body?.case_id);

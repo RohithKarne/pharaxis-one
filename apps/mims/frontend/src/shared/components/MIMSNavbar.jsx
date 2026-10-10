@@ -90,7 +90,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Inbox */}
       <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox"
         active={isActive('/inbox')}
-        disabled={!canAccess('mims_core')} />
+        disabled={!canAccess('inbox')} />
 
 
       {/* Case Management — accordion */}
