@@ -566,8 +566,17 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       );
     }
 
+    let unmatchedOutcome = null;
     if (caseType === 'AE') {
       const aeData = (ae && typeof ae === 'object') ? ae : {};
+      // case_ae_events.outcome holds six fixed values; the portal sends its own wording
+      // ("Not recovered"). Unmatched, the database refused the whole safety report.
+      // Same mapping as the AE screen (caseAE.js); words it cannot place are kept as
+      // 'unknown' and written to the case history below, so nothing the person said is lost.
+      const OUTCOMES = new Set(['recovered', 'recovering', 'not_recovered', 'recovered_with_sequelae', 'fatal', 'unknown']);
+      const outcomeKey = String(aeData.outcome || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const outcome = !outcomeKey ? null : OUTCOMES.has(outcomeKey) ? outcomeKey : 'unknown';
+      if (outcomeKey && !OUTCOMES.has(outcomeKey)) unmatchedOutcome = String(aeData.outcome);
       const [aev] = await conn.execute('INSERT INTO case_ae_versions (case_id, version_number, created_by) VALUES (?, 1, NULL)', [caseId]);
       const aeVer = aev.insertId;
       await conn.execute(
@@ -580,7 +589,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
             is_serious, is_death, is_life_threatening, is_hospitalization,
             is_disability, is_congenital_anomaly, is_other_medically_important)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [aeVer, aeData.reaction_description || null, aeData.outcome || null, toDateOnly(aeData.reaction_onset_date),
+        [aeVer, aeData.reaction_description || null, outcome, toDateOnly(aeData.reaction_onset_date),
          aeData.is_serious ? 1 : 0, aeData.is_death ? 1 : 0, aeData.is_life_threatening ? 1 : 0, aeData.is_hospitalization ? 1 : 0,
          aeData.is_disability ? 1 : 0, aeData.is_congenital_anomaly ? 1 : 0, aeData.is_other_medically_important ? 1 : 0]
       );
@@ -641,6 +650,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     for (const s of shortened) {
       await writeCaseAudit(caseId, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
         'INTAKE_VALUE_SHORTENED', s.path, s.full, s.kept, conn);
+    }
+    if (unmatchedOutcome) {
+      await writeCaseAudit(caseId, 0, apiActor, 'INTAKE_VALUE_NOT_MATCHED', 'ae_intake.outcome', unmatchedOutcome, 'unknown', conn);
     }
 
     await conn.commit();
