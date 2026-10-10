@@ -1952,9 +1952,9 @@ body { background: var(--cp-bg); }
 .pp-pdf-head b { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-pdf-head a, .pp-pdf-head button { font-size: 13px; font-weight: 600; color: var(--pp-primary); border: 1px solid var(--pp-border); border-radius: 2px; padding: 6px 12px; background: #fff; cursor: pointer; text-decoration: none; }
 .pp-pdf-frame { flex: 1; border: 0; width: 100%; }
-.pp-specialty-modal { background: #fff; border-radius: 2px; width: min(520px, 100%); padding: 28px; }
-.pp-specialty-modal h2 { font-size: 20px; font-weight: 700; margin: 0 0 6px; color: var(--pp-text); }
-.pp-specialty-modal p { font-size: 14px; color: var(--pp-text-muted); margin: 0 0 18px; }
+.pp-specialty-card { background: #fff; border: 1px solid var(--pp-border); border-left: 4px solid var(--pp-primary); border-radius: 2px; padding: 16px 18px; margin-bottom: 20px; }
+.pp-specialty-card h3 { font-size: 16px; font-weight: 700; margin: 0 0 4px; color: var(--pp-text); }
+.pp-specialty-card p { font-size: 13px; color: var(--pp-text-muted); margin: 0 0 12px; }
 .pp-specialty-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .pp-specialty-chip { font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 2px; border: 1px solid var(--pp-border); background: var(--pp-surface); color: var(--pp-text); cursor: pointer; }
 .pp-specialty-chip:hover:not(:disabled) { border-color: var(--pp-primary); color: var(--pp-primary); }

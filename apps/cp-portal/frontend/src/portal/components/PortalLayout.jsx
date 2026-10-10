@@ -438,59 +438,8 @@ export default function PortalLayout({ children }) {
           until the CP walk of 4 Oct 2026 only the feature flag was read, so the widget showed with the switch off. */}
       {isFeatureEnabled('chatbox') && portalConfig?.chatbox && <ChatboxWidget clientCode={clientCode} />}
       {!loading && showGate && <UserTypeGate />}
-      {!loading && !showGate && user && !user.specialty && <SpecialtyPrompt clientCode={clientCode} />}
       {!loading && <ConsentBanner />}
       {!loading && <FeedbackWidget />}
-    </div>
-  )
-}
-
-const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
-
-// CPPM-89: "Skip for now" is remembered for 30 days on this browser, per person,
-// instead of only until the next page load.
-const SKIP_DAYS = 30
-function skipKey(clientCode, userId) { return `cp_specialty_skip_${clientCode}_${userId}` }
-function skippedRecently(clientCode, userId) {
-  try { return Date.now() - Number(localStorage.getItem(skipKey(clientCode, userId)) || 0) < SKIP_DAYS * 864e5 } catch { return false }
-}
-
-function SpecialtyPrompt({ clientCode }) {
-  const { portalHeaders, user, t } = usePortal()
-  const [dismissed, setDismissed] = useState(() => skippedRecently(clientCode, user?.id))
-  const [saving, setSaving] = useState(false)
-  function skip() {
-    try { localStorage.setItem(skipKey(clientCode, user?.id), String(Date.now())) } catch { /* private window: skip for this page only */ }
-    setDismissed(true)
-  }
-  if (dismissed) return null
-  async function pick(specialty) {
-    setSaving(true)
-    try {
-      const res = await fetch('/api/portal/auth/profile', {
-        method: 'PATCH',
-        headers: { ...portalHeaders(), 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ specialty }),
-      })
-      if (!res.ok) return // keep the prompt open so the user can retry
-      setDismissed(true)
-    } catch { /* non-blocking — keep prompt open for retry */ } finally {
-      setSaving(false)
-    }
-  }
-  return (
-    <div className="pp-pdf-overlay" onClick={skip} role="dialog" aria-modal="true" aria-label="Choose your specialty">
-      <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
-        <h2>{t('Your area of practice')}</h2>
-        <p>{t('Choose your specialty. It is saved to your profile.')}</p>
-        <div className="pp-specialty-grid">
-          {SPECIALTIES.map(s => (
-            <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
-          ))}
-        </div>
-        <button type="button" className="pp-specialty-skip" onClick={skip}>{t('Skip for now')}</button>
-      </div>
     </div>
   )
 }

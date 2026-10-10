@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import SpecialtyCard from '../components/SpecialtyCard'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function PortalHomePage() {
@@ -263,6 +264,8 @@ export default function PortalHomePage() {
                 </div>
               </div>
             )}
+
+            <SpecialtyCard />
 
             {forYou && (
               <div>
