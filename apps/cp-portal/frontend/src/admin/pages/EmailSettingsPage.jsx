@@ -151,41 +151,52 @@ export default function EmailSettingsPage() {
         </div>
       </div>
 
+      {/* CP ease-of-use plan, phase 3 row 22: who the emails come from first, then the
+          mail server, with port and encryption under Advanced; Send test beside Save. */}
       <div className="cp-card" style={{ marginBottom: 24 }}>
         <h3 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 600, color: '#1A1A2E' }}>
-          SMTP Configuration
+          Sending email
         </h3>
 
         <div className="cp-field-row">
-          <div className="cp-field" style={{ flex: 2 }}>
-            <label>SMTP Host *</label>
+          <div className="cp-field">
+            <label htmlFor="mail-from-name">From name</label>
             <input
+              id="mail-from-name"
+              value={form.from_name}
+              onChange={e => set('from_name', e.target.value)}
+              placeholder="e.g. Medical Portal Team"
+            />
+          </div>
+          <div className="cp-field">
+            <label htmlFor="mail-from-email">From email address *</label>
+            <input
+              id="mail-from-email"
+              type="email"
+              value={form.from_email}
+              onChange={e => set('from_email', e.target.value)}
+              placeholder="noreply@yourdomain.com"
+            />
+          </div>
+        </div>
+
+        <p style={{ margin: '4px 0 10px', fontSize: 13, color: '#4B5563' }}>
+          Mail server — your IT team has these details.
+        </p>
+        <div className="cp-field-row">
+          <div className="cp-field" style={{ flex: 2 }}>
+            <label htmlFor="mail-host">Mail server address *</label>
+            <input
+              id="mail-host"
               value={form.smtp_host}
               onChange={e => set('smtp_host', e.target.value)}
               placeholder="e.g. smtp.gmail.com"
             />
           </div>
-          <div className="cp-field" style={{ flex: 1 }}>
-            <label>Port</label>
-            <input
-              type="number"
-              value={form.smtp_port}
-              onChange={e => set('smtp_port', e.target.value)}
-              placeholder="587"
-            />
-          </div>
-          <div className="cp-field" style={{ flex: 1 }}>
-            <label htmlFor="smtp-encryption">Encryption</label>
-            <select id="smtp-encryption" value={form.smtp_encryption} onChange={e => set('smtp_encryption', e.target.value)}>
-              {ENCRYPTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="cp-field-row">
           <div className="cp-field">
-            <label>SMTP Username *</label>
+            <label htmlFor="mail-user">Username *</label>
             <input
+              id="mail-user"
               value={form.smtp_username}
               onChange={e => set('smtp_username', e.target.value)}
               placeholder="your@email.com"
@@ -193,11 +204,12 @@ export default function EmailSettingsPage() {
             />
           </div>
           <div className="cp-field">
-            <label>
-              SMTP Password
+            <label htmlFor="mail-password">
+              Password
               {hasPassword && <span style={{ color: '#166534', fontSize: 11, marginLeft: 8 }}>(saved)</span>}
             </label>
             <input
+              id="mail-password"
               type="password"
               value={form.smtp_password}
               onChange={e => set('smtp_password', e.target.value)}
@@ -207,44 +219,34 @@ export default function EmailSettingsPage() {
           </div>
         </div>
 
-        <div className="cp-field-row">
-          <div className="cp-field">
-            <label>From Name</label>
-            <input
-              value={form.from_name}
-              onChange={e => set('from_name', e.target.value)}
-              placeholder="e.g. Medical Portal Team"
-            />
+        <details className="cp-advanced">
+          <summary>Advanced: port {form.smtp_port || '587'}, {form.smtp_encryption}</summary>
+          <div className="cp-field-row">
+            <div className="cp-field">
+              <label htmlFor="smtp-port">Port</label>
+              <input
+                id="smtp-port"
+                type="number"
+                value={form.smtp_port}
+                onChange={e => set('smtp_port', e.target.value)}
+                placeholder="587"
+              />
+            </div>
+            <div className="cp-field">
+              <label htmlFor="smtp-encryption">Encryption</label>
+              <select id="smtp-encryption" value={form.smtp_encryption} onChange={e => set('smtp_encryption', e.target.value)}>
+                {ENCRYPTION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="cp-field">
-            <label>From Email *</label>
-            <input
-              type="email"
-              value={form.from_email}
-              onChange={e => set('from_email', e.target.value)}
-              placeholder="noreply@yourdomain.com"
-            />
-          </div>
-        </div>
+        </details>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
           <LoadingButton onClick={handleSave}>Save Settings</LoadingButton>
-          {saved && <span style={{ fontSize: 13, color: '#166534', fontWeight: 500 }}>Saved</span>}
-          {saveError && <span style={{ fontSize: 13, color: '#B91C1C', fontWeight: 500 }}>{saveError}</span>}
-        </div>
-      </div>
-
-      <div className="cp-card">
-        <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#1A1A2E' }}>
-          Send Test Email
-        </h3>
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#4B5563' }}>
-          Send a test email to verify your SMTP configuration is working. Save your settings first.
-        </p>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div className="cp-field" style={{ margin: 0, flex: 1 }}>
-            <label>Recipient Email</label>
+          <div className="cp-field" style={{ margin: '0 0 0 12px', flex: '1 1 220px', maxWidth: 360 }}>
+            <label htmlFor="mail-test-to">Send a test to (save first)</label>
             <input
+              id="mail-test-to"
               type="email"
               value={testTo}
               onChange={e => { setTestTo(e.target.value); setTestMsg(null) }}
@@ -260,6 +262,8 @@ export default function EmailSettingsPage() {
             Send Test
           </LoadingButton>
         </div>
+        {saved && <div style={{ marginTop: 8, fontSize: 13, color: '#166534', fontWeight: 500 }}>Saved</div>}
+        {saveError && <div style={{ marginTop: 8, fontSize: 13, color: '#B91C1C', fontWeight: 500 }}>{saveError}</div>}
         {testMsg && (
           <div style={{
             marginTop: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13,

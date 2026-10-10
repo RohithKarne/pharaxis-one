@@ -1172,6 +1172,9 @@ body { background: var(--cp-bg); }
 /* ── Features ─────────────────────────────────────────────────── */
 
 .cp-features-summary { display: flex; gap: 8px; margin-bottom: 16px; }
+/* Technical settings folded away (CP ease-of-use plan, phase 3 row 22). */
+.cp-advanced { margin-top: 12px; border-top: 1px solid var(--cp-border); padding-top: 10px; }
+.cp-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--cp-primary, #1d3557); margin-bottom: 8px; }
 .cp-features-list { display: flex; flex-direction: column; gap: 6px; }
 .cp-feature-row {
   display: flex; align-items: center; gap: 14px;
