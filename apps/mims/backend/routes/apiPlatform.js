@@ -287,6 +287,39 @@ router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) =
   res.json({ claimed: r.affectedRows, sent: ids.length });
 });
 
+// Bridge plan P6: the sending portal checks its list against MIMS. It sends the key
+// and fingerprint of each report it believes MIMS holds; MIMS answers which keys it
+// has no case for at all (lost — the portal sends those again) and which it holds
+// from a different version. Only this connection's cases count; a merged or deleted
+// case is not missing, because the change list already tells the portal about it.
+router.post('/api/v1/cases/reconcile', scopeGuard('cases:read'), async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 1001) : [];
+  if (!items.length || items.length > 1000) return res.status(400).json({ error: 'items must be a list of 1 to 1000 reports.' });
+  const wanted = new Map();
+  for (const it of items) {
+    const key = typeof it?.key === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(it.key) ? it.key : null;
+    if (!key) return res.status(400).json({ error: 'Each item needs the key the report was sent with.' });
+    wanted.set(key, typeof it.fingerprint === 'string' ? it.fingerprint.toLowerCase() : null);
+  }
+  try {
+    const keys = [...wanted.keys()];
+    const [rows] = await pool.execute(
+      `SELECT id, case_number, source_key, source_fingerprint FROM cases
+        WHERE org_id = ? AND source_api_client_id = ? AND source_key IN (${keys.map(() => '?').join(',')})`,
+      [req.apiClient.org_id, req.apiClient.id, ...keys]);
+    const held = new Map(rows.map(r => [r.source_key, r]));
+    const missing = keys.filter(k => !held.has(k));
+    const different = [];
+    for (const [key, fp] of wanted) {
+      const r = held.get(key);
+      if (r && fp && r.source_fingerprint && r.source_fingerprint !== fp) different.push({ key, id: r.id, case_number: r.case_number });
+    }
+    res.json({ checked: keys.length, missing, different });
+  } catch (err) {
+    res.status(500).json(intakeFailure(err, req, 'Failed to compare the reports.'));
+  }
+});
+
 router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   const [[row]] = await pool.execute(
     `SELECT c.id, c.case_number, c.case_type, ws.name AS status, COALESCE(ws.is_closed, 0) = 1 AS closed, c.priority, c.created_at, c.updated_at

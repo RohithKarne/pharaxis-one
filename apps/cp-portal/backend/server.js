@@ -27,6 +27,7 @@ let server = null;
 let schedulerHandle = null;
 let mimsCloseSyncHandle = null;
 let mimsRetryHandle = null;
+let mimsReconcileHandle = null;
 
 function applySecurityHeaders(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -413,6 +414,31 @@ app.post('/api/internal/cron/mims-retry', async (req, res) => {
   catch (err) { log.error('mims-retry.cron.failed', { err }); res.status(500).json({ error: 'Retry tick failed.' }); }
 });
 
+// ── Bridge plan P6: the portal and MIMS compare lists ───────
+// Hourly for side-effect reports, nightly for all (services/mimsReconcile.js).
+function createMimsReconcileScheduler() {
+  const { reconcileTick } = require('./services/mimsReconcile');
+  const LOCK_KEY = 'cp-portal-mims-reconcile';
+  async function tick() {
+    try {
+      await withJobLock(LOCK_KEY, reconcileTick);
+    } catch (err) {
+      log.error('mims-reconcile.tick_failed', { err });
+    }
+  }
+  return tick;
+}
+const mimsReconcileTick = createMimsReconcileScheduler();
+
+app.post('/api/internal/cron/mims-reconcile', async (req, res) => {
+  const secret = process.env.CP_CRON_SECRET;
+  if (!secret || req.get('x-cron-secret') !== secret) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  try { await mimsReconcileTick(); res.json({ ok: true }); }
+  catch (err) { log.error('mims-reconcile.cron.failed', { err }); res.status(500).json({ error: 'Reconcile tick failed.' }); }
+});
+
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
   let dbStatus = 'ok';
@@ -457,6 +483,8 @@ runMigrations()
       // R1: retry poller (configurable, default every 60s; backoff gates actual work)
       mimsRetryTick();
       mimsRetryHandle = setInterval(mimsRetryTick, Number(process.env.MIMS_RETRY_INTERVAL_MS || 60 * 1000));
+      // P6: comparison with MIMS (default every hour; the nightly full check rides on it)
+      mimsReconcileHandle = setInterval(mimsReconcileTick, Number(process.env.MIMS_RECONCILE_INTERVAL_MS || 60 * 60 * 1000));
       log.info('scheduler.mode', { mode: 'in-process' });
     }
   })
@@ -471,6 +499,7 @@ function shutdown(signal) {
   if (schedulerHandle) clearInterval(schedulerHandle);
   if (mimsCloseSyncHandle) clearInterval(mimsCloseSyncHandle);
   if (mimsRetryHandle) clearInterval(mimsRetryHandle);
+  if (mimsReconcileHandle) clearInterval(mimsReconcileHandle);
   if (!server) return process.exit(0);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 1500).unref();
