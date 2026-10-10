@@ -1085,6 +1085,13 @@ body { background: var(--cp-bg); }
 }
 .cp-table-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 .cp-pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #4B5563; } /* CPPM-98: 4.5:1 on the grey pager */
+/* One menu per row instead of a row of buttons (CP ease-of-use plan, phase 3 row 17). */
+.cp-row-menu { position: relative; display: inline-block; }
+.cp-row-menu > button { white-space: nowrap; }
+.cp-row-menu-list { position: absolute; right: 0; top: calc(100% + 2px); z-index: 20; min-width: 160px; background: #fff; border: 1px solid var(--cp-border); box-shadow: 0 4px 12px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+.cp-row-menu-list button { text-align: left; background: none; border: 0; padding: 7px 12px; font-size: 13px; cursor: pointer; color: var(--cp-text, #1d2733); }
+.cp-row-menu-list button:hover, .cp-row-menu-list button:focus-visible { background: #eef2f6; }
+.cp-row-menu-list button.danger { color: #B91C1C; }
 
 /* ── Badges ───────────────────────────────────────────────────── */
 

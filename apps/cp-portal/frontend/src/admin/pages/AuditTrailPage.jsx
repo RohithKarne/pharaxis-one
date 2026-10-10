@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { label } from '../../shared/utils/labels'
+import Pager, { PAGE_SIZE } from '../components/Pager'
 
 // The filter drop-downs list what the server has actually recorded for this
 // scope (sent with every page), so nothing recorded is impossible to filter for.
@@ -16,7 +17,7 @@ const ACTION_BADGE_STYLES = {
   UPLOAD:  { background: '#f3e8ff', color: '#6b21a8' },
 }
 
-const LIMIT = 50
+const LIMIT = PAGE_SIZE
 
 // CPPM-43: an edit records { changes: { field: { from, to } } }. Shown as
 // "status: Recruiting → Active, not recruiting"; long values are shortened here
@@ -68,7 +69,6 @@ export default function AuditTrailPage() {
   const [filterFrom,   setFilterFrom]   = useState('')
   const [filterTo,     setFilterTo]     = useState('')
 
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
@@ -293,27 +293,7 @@ export default function AuditTrailPage() {
               </tbody>
             </table>
 
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                <button
-                  className="cp-btn cp-btn-sm cp-btn-outline"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  Previous
-                </button>
-                <span style={{ fontSize: 12, color: 'var(--cp-text-muted)' }}>
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  className="cp-btn cp-btn-sm cp-btn-outline"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            )}
+            <Pager page={page} pageSize={LIMIT} shown={records.length} total={total} onPage={setPage} />
           </>
         )}
       </div>

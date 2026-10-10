@@ -330,17 +330,23 @@ router.get('/:clientId/access-requests/count', async (req, res) => {
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
   try {
     const { user_type, search, access } = req.query;
-    let query = 'SELECT id, first_name, last_name, email, user_type, specialty, country, is_active, is_verified, last_login_at, created_at, access_status, access_requested_at, access_decided_at FROM cp_portal_users WHERE client_id = ?';
+    let where = ' FROM cp_portal_users WHERE client_id = ?';
     const params = [req.params.clientId];
-    if (user_type) { query += ' AND user_type = ?'; params.push(user_type); }
+    if (user_type) { where += ' AND user_type = ?'; params.push(user_type); }
     // CPPM-113: ?access=requested or ?access=declined lists access requests.
-    if (access === 'requested' || access === 'declined') { query += ' AND access_status = ?'; params.push(access); }
-    if (search) { query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)'; const s = `%${search}%`; params.push(s, s, s); }
-    query += ' ORDER BY created_at DESC';
+    if (access === 'requested' || access === 'declined') { where += ' AND access_status = ?'; params.push(access); }
+    if (search) { where += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)'; const s = `%${search}%`; params.push(s, s, s); }
+    let query = 'SELECT id, first_name, last_name, email, user_type, specialty, country, is_active, is_verified, last_login_at, created_at, access_status, access_requested_at, access_decided_at' + where + ' ORDER BY created_at DESC, id DESC';
+    // CP ease-of-use plan, phase 3 row 17: ?limit=25&page=2 returns one page and the
+    // total (300 users were one long page). Without ?limit the whole list, as before.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 200);
+    const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    if (limit) query += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     const [rows] = await pool.execute(query, params);
+    const [[{ n: total }]] = await pool.execute('SELECT COUNT(*) AS n' + where, params);
     // CPPM-49: when a user's sign-in is locked, and until when (UTC).
     const locked = await lockout.lockedUntilByEmail('portal', req.params.clientId, rows.map(r => r.email));
-    res.json({ users: rows.map(r => ({ ...r, locked_until: locked[r.email] || null })) });
+    res.json({ users: rows.map(r => ({ ...r, locked_until: locked[r.email] || null })), total: Number(total), page, limit });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

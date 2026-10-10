@@ -5,6 +5,7 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
 import { formatDateTime } from '../../shared/utils/datetime'
 import { labelsOf } from '../../shared/utils/labels'
+import Pager, { PAGE_SIZE } from '../components/Pager'
 
 const TYPE_LABELS = labelsOf('submissionType')
 
@@ -215,7 +216,6 @@ export default function SubmissionsPage() {
   const [page, setPage]         = useState(1)
   const [matched, setMatched]   = useState(0)
   const [mineCount, setMineCount] = useState(0)
-  const PAGE_SIZE = 100
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search, dateFrom, dateTo, mineOnly, page])
 
@@ -335,7 +335,6 @@ export default function SubmissionsPage() {
 
   // Filters, dates and "mine" are applied by the server, across every submission.
   const shown = submissions
-  const pageCount = Math.max(1, Math.ceil(matched / PAGE_SIZE))
 
   return (
     <AdminLayout title="Submissions">
@@ -582,16 +581,7 @@ export default function SubmissionsPage() {
           </table>
         </div>
       )}
-      <div className="cp-pager">
-        <span>{matched ? `Showing ${(page - 1) * PAGE_SIZE + 1}–${(page - 1) * PAGE_SIZE + submissions.length} of ${matched}` : 'Showing 0'}{matched !== total ? ` (${total} in all)` : ''}</span>
-        {pageCount > 1 && (
-          <>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
-            <span>Page {page} of {pageCount}</span>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>Next</button>
-          </>
-        )}
-      </div>
+      <Pager page={page} shown={submissions.length} total={matched} note={matched !== total ? ` (${total} in all)` : ''} onPage={setPage} />
     </AdminLayout>
   )
 }
