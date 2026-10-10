@@ -146,7 +146,7 @@ const ROLE_CHOICES = [
 function RequestAccess({ clientCode, userTypes, onBack }) {
   const { t } = usePortal()
   const roles = Array.isArray(userTypes) && userTypes.length ? userTypes : ROLE_CHOICES
-  const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '' })
+  const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '', weekly_email: false })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
@@ -189,6 +189,13 @@ function RequestAccess({ clientCode, userTypes, onBack }) {
         </select>
       </div>
       <div className="pp-field"><label htmlFor="ra-country">{t('Country')}</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
+      {/* CPPM-101: the reader's own yes to the weekly email, never ticked for them. */}
+      <div className="pp-field">
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontWeight: 400 }}>
+          <input type="checkbox" checked={f.weekly_email} onChange={e => set('weekly_email', e.target.checked)} style={{ marginTop: 3 }} />
+          <span>{t('Email me a weekly update of new content. You can switch it off at any time in your preferences.')}</span>
+        </label>
+      </div>
       <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={busy}>{busy ? 'Sending…' : 'Send request'}</button>
       <div style={{ marginTop: 14, textAlign: 'center' }}>
         <button type="button" className="pp-link-btn" onClick={onBack}>{t('Back to sign in')}</button>

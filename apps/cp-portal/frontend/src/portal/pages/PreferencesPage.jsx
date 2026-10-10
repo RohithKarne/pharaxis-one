@@ -8,13 +8,13 @@ const NOTIF_TYPES = [
   { key: 'documents', label: 'Documents',             desc: 'Notify me when new documents are added to the library.' },
   // CPPM-108: high and critical alerts are always sent; this switch covers the rest.
   { key: 'safety',    label: 'Safety Alerts (medium and informational)', desc: 'Notify me when medium or informational safety alerts are issued. High and critical safety alerts are always sent to you.' },
-  { key: 'digest',    label: 'Weekly Digest Email',   desc: 'Email me a weekly summary of new content.' },
+  { key: 'weekly_email', label: 'Weekly Digest Email', desc: 'Email me a weekly summary of new content.' },
 ]
 
 export default function PreferencesPage() {
   const { clientCode, portalHeaders, t } = usePortal()
   const toast = useToast()
-  const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true, digest: true })
+  const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true, weekly_email: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
