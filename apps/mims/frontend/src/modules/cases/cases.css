@@ -156,6 +156,19 @@
   cursor: not-allowed;
 }
 
+.cf-cases-view-btn.active { background: #1d3557; color: #fff; }
+
+/* "More filters" — people, correspondence and order, in one panel (Phase 3) */
+.cf-cases-more {
+  display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 0 0 12px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 2px; background: var(--surface, #fff);
+}
+.cf-cases-more fieldset { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin: 0; padding: 0; border: 0; }
+.cf-cases-more legend { padding: 0; margin-bottom: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+.cf-cases-more label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.cf-cases-more .cf-query-input, .cf-cases-more .cf-query-select { min-width: 150px; }
+.cf-cases-more input[type="date"] { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; }
+
 .cf-cases-scope-btn {
   border: 1px solid var(--border);
   background: #fff;

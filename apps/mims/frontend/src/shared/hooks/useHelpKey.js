@@ -39,9 +39,6 @@ function deriveKey(pathname, search) {
       if (sub) return { featureKey: 'cases.detail', featureGroup: 'cases' }
       return { featureKey: 'cases', featureGroup: 'cases' }
 
-    case 'case-query':
-      return { featureKey: 'cases', featureGroup: 'cases' }
-
     case 'content': {
       // tab param maps to cm sub-keys
       const tabMap = {

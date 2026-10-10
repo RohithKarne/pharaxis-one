@@ -2,6 +2,9 @@
  * CasesPage.jsx — Case Management List View
  * F-13: New case creation modal (3 steps: Org → Site → Case Type)
  * Tabs: My Cases | Unassigned Cases | Deleted Cases
+ * The one place to find a case (Phase 3): text search, "More filters" for the
+ * reporter, the patient and correspondence (what Case Query and the Cross-Case
+ * Search pop-up offered), and a built-in "Correspondence" view.
  * CSS namespace: cf- (case form)
  */
 
@@ -19,9 +22,20 @@ const API = import.meta.env.VITE_API_URL || '/api'
 
 const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
+const PAGE_SIZE = 50
+// "More filters": the server's names for them, so they go on the request as they are.
+const EMPTY_MORE = { reporter: '', patient_initials: '', has_correspondence: '', corr_box: '', corr_party: '', corr_from: '', corr_to: '' }
+const CORR_KEYS  = ['has_correspondence', 'corr_box', 'corr_party', 'corr_from', 'corr_to']
+const CORRESPONDENCE_VIEW = { ...EMPTY_MORE, has_correspondence: 'yes' }
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  const dt = parseServerTime(value)
+  return Number.isNaN(dt.getTime()) ? String(value) : dt.toLocaleString()
+}
 
 import SlaCountdownBadge from '../../../shared/components/SlaCountdownBadge'
-import CrossCaseSearchModal from '../components/CrossCaseSearchModal'
+import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 export default function CasesPage() {
   const navigate        = useNavigate()
@@ -46,7 +60,22 @@ export default function CasesPage() {
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  const [crossCaseModalOpen, setCrossCaseModalOpen] = useState(false)
+  // ?view=correspondence (where old Case Query links land) opens the Correspondence view.
+  const openCorrespondence = searchParams.get('view') === 'correspondence'
+  const [more, setMore]             = useState(openCorrespondence ? CORRESPONDENCE_VIEW : EMPTY_MORE)
+  const [showMore, setShowMore]     = useState(openCorrespondence)
+  const [sortBy, setSortBy]         = useState('created_at')
+  const [page, setPage]             = useState(0)
+  const [total, setTotal]           = useState(null)   // set only when searching all active cases
+  const [loadError, setLoadError]   = useState('')
+  const moreActive = Object.values(more).some(v => String(v).trim())
+  const corrActive = CORR_KEYS.some(k => String(more[k]).trim())
+
+  function setMoreField(key, value) {
+    setMore(m => ({ ...m, [key]: value }))
+    setPage(0)
+    setActiveViewId(null)
+  }
 
   // New case modal state — multi-step intake form (CF-E1–E5)
   const [modalOpen, setModalOpen]     = useState(false)
@@ -182,6 +211,7 @@ export default function CasesPage() {
 
   function handleTabChange(tab, options = {}) {
     setActiveTab(tab)
+    setPage(0)
     if (!options.preserveSavedView) setActiveViewId(null)
     const next = new URLSearchParams(searchParams)
     next.set('tab', tab)
@@ -190,10 +220,27 @@ export default function CasesPage() {
 
   const loadCases = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const searchTerm = search.trim()
       const searchQuery = searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''
-      const useGlobalSearch = searchTerm.length > 0 && searchScope === 'all'
+      const useGlobalSearch = (searchTerm.length > 0 && searchScope === 'all') || moreActive
+
+      // Searching all active cases pages through the server's full result.
+      if (useGlobalSearch) {
+        const q = new URLSearchParams({ include_meta: 'true', limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE), sort_by: sortBy })
+        if (searchTerm) q.set('search', searchTerm)
+        if (typeFilter !== 'all') q.set('type', typeFilter)
+        for (const [key, value] of Object.entries(more)) if (String(value).trim()) q.set(key, String(value).trim())
+        const res  = await httpFetch(`${API}/cases?${q}`, { headers })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'The search could not be run.')
+        setCases(Array.isArray(data.rows) ? data.rows : [])
+        setTotal(Number(data.total || 0))
+        setSelectedCaseIds([])
+        return
+      }
+      setTotal(null)
 
       const endpoint = useGlobalSearch
         ? `${API}/cases${searchQuery ? `?${searchQuery}` : ''}`
@@ -210,10 +257,12 @@ export default function CasesPage() {
     } catch (err) {
       console.error('loadCases error:', err)
       setCases([])
+      setTotal(null)
+      setLoadError(err.message || 'The cases could not be loaded.')
     } finally {
       setLoading(false)
     }
-  }, [activeTab, headers, search, searchScope])
+  }, [activeTab, headers, search, searchScope, moreActive, more, page, sortBy, typeFilter])
 
   useEffect(() => { loadCases() }, [loadCases])
 
@@ -264,6 +313,11 @@ export default function CasesPage() {
     setTypeFilter(filters.typeFilter || 'all')
     setPriorityFilter(filters.priorityFilter || 'all')
     setStatusFilter(filters.statusFilter || 'all')
+    const nextMore = { ...EMPTY_MORE, ...(filters.more || {}) }
+    setMore(nextMore)
+    setShowMore(Object.values(nextMore).some(Boolean))
+    setSortBy(filters.sortBy || 'created_at')
+    setPage(0)
     setActiveViewId(view.id)
     if (filters.tab === 'my' || filters.tab === 'unassigned' || filters.tab === 'deleted') {
       handleTabChange(filters.tab, { preserveSavedView: true })
@@ -293,6 +347,8 @@ export default function CasesPage() {
             typeFilter,
             priorityFilter,
             statusFilter,
+            more,
+            sortBy,
           },
         }),
       })
@@ -513,7 +569,8 @@ export default function CasesPage() {
   }, [cases])
 
   const hasSearch = search.trim().length > 0
-  const isGlobalSearch = hasSearch && searchScope === 'all'
+  const isGlobalSearch = (hasSearch && searchScope === 'all') || moreActive
+  const openCase = (c) => navigate(`/cases/${c.id}${corrActive ? '?section=correspondence' : ''}`, { state: { from: '/cases' } })
 
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
@@ -524,9 +581,6 @@ export default function CasesPage() {
         <div className="cf-cases-title-row">
           <h1 className="cf-cases-title">Case Management</h1>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="cf-cases-view-btn" onClick={() => setCrossCaseModalOpen(true)}>
-              Cross-Case Search
-            </button>
             <button className="cf-new-case-btn" onClick={openModal}
               disabled={!hasCapability('case.create')}
               title={!hasCapability('case.create') ? 'Your security group does not allow creating cases.' : undefined}>
@@ -559,7 +613,7 @@ export default function CasesPage() {
             aria-label="Search cases"
             placeholder="Global search: case #, notes, contacts, products…"
             value={search}
-            onChange={e => { setSearch(e.target.value); setActiveViewId(null) }}
+            onChange={e => { setSearch(e.target.value); setPage(0); setActiveViewId(null) }}
           />
           <div className="cf-cases-search-scope">
             <button
@@ -570,14 +624,24 @@ export default function CasesPage() {
               All Active Cases
             </button>
             <button
-              className={`cf-cases-scope-btn ${searchScope === 'tab' ? 'active' : ''}`}
+              className={`cf-cases-scope-btn ${searchScope === 'tab' && !moreActive ? 'active' : ''}`}
               onClick={() => { setSearchScope('tab'); setActiveViewId(null) }}
+              disabled={moreActive}
+              title={moreActive ? 'More filters always search all active cases.' : undefined}
               type="button"
             >
               Current Tab
             </button>
           </div>
           <div className="cf-cases-view-actions">
+            <button
+              className={`cf-cases-view-btn ${showMore ? 'active' : ''}`}
+              type="button"
+              aria-expanded={showMore}
+              onClick={() => setShowMore(v => !v)}
+            >
+              More filters{moreActive ? ` (${Object.values(more).filter(v => String(v).trim()).length})` : ''}
+            </button>
             <button
               className="cf-cases-view-btn"
               type="button"
@@ -587,7 +651,7 @@ export default function CasesPage() {
               {viewSaving ? 'Saving…' : 'Save View'}
             </button>
           </div>
-          {hasSearch && (
+          {(hasSearch || moreActive) && (
             <div className="cf-cases-search-hint">
               {isGlobalSearch
                 ? 'Showing global results across active cases in your organisation.'
@@ -595,17 +659,73 @@ export default function CasesPage() {
             </div>
           )}
         </div>
+        {showMore && (
+          <div className="cf-cases-more">
+            <fieldset>
+              <legend>People</legend>
+              <label>Reporter
+                <input className="cf-query-input" placeholder="Name, email or phone" value={more.reporter} onChange={e => setMoreField('reporter', e.target.value)} />
+              </label>
+              <label>Patient initials
+                <input className="cf-query-input" placeholder="e.g. J.D." value={more.patient_initials} onChange={e => setMoreField('patient_initials', e.target.value)} />
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Correspondence</legend>
+              <label>Has correspondence
+                <select className="cf-query-select" value={more.has_correspondence} onChange={e => setMoreField('has_correspondence', e.target.value)}>
+                  <option value="">Any</option><option value="yes">Yes</option><option value="no">No</option>
+                </select>
+              </label>
+              <label>Last message
+                <select className="cf-query-select" value={more.corr_box} onChange={e => setMoreField('corr_box', e.target.value)}>
+                  <option value="">Any</option><option value="inbox">Received</option><option value="sent">Sent</option>
+                </select>
+              </label>
+              <label>Sender or recipient
+                <input className="cf-query-input" placeholder="Name or email" value={more.corr_party} onChange={e => setMoreField('corr_party', e.target.value)} />
+              </label>
+              <label>Last message from
+                <input type="date" value={more.corr_from} onChange={e => setMoreField('corr_from', e.target.value)} />
+              </label>
+              <label>to
+                <input type="date" value={more.corr_to} onChange={e => setMoreField('corr_to', e.target.value)} />
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Order</legend>
+              <label>Sort by
+                <select className="cf-query-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0) }}>
+                  <option value="created_at">Newest first</option>
+                  <option value="updated_at">Recently updated</option>
+                  <option value="date_received">Date received</option>
+                  <option value="case_number">Case number</option>
+                  <option value="last_comm_at">Latest message</option>
+                  <option value="communication_count">Most messages</option>
+                </select>
+              </label>
+              <button type="button" className="cf-cancel-btn" onClick={() => { setMore(EMPTY_MORE); setSortBy('created_at'); setPage(0); setActiveViewId(null) }}>Clear these</button>
+            </fieldset>
+          </div>
+        )}
+
         <div className="cf-cases-quick-presets" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('AE'); setPriorityFilter('high_urgent'); setStatusFilter('all'); setActiveViewId(null) }}>High Priority AE</button>
-          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('urgent'); setStatusFilter('all'); setActiveViewId(null) }}>Urgent SLA</button>
-          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('MI'); setPriorityFilter('all'); setStatusFilter('all'); setActiveViewId(null) }}>MI Cases</button>
-          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('all'); setStatusFilter('all'); setSearch(''); setActiveViewId(null) }}>Clear Filters</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('AE'); setPriorityFilter('high_urgent'); setStatusFilter('all'); setPage(0); setActiveViewId(null) }}>High Priority AE</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('urgent'); setStatusFilter('all'); setPage(0); setActiveViewId(null) }}>Urgent SLA</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('MI'); setPriorityFilter('all'); setStatusFilter('all'); setPage(0); setActiveViewId(null) }}>MI Cases</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('all'); setStatusFilter('all'); setSearch(''); setMore(EMPTY_MORE); setSortBy('created_at'); setPage(0); setActiveViewId(null) }}>Clear Filters</button>
         </div>
 
         <div className="cf-cases-saved-views">
           <span className="cf-cases-saved-label">Saved Views</span>
+          {/* Built in: what Case Query used to show. */}
+          <div className={`cf-cases-view-chip ${!activeViewId && corrActive && more.has_correspondence === 'yes' ? 'active' : ''}`}>
+            <button type="button" onClick={() => { setMore(CORRESPONDENCE_VIEW); setShowMore(true); setPage(0); setActiveViewId(null) }}>
+              Correspondence
+            </button>
+          </div>
           {viewsLoading && <span className="cf-cases-saved-empty">Loading…</span>}
-          {!viewsLoading && savedViews.length === 0 && <span className="cf-cases-saved-empty">No saved views yet.</span>}
+          {!viewsLoading && savedViews.length === 0 && <span className="cf-cases-saved-empty">None of your own yet.</span>}
           {!viewsLoading && savedViews.map((view) => (
             <div key={view.id} className={`cf-cases-view-chip ${Number(activeViewId) === Number(view.id) ? 'active' : ''}`}>
               <button type="button" onClick={() => applySavedView(view)}>
@@ -658,14 +778,16 @@ export default function CasesPage() {
 
         {loading ? (
           <div className="cf-cases-loading">Loading…</div>
+        ) : loadError ? (
+          <div className="cf-form-error">{loadError}</div>
         ) : filteredCases.length === 0 ? (
           <div className="cf-cases-empty">
-            {search || typeFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all'
+            {search || moreActive || typeFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all'
               ? (isGlobalSearch
                 ? 'No active cases match your global search and filters.'
                 : 'No cases match your filters/search.')
               : `No ${activeTab === 'my' ? 'cases assigned to you' : activeTab + ' cases'} yet.`}
-            {activeTab === 'my' && !search && unassignedCount > 0 && (
+            {activeTab === 'my' && !search && !moreActive && unassignedCount > 0 && (
               <div className="cf-cases-empty-action">
                 <button type="button" className="cf-cases-tab" onClick={() => handleTabChange('unassigned')}>
                   See {unassignedCount} unassigned {unassignedCount === 1 ? 'case' : 'cases'}
@@ -686,7 +808,7 @@ export default function CasesPage() {
                 <th>Case #</th>
                 <th>
                   Type
-                  <select className="cf-th-filter-select" aria-label="Filter by type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                  <select className="cf-th-filter-select" aria-label="Filter by type" value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(0) }}>
                     <option value="all">All</option>
                     <option value="MI">MI</option>
                     <option value="AE">AE</option>
@@ -714,12 +836,14 @@ export default function CasesPage() {
                 <th>SLA</th>
                 <th>Date Received</th>
                 <th>Owner</th>
+                {corrActive && <th>Messages</th>}
+                {corrActive && <th>Last message</th>}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {filteredCases.map(c => (
-                <tr key={c.id} className={`cf-cases-row ${selectedCaseIds.includes(c.id) ? 'selected' : ''}`} onClick={() => navigate(`/cases/${c.id}`, { state: { from: '/cases' } })}>
+                <tr key={c.id} className={`cf-cases-row ${selectedCaseIds.includes(c.id) ? 'selected' : ''}`} onClick={() => openCase(c)}>
                   <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                     <input type="checkbox" className="cf-cases-checkbox"
                       aria-label={`Select case ${c.case_number || 'draft'}`}
@@ -748,15 +872,37 @@ export default function CasesPage() {
                   <td><SlaCountdownBadge dueAt={c.sla_due || c.due_at} compact /></td>
                   <td>{c.date_received ? c.date_received.slice(0, 10) : '—'}</td>
                   <td>{c.owner_name || '—'}</td>
+                  {corrActive && <td>{c.communication_count || 0}</td>}
+                  {corrActive && (
+                    <td>
+                      {c.last_comm_box && <span className={`cf-query-dir ${c.last_comm_box}`}>{c.last_comm_box === 'sent' ? 'Sent' : 'Received'}</span>}{' '}
+                      {formatDateTime(c.last_comm_at)}
+                    </td>
+                  )}
                   <td>
-                    <button className="cf-open-btn" onClick={e => { e.stopPropagation(); navigate(`/cases/${c.id}`, { state: { from: '/cases' } }) }}>
-                      Open
+                    <button className="cf-open-btn" onClick={e => { e.stopPropagation(); openCase(c) }}>
+                      {corrActive ? 'Open messages' : 'Open'}
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && !loadError && total !== null && total > 0 && (
+          <div className="cf-query-pagination">
+            <div className="cf-query-page-meta">
+              Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + cases.length} of {total}
+              {(statusFilter !== 'all' || priorityFilter !== 'all') && ' (the Status and Priority column filters narrow this page only)'}
+            </div>
+            {total > PAGE_SIZE && (
+              <div className="cf-query-page-actions">
+                <button className="cf-open-btn" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</button>
+                <span className="cf-query-page-num">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
+                <button className="cf-open-btn" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -985,10 +1131,6 @@ export default function CasesPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {crossCaseModalOpen && (
-        <CrossCaseSearchModal onClose={() => setCrossCaseModalOpen(false)} />
       )}
     </div>
     </MIMSLayout>

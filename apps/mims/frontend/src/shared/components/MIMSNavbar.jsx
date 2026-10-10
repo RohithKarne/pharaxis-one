@@ -126,11 +126,6 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         </div>
       )}
 
-      {/* Case Query */}
-      <NavItem collapsed={collapsed} to="/case-query" icon={<Icon name="search" />} label="Case Query"
-        active={isActive('/case-query')}
-        disabled={!canAccess('mims_core')} />
-
       {/* Utilities — accordion */}
       <NavItem collapsed={collapsed} to="/transmissions" icon={<Icon name="transmissions" />} label="Transmissions"
         active={isActive('/transmissions')}
