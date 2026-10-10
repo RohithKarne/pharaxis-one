@@ -39,7 +39,6 @@ const AiConfig = lazy(() => import('./AiConfig'))
 const DeveloperApiAdmin = lazy(() => import('./DeveloperApiAdmin'))
 const SystemParameters = lazy(() => import('./SystemParameters'))
 const Users = lazy(() => import('./Users'))
-const SupportAccess = lazy(() => import('./SupportAccess'))
 const ViewData = lazy(() => import('./ViewData'))
 const DPPRPage = lazy(() => import('../../../admin/pages/DPPRPage'))
 const RegressionPage = lazy(() => import('../../../regression/pages/RegressionPage'))
@@ -67,7 +66,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-exception-log' ? <ExceptionLog />
     : selectedItem === 'sys-sec-group' ? <CapabilityGroupSecurity />
     : selectedItem === 'sys-sec-logged-in' ? <LoggedInUsers />
-    : selectedItem === 'sys-sec-support-access' ? <SupportAccess />
     : selectedItem === 'sys-sec-users' ? <Users />
     : selectedItem === 'sys-sec-auth-policy' ? <SetupAuthPolicy />
     : selectedItem === 'sys-setup-2fa-config' ? <SetupTwoFactor />

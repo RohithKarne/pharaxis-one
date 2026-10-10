@@ -33,7 +33,6 @@ const HELP_KEYS_BY_SYSTEM_ITEM = {
   'sys-setup-field-config':     'admin.field_setup',
   'sys-setup-case-form-def':    'admin.case_form_definition',
   'sys-setup-change-approvals': 'admin.change_approvals',
-  'sys-sec-support-access':     'admin.support_access',
   'sys-setup-2fa-config':       'admin.two_factor_config',
   'sys-setup-alerts':           'admin.alerts',
   'sys-system-params':          'admin.system_parameters',
