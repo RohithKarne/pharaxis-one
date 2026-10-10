@@ -11,10 +11,111 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import { isPlatformAdmin } from '../../../../shared/utils/adminScope.js'
+import { useAdminTenant } from '../../utils/AdminTenantContext'
 
 const MentionsInbox = lazy(() => import('../../../../shared/components/collab/MentionsInbox'))
 const RecentPinnedWidget = lazy(() => import('../../../../shared/components/caseActions/RecentPinnedWidget'))
 const PcSignalsWidget = lazy(() => import('../../../../shared/components/PcSignalsWidget'))
+
+// Where a failed setup check is fixed, when the admin console has a screen for it.
+const CHECK_SCREENS = {
+  workflow:  'sys-setup-workflow',
+  numbering: 'sys-setup-case-numbering',
+}
+
+// The admin home opened on one empty "PC Signals" box for an organisation's admin
+// (MIMS screen review, row 7). It now leads with the organisation's setup checks —
+// the ones run when it was created — recent admin changes and the common settings.
+function AdminHome({ onNavigateTab, commonSettings }) {
+  const { token, user } = useAuth()
+  const { tenantId, tenants } = useAdminTenant()
+  const platform = isPlatformAdmin(user)
+  const [readiness, setReadiness] = useState(null)
+  const [readinessError, setReadinessError] = useState('')
+  const [changes, setChanges] = useState(null)
+
+  useEffect(() => {
+    if (!tenantId) return undefined
+    let cancelled = false
+    const H = { Authorization: `Bearer ${token}` }
+    httpFetch(`/api/admin/orgs/${tenantId}/readiness`, { headers: H })
+      .then(async r => {
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(data.error || `Could not load setup checks (${r.status}).`)
+        if (!cancelled) { setReadiness(data); setReadinessError('') }
+      })
+      .catch(err => { if (!cancelled) { setReadiness(null); setReadinessError(err.message) } })
+    httpFetch('/api/admin/audit-logs?page_size=10&named_only=1', { headers: H })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(data => { if (!cancelled) setChanges((data.logs || []).slice(0, 5)) })
+      .catch(() => { if (!cancelled) setChanges([]) })
+    return () => { cancelled = true }
+  }, [tenantId, token])
+
+  const orgName = readiness?.org_name || tenants.find(t => String(t.id) === String(tenantId))?.name || 'this organisation'
+  const openSystem = value => onNavigateTab?.('system', 'system', value)
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 14 }}>
+      <div className="card">
+        <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Setup checks for {orgName}</h3></div>
+        <div className="card-body">
+          {!readiness && !readinessError && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+          {readinessError && <div style={{ color: '#b91c1c' }}>{readinessError}</div>}
+          {readiness && (
+            <>
+              <div style={{ marginBottom: 8 }}>
+                {readiness.ready ? 'All checks pass.' : `${readiness.blockers.length} of ${readiness.checks.length} checks need attention.`}
+              </div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+                {readiness.checks.map(check => (
+                  <li key={check.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                    <span role="img" aria-label={check.ok ? 'Passes' : 'Needs attention'} style={{ color: check.ok ? '#15803d' : '#b91c1c', fontWeight: 'bold' }}>{check.ok ? '✓' : '✕'}</span>
+                    <span>
+                      {CHECK_SCREENS[check.key]
+                        ? <a href="#" onClick={e => { e.preventDefault(); openSystem(CHECK_SCREENS[check.key]) }}>{check.label}</a>
+                        : check.label}
+                      <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>{check.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>{platform ? 'Recent changes, all organisations' : 'Recent changes'}</h3></div>
+        <div className="card-body">
+          {changes === null && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+          {changes?.length === 0 && <div style={{ color: 'var(--text-muted)' }}>No changes recorded yet.</div>}
+          {changes?.map(log => (
+            <div key={log.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13 }}>{log.action} {log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{log.user_name || 'Unknown user'} · {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {commonSettings?.length > 0 && (
+        <div className="card">
+          <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Common settings</h3></div>
+          <div className="card-body">
+            <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+              {commonSettings.map(leaf => (
+                <li key={leaf.value}>
+                  <a href="#" onClick={e => { e.preventDefault(); onNavigateTab?.(leaf.tab, leaf.key, leaf.value) }}>{leaf.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SecondarySectionLoader({ label = 'Loading insights...' }) {
   return (
@@ -26,7 +127,7 @@ function SecondarySectionLoader({ label = 'Loading insights...' }) {
   )
 }
 
-export default function Dashboard({ onNavigateTab }) {
+export default function Dashboard({ onNavigateTab, commonSettings }) {
   const { token, user } = useAuth()
   const navigate = useNavigate()
   const H = useMemo(() => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }), [token])
@@ -127,6 +228,8 @@ export default function Dashboard({ onNavigateTab }) {
           users have 2FA enabled", "Active sessions: 142") — none read anything,
           and some were false. Removed (T10, 2026-09-29); this page shows only
           what it loads. */}
+
+      <AdminHome onNavigateTab={onNavigateTab} commonSettings={commonSettings} />
 
       {/* Platform Health card */}
       {platform && (

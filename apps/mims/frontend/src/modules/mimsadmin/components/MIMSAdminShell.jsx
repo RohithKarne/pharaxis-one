@@ -178,6 +178,9 @@ function filterSystemNav(nav, effectiveAccess) {
 // and nothing saying where you were (MIMS screen review, row 6). They are now one
 // list that stays on screen, a "Find a setting" box over every screen in it, and a
 // trail above the page. Each entry opens the same address it always did.
+// The admin home's short list of the settings most admin visits are for.
+const COMMON_SETTINGS = ['sys-sec-users', 'sys-sec-group', 'sys-setup-case-fields', 'sys-setup-workflow', 'sys-setup-email-accounts']
+
 function buildAdminTree(tabs, systemNav) {
   const navs = {
     'service-log':     [SERVICE_LOG_NAV, 'service'],
@@ -630,7 +633,7 @@ function MIMSAdminShellInner() {
               : activeTab === 'help'
               ? <HelpTab selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
               : activeTab === 'dashboard'
-              ? <DashboardTab onNavigateTab={activateTab} />
+              ? <DashboardTab onNavigateTab={activateTab} commonSettings={COMMON_SETTINGS.map(v => adminLeaves.find(l => l.value === v)).filter(Boolean)} />
               : <ActiveComponent />
             }
           </Suspense>

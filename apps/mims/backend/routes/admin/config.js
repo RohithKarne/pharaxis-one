@@ -304,6 +304,9 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
     if (action)    { whereParts.push('action = ?'); params.push(action); }
     if (entity)    { whereParts.push('entity = ?'); params.push(entity); }
     if (entity_id) { whereParts.push('entity_id = ?'); params.push(entity_id); }
+    // Every write request is also logged under its HTTP method (sign-ins, error
+    // reports). The admin home asks for the named changes only.
+    if (req.query.named_only === '1') whereParts.push("action NOT IN ('GET', 'POST', 'PUT', 'PATCH', 'DELETE')");
     if (search) {
       whereParts.push('(user_name LIKE ? OR action LIKE ? OR entity LIKE ? OR CAST(entity_id AS CHAR) LIKE ? OR details LIKE ?)');
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
