@@ -329,14 +329,24 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
       events.forEach(e => byId.get(e.submission_id)?.push(e));
       // Bridge row 9: what the person added after sending, oldest first.
       const [fus] = await pool.execute(
-        `SELECT f.submission_id, f.body, f.created_at
+        `SELECT f.submission_id, f.body, f.created_at, f.question_id
            FROM cp_submission_followups f
            JOIN cp_submissions s ON s.id = f.submission_id
           WHERE f.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
           ORDER BY f.id ASC`,
         [...rows.map(r => r.id), client.id, req.portalUser.userId]
       );
-      fus.forEach(f => { const r = rows.find(x => x.id === f.submission_id); (r.followups = r.followups || []).push({ body: f.body, at: f.created_at }); });
+      fus.forEach(f => { const r = rows.find(x => x.id === f.submission_id); (r.followups = r.followups || []).push({ body: f.body, at: f.created_at, question_id: f.question_id || null }); });
+      // Bridge feature F3: questions the medical team asked. A withdrawn one is not shown.
+      const [qs] = await pool.execute(
+        `SELECT q.id, q.submission_id, q.question, q.asked_at, q.status, q.answered_at
+           FROM cp_submission_questions q
+           JOIN cp_submissions s ON s.id = q.submission_id
+          WHERE q.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ? AND q.status IN ('open', 'answered')
+          ORDER BY q.id ASC`,
+        [...rows.map(r => r.id), client.id, req.portalUser.userId]
+      );
+      qs.forEach(q => { const r = rows.find(x => x.id === q.submission_id); (r.questions = r.questions || []).push({ id: q.id, question: q.question, asked_at: q.asked_at, status: q.status, answered_at: q.answered_at }); });
     }
     // Surface the user-facing case reference (matches the confirmation email/response).
     // CPPM-63: the conversation after the first answer — the person's own replies
@@ -365,6 +375,7 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
       reference: `CP-${String(r.id).padStart(6, '0')}`,
       timeline: publicTimeline(byId.get(r.id) || []),
       followups: r.followups || [],
+      questions: r.questions || [],
       can_follow_up: r.status !== 'closed',
       conversation: convById.get(r.id) || [],
       // Screened types ask "did anyone become unwell" on a reply too (PD-2).
@@ -400,7 +411,16 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
         WHERE s.id = ? AND c.code = ? AND c.is_active = 1 AND s.user_id = ?`,
       [req.params.id, clientCode, req.portalUser.userId]);
     if (!s) return refuse(404, 'Request not found.');
-    if (s.status === 'closed') return refuse(409, 'This request is closed. Please send a new one.');
+    // Bridge feature F3: an answer to a question the medical team asked. It can be
+    // answered once, also after the request closed (the team asked, so they want it).
+    let question = null;
+    if (req.body?.question_id) {
+      [[question]] = await pool.execute(
+        "SELECT id, status FROM cp_submission_questions WHERE id = ? AND submission_id = ?", [Number(req.body.question_id) || 0, s.id]);
+      if (!question) return refuse(404, 'Question not found.');
+      if (question.status !== 'open') return refuse(409, 'This question has already been answered or was withdrawn.');
+    }
+    if (s.status === 'closed' && !question) return refuse(409, 'This request is closed. Please send a new one.');
 
     // PD-2: what the person adds is asked the same question as the form and a reply —
     // "did anyone become unwell" — and a Yes goes to the safety team (as CPPM-63 does
@@ -424,9 +444,15 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
     try {
       await conn.beginTransaction();
       const [r] = await conn.execute(
-        'INSERT INTO cp_submission_followups (submission_id, client_id, body, forward_status) VALUES (?, ?, ?, ?)',
-        [s.id, s.client_id, text, forwardStatus]);
+        'INSERT INTO cp_submission_followups (submission_id, client_id, body, forward_status, question_id) VALUES (?, ?, ?, ?, ?)',
+        [s.id, s.client_id, text, forwardStatus, question?.id || null]);
       followupId = r.insertId;
+      if (question) {
+        const [q] = await conn.execute(
+          "UPDATE cp_submission_questions SET status = 'answered', answered_at = NOW() WHERE id = ? AND status = 'open'", [question.id]);
+        // Two answers sent at once: only the first one counts as the answer.
+        if (!q.affectedRows) { const e = new Error('question already answered'); e.code = 'QUESTION_TAKEN'; throw e; }
+      }
       if (flagged) {
         const reported = ((detail ? `${detail}\n\n` : '') + `What they added: ${text}`).slice(0, 5000);
         const [[open]] = await conn.execute(
@@ -446,6 +472,7 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
       await conn.commit();
     } catch (txErr) {
       await conn.rollback().catch(() => {});
+      if (txErr.code === 'QUESTION_TAKEN') return refuse(409, 'This question has already been answered or was withdrawn.');
       throw txErr;
     } finally {
       conn.release();
@@ -454,10 +481,13 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
     const attachmentIds = await storeAttachments(s.id, s.client_id, clientCode, req.files, blockedFiles);
     await recordStatusEvent({ submissionId: s.id, clientId: s.client_id, status: 'follow_up', source: 'portal' });
     systemAudit('portal', s.client_id, 'SUBMISSION_FOLLOW_UP', 'submission', s.id,
-      { followup_id: followupId, files: attachmentIds.length, blocked: blockedFiles.length, ae_screen_answer: screenAnswer });
+      { followup_id: followupId, files: attachmentIds.length, blocked: blockedFiles.length, ae_screen_answer: screenAnswer,
+        ...(question ? { question_id: question.id } : {}) });
 
     res.status(201).json({
-      message: flagged
+      message: question
+        ? `Thank you. Your answer has been sent to the medical team.${flagged ? ' Our safety team will also review what you told us.' : ''}`
+        : flagged
         ? 'Thank you. Your information has been added to your request, and our safety team will review what you told us.'
         : 'Thank you. Your information has been added to your request.',
       blocked_files: blockedFiles.map(b => b.file),
@@ -598,6 +628,9 @@ router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, 
 // CP form type → MIMS case_type. `other_inquiry` has NO MIMS equivalent
 // (MIMS only models MI/AE/PC), so it is intentionally absent here and is never
 // pushed — it stays CP-only on the admin screen. (Rohith decision, Gate 1 2026-07-10)
+// Where this portal's screens are, for links that leave it (the same setting the alert emails use).
+const FRONTEND_BASE = (process.env.CP_FRONTEND_BASE_URL || 'http://localhost:5174').replace(/\/+$/, '');
+
 const FORM_TYPE_TO_CASE_TYPE = {
   medical_inquiry:   'MI',
   adverse_event:     'AE',
@@ -786,6 +819,43 @@ async function forwardAttachments(integration, mimsCaseId, submissionId, headers
   }
 }
 
+// Admin-configured field mappings override/extend the defaults, then every other
+// answer goes along under its question. Used for real reports and for the connection
+// test's trial report (bridge feature F4), so both are built the same way.
+async function addMappedAndOtherAnswers({ clientId, integrationId, formType, formData, payload, used }) {
+  const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
+    [clientId, integrationId, formType]);
+  // NEW-C: dot-path targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into
+  // the nested payload the MIMS API actually reads — a flat assignment would silently no-op.
+  for (const m of mappings) {
+    let value = formData[m.cp_field] ?? m.default_value ?? null;
+    if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
+    if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
+    const segs = String(m.target_field).split('.');
+    let obj = payload;
+    while (segs.length > 1) {
+      const k = segs.shift();
+      if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
+      obj = obj[k];
+    }
+    obj[segs[0]] = value;
+    used.add(m.cp_field);
+  }
+
+  // Bridge plan P2: every other answer reaches the case, under its question as the
+  // person saw it. Before, anything the payload did not name was dropped.
+  const { fields } = await loadFormFields(clientId, formType);
+  const labelOf = Object.fromEntries(fields.map(f => [f.field_key, f.label]));
+  const other = Object.entries(formData)
+    .filter(([k, v]) => !used.has(k) && !NOT_OTHER_ANSWER.test(k) && v !== null && v !== undefined && String(v).trim() !== '')
+    .map(([k, v]) => ({
+      question: String(labelOf[k] || k).slice(0, 200),
+      answer: (Array.isArray(v) ? v.join(', ') : v === true ? 'Yes' : v === false ? 'No' : String(v)).slice(0, 2000),
+    }));
+  if (other.length) payload.other_answers = other.slice(0, 50);
+  return other;
+}
+
 async function syncToIntegration(clientId, submissionId, formType) {
   // other_inquiry has no MIMS case type — it is never pushed (CP-only). Gate 1 decision.
   if (!Object.prototype.hasOwnProperty.call(FORM_TYPE_TO_CASE_TYPE, formType)) return;
@@ -804,9 +874,6 @@ async function syncToIntegration(clientId, submissionId, formType) {
 
     const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
     if (!submission) return;
-
-    const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
-      [clientId, integration.id, formType]);
 
     const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
@@ -830,35 +897,12 @@ async function syncToIntegration(clientId, submissionId, formType) {
       if (rel?.sync_key) payload.related_source_key = rel.sync_key;
     }
 
-    // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
-    // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
-    // payload the MIMS API actually reads — a flat assignment would silently no-op.
-    for (const m of mappings) {
-      let value = formData[m.cp_field] ?? m.default_value ?? null;
-      if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
-      if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
-      const segs = String(m.target_field).split('.');
-      let obj = payload;
-      while (segs.length > 1) {
-        const k = segs.shift();
-        if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
-        obj = obj[k];
-      }
-      obj[segs[0]] = value;
-      used.add(m.cp_field);
-    }
+    // Bridge feature F1: the request's own page on this portal, opened from the MIMS case.
+    payload.source_link = `${FRONTEND_BASE}/admin/clients/${clientId}/submissions?search=${payload.reference}`;
+    // Bridge feature F3: only a person who was signed in can see and answer a question.
+    payload.reporter_can_reply = !!submission.user_id;
 
-    // Bridge plan P2: every other answer reaches the case, under its question as the
-    // person saw it. Before, anything the payload did not name was dropped.
-    const { fields } = await loadFormFields(clientId, formType);
-    const labelOf = Object.fromEntries(fields.map(f => [f.field_key, f.label]));
-    const other = Object.entries(formData)
-      .filter(([k, v]) => !used.has(k) && !NOT_OTHER_ANSWER.test(k) && v !== null && v !== undefined && String(v).trim() !== '')
-      .map(([k, v]) => ({
-        question: String(labelOf[k] || k).slice(0, 200),
-        answer: (Array.isArray(v) ? v.join(', ') : v === true ? 'Yes' : v === false ? 'No' : String(v)).slice(0, 2000),
-      }));
-    if (other.length) payload.other_answers = other.slice(0, 50);
+    await addMappedAndOtherAnswers({ clientId, integrationId: integration.id, formType, formData, payload, used });
     // Bridge plan P5: MIMS checks the report arrived as sent, and answers with the same value.
     payload.payload_sha256 = reportFingerprint(payload);
   } catch (err) {
@@ -1038,8 +1082,9 @@ async function forwardReleasedAttachment(attachmentId) {
 // our follow-up id, so a retry after a lost reply never adds the comment twice.
 async function forwardFollowUp(followupId) {
   const [[f]] = await pool.execute(
-    `SELECT f.id, f.body, f.forward_attempts, f.submission_id, s.client_id, s.external_ref
+    `SELECT f.id, f.body, f.forward_attempts, f.submission_id, s.client_id, s.external_ref, q.mims_question_id
        FROM cp_submission_followups f JOIN cp_submissions s ON s.id = f.submission_id
+       LEFT JOIN cp_submission_questions q ON q.id = f.question_id AND q.submission_id = f.submission_id
       WHERE f.id = ? AND f.forward_status IN ('pending', 'failed') AND s.external_ref IS NOT NULL`, [followupId]);
   if (!f) return;
   const [[integration]] = await pool.execute(
@@ -1057,7 +1102,9 @@ async function forwardFollowUp(followupId) {
     };
     let headers = await buildHeaders();
     const post = () => safeFetch(new URL(`/api/v1/cases/${encodeURIComponent(f.external_ref)}/follow-ups`, safeBaseUrl).toString(), {
-      method: 'POST', headers, body: JSON.stringify({ text: f.body, followup_id: `cp-followup-${f.id}`, reference: ref }),
+      method: 'POST', headers, body: JSON.stringify({ text: f.body, followup_id: `cp-followup-${f.id}`, reference: ref,
+        // Bridge feature F3: this answers a question MIMS asked.
+        ...(f.mims_question_id ? { question_id: f.mims_question_id } : {}) }),
     });
     let r = await post();
     if (r.status === 401 && integration.auth_type === 'oauth') {
@@ -1113,3 +1160,6 @@ module.exports.forwardReleasedAttachment = forwardReleasedAttachment;
 module.exports.toDateOnly = toDateOnly;
 module.exports.raiseSafetyTaskAlert = raiseSafetyTaskAlert;
 module.exports.forwardFollowUp = forwardFollowUp;
+module.exports.buildMimsPayload = buildMimsPayload;
+module.exports.addMappedAndOtherAnswers = addMappedAndOtherAnswers;
+module.exports.FORM_TYPE_TO_CASE_TYPE = FORM_TYPE_TO_CASE_TYPE;
