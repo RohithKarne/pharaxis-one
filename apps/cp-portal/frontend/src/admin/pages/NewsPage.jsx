@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
+import { loadAreas } from '../components/AreaTagSelect' // CPPM-122
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput, formatDateTime } from '../../shared/utils/datetime'
 
@@ -15,6 +15,7 @@ const EMPTY_FORM = {
   target_types: [],
   status: 'draft',
   is_pinned: false,
+  therapeutic_area_id: '',
 }
 
 const STATUS_LABELS = {
@@ -37,8 +38,13 @@ export default function NewsPage() {
   const [form, setForm]           = useState(EMPTY_FORM)
   const [error, setError]         = useState('')
   const [selectedIds, setSelectedIds] = useState([])
+  // A live area dropdown in every row re-tagged a post on a mis-click; the area is now
+  // chosen in the post form and the list shows it as text (CP screen review, 10 Oct 2026).
+  const [areas, setAreas] = useState([])
 
   useEffect(() => { load() }, [clientId])
+  useEffect(() => { loadAreas(clientId).then(setAreas) }, [clientId])
+  const areaName = id => areas.find(a => a.id === id)?.name
 
   async function load() {
     setLoading(true)
@@ -94,6 +100,7 @@ export default function NewsPage() {
       target_types: post.target_types_json ? (Array.isArray(post.target_types_json) ? post.target_types_json : JSON.parse(post.target_types_json)) : [],
       status:       post.status || 'draft',
       is_pinned:    !!post.is_pinned,
+      therapeutic_area_id: post.therapeutic_area_id ?? '',
     })
     setError('')
     setShowForm(true)
@@ -132,6 +139,15 @@ export default function NewsPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }
       setShowForm(false)
+      // The area is kept by its own route (CPPM-122); save it only when it changed.
+      const postId = editPost ? editPost.id : data.post?.id
+      if (postId && String(form.therapeutic_area_id) !== String(editPost?.therapeutic_area_id ?? '')) {
+        const r = await fetch(`/api/admin/area-tags/${clientId}/news/${postId}`, {
+          method: 'PUT', headers: adminHeaders(),
+          body: JSON.stringify({ therapeutic_area_id: form.therapeutic_area_id === '' ? null : Number(form.therapeutic_area_id) }),
+        })
+        if (!r.ok) { const d = await r.json().catch(() => ({})); setError(`The post was saved, but its area was not: ${d.error || `error ${r.status}`}.`) }
+      }
       load()
     } catch {
       setError('Network error.')
@@ -236,6 +252,13 @@ export default function NewsPage() {
                 </div>
               </div>
               <div className="cp-field">
+                <label htmlFor="news-area">Therapeutic area</label>
+                <select id="news-area" value={form.therapeutic_area_id} onChange={e => setField('therapeutic_area_id', e.target.value)}>
+                  <option value="">No area</option>
+                  {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="cp-field">
                 <label>Publish At</label>
                 <input type="datetime-local" value={form.publish_at} onChange={e => setField('publish_at', e.target.value)} />
               </div>
@@ -309,7 +332,7 @@ export default function NewsPage() {
                   )}
                   <td>{p.title}</td>
                   <td>{p.category || '—'}</td>
-                  <td><AreaTagSelect clientId={clientId} kind="news" item={p} /></td>
+                  <td>{areaName(p.therapeutic_area_id) || '—'}</td>
                   <td>
                     <span className="cp-status-badge" style={statusBadgeStyle(p.status)}>
                       {/* CPPM-58: published with a later date is not on the portal yet. */}

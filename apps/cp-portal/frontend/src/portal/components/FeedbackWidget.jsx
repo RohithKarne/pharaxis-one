@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 export default function FeedbackWidget() {
@@ -8,6 +8,14 @@ export default function FeedbackWidget() {
   const [hovered, setHovered] = useState(0)
   const [message, setMessage] = useState('')
   const [status, setStatus]   = useState(null) // null | 'sending' | 'done' | 'error'
+
+  // The floating button covered page text on a phone (CP screen review, 10 Oct 2026).
+  // The footer and the account menu now open this panel, the same way Cookie settings does.
+  useEffect(() => {
+    const show = () => setOpen(true)
+    window.addEventListener('cp:open-feedback', show)
+    return () => window.removeEventListener('cp:open-feedback', show)
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -29,12 +37,14 @@ export default function FeedbackWidget() {
     setOpen(false); setRating(0); setHovered(0); setMessage(''); setStatus(null)
   }
 
+  if (!open) return null
+
   return (
-    <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 999 }}>
+    <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 999 }} role="dialog" aria-label={t('Share Feedback')}>
       {open && (
         <div style={{
           background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-          width: 300, marginBottom: 12, overflow: 'hidden',
+          width: 300, maxWidth: 'calc(100vw - 48px)', overflow: 'hidden',
         }}>
           <div style={{ background: 'var(--pp-primary, #6B3FA0)', color: '#fff', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>{t('Share Feedback')}</span>
@@ -87,20 +97,6 @@ export default function FeedbackWidget() {
         </div>
       )}
 
-      <button
-        onClick={() => { if (open) reset(); else setOpen(true) }}
-        style={{
-          background: 'var(--pp-primary, #6B3FA0)', color: '#fff',
-          border: 'none', borderRadius: 2, height: 30, padding: '0 12px',
-          fontSize: 13, fontWeight: 700, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'transform 0.15s',
-        }}
-        aria-label={t('Give feedback')}
-        title={t('Share feedback')}
-      >
-        {t('Feedback')}
-      </button>
     </div>
   )
 }

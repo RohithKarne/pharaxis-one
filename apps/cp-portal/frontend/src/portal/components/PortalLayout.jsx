@@ -377,6 +377,7 @@ export default function PortalLayout({ children }) {
                     <Link to={`${base}/my-submissions`} className="pp-dropdown-item" role="menuitem">{t('btn.my_submissions')}</Link>
                     <Link to={`${base}/saved`} className="pp-dropdown-item" role="menuitem">{t('btn.saved_items')}</Link>
                     <Link to={`${base}/preferences`} className="pp-dropdown-item" role="menuitem">{t('btn.preferences')}</Link>
+                    <button className="pp-dropdown-item" role="menuitem" onClick={() => { setUserMenuOpen(false); window.dispatchEvent(new Event('cp:open-feedback')) }}>{t('Give feedback')}</button>
                     <button className="pp-dropdown-item pp-dropdown-item-danger" role="menuitem" onClick={handleLogout}>{t('btn.sign_out')}</button>
                   </div>
                 )}
@@ -409,6 +410,9 @@ export default function PortalLayout({ children }) {
             <Link to={`${base}/contact`}>{t('Contact Us')}</Link>
             <button type="button" className="pp-footer-link-btn" onClick={() => window.dispatchEvent(new Event('cp:open-consent'))}>
               {t('Cookie settings')}
+            </button>
+            <button type="button" className="pp-footer-link-btn" onClick={() => window.dispatchEvent(new Event('cp:open-feedback'))}>
+              {t('Give feedback')}
             </button>
           </div>
           <div className="pp-footer-legal">

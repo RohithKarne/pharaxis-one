@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { activityActor } from '../../shared/utils/activityActor'
 import {
   ResponsiveContainer,
   AreaChart, Area,
@@ -58,11 +59,15 @@ export default function AnalyticsPage() {
   const [error, setError]       = useState('')
   const [exporting, setExporting] = useState(false)
 
+  // People's actions by default; MIMS retries filled the list (CP screen review, 10 Oct 2026).
+  const [includeSystem, setIncludeSystem] = useState(false)
+
   useEffect(() => {
     async function load() {
-      setLoading(true); setError('')
+      if (!data) setLoading(true)
+      setError('')
       try {
-        const res = await fetch(`/api/admin/analytics/${clientId}`, { headers: adminHeaders() })
+        const res = await fetch(`/api/admin/analytics/${clientId}${includeSystem ? '?include_system=1' : ''}`, { headers: adminHeaders() })
         if (!res.ok) throw new Error()
         setData(await res.json())
       } catch {
@@ -71,7 +76,7 @@ export default function AnalyticsPage() {
       setLoading(false)
     }
     load()
-  }, [clientId])
+  }, [clientId, includeSystem])
 
   async function handleExport() {
     setExporting(true)
@@ -226,6 +231,10 @@ export default function AnalyticsPage() {
 
       {/* Recent Activity */}
       <SectionCard title="Recent Activity">
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4B5563', margin: '-8px 0 12px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={includeSystem} onChange={e => setIncludeSystem(e.target.checked)} />
+          Include automatic actions
+        </label>
         {recentActivity.length === 0 ? <EmptyState msg="No recent activity." /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {recentActivity.map((row, i) => (
@@ -237,9 +246,7 @@ export default function AnalyticsPage() {
                   <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{row.action}</span>
                   {' '}
                   <span style={{ fontSize: 13, color: '#4B5563' }}>{row.entity || ''}</span>
-                  {row.admin_name && (
-                    <span style={{ fontSize: 12, color: '#5F6B7A' }}> · {row.admin_name}</span>
-                  )}
+                  <span style={{ fontSize: 12, color: '#5F6B7A' }}> · {activityActor(row)}</span>
                 </div>
                 <div style={{ fontSize: 11, color: '#5F6B7A', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}

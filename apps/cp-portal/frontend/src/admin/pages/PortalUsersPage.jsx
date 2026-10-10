@@ -28,6 +28,21 @@ export default function PortalUsersPage({ requestsOnly = false }) {
 
   useEffect(() => { load() }, [clientId, userType, access])
 
+  // The type lists were typed into the page, so a client's own types could be missing
+  // (CP screen review, 10 Oct 2026). They now come from the client's access gate setup.
+  const FALLBACK_TYPES = [
+    { type_key: 'hcp', label: 'HCP' }, { type_key: 'patient', label: 'Patient' }, { type_key: 'physician', label: 'Physician' },
+    { type_key: 'non_hcp', label: 'Non-HCP' }, { type_key: 'other', label: 'Other' },
+  ]
+  const [types, setTypes] = useState(FALLBACK_TYPES)
+  useEffect(() => {
+    fetch(`/api/admin/gate/${clientId}/user-types`, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.userTypes?.length) setTypes(d.userTypes) })
+      .catch(() => {})
+  }, [clientId])
+  const typeLabel = key => types.find(t => t.type_key === key)?.label || key
+
   async function load() {
     setLoading(true)
     try {
@@ -172,11 +187,7 @@ export default function PortalUsersPage({ requestsOnly = false }) {
         )}
         <select aria-label="User type" value={userType} onChange={e => setUserType(e.target.value)}>
           <option value="">All Types</option>
-          <option value="hcp">HCP</option>
-          <option value="patient">Patient</option>
-          <option value="physician">Physician</option>
-          <option value="non_hcp">Non-HCP</option>
-          <option value="other">Other</option>
+          {types.map(t => <option key={t.type_key} value={t.type_key}>{t.label}</option>)}
         </select>
         <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
         <CanChange area="users">
@@ -227,11 +238,9 @@ export default function PortalUsersPage({ requestsOnly = false }) {
                 <div className="cp-field">
                   <label>User Type</label>
                   <select aria-label="User type" value={editForm.user_type} onChange={e => setEditForm(f => ({ ...f, user_type: e.target.value }))}>
-                    <option value="hcp">HCP</option>
-                    <option value="patient">Patient</option>
-                    <option value="physician">Physician</option>
-                    <option value="non_hcp">Non-HCP</option>
-                    <option value="other">Other</option>
+                    {types.map(t => <option key={t.type_key} value={t.type_key}>{t.label}</option>)}
+                    {/* A type the client no longer offers stays shown, so opening the form does not change it. */}
+                    {editForm.user_type && !types.some(t => t.type_key === editForm.user_type) && <option value={editForm.user_type}>{editForm.user_type}</option>}
                   </select>
                 </div>
                 <div className="cp-field"><label>Country</label><input value={editForm.country} onChange={e => setEditForm(f => ({ ...f, country: e.target.value }))} /></div>
@@ -256,7 +265,13 @@ export default function PortalUsersPage({ requestsOnly = false }) {
       )}
 
       {loading ? <div className="cp-loading">Loading…</div> : users.length === 0 ? (
-        <div className="cp-empty"><p>No portal users have registered yet.</p></div>
+        <div className="cp-empty"><p>{
+          // Access Requests said "No portal users have registered yet." with 300 users on file (CP screen review, 10 Oct 2026).
+          access === 'requested' ? 'No access requests are waiting.'
+            : access === 'declined' ? 'No declined access requests.'
+            : search.trim() || userType ? 'No portal users match this search.'
+            : 'No portal users have registered yet.'
+        }</p></div>
       ) : (
         <div className="cp-table-card">
           <table className="cp-table">
@@ -270,7 +285,7 @@ export default function PortalUsersPage({ requestsOnly = false }) {
                   <td><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => toggleSelect(u.id)} aria-label={`Select ${u.email}`} /></td>
                   <td>{u.first_name} {u.last_name}</td>
                   <td>{u.email}</td>
-                  <td><span className="cp-type-badge">{u.user_type}</span></td>
+                  <td><span className="cp-type-badge">{typeLabel(u.user_type)}</span></td>
                   <td>{u.country || '—'}</td>
                   <td>{u.is_verified ? 'Verified' : 'Not verified'}</td>
                   <td>

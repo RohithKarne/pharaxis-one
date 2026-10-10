@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import Icon from '../../shared/components/Icon'
@@ -53,6 +53,10 @@ export default function SubmitPage() {
   const [dirty, setDirty]               = useState(false)
   // CPPM-112: side effect reports and complaints show every answer once before Send.
   const [reviewing, setReviewing]       = useState(false)
+  // Missed questions were marked one by one down a long form; a list at the top
+  // names them all and takes the doctor to each (CP screen review, 10 Oct 2026).
+  const errorSummaryRef = useRef(null)
+  const focusErrorSummary = () => requestAnimationFrame(() => errorSummaryRef.current?.focus())
 
   const ATTACH_MAX = 10 * 1024 * 1024
   // CPPM-12: legacy .doc is no longer accepted — macros cannot be separated out of it.
@@ -155,7 +159,9 @@ export default function SubmitPage() {
     formFields.filter(f => f.is_required && isVisible(f)).forEach(f => {
       const v = formValues[f.field_key]
       if (!v || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')) {
-        errors[f.field_key] = `${f.field_label || f.label} is required.`
+        // The message sits under the question, so it does not repeat the label:
+        // "You are a is required." read as broken English (CP screen review, 10 Oct 2026).
+        errors[f.field_key] = t('Please answer this question.')
       }
     })
     setFieldErrors(errors)
@@ -166,7 +172,7 @@ export default function SubmitPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate()) { focusErrorSummary(); return }
     if (CHECK_FIRST.includes(selectedType) && !reviewing) {
       setReviewing(true); setError('')
       window.scrollTo?.({ top: 0 })
@@ -188,13 +194,14 @@ export default function SubmitPage() {
         setReviewing(false) // back to the form, where the refused answers are marked
         setError(data.error || 'Submission failed. Please try again.')
         // CPPM-85: the server names each answer it refused, and why.
-        if (data.field_errors) setFieldErrors(data.field_errors)
+        if (data.field_errors) { setFieldErrors(data.field_errors); focusErrorSummary() }
         // CPPM-7: the server names the required fields it found empty.
         else if (Array.isArray(data.fields)) {
           setFieldErrors(Object.fromEntries(data.fields.map(k => {
             const f = formFields.find(x => x.field_key === k)
-            return [k, `${f?.field_label || f?.label || k} is required.`]
+            return [k, t('Please answer this question.')]
           })))
+          focusErrorSummary()
         }
         return
       }
@@ -289,8 +296,30 @@ export default function SubmitPage() {
               {reviewing ? (
                 <CheckAnswers fields={formFields.filter(f => isVisible(f))} values={formValues} attachments={attachments} />
               ) : <>
+              {(() => {
+                const missed = formFields.filter(f => isVisible(f) && fieldErrors[f.field_key])
+                if (missed.length === 0) return null
+                return (
+                  <div className="pp-error-summary" ref={errorSummaryRef} tabIndex={-1} role="alert">
+                    <p className="pp-error-summary-title">
+                      {missed.length === 1 ? t('1 question needs an answer') : `${missed.length} ${t('questions need an answer')}`}
+                    </p>
+                    <ul>
+                      {missed.map(f => (
+                        <li key={f.field_key}>
+                          <a href={`#q-${f.field_key}`} onClick={e => {
+                            e.preventDefault()
+                            document.getElementById(`q-${f.field_key}`)?.scrollIntoView({ block: 'center' })
+                            document.querySelector(`#q-${f.field_key} input, #q-${f.field_key} textarea, #q-${f.field_key} select`)?.focus({ preventScroll: true })
+                          }}>{f.label}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
               {formFields.filter(f => isVisible(f)).map(field => (
-                <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
+                <div key={field.field_key} id={`q-${field.field_key}`} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   {/* CPPM-105: the label is tied to its box (a radio group, tick-box group
                       or single tick box carries the name itself), and the help text is
                       read out with the field. */}

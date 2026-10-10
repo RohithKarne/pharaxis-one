@@ -48,7 +48,11 @@ export default function TherapeuticAreasPage() {
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/therapeutic-areas`)
-      .then(r => r.json()).then(d => { setAreas(d.items || []); setLoading(false) }).catch(() => setLoading(false))
+      .then(r => r.json()).then(d => {
+        setAreas(d.items || []); setLoading(false)
+        // Open the first area straight away instead of an empty "select one" panel (CP screen review, 10 Oct 2026).
+        if (d.items?.length) selectArea(d.items[0])
+      }).catch(() => setLoading(false))
   }, [clientCode])
 
   async function selectArea(area) {
