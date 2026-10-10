@@ -45,7 +45,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     // in the list they already work from rather than only in the safety queue.
     let query = `
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
-             s.submitter_type, s.status, s.external_ref, s.submitted_at,
+             s.submitter_type, s.status, s.external_ref, s.mims_case_number, s.mims_fingerprint, s.submitted_at,
              s.sync_attempts, s.form_data,
              u.first_name, u.last_name, u.email AS user_email,
              -- CPPM-63: an enquiry can now hold more than one safety task (one per
@@ -286,9 +286,45 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
         WHERE f.client_id = ? AND f.forward_status = 'failed'
         ORDER BY f.last_forward_at DESC LIMIT 100`, [req.params.clientId]);
     followups.forEach(f => { f.reference = `CP-${String(f.submission_id).padStart(6, '0')}`; });
-    res.json({ counts: byStatus, failures, files, followups });
+    // Bridge plan P6: the latest comparison with MIMS, for side effects and for everything.
+    const [runs] = await pool.execute(
+      `SELECT r.scope, r.started_at, r.finished_at, r.checked, r.missing, r.different, r.resent, r.error
+         FROM cp_mims_reconciliations r
+         JOIN (SELECT scope, MAX(id) AS id FROM cp_mims_reconciliations WHERE client_id = ? GROUP BY scope) l ON l.id = r.id`,
+      [req.params.clientId]);
+    const reconciliation = Object.fromEntries(runs.map(r => [r.scope, r]));
+    res.json({ counts: byStatus, failures, files, followups, reconciliation });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/submissions/:clientId/reconciliation.csv?month=YYYY-MM — bridge plan P6:
+// every comparison with MIMS in a month and what each found, for audit.
+router.get('/:clientId/reconciliation.csv', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? req.query.month : new Date().toISOString().slice(0, 7);
+    const [rows] = await pool.execute(
+      `SELECT r.id, r.scope, r.started_at, r.finished_at, r.checked, r.missing, r.different, r.resent, r.error,
+              i.submission_id, i.problem, i.action
+         FROM cp_mims_reconciliations r
+         LEFT JOIN cp_mims_reconciliation_items i ON i.run_id = r.id
+        WHERE r.client_id = ? AND r.started_at >= ? AND r.started_at < ? + INTERVAL 1 MONTH
+        ORDER BY r.id, i.id`,
+      [req.params.clientId, `${month}-01`, `${month}-01`]);
+    const esc = v => `"${(v == null ? '' : (v instanceof Date ? v.toISOString() : String(v))).replace(/"/g, '""')}"`;
+    const header = ['Run', 'Scope', 'Started', 'Finished', 'Checked', 'Missing', 'Different', 'Sent again', 'Error', 'Request', 'Problem', 'Action'];
+    const lines = rows.map(r => [
+      r.id, r.scope === 'ae' ? 'Side effects (hourly)' : 'All reports (nightly)', r.started_at, r.finished_at,
+      r.checked, r.missing, r.different, r.resent, r.error,
+      r.submission_id ? `CP-${String(r.submission_id).padStart(6, '0')}` : '', r.problem, r.action,
+    ].map(esc).join(','));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="mims-reconciliation-${req.params.clientId}-${month}.csv"`);
+    res.send([header.map(esc).join(','), ...lines].join('\r\n'));
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/reconciliation.csv', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

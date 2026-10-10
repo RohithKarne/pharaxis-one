@@ -7,7 +7,7 @@ const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
-const { issueClientCredentials, createApiClient } = require('../services/api-platform/tokenIssuer');
+const { issueClientCredentials, createApiClient, rotateClientSecret } = require('../services/api-platform/tokenIssuer');
 
 // Scopes a client may be granted. '*'/unknown scopes are rejected. (H-04)
 const ALLOWED_API_SCOPES = ['cases:read', 'cases:write', 'webhooks:read', 'webhooks:write'];
@@ -17,6 +17,7 @@ const { publicApiRateLimiter } = require('../services/api-platform/rateLimiter')
 const { signPayload } = require('../services/api-platform/webhookDispatcher');
 const { deliverPendingWebhooks } = require('../services/api-platform/webhookDeliveryWorker');
 const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
+const { reportFingerprint } = require('../services/api-platform/reportFingerprint');
 const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
@@ -99,6 +100,7 @@ router.get('/api/admin/api-clients', authenticate, requireRole('admin', 'platfor
     const [clients] = await pool.execute(
       `SELECT c.id, c.client_id, c.name, c.scopes, c.status, c.rate_limit_per_min, c.default_site_id, c.initial_status_id,
               c.created_at, c.last_used_at,
+              CASE WHEN c.previous_secret_expires_at > NOW() THEN c.previous_secret_expires_at END AS previous_secret_expires_at,
               (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
               (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h,
               (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
@@ -144,6 +146,23 @@ router.put('/api/admin/api-clients/:id', authenticate, requireRole('admin', 'pla
   } catch (err) { res.status(500).json({ error: 'Could not save the connection.' }); }
 });
 
+// Bridge plan P7: a new secret for a connection without creating a new connection
+// (which would orphan every case the old one sent). The old secret keeps working
+// for 7 days; tokens already issued run out within the hour as usual.
+router.post('/api/admin/api-clients/:id/new-secret', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id, org_id, name, status FROM api_clients WHERE id = ?', [req.params.id]);
+    if (!client || (!hasGlobalAdminScope(req.user) && Number(client.org_id) !== Number(req.user.orgId))) {
+      return res.status(404).json({ error: 'Connection not found.' });
+    }
+    if (client.status !== 'active') return res.status(400).json({ error: 'Switch the connection on before giving it a new secret.' });
+    const rotated = await rotateClientSecret(client.id);
+    await writeAuditLog(req.user.userId, req.user.email, 'SECRET_ROTATED', 'api_client', client.id,
+      { previous_secret_works_until: rotated.previous_secret_expires_at });
+    res.json(rotated);
+  } catch (err) { res.status(500).json({ error: 'Could not issue a new secret.' }); }
+});
+
 router.get('/api/openapi.yaml', (_req, res) => {
   res.type('text/yaml').send(buildOpenApiYaml());
 });
@@ -167,6 +186,25 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
 });
 
 // Fetch a single case's current status — used by the CP portal close-sync poller.
+// Bridge plan P4: a case this connection created that MIMS merged into another is
+// followed to the case that absorbed it (up to three merges), within the organisation.
+// Returns the live case and, when it is not the one asked for, the merged-away case;
+// null when the case is not this connection's, or was deleted without a merge.
+async function ownCaseOrSurvivor(db, caseId, apiClient) {
+  const [[asked]] = await db.execute(
+    'SELECT id, case_number, is_deleted, merged_into_case_id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? LIMIT 1',
+    [caseId, apiClient.org_id, apiClient.id]);
+  let cur = asked;
+  for (let hop = 0; cur && Number(cur.is_deleted) === 1 && hop < 3; hop++) {
+    if (!cur.merged_into_case_id) return null;
+    [[cur]] = await db.execute(
+      'SELECT id, case_number, is_deleted, merged_into_case_id FROM cases WHERE id = ? AND org_id = ? LIMIT 1',
+      [cur.merged_into_case_id, apiClient.org_id]);
+  }
+  if (!cur || Number(cur.is_deleted) === 1) return null;
+  return { id: cur.id, case_number: cur.case_number, mergedFrom: cur.id === asked.id ? null : asked };
+}
+
 // Org-scoped by the API key so a client can only read its own cases.
 // Bridge row 4: what changed among THIS connection's cases since a point in time —
 // one call instead of one per case. `closed` is the state's fixed marker, not a
@@ -178,46 +216,65 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
   const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(req.query.since) ? req.query.since : null;
   if (req.query.since && !since) return res.status(400).json({ error: "since must be 'YYYY-MM-DD HH:MM:SS' (UTC)." });
   const afterId = Math.max(parseInt(req.query.after_id, 10) || 0, 0);
+  // Bridge plan P4: deleted cases come through too. One merged into another case is
+  // reported under its own id with the state, owner and answer of the case that
+  // absorbed it (up to two merges), and changes when either case changes. One deleted
+  // without a merge is reported as removed. Before, both simply vanished from this
+  // list and the portal request waited "with the medical team" for good.
   const [rows] = await pool.execute(
-    `SELECT c.id, c.case_number, ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
-            DATE_FORMAT(c.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
-            c.case_owner_id IS NOT NULL AS owner_assigned,
-            c.reporter_erased_at IS NOT NULL AS reporter_erased,
-            -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
-            -- or a superseded one), and whether it was addressed to the person who
-            -- reported — only then does its text travel back to them.
-            (SELECT r.id FROM case_mi_responses r
-              WHERE r.case_id = c.id AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
-              ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
-       FROM cases c
-       LEFT JOIN workflow_states ws ON ws.id = c.status_id
-      WHERE c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0
-        -- A change stamped in the future (a writer on the wrong clock) is not handed out
-        -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
-        -- every real change after it is skipped, with no error anywhere.
-        AND c.updated_at <= NOW() + INTERVAL 1 MINUTE
-        ${since ? 'AND (c.updated_at > ? OR (c.updated_at = ? AND c.id > ?))' : ''}
-      ORDER BY c.updated_at ASC, c.id ASC
+    `SELECT x.*, DATE_FORMAT(x.changed_at, '%Y-%m-%d %H:%i:%s') AS updated_at FROM (
+       SELECT c.id, c.case_number, c.is_deleted, live.id AS live_id, live.case_number AS live_number,
+              ws.name AS status, COALESCE(ws.is_closed, 0) AS closed,
+              GREATEST(c.updated_at, COALESCE(live.updated_at, c.updated_at)) AS changed_at,
+              COALESCE(live.case_owner_id, c.case_owner_id) IS NOT NULL AS owner_assigned,
+              c.reporter_erased_at IS NOT NULL AS reporter_erased,
+              -- Bridge row 8: the latest answer that has gone out (never a draft, a voided
+              -- or a superseded one), and whether it was addressed to the person who
+              -- reported — only then does its text travel back to them.
+              (SELECT r.id FROM case_mi_responses r
+                WHERE r.case_id = COALESCE(live.id, c.id) AND r.response_status = 'SENT' AND r.voided_at IS NULL AND r.superseded_by_id IS NULL
+                ORDER BY r.sent_at DESC, r.id DESC LIMIT 1) AS answer_id
+         FROM cases c
+         LEFT JOIN cases s1 ON c.is_deleted = 1 AND s1.id = c.merged_into_case_id AND s1.org_id = c.org_id
+         LEFT JOIN cases s2 ON s1.is_deleted = 1 AND s2.id = s1.merged_into_case_id AND s2.org_id = c.org_id
+         LEFT JOIN cases live ON live.id = CASE WHEN s1.is_deleted = 0 THEN s1.id WHEN s2.is_deleted = 0 THEN s2.id END
+         LEFT JOIN workflow_states ws ON ws.id = COALESCE(live.status_id, c.status_id)
+        WHERE c.org_id = ? AND c.source_api_client_id = ?
+     ) x
+      -- A change stamped in the future (a writer on the wrong clock) is not handed out
+      -- until its time comes: otherwise the caller's checkpoint jumps ahead of now and
+      -- every real change after it is skipped, with no error anywhere.
+      WHERE x.changed_at <= NOW() + INTERVAL 1 MINUTE
+        ${since ? 'AND (x.changed_at > ? OR (x.changed_at = ? AND x.id > ?))' : ''}
+      ORDER BY x.changed_at ASC, x.id ASC
       LIMIT ${limit + 1}`,
     since ? [req.apiClient.org_id, req.apiClient.id, since, since, afterId] : [req.apiClient.org_id, req.apiClient.id]
   );
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   const answers = {};
-  const answerIds = page.map(r => r.answer_id).filter(Boolean);
+  const answerIds = [...new Set(page.map(r => r.answer_id).filter(Boolean))];
   if (answerIds.length) {
     const [ans] = await pool.execute(
-      `SELECT r.id, r.case_id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
-              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at,
-              (SELECT cr.email FROM case_reporter cr WHERE cr.case_id = r.case_id ORDER BY cr.id LIMIT 1) AS reporter_email
+      `SELECT r.id, r.response_text, r.response_body_html, r.response_subject, r.recipient_email,
+              DATE_FORMAT(r.sent_at, '%Y-%m-%d %H:%i:%s') AS sent_at
          FROM case_mi_responses r WHERE r.id IN (${answerIds.map(() => '?').join(',')})`, answerIds);
-    for (const a of ans) {
-      const toReporter = !!a.recipient_email && !!a.reporter_email
-        && a.recipient_email.trim().toLowerCase() === a.reporter_email.trim().toLowerCase();
+    const answerById = Object.fromEntries(ans.map(a => [a.id, a]));
+    // The person who reported is the one on the portal's own case, also when the
+    // answer was written on the case it was merged into (bridge plan P4).
+    const [reporters] = await pool.execute(
+      `SELECT case_id, email FROM case_reporter WHERE case_id IN (${page.map(() => '?').join(',')}) ORDER BY id DESC`, page.map(r => r.id));
+    const reporterOf = Object.fromEntries(reporters.map(o => [o.case_id, o.email]));
+    for (const r of page) {
+      const a = answerById[r.answer_id];
+      if (!a) continue;
+      const reporterEmail = reporterOf[r.id];
+      const toReporter = !!a.recipient_email && !!reporterEmail
+        && a.recipient_email.trim().toLowerCase() === reporterEmail.trim().toLowerCase();
       const text = a.response_text || String(a.response_body_html || '')
         .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '')
         .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-      answers[a.case_id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
+      answers[r.id] = { id: a.id, sent_at: a.sent_at, to_reporter: toReporter, subject: a.response_subject || null, text: toReporter ? text : null };
     }
   }
   res.json({
@@ -226,6 +283,8 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
       owner_assigned: !!Number(r.owner_assigned), answer: answers[r.id] || null,
       // Bridge row 10: the reporter's identity has been erased on this case.
       reporter_erased: !!Number(r.reporter_erased),
+      ...(r.live_id ? { merged_into: { id: r.live_id, case_number: r.live_number } } : {}),
+      ...(Number(r.is_deleted) && !r.live_id ? { removed: true, closed: true } : {}),
     })),
     has_more: rows.length > limit,
     next: last ? { since: last.updated_at, after_id: last.id } : null,
@@ -244,6 +303,39 @@ router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) =
       WHERE org_id = ? AND source_api_client_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
     [req.apiClient.id, req.apiClient.org_id, ...ids]);
   res.json({ claimed: r.affectedRows, sent: ids.length });
+});
+
+// Bridge plan P6: the sending portal checks its list against MIMS. It sends the key
+// and fingerprint of each report it believes MIMS holds; MIMS answers which keys it
+// has no case for at all (lost — the portal sends those again) and which it holds
+// from a different version. Only this connection's cases count; a merged or deleted
+// case is not missing, because the change list already tells the portal about it.
+router.post('/api/v1/cases/reconcile', scopeGuard('cases:read'), async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 1001) : [];
+  if (!items.length || items.length > 1000) return res.status(400).json({ error: 'items must be a list of 1 to 1000 reports.' });
+  const wanted = new Map();
+  for (const it of items) {
+    const key = typeof it?.key === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(it.key) ? it.key : null;
+    if (!key) return res.status(400).json({ error: 'Each item needs the key the report was sent with.' });
+    wanted.set(key, typeof it.fingerprint === 'string' ? it.fingerprint.toLowerCase() : null);
+  }
+  try {
+    const keys = [...wanted.keys()];
+    const [rows] = await pool.execute(
+      `SELECT id, case_number, source_key, source_fingerprint FROM cases
+        WHERE org_id = ? AND source_api_client_id = ? AND source_key IN (${keys.map(() => '?').join(',')})`,
+      [req.apiClient.org_id, req.apiClient.id, ...keys]);
+    const held = new Map(rows.map(r => [r.source_key, r]));
+    const missing = keys.filter(k => !held.has(k));
+    const different = [];
+    for (const [key, fp] of wanted) {
+      const r = held.get(key);
+      if (r && fp && r.source_fingerprint && r.source_fingerprint !== fp) different.push({ key, id: r.id, case_number: r.case_number });
+    }
+    res.json({ checked: keys.length, missing, different });
+  } catch (err) {
+    res.status(500).json(intakeFailure(err, req, 'Failed to compare the reports.'));
+  }
 });
 
 router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
@@ -270,9 +362,13 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
 router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    // Only a case this connection created, as for follow-ups: another system in the
+    // same organisation could erase the reporter on a portal case, recorded as the
+    // portal's own erasure request. A merged or deleted case too (bridge plan P4): it
+    // still holds the reporter's name and contact details, and a merge does not move them.
     const [[c]] = await conn.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
-      [req.params.id, req.apiClient.org_id]
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND source_api_client_id = ? LIMIT 1',
+      [req.params.id, req.apiClient.org_id, req.apiClient.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
@@ -319,6 +415,30 @@ const INTAKE_LIMITS = {
   'mi_intake.mi_category': 255,
 };
 
+// Bridge plan P2 (decision 1, option A): the reporter's own seriousness answer ticks
+// the matching criteria, recorded as reported and to be confirmed at triage, and a
+// serious report starts at high priority. The portal offers Death, Life-threatening,
+// Hospitalization, Disability, Congenital anomaly, Other and None of these.
+const SERIOUSNESS_WORDS = [
+  [/death|died|fatal/i, 'is_death'],
+  [/life[\s-]*threat/i, 'is_life_threatening'],
+  [/hospital/i, 'is_hospitalization'],
+  [/disab|incapacit/i, 'is_disability'],
+  [/congenital|birth defect/i, 'is_congenital_anomaly'],
+  [/^other\b|medically important/i, 'is_other_medically_important'],
+];
+function reportedSeriousness(ae) {
+  const raw = ae && typeof ae === 'object' ? ae.seriousness_reported : null;
+  if (raw == null) return null;
+  const answers = (Array.isArray(raw) ? raw : String(raw).split(/[\n,;]+/)).map(s => String(s).trim()).filter(Boolean);
+  if (!answers.length) return null;
+  const flags = {};
+  for (const a of answers) for (const [re, key] of SERIOUSNESS_WORDS) if (re.test(a)) flags[key] = 1;
+  if (Object.keys(flags).length) flags.is_serious = 1;
+  const unmatched = answers.filter(a => !/^none\b/i.test(a) && !SERIOUSNESS_WORDS.some(([re]) => re.test(a)));
+  return { text: answers.join(', ').slice(0, 500), flags, unmatched };
+}
+
 function fitIntakeToLimits(body) {
   const shortened = [];
   for (const [path, max] of Object.entries(INTAKE_LIMITS)) {
@@ -345,6 +465,13 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
   const orgId = req.apiClient.org_id;
+  // Bridge plan P5: the fingerprint of the report as it arrived, taken before anything
+  // is shortened. A sender that gives its own value must match it, or the report
+  // changed on the way and is refused rather than stored.
+  const fingerprint = reportFingerprint(req.body);
+  if (req.body?.payload_sha256 && String(req.body.payload_sha256).toLowerCase() !== fingerprint) {
+    return res.status(400).json({ error: 'The report changed on its way to MIMS: its fingerprint does not match. Send it again.' });
+  }
   const shortened = fitIntakeToLimits(req.body || {});
   const conn = await pool.getConnection();
   try {
@@ -371,7 +498,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     // number where that number is free, so the case can be found by it in MIMS.
     const reference = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
     const desc = req.body.description || req.body.subject || null;
-    const priority = req.body.priority || 'normal';
+    const seriousness = caseType === 'AE' ? reportedSeriousness(req.body.ae_intake) : null;
+    if (seriousness) Object.assign(req.body.ae_intake, seriousness.flags);
+    const priority = req.body.priority || (seriousness?.flags.is_serious ? 'high' : 'normal');
     // CPPM-18: when the report first reached the company, per the source portal
     // (e.g. the day a person reported it in chat, not the day a reviewer
     // confirmed it). It starts the regulatory clock on the awareness basis
@@ -394,16 +523,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let reusedFrom = null;
     if (sourceKey) {
       const [[same]] = await conn.execute(
-        'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1',
+        'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1',
         [req.apiClient.id, sourceKey]);
       if (same) {
         await conn.commit();
-        return res.status(200).json({ id: same.id, idempotent: true });
+        return res.status(200).json({ id: same.id, case_number: same.case_number, fingerprint: same.source_fingerprint, idempotent: true });
       }
     }
     if (reference) {
       const [[existing]] = await conn.execute(
-        `SELECT id, case_number, source_key, created_at >= NOW() - INTERVAL 2 HOUR AS recent
+        `SELECT id, case_number, source_key, source_fingerprint, created_at >= NOW() - INTERVAL 2 HOUR AS recent
            FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1`,
         [req.apiClient.id, reference]
       );
@@ -416,7 +545,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
           await conn.execute('UPDATE cases SET source_key = ?, updated_at = updated_at WHERE id = ?', [sourceKey, existing.id]);
         }
         await conn.commit();
-        return res.status(200).json({ id: existing.id, idempotent: true });
+        return res.status(200).json({ id: existing.id, case_number: existing.case_number, fingerprint: existing.source_fingerprint, idempotent: true });
       }
       // A case deleted in MIMS still holds its reference under the unique key, so a
       // report sent again after that deletion (Sync Health › Retry) used to fail with
@@ -437,7 +566,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
         // number, no recorded creator, same intake channel. Claimed, then treated as
         // ours. Only for a sender without keys — one with keys sent nothing that old.
         const [[legacy]] = await conn.execute(
-          `SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
+          `SELECT id, case_number FROM cases WHERE org_id = ? AND case_number = ? AND source_api_client_id IS NULL
               AND intake_channel = ? AND is_deleted = 0 LIMIT 1`,
           [orgId, reference, intakeChannel]
         );
@@ -446,7 +575,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
             'UPDATE cases SET source_api_client_id = ?, source_reference = ?, updated_at = updated_at WHERE id = ?',
             [req.apiClient.id, reference, legacy.id]);
           await conn.commit();
-          return res.status(200).json({ id: legacy.id, idempotent: true });
+          return res.status(200).json({ id: legacy.id, case_number: legacy.case_number, fingerprint: null, idempotent: true });
         }
       }
     }
@@ -466,9 +595,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference, source_key)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
-        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, storedReference, sourceKey]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by, source_api_client_id, source_reference, source_key, source_fingerprint)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority, req.apiClient.id, storedReference, sourceKey, fingerprint]
       );
     } catch (err) {
       // Race: the same report pushed twice at once — the second loses on the
@@ -476,11 +605,11 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       if (err.code === 'ER_DUP_ENTRY' && (sourceKey || reference)) {
         const [[dup]] = await conn.execute(
           sourceKey
-            ? 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
-            : 'SELECT id FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
+            ? 'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_key = ? AND is_deleted = 0 LIMIT 1'
+            : 'SELECT id, case_number, source_fingerprint FROM cases WHERE source_api_client_id = ? AND source_reference = ? AND is_deleted = 0 LIMIT 1',
           [req.apiClient.id, sourceKey || storedReference]
         );
-        if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
+        if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, case_number: dup.case_number, fingerprint: dup.source_fingerprint, idempotent: true }); }
       }
       throw err;
     }
@@ -545,11 +674,22 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
 
     // C2: MI question fields → case_mi tab (not just the case description).
     const mi = req.body.mi_intake;
+    let unmatchedProduct = null;
     if (mi && typeof mi === 'object' && caseType === 'MI') {
+      // Bridge plan P2: the product the person named, matched by name to this
+      // organisation's products. A name that matches none is kept in the case comment.
+      let productId = null;
+      const productName = mi.product_name ? String(mi.product_name).trim().slice(0, 255) : '';
+      if (productName) {
+        const [[p]] = await conn.execute(
+          'SELECT id FROM products WHERE org_id = ? AND is_active = 1 AND LOWER(trade_name) = LOWER(?) ORDER BY id LIMIT 1',
+          [orgId, productName]);
+        if (p) productId = p.id; else unmatchedProduct = productName;
+      }
       await conn.execute(
-        `INSERT INTO case_mi (case_id, tab_index, mi_category, question_summary, detailed_question, status)
-         VALUES (?, 1, ?, ?, ?, 'Open')`,
-        [caseId, mi.mi_category || null, mi.question_summary || null, mi.detailed_question || null]
+        `INSERT INTO case_mi (case_id, tab_index, mi_category, product_id, question_summary, detailed_question, status)
+         VALUES (?, 1, ?, ?, ?, ?, 'Open')`,
+        [caseId, mi.mi_category || null, productId, mi.question_summary || null, mi.detailed_question || null]
       );
     }
 
@@ -566,8 +706,17 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       );
     }
 
+    let unmatchedOutcome = null;
     if (caseType === 'AE') {
       const aeData = (ae && typeof ae === 'object') ? ae : {};
+      // case_ae_events.outcome holds six fixed values; the portal sends its own wording
+      // ("Not recovered"). Unmatched, the database refused the whole safety report.
+      // Same mapping as the AE screen (caseAE.js); words it cannot place are kept as
+      // 'unknown' and written to the case history below, so nothing the person said is lost.
+      const OUTCOMES = new Set(['recovered', 'recovering', 'not_recovered', 'recovered_with_sequelae', 'fatal', 'unknown']);
+      const outcomeKey = String(aeData.outcome || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const outcome = !outcomeKey ? null : OUTCOMES.has(outcomeKey) ? outcomeKey : 'unknown';
+      if (outcomeKey && !OUTCOMES.has(outcomeKey)) unmatchedOutcome = String(aeData.outcome);
       const [aev] = await conn.execute('INSERT INTO case_ae_versions (case_id, version_number, created_by) VALUES (?, 1, NULL)', [caseId]);
       const aeVer = aev.insertId;
       await conn.execute(
@@ -580,7 +729,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
             is_serious, is_death, is_life_threatening, is_hospitalization,
             is_disability, is_congenital_anomaly, is_other_medically_important)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [aeVer, aeData.reaction_description || null, aeData.outcome || null, toDateOnly(aeData.reaction_onset_date),
+        [aeVer, aeData.reaction_description || null, outcome, toDateOnly(aeData.reaction_onset_date),
          aeData.is_serious ? 1 : 0, aeData.is_death ? 1 : 0, aeData.is_life_threatening ? 1 : 0, aeData.is_hospitalization ? 1 : 0,
          aeData.is_disability ? 1 : 0, aeData.is_congenital_anomaly ? 1 : 0, aeData.is_other_medically_important ? 1 : 0]
       );
@@ -642,9 +791,34 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       await writeCaseAudit(caseId, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
         'INTAKE_VALUE_SHORTENED', s.path, s.full, s.kept, conn);
     }
+    if (unmatchedOutcome) {
+      await writeCaseAudit(caseId, 0, apiActor, 'INTAKE_VALUE_NOT_MATCHED', 'ae_intake.outcome', unmatchedOutcome, 'unknown', conn);
+    }
+
+    // Bridge plan P2: what the reporter said that has no field of its own on the case
+    // screen, in one comment the case handler sees, so nothing from the form is lost.
+    const lines = [];
+    if (seriousness) {
+      lines.push(seriousness.flags.is_serious
+        ? `Seriousness, as reported: ${seriousness.text}. The matching criteria are ticked; confirm them at triage.`
+        : `Seriousness, as reported: ${seriousness.text}. No serious criterion is ticked; confirm at triage.`);
+      if (seriousness.unmatched.length) lines.push(`Not matched to a seriousness criterion: ${seriousness.unmatched.join(', ')}. Assess at triage.`);
+      await writeCaseAudit(caseId, 0, apiActor, 'SERIOUSNESS_AS_REPORTED', 'ae_intake.seriousness', null,
+        `${seriousness.text} (as reported, to be confirmed at triage)`, conn);
+    }
+    if (unmatchedProduct) lines.push(`Product named: ${unmatchedProduct} (no MIMS product has this name).`);
+    const others = Array.isArray(req.body.other_answers) ? req.body.other_answers.slice(0, 50) : [];
+    for (const o of others) {
+      if (!o || typeof o !== 'object' || o.answer == null || String(o.answer).trim() === '') continue;
+      lines.push(`${String(o.question || 'Answer').slice(0, 200)}: ${String(o.answer).slice(0, 2000)}`);
+    }
+    if (lines.length) {
+      await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
+        [caseId, `From the report on ${req.apiClient.name}${reference ? ` (${reference})` : ''}:\n${lines.join('\n')}`]);
+    }
 
     await conn.commit();
-    res.status(201).json({ id: caseId, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
+    res.status(201).json({ id: caseId, case_number: caseNumber, fingerprint, ...(shortened.length ? { shortened: shortened.map(s => s.path) } : {}) });
     // Bridge row 7: an unassigned side-effect or complaint case tells the supervisors.
     notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName: req.apiClient.name });
   } catch (err) {
@@ -666,11 +840,14 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
   if (!followupId) return res.status(400).json({ error: 'followup_id is required.' });
   const conn = await pool.getConnection();
   try {
+    // Bridge plan P4: information added to a case MIMS merged into another goes to that case.
+    const live = await ownCaseOrSurvivor(conn, req.params.id, req.apiClient);
+    if (!live) return res.status(404).json({ error: 'Case not found.' });
     const [[c]] = await conn.execute(
       `SELECT c.id, c.case_number, c.case_type, c.org_id, c.case_owner_id, COALESCE(ws.is_closed, 0) AS closed
          FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id
-        WHERE c.id = ? AND c.org_id = ? AND c.source_api_client_id = ? AND c.is_deleted = 0 LIMIT 1`,
-      [req.params.id, req.apiClient.org_id, req.apiClient.id]);
+        WHERE c.id = ? AND c.org_id = ? LIMIT 1`,
+      [live.id, req.apiClient.org_id]);
     if (!c) return res.status(404).json({ error: 'Case not found.' });
     const [[done]] = await conn.execute(
       'SELECT comment_id FROM api_case_followups WHERE api_client_id = ? AND external_followup_id = ?', [req.apiClient.id, followupId]);
@@ -678,8 +855,9 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
 
     await conn.beginTransaction();
     const reference = req.body?.reference ? String(req.body.reference).slice(0, 100) : c.case_number;
+    const merged = live.mergedFrom ? `; ${live.mergedFrom.case_number} was merged into this case` : '';
     const [cm] = await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
-      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}):\n${text}`]);
+      [c.id, `Follow-up from the reporter (${reference}, via ${req.apiClient.name}${merged}):\n${text}`]);
     await conn.execute('UPDATE cases SET follow_up_received_date = CURDATE(), updated_at = NOW() WHERE id = ?', [c.id]);
     await conn.execute(
       'INSERT INTO api_case_followups (api_client_id, external_followup_id, case_id, comment_id) VALUES (?, ?, ?, ?)',
@@ -713,10 +891,9 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
 router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUpload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file is required.' });
-    const [[c]] = await pool.execute(
-      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
-      [req.params.id, req.apiClient.org_id]
-    );
+    // Only on a case this connection created, as for follow-ups; a merged one's file
+    // goes to the case it was merged into (bridge plan P4).
+    const c = await ownCaseOrSurvivor(pool, req.params.id, req.apiClient);
     if (!c) return res.status(404).json({ error: 'Case not found.' });
 
     // The sending portal retries a file it could not confirm (a timeout, a crash after
@@ -742,34 +919,16 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
        String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, checksum]
     );
     await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
-      'ATTACHMENT_ADDED_VIA_API', 'attachment', null, `${String(req.file.originalname || '').slice(0, 200)} (${req.file.size} bytes)`);
+      'ATTACHMENT_ADDED_VIA_API', 'attachment', null, `${String(req.file.originalname || '').slice(0, 200)} (${req.file.size} bytes)${c.mergedFrom ? `, sent to ${c.mergedFrom.case_number}, which was merged into this case` : ''}`);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     res.status(500).json(intakeFailure(err, req, 'Failed to store attachment.'));
   }
 });
 
-router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {
-  // M-20: optional optimistic concurrency. If the caller supplies an expected
-  // version, gate the UPDATE on it and return 409 on a stale write. Without it,
-  // behaviour is unchanged (last-write-wins) for backward compatibility.
-  const expected = req.body.expected_version_stamp;
-  if (expected !== undefined && expected !== null && expected !== '') {
-    const [result] = await pool.execute(
-      'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND version_stamp=?',
-      [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, expected]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(409).json({ error: 'Version conflict: the case was modified since your expected version.' });
-    }
-    return res.json({ id: Number(req.params.id) });
-  }
-  await pool.execute(
-    'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=?',
-    [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id]
-  );
-  res.json({ id: Number(req.params.id) });
-});
+// No PUT /api/v1/cases/:id. The portal never rewrote a case, and the route changed the
+// description and priority with no line in the case history (Rohith, 2026-10-10,
+// bridge plan decision 3). A case changes in MIMS; the portal adds follow-ups.
 
 router.get('/api/v1/picklists', scopeGuard('picklists:read'), async (req, res) => {
   const [rows] = await pool.execute('SELECT id, category, field_type, value, status FROM picklists WHERE org_id=? AND (? IS NULL OR category=?) AND (? IS NULL OR field_type=?) ORDER BY sort_order ASC, value ASC', [req.apiClient.org_id, req.query.category || null, req.query.category || null, req.query.field_type || null, req.query.field_type || null]);

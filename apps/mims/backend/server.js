@@ -205,8 +205,16 @@ app.use('/api', (req, res, next) => {
 // public REST, signed webhooks) is off by default. It is the surface of the SSRF and
 // cross-tenant webhook security findings and has no current client demand — enable
 // per-deployment (ENABLE_API_PLATFORM=true) only when a client contracts for it.
+//
+// ENABLE_API_PLATFORM=bridge turns on only what the CP Portal uses: the token,
+// the cases routes and the API connections screen (bridge plan P7). Webhooks,
+// GraphQL, contacts, users and the rest stay off.
 if (process.env.ENABLE_API_PLATFORM === 'true') {
   app.use('/', require('./routes/apiPlatform'));
+} else if (process.env.ENABLE_API_PLATFORM === 'bridge') {
+  const apiPlatform = require('./routes/apiPlatform');
+  const bridgePath = /^\/(oauth\/token|api\/admin\/api-clients|api\/v1\/cases)(\/|$)/;
+  app.use((req, res, next) => (bridgePath.test(req.path) ? apiPlatform(req, res, next) : next()));
 }
 
 // SECURITY (F3): Do NOT serve CM complaint documents as unauthenticated static files.

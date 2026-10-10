@@ -21,6 +21,7 @@ export default function SyncHealthPage() {
   const [failures, setFailures] = useState([])
   const [files, setFiles]       = useState([])
   const [followups, setFollowups] = useState([])
+  const [reconciliation, setReconciliation] = useState({})
   const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -39,11 +40,34 @@ export default function SyncHealthPage() {
       setFailures(d.failures || [])
       setFiles(d.files || [])
       setFollowups(d.followups || [])
+      setReconciliation(d.reconciliation || {})
     } catch {
       setError('Network error — please try again.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Bridge plan P6: every comparison with MIMS this month and what it found.
+  async function downloadReconciliation() {
+    const month = new Date().toISOString().slice(0, 7)
+    const res = await fetch(`/api/admin/submissions/${clientId}/reconciliation.csv?month=${month}`, { headers: adminHeaders() })
+    if (!res.ok) { setError(`Could not download the comparison report (error ${res.status}).`); return }
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url; a.download = `mims-reconciliation-${clientId}-${month}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function describeRun(run) {
+    if (!run) return 'Not run yet.'
+    const when = new Date(run.started_at).toLocaleString()
+    if (run.error) return `${when}: could not finish. ${run.error}`
+    if (!run.finished_at) return `${when}: running.`
+    const found = Number(run.missing) + Number(run.different)
+    return found === 0
+      ? `${when}: ${run.checked} checked, 0 differences.`
+      : `${when}: ${run.checked} checked; ${run.missing} missing in MIMS (${run.resent} sent again), ${run.different} different.`
   }
 
   async function retry(submissionId) {
@@ -104,6 +128,15 @@ export default function SyncHealthPage() {
               <span key={t.key}>{t.label}: <b>{counts[t.key] || 0}</b></span>
             ))}
             <span>Total submissions: <b>{total}</b></span>
+          </div>
+
+          <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2>Comparison with MIMS</h2>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadReconciliation}>Download this month (CSV)</button>
+          </div>
+          <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
+            <div>Side-effect reports, every hour: {describeRun(reconciliation.ae)}</div>
+            <div>All reports, every night: {describeRun(reconciliation.all)}</div>
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

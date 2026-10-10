@@ -24,9 +24,6 @@ paths:
       summary: List cases
     post:
       summary: Create a case
-  /cases/{id}:
-    put:
-      summary: Update a case
   /cases/{id}/redact-reporter:
     post:
       summary: Remove the reporter's identity from a case, keeping the case (GDPR erasure)
@@ -36,6 +33,9 @@ paths:
   /cases/claim:
     post:
       summary: Record this connection as the sender of cases it created before senders were recorded
+  /cases/reconcile:
+    post:
+      summary: Compare the sender's list of report keys and fingerprints with the cases this connection created; returns the missing and the different
   /cases/{id}/follow-ups:
     post:
       summary: Add information the reporter sent after the case was created, as a case comment (idempotent on followup_id)

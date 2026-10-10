@@ -44,6 +44,18 @@ export default function DeveloperApiAdmin() {
     setMsg(`Saved "${client.name}".`); load()
   }
 
+  // Bridge plan P7: a new secret for the same connection; the old one works 7 more days.
+  async function newSecret(client) {
+    // Only one old secret is kept: a second new secret within the 7 days ends the oldest at once.
+    const ending = client.previous_secret_expires_at ? ' The secret before the current one stops working now.' : ''
+    if (!window.confirm(`Give "${client.name}" a new secret? The current secret keeps working for 7 days, so there is time to put the new one into the portal.${ending}`)) return
+    setMsg('')
+    const res = await httpFetch(`/api/admin/api-clients/${client.id}/new-secret`, { method: 'POST', headers })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { setMsg(d.error || 'Could not issue a new secret.'); return }
+    setCreated({ client_id: client.client_id, client_secret: d.client_secret, previous_until: d.previous_secret_expires_at }); load()
+  }
+
   return (
     <div className="ma-ai-config">
       <h1>API connections</h1>
@@ -84,6 +96,8 @@ export default function DeveloperApiAdmin() {
                   {c.status === 'active'
                     ? <button className="btn btn-outline" onClick={() => save(c, { status: 'revoked' })}>Switch off</button>
                     : <button className="btn btn-outline" onClick={() => save(c, { status: 'active' })}>Switch on</button>}
+                  {c.status === 'active' && <button className="btn btn-outline" style={{ marginLeft: 6 }} onClick={() => newSecret(c)}>New secret</button>}
+                  {c.previous_secret_expires_at && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Old secret works until {new Date(c.previous_secret_expires_at).toLocaleString()}</div>}
                 </td>
               </tr>
             ))}
@@ -110,6 +124,7 @@ export default function DeveloperApiAdmin() {
           <strong>Copy these now — the secret is shown only once.</strong>
           <div>Client ID: <code>{created.client_id}</code></div>
           <div>Client secret: <code>{created.client_secret}</code></div>
+          {created.previous_until && <div style={{ fontSize: 12, marginTop: 4 }}>The old secret keeps working until {new Date(created.previous_until).toLocaleString()}. Put the new one into the portal's MIMS connection before then.</div>}
         </div>
       )}
     </div>

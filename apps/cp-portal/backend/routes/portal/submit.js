@@ -20,6 +20,7 @@ const { systemAudit, auditWithin } = require('../../utils/audit');
 const { recordStatusEvent, publicTimeline, REOPENED_NOTE } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired, invalidAnswers } = require('../../services/formFields');
+const { reportFingerprint } = require('../../services/reportFingerprint');
 const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 
@@ -282,6 +283,10 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
 // not a name, an email or the screening question.
 const REQUEST_TEXT_KEYS = ['question', 'event_description', 'description', 'message', 'inquiry_details', 'complaint_details'];
 const NOT_REQUEST_TEXT = /name|email|phone|contact|^ae_screen/;
+// Bridge plan P2: answers with no field of their own in MIMS travel as "other answers"
+// and become a case comment. Never the person's identity (an erasure request clears
+// the reporter fields in MIMS, not comments) and never the screening question (MIMS-64).
+const NOT_OTHER_ANSWER = /name|email|phone|contact|address|post_?code|zip|birth|^ae_screen/i;
 function requestText(formData) {
   let d = formData;
   if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return null; } }
@@ -610,9 +615,12 @@ function toDateOnly(d) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
 
-function buildMimsPayload(formType, formData, submissionId, submittedAt) {
+// `used` collects every form key the payload reads, so the caller can send the rest
+// as other answers.
+function buildMimsPayload(formType, formData, submissionId, submittedAt, used = new Set()) {
   const caseType = FORM_TYPE_TO_CASE_TYPE[formType];
   const pick = (...keys) => {
+    keys.forEach(k => used.add(k));
     for (const k of keys) {
       const v = formData[k];
       if (v !== undefined && v !== null && String(v).trim() !== '') return v;
@@ -659,6 +667,8 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       mi_category:       pick('mi_category', 'category'),
       question_summary:  pick('question_summary', 'subject') || (question ? String(question).slice(0, 255) : null),
       detailed_question: question,
+      // Bridge plan P2: MIMS matches the name to its product list.
+      product_name:      pick('product', 'product_name', 'drug_name'),
     };
   } else if (caseType === 'AE') {
     payload.patient = {
@@ -673,6 +683,9 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       reaction_description: reaction,
       reaction_onset_date:  pick('event_date', 'onset_date', 'reaction_onset_date', 'date_of_event'),
       outcome:              pick('outcome'),
+      // Bridge plan P2: the reporter's own answer; MIMS ticks the matching criteria as
+      // reported, to be confirmed at triage.
+      seriousness_reported: pick('seriousness', 'seriousness_criteria', 'serious'),
     };
     payload.description = reaction;
   } else if (caseType === 'PC') {
@@ -682,6 +695,9 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       batch_lot_number:      pick('lot_number', 'batch_lot_number', 'batch_number', 'lot'),
       complaint_category:    pick('complaint_category', 'complaint_type', 'category'),
       complaint_description: complaint,
+      // Stored on the MIMS intake record. No MIMS complaint screen shows it, so it is
+      // also left for the other answers (not added to `used`).
+      purchase_date:         formData.purchase_date || null,
     };
     payload.description = complaint;
   }
@@ -795,7 +811,8 @@ async function syncToIntegration(clientId, submissionId, formType) {
     const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
     // Default structured payload — works out-of-the-box for the seeded portal forms.
-    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
+    const used = new Set(['awareness_date', 'related_reference']);
+    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at, used);
 
     // Post-merge review: this request's own key, so MIMS never hands it another report's
     // case that happens to have the same number (a portal set up again, or a second
@@ -828,7 +845,22 @@ async function syncToIntegration(clientId, submissionId, formType) {
         obj = obj[k];
       }
       obj[segs[0]] = value;
+      used.add(m.cp_field);
     }
+
+    // Bridge plan P2: every other answer reaches the case, under its question as the
+    // person saw it. Before, anything the payload did not name was dropped.
+    const { fields } = await loadFormFields(clientId, formType);
+    const labelOf = Object.fromEntries(fields.map(f => [f.field_key, f.label]));
+    const other = Object.entries(formData)
+      .filter(([k, v]) => !used.has(k) && !NOT_OTHER_ANSWER.test(k) && v !== null && v !== undefined && String(v).trim() !== '')
+      .map(([k, v]) => ({
+        question: String(labelOf[k] || k).slice(0, 200),
+        answer: (Array.isArray(v) ? v.join(', ') : v === true ? 'Yes' : v === false ? 'No' : String(v)).slice(0, 2000),
+      }));
+    if (other.length) payload.other_answers = other.slice(0, 50);
+    // Bridge plan P5: MIMS checks the report arrived as sent, and answers with the same value.
+    payload.payload_sha256 = reportFingerprint(payload);
   } catch (err) {
     const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
     log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });
@@ -872,11 +904,39 @@ async function syncToIntegration(clientId, submissionId, formType) {
     // against the connection; any other answer proves the line works).
     await recordConnectionResult(integration, r.status < 500, r.status < 500 ? null : `MIMS answered HTTP ${r.status}.`);
 
+    const data = r.ok ? await r.json().catch(() => ({})) : null;
+    const mimsCaseId = data ? (data.case_id || data.id || null) : null;
+    // Bridge plan P5: a success that names no case is not a delivery. It was recorded
+    // as delivered with no link, and the report was never followed again.
+    if (r.ok && !mimsCaseId) {
+      const reason = 'MIMS said it accepted the report but gave no case number, so delivery cannot be confirmed.';
+      await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [reason, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
+      systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, status: r.status });
+      await alertIfStuck(clientId, submissionId, reason);
+      return;
+    }
     if (r.ok) {
-      const data = await r.json().catch(() => ({}));
-      const mimsCaseId = data.case_id || data.id || null;
-      await pool.execute(`UPDATE cp_submissions SET status='synced', external_ref=?, synced_at=NOW(), sync_error=null WHERE id=?`,
-        [mimsCaseId, submissionId]);
+      // The receipt: MIMS's case number and the fingerprint of what it received. A
+      // repeat of an earlier report returns that report's fingerprint; if it differs
+      // from what was sent now, MIMS holds an older version and a person must look.
+      // The earlier receipt is kept: it is still true of what MIMS holds.
+      const theirs = typeof data.fingerprint === 'string' ? data.fingerprint : null;
+      const matches = theirs === payload.payload_sha256;
+      await pool.execute(
+        `UPDATE cp_submissions SET status='synced', external_ref=?, mims_case_number=?, mims_fingerprint=COALESCE(?, mims_fingerprint), synced_at=NOW(), sync_error=null WHERE id=?`,
+        [mimsCaseId, data.case_number ? String(data.case_number).slice(0, 100) : null, matches ? theirs : null, submissionId]);
+      if (theirs && !matches) {
+        systemAudit('MIMS integration', clientId, 'RECEIPT_MISMATCH', 'submission', submissionId,
+          { mims_case_id: mimsCaseId, sent: payload.payload_sha256, mims_holds: theirs });
+        await raiseAlert(clientId, {
+          kind: 'receipt_mismatch', audience: 'integration',
+          title: `MIMS holds a different version of ${`CP-${String(submissionId).padStart(6, '0')}`}`,
+          body: `The report was sent again and MIMS matched it to case ${data.case_number || mimsCaseId}, which was created from a different version of it. Compare the request with the MIMS case and update the case by hand if needed.`,
+          linkPath: `/admin/clients/${clientId}/sync-health`,
+          relatedType: 'submission', relatedId: submissionId, dedupeKey: `receipt:${submissionId}:${theirs}`,
+        });
+      }
       await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
       clearAlerts(clientId, `sync:${submissionId}`, 'system: the report reached MIMS');

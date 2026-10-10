@@ -11,12 +11,12 @@ const MIMS_COMMON_FIELDS = [
   'reporter.organisation', 'reporter.reporter_type', 'description', 'priority',
 ]
 const MIMS_TARGETS = {
-  medical_inquiry:   [...MIMS_COMMON_FIELDS, 'mi_intake.mi_category', 'mi_intake.question_summary', 'mi_intake.detailed_question'],
+  medical_inquiry:   [...MIMS_COMMON_FIELDS, 'mi_intake.mi_category', 'mi_intake.question_summary', 'mi_intake.detailed_question', 'mi_intake.product_name'],
   adverse_event:     [...MIMS_COMMON_FIELDS, 'patient.initials', 'patient.age', 'patient.gender',
                       'ae_intake.suspect_drug_name', 'ae_intake.batch_lot_number', 'ae_intake.reaction_description',
-                      'ae_intake.reaction_onset_date', 'ae_intake.outcome'],
+                      'ae_intake.reaction_onset_date', 'ae_intake.outcome', 'ae_intake.seriousness_reported'],
   product_complaint: [...MIMS_COMMON_FIELDS, 'pc_intake.product_name', 'pc_intake.batch_lot_number',
-                      'pc_intake.complaint_category', 'pc_intake.complaint_description'],
+                      'pc_intake.complaint_category', 'pc_intake.complaint_description', 'pc_intake.purchase_date'],
 }
 const FORM_TYPE_LABELS = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint' }
 
