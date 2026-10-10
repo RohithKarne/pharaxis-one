@@ -440,7 +440,7 @@ function skippedRecently(clientCode, userId) {
 }
 
 function SpecialtyPrompt({ clientCode }) {
-  const { portalHeaders, user } = usePortal()
+  const { portalHeaders, user, t } = usePortal()
   const [dismissed, setDismissed] = useState(() => skippedRecently(clientCode, user?.id))
   const [saving, setSaving] = useState(false)
   function skip() {
@@ -511,7 +511,7 @@ function ChatboxWidget({ clientCode }) {
       setUnwellError('We could not send your report. Please use the side effect form.')
     } finally { setUnwellBusy(false) }
   }
-  const { portalConfig, user } = usePortal()
+  const { portalConfig, user, t } = usePortal()
   const welcomeMsg = portalConfig?.chatbox?.welcome_message || 'Hello! How can I help you today?'
 
   function openChat() {

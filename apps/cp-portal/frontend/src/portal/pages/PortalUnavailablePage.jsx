@@ -9,6 +9,8 @@
  * Deliberately standalone: it renders instead of PortalLayout, so nothing
  * belonging to a real portal appears around it.
  */
+import { usePortal } from '../context/PortalContext'
+
 export default function PortalUnavailablePage() {
   const { t } = usePortal()
   return (

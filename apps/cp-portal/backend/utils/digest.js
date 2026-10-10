@@ -73,7 +73,7 @@ function buildHtml(clientName, { news, safety, docs }) {
       ${section('📰 News', news)}
       ${section('⚠️ Safety Alerts', safety)}
       ${section('📁 New Documents', docs)}
-      <p style="color:#6B7280;font-size:12px;margin-top:20px">You are receiving this because you opted in to the weekly digest. You can turn it off in your portal preferences.</p>
+      <p style="color:#6B7280;font-size:12px;margin-top:20px">You are receiving this because you asked for the weekly update, when you requested access or in your portal preferences. You can switch it off there at any time.</p>
     </div>`
 }
 
@@ -86,8 +86,10 @@ async function recipients(clientId) {
   )
   return rows.filter(u => {
     let prefs = {}
-    try { prefs = JSON.parse(u.notif_prefs_json || '{}') } catch { /* default opt-in */ }
-    return prefs.digest !== false // opt-out model — default on
+    try { prefs = JSON.parse(u.notif_prefs_json || '{}') } catch { /* unreadable = no */ }
+    // CPPM-101: only a reader who said yes. The old "digest" value was on for everyone
+    // by default, so it is not read; weekly_email is set only by the reader's own choice.
+    return prefs.weekly_email === true
   })
 }
 

@@ -63,7 +63,7 @@ router.post('/register', async (req, res) => {
 // used to find out who has an account.
 router.post('/request-access', async (req, res) => {
   try {
-    const { client_code, first_name, last_name, email, user_type, country } = req.body || {};
+    const { client_code, first_name, last_name, email, user_type, country, weekly_email } = req.body || {};
     const f = String(first_name || '').trim(), l = String(last_name || '').trim();
     const e = String(email || '').trim().toLowerCase(), c = String(country || '').trim();
     if (!client_code || !f || !l || !e || !c || !user_type) {
@@ -82,16 +82,19 @@ router.post('/request-access', async (req, res) => {
     if (!validTypes.includes(user_type)) return res.status(400).json({ error: 'Please choose your role from the list.' });
 
     const unusablePassword = `!request:${crypto.randomBytes(24).toString('hex')}`;
+    // CPPM-101: the weekly email goes only to a reader who ticked the box; unticked is no.
+    const weeklyEmail = weekly_email === true;
+    const prefs = JSON.stringify({ news: true, documents: true, safety: true, weekly_email: weeklyEmail });
     try {
       const [info] = await pool.execute(
         `INSERT INTO cp_portal_users
            (client_id, first_name, last_name, email, password, user_type, country,
             is_active, is_verified, user_type_confirmed, email_verified, token_version,
-            access_status, access_requested_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP())`,
-        [client.id, f, l, e, unusablePassword, user_type, c]
+            access_status, access_requested_at, notif_prefs_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP(), ?)`,
+        [client.id, f, l, e, unusablePassword, user_type, c, prefs]
       );
-      await systemAudit('portal access request', client.id, 'ACCESS_REQUESTED', 'portal_user', info.insertId, { user_type });
+      await systemAudit('portal access request', client.id, 'ACCESS_REQUESTED', 'portal_user', info.insertId, { user_type, weekly_email: weeklyEmail });
       // Tell the client's admins. One open alert per portal, however many requests
       // arrive, so a burst of requests cannot become a burst of emails. It carries no
       // personal detail; names and emails are read in the admin console.
