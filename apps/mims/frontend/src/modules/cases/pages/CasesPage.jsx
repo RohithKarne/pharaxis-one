@@ -221,7 +221,7 @@ export default function CasesPage() {
     next.delete('new')
     setSearchParams(next, { replace: true })
     if (hasCapability('case.create')) openModal()
-  }, [searchParams])
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleTabChange(tab, options = {}) {
     setActiveTab(tab)
