@@ -236,6 +236,14 @@ const CASE_FORM_SECTIONS = {
   PC: ['Contact / Requestor', 'Case Information', 'PC — General', 'PC — Patient Information', 'PC — Product Information', 'PC — Return & Retrieval', 'PC — Replacement', 'PC — Refund & Credit'],
 };
 
+// MIPM-222: an "AE — …", "MI — …" or "PC — …" section belongs to that case type,
+// as on the platform rows (migration 048). Untagged, every field read as shared
+// and Case Form Fields listed all AE and PC sections under MI.
+function caseTypeScope(sectionName) {
+  const m = /^(AE|MI|PC) —/.exec(sectionName);
+  return m ? m[1].toLowerCase() : 'shared';
+}
+
 async function seedFieldSetup(conn, orgId, _userId) {
   const allRows = [...FIELD_SETUP_ROWS, ...EXTRA_FIELDS];
   for (const row of allRows) {
@@ -244,9 +252,9 @@ async function seedFieldSetup(conn, orgId, _userId) {
       // contact card on step 1). Untagged, they were drawn on every other step as
       // an empty duplicate form whose required stars nothing enforced.
       `INSERT IGNORE INTO field_setup
-        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id, display_tab)
-       VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
-      [row[0], row[1], row[2], row[3], row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null]
+        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id, display_tab, case_type_scope)
+       VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)`,
+      [row[0], row[1], row[2], row[3], row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null, caseTypeScope(row[0])]
     );
   }
 }

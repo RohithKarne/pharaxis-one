@@ -955,7 +955,7 @@ export default function InboxPage() {
   // non-processed), not over the page on screen. '—' until the first response arrives.
   const heroMetrics = useMemo(() => ([
     { label: 'Open work',  value: metrics ? metrics.open_work  : '—' },
-    { label: 'Unassigned', value: metrics ? metrics.unassigned : '—' },
+    { label: 'Unassigned inquiries', value: metrics ? metrics.unassigned : '—' },
     { label: 'My queue',   value: metrics ? metrics.my_queue   : '—' },
     { label: 'SLA risk',   value: metrics ? metrics.sla_risk   : '—' },
   ]), [metrics])
