@@ -353,6 +353,7 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/admin/haClock'));
   r.use(prefix || '/', require('./routes/admin/caseValidity'));
   r.use(prefix || '/', require('./routes/caseHandoff'));
+  r.use(prefix || '/', require('./routes/caseBridge'));
   r.use(prefix || '/', require('./routes/admin/meddra'));
   r.use(prefix || '/', require('./routes/admin/causality'));
   r.use(prefix || '/', require('./routes/admin/caseDrugs'));

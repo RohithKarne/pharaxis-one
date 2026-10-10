@@ -4391,3 +4391,34 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* A case sent in by a connected portal (bridge features F1, F3, F5): where it came
+   from, a possible duplicate, and questions for the reporter. */
+.cf-bridge-panel {
+  padding: 6px 20px 8px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: #fbfbfd;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.cf-bridge-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cf-bridge-source .cf-strip-key { margin-right: 6px; }
+.cf-bridge-duplicate {
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-sm, 4px);
+  background: #fffbeb;
+  color: #92400e;
+}
+.cf-bridge-note { color: var(--text-muted, #6b7280); }
+.cf-bridge-ask { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-width: 720px; }
+.cf-bridge-ask label { font-weight: 600; }
+.cf-bridge-ask textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--border, #d1d5db); border-radius: var(--radius-sm, 4px); }
+.cf-bridge-actions { display: flex; gap: 8px; }
+.cf-bridge-error { margin-top: 6px; color: #b91c1c; }
+.cf-bridge-questions { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cf-bridge-questions li { padding: 6px 10px; border: 1px solid var(--border, #e5e7eb); border-radius: var(--radius-sm, 4px); background: #fff; }
+.cf-bridge-q-head { color: var(--text-muted, #6b7280); font-size: 11.5px; }
+.cf-bridge-q-text { white-space: pre-wrap; }
+.cf-bridge-link { margin-left: 8px; border: 0; background: none; padding: 0; color: #b91c1c; cursor: pointer; font: inherit; text-decoration: underline; }

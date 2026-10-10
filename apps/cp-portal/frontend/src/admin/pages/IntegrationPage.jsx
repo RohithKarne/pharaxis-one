@@ -277,14 +277,41 @@ export default function IntegrationPage() {
               </CanChange>
               {testResult[i.id] && (
                 <div className={`cp-test-result ${testResult[i.id].success ? 'success' : 'fail'}`}>
-                  {testResult[i.id].success ? `Connected (HTTP ${testResult[i.id].status})` : `Failed: ${testResult[i.id].error || `HTTP ${testResult[i.id].status}`}`}
+                  {testResult[i.id].success ? `Connected (HTTP ${testResult[i.id].status})` : `Failed: ${testResult[i.id].error || testResult[i.id].message || `HTTP ${testResult[i.id].status}`}`}
                 </div>
               )}
+              {testResult[i.id]?.bridge && <BridgeCheck bridge={testResult[i.id].bridge} />}
               <FieldMappingSection clientId={clientId} integration={i} />
             </div>
           ))}
         </div>
       )}
     </AdminLayout>
+  )
+}
+
+const FORM_LABELS = { medical_inquiry: 'Medical enquiry', adverse_event: 'Side-effect report', product_complaint: 'Product complaint' }
+
+// Bridge feature F4: what the connection test found beyond signing in — whether both
+// sides run the same bridge, and whether a trial report from each form would land.
+function BridgeCheck({ bridge }) {
+  if (bridge.error) return <div className="cp-test-result fail">The bridge checks could not run: {bridge.error}</div>
+  const sameVersion = bridge.mims_bridge_version === bridge.portal_bridge_version
+  return (
+    <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+      <div style={{ color: sameVersion ? '#166534' : '#92400E', fontWeight: 600 }}>{sameVersion ? '✓ ' : '! '}{bridge.version_message}</div>
+      {bridge.forms.map(f => (
+        <div key={f.form_type} style={{ marginTop: 6 }}>
+          <div style={{ color: f.ok ? '#166534' : '#B91C1C', fontWeight: 600 }}>
+            {f.ok ? '✓ ' : '✗ '}{FORM_LABELS[f.form_type] || f.form_type}: {f.message}
+          </div>
+          {f.comment_only.length > 0 && (
+            <div style={{ color: '#4B5563' }}>
+              Reaches MIMS only inside the case comment, because no MIMS field takes it: {f.comment_only.join(', ')}. Map a question below to give it a field of its own.
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   )
 }

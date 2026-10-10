@@ -249,6 +249,9 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   sync_key        CHAR(36)     NULL,
   mims_case_number VARCHAR(100) NULL,  -- bridge plan P5 (0044): MIMS's receipt
   mims_fingerprint CHAR(64)    NULL,
+  mims_serious    TINYINT(1)   NULL,   -- bridge features (0046): serious, due date, triaged
+  mims_due_date   DATE         NULL,
+  mims_triaged_at DATETIME     NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_cp_submissions_sync_key (sync_key),
   KEY idx_cp_submissions_client (client_id),
@@ -1182,6 +1185,7 @@ CREATE TABLE IF NOT EXISTS cp_submission_followups (
   forward_error      VARCHAR(1000) NULL,
   last_forward_at    DATETIME      NULL,
   mims_comment_id    INT           NULL,
+  question_id        INT           NULL,  -- bridge feature F3 (0046): answers this question
   created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_followup_submission (submission_id),
@@ -1252,6 +1256,22 @@ CREATE TABLE IF NOT EXISTS cp_mims_reconciliation_items (
 -- 0039 (CPPM-109) only adds two feature rows to clients that already exist; a fresh
 -- database has none, and new clients get both rows when they are created.
 
+-- ── QUESTIONS FROM MIMS (from 0046, bridge feature F3) ─────────
+CREATE TABLE IF NOT EXISTS cp_submission_questions (
+  id                INT          NOT NULL AUTO_INCREMENT,
+  submission_id     INT          NOT NULL,
+  client_id         INT          NOT NULL,
+  mims_question_id  INT          NOT NULL,
+  question          TEXT         NOT NULL,
+  asked_at          DATETIME     NULL,
+  status            VARCHAR(20)  NOT NULL DEFAULT 'open',
+  answered_at       DATETIME     NULL,
+  created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_submission_question (submission_id, mims_question_id),
+  CONSTRAINT fk_question_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1301,4 +1321,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0042_add_content_area_tags.sql',            NULL),
   ('0043_add_safety_ack_reminders.sql',         NULL),
   ('0044_add_mims_delivery_receipt.sql',        NULL),
-  ('0045_add_mims_reconciliation.sql',          NULL);
+  ('0045_add_mims_reconciliation.sql',          NULL),
+  ('0046_add_mims_bridge_features.sql',         NULL);
