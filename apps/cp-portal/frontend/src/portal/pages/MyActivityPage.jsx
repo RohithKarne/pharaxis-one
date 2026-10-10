@@ -38,7 +38,7 @@ export default function MyActivityPage() {
   ]
 
   return (
-    <div className="pp-container pp-page-content" style={{ maxWidth: 820 }}>
+    <div className="pp-container pp-page-content pp-page-narrow">
       <div className="pp-page-header">
         <h1>{t('My Activity')}</h1>
         <p>{t('Your submissions, saved items, safety letters, and the topics you follow.')}</p>

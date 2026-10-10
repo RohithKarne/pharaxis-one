@@ -36,16 +36,16 @@ export default function NewsDetailPage() {
     if (clientCode && postId) load()
   }, [clientCode, postId, language])
 
-  if (loading) return <div className="pp-article-page"><div className="pp-loading">{t('Loading…')}</div></div>
-  if (error)   return <div className="pp-article-page"><div className="pp-error-state">{error}</div></div>
+  if (loading) return <div className="pp-container pp-page-content pp-page-narrow"><div className="pp-loading">{t('Loading…')}</div></div>
+  if (error)   return <div className="pp-container pp-page-content pp-page-narrow"><div className="pp-error-state">{error}</div></div>
   if (!post)   return null
 
   return (
-    <div className="pp-article-page">
+    <div className="pp-container pp-page-content pp-page-narrow">
       <button onClick={() => navigate(-1)} className="pp-back-btn">{t('Back to News')}</button>
 
       {post.category && <div className="pp-article-cat">{post.category}</div>}
-      <h1 className="pp-article-title">{post.title}</h1>
+      <h1 className="pp-page-title">{post.title}</h1>
       {post.publish_at && (
         <div className="pp-article-date">{formatLongDate(post.publish_at)}</div>
       )}

@@ -27,13 +27,13 @@ export default function FAQPortalPage() {
     return acc
   }, {})
 
-  if (loading) return <div className="pp-loading">{t('Loading…')}</div>
+  if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">{t('Loading…')}</div></div>
 
   return (
-    <div className="pp-page-container" style={{ maxWidth: 760, margin: '0 auto' }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>{t('Frequently Asked Questions')}</h1>
-        <p style={{ color: '#4B5563', fontSize: 15 }}>{t('Find answers to common questions below.')}</p>
+    <div className="pp-container pp-page-content pp-page-narrow">
+      <div className="pp-page-header">
+        <h1>{t('Frequently Asked Questions')}</h1>
+        <p>{t('Find answers to common questions below.')}</p>
       </div>
 
       {faqs.length === 0 ? (

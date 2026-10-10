@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import SpecialtyCard from '../components/SpecialtyCard'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function PortalHomePage() {
@@ -69,7 +70,6 @@ export default function PortalHomePage() {
       .catch(() => {})
   }, [clientCode])
   const [latestNews, setLatestNews] = useState([])
-  const [latestDocs, setLatestDocs] = useState([])
   useEffect(() => {
     if (!clientCode) return
     fetch(`/api/portal/content/${clientCode}/events`)
@@ -102,73 +102,43 @@ export default function PortalHomePage() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.posts) setLatestNews(d.posts.slice(0, 4)) })
       .catch(() => {})
-    fetch(`/api/portal/documents?clientCode=${clientCode}`, { headers: portalHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.documents) setLatestDocs(d.documents.slice(0, 3)) })
-      .catch(() => {})
   }, [clientCode])
 
+  // The home page repeated the same links three to five times (Go to, Quick Links, Common
+  // requests, More information, the closing banner). It is now one search, three tasks,
+  // the doctor's own feed and safety (CP ease-of-use plan, phase 2 row 9). Everything
+  // else is one click away in the menu.
   const topTasks = [
     {
       key:   'medical_inquiry',
       icon:  'send',
-      title: t('Submit a Medical Inquiry'),
-      desc: t('Ask a product question, report an event, or request medical information.'),
-      path:  'submit',
-      action: t('Start request'),
+      title: t('Ask a question'),
+      desc: t('Ask our medical team about a product, dosing or a clinical situation.'),
+      path:  'submit?type=medical_inquiry',
+      action: t('Start a question'),
+      tone: 'primary',
+    },
+    {
+      key:   'adverse_event',
+      icon:  'shield',
+      title: t('Report a side effect'),
+      desc: t('Tell us about anyone who became unwell after using one of our products.'),
+      path:  'submit?type=adverse_event',
+      action: t('Start a report'),
       tone: 'primary',
     },
     {
       key:   'document_library',
       icon:  'file',
-      title: t('Find Approved Documents'),
-      desc: t('Browse prescribing information, safety materials, and approved resources.'),
+      title: t('Find documents'),
+      desc: t('Prescribing information, safety materials and approved resources.'),
       path:  'documents',
       action: t('Browse documents'),
       tone: 'teal',
     },
-    {
-      key:   'find_msl',
-      icon:  'users',
-      title: t('Contact an MSL'),
-      desc: t('Connect with a Medical Science Liaison for your area.'),
-      path:  'find-msl',
-      action: t('Find an MSL'),
-      tone: 'primary',
-    },
-  ].filter(c => isFeatureEnabled(c.key))
-
-  const secondaryTasks = [
-    {
-      key:   'therapeutic_areas',
-      icon:  'beaker',
-      title: t('Therapeutic Areas'),
-      desc: t('Information by disease area and treatment category.'),
-      path:  'therapeutic-areas',
-    },
-    {
-      key:   'drug_info',
-      icon:  'pill',
-      title: t('Drug Information'),
-      desc: t('Review approved prescribing information and clinical summaries.'),
-      path:  'drug-info',
-    },
-    {
-      key:   'resources',
-      icon:  'book',
-      title: t('Resources'),
-      desc: t('Access publications, clinical data, and approved materials.'),
-      path:  'resources',
-    },
   ].filter(c => isFeatureEnabled(c.key))
 
   const quickSearches = [productTerm, t('Dosing'), t('Clinical trials'), t('Prescribing information'), t('Safety')].filter(Boolean)
-  const quickDocs = latestDocs.length > 0
-    ? latestDocs.slice(0, 2)
-    : [
-        { id: 'prescribing-info', title: t('Prescribing Information') },
-        { id: 'medical-literature', title: t('Request Medical Literature') },
-      ]
 
   const heroTitle    = portalConfig?.welcome_title || t('Medical Information')
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || t('Ask a question about our products, report a side effect, or find approved documents.')
@@ -232,14 +202,6 @@ export default function PortalHomePage() {
                 <button key={term} type="button" onClick={() => runSearch(term)}>{term}</button>
               ))}
             </div>
-            <div className="pp-search-suggestions pp-hero-shortcuts" aria-label={t('Shortcuts')}>
-              <span>{t('Go to:')}</span>
-              {/* CPPM-93: only the pages this client has switched on. */}
-              {isFeatureEnabled('document_library') && <Link to={`${base}/documents`}>{t('Prescribing information')}</Link>}
-              {isFeatureEnabled('adverse_event') && <Link to={`${base}/submit?type=adverse_event`}>{t('Report a side effect')}</Link>}
-              {isFeatureEnabled('find_msl') && <Link to={`${base}/find-msl`}>{t('Find an MSL')}</Link>}
-              {isFeatureEnabled('drug_info') && <Link to={`${base}/drug-info`}>{t('Product catalogue')}</Link>}
-            </div>
           </div>
           <aside className="pp-hero-panel" aria-label={t('Portal shortcuts')}>
             <div className="pp-safety-card">
@@ -250,29 +212,14 @@ export default function PortalHomePage() {
                 <Link to={`${base}/safety`}>{t('View Safety Alerts')}</Link>
               </div>
             </div>
-            <div className="pp-quick-links">
-              <div className="pp-quick-links-title">{t('Quick Links')}</div>
-              {quickDocs.map(doc => (
-                <Link key={doc.id} to={`${base}/documents`} className="pp-quick-link-row">
-                  <Icon name="file" size={18} />
-                  <span>{doc.title}</span>
-                  <span aria-hidden="true">›</span>
-                </Link>
-              ))}
-              <Link to={`${base}/submit`} className="pp-quick-link-row">
-                <Icon name="shield" size={18} />
-                <span>{t('Report a Product Complaint')}</span>
-                <span aria-hidden="true">›</span>
-              </Link>
-            </div>
           </aside>
         </div>
       </section>
 
-      <section className="pp-top-tasks-section">
+      {topTasks.length > 0 && <section className="pp-top-tasks-section">
         <div className="pp-container">
           <div className="pp-section-heading">
-            <h2>{t('Common requests')}</h2>
+            <h2>{t('What would you like to do?')}</h2>
           </div>
           <div className="pp-top-task-grid">
             {topTasks.map(card => (
@@ -287,7 +234,7 @@ export default function PortalHomePage() {
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* S4-9: Personalised greeting + For You section (signed-in users only) */}
       {user && (
@@ -317,6 +264,8 @@ export default function PortalHomePage() {
                 </div>
               </div>
             )}
+
+            <SpecialtyCard />
 
             {forYou && (
               <div>
@@ -351,29 +300,10 @@ export default function PortalHomePage() {
         </section>
       )}
 
-      {secondaryTasks.length > 0 && (
-        <section className="pp-features-section">
-          <div className="pp-container">
-            <div className="pp-section-heading compact">
-              <h2>{t('More information')}</h2>
-            </div>
-            <div className="pp-feature-grid">
-              {secondaryTasks.map(card => (
-                <Link key={card.key} to={`${base}/${card.path}`} className="pp-feature-card">
-                  <div className="pp-feature-icon"><Icon name={card.icon} size={24} /></div>
-                  <h3 className="pp-feature-title">{card.title}</h3>
-                  <p className="pp-feature-desc">{card.desc}</p>
-                  <span className="pp-feature-link">{t('Open')}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      <section className="pp-updates-section">
+      {/* A signed-in doctor gets these through "For you" above. */}
+      {!user && (isFeatureEnabled('events') || isFeatureEnabled('news_announcements')) && <section className="pp-updates-section">
         <div className="pp-container">
-          <div className="pp-updates-grid">
+          <div className="pp-updates-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
             {isFeatureEnabled('events') && (
               <section className="pp-update-panel">
                 <div className="pp-update-panel-head">
@@ -418,36 +348,9 @@ export default function PortalHomePage() {
                 </div>
               </section>
             )}
-            <section className="pp-update-panel pp-safety-info-panel">
-              <div className="pp-update-panel-head">
-                <h2>{t('Safety Information')}</h2>
-                <Link to={`${base}/safety`}>{t('View all')}</Link>
-              </div>
-              <div className="pp-safety-info-box">
-                <Icon name="shield" size={22} />
-                <p>{t('Important safety information is available for healthcare professionals. Always refer to current prescribing information.')}</p>
-                <Link to={`${base}/safety`} className="pp-btn pp-btn-outline pp-btn-full">{t('View Safety Information')}</Link>
-              </div>
-            </section>
           </div>
         </div>
-      </section>
-
-      {isFeatureEnabled('medical_inquiry') && (
-        <section className="pp-cta-section">
-          <div className="pp-container">
-            <div className="pp-cta-card">
-              <div className="pp-cta-text">
-                <h2>{t('Need Medical Information?')}</h2>
-                <p>{t('Our medical affairs team is ready to assist healthcare professionals and patients with accurate, evidence-based information.')}</p>
-              </div>
-              <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
-                {t('Submit a Request')}
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      </section>}
     </div>
   )
 }

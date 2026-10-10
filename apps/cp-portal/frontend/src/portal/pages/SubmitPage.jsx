@@ -76,6 +76,17 @@ export default function SubmitPage() {
   }
   function removeAttachment(i) { setAttachments(a => a.filter((_, idx) => idx !== i)) }
 
+  // A free-text Product box although the client lists its products (CP ease-of-use plan,
+  // phase 2 row 11): the product questions offer the client's products, with "Other".
+  const PRODUCT_KEYS = ['product', 'product_name', 'suspect_product']
+  const [products, setProducts] = useState([])
+  useEffect(() => {
+    fetch(`/api/portal/content/${clientCode}/drugs`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setProducts((d?.items || []).map(x => x.brand_name || x.generic_name).filter(Boolean)))
+      .catch(() => {})
+  }, [clientCode])
+
   useEffect(() => {
     setReviewing(false)
     if (!selectedType) return
@@ -101,6 +112,14 @@ export default function SubmitPage() {
         }
         const filled = { ...draft }
         for (const [k, v] of Object.entries(mine)) if (keys.has(k) && v && !filled[k]) filled[k] = v
+        // "You are a" asked again for the role the profile already holds (phase 2 row 11).
+        // The client words its own choices, so match the profile's type to one of them.
+        const roleField = (d.fields || []).find(f => f.field_key === 'user_type' && ['select', 'radio'].includes(f.field_type))
+        if (roleField && user?.user_type && !filled.user_type) {
+          const plain = x => String(x).toLowerCase().replace(/[^a-z]/g, '')
+          const match = optionList(roleField.options).find(o => plain(o) === plain(user.user_type))
+          if (match) filled.user_type = match
+        }
         // CPPM-110: "Ask about this" brings the product and the item it was pressed on.
         if (selectedType === requestedType) {
           const product = (params.get('product') || '').slice(0, 200)
@@ -395,6 +414,10 @@ export default function SubmitPage() {
                       />
                       <span>{field.placeholder || field.label}</span>
                     </label>
+                  ) : field.field_type === 'text' && PRODUCT_KEYS.includes(field.field_key) && products.length > 0 ? (
+                    <ProductPicker id={`f-${field.field_key}`} products={products} value={formValues[field.field_key] || ''}
+                      onChange={v => handleFieldChange(field.field_key, v)} t={t}
+                      describedBy={field.help_text ? `f-${field.field_key}-help` : undefined} />
                   ) : (
                     <input
                       id={`f-${field.field_key}`}
@@ -471,5 +494,29 @@ function CheckAnswers({ fields, values, attachments }) {
         <dd style={{ margin: 0 }}>{attachments.length ? attachments.map(a => a.name).join(', ') : 'None'}</dd>
       </dl>
     </section>
+  )
+}
+
+// One of the client's products, or "Other" with a box to type the name. The answer is
+// still the product's name as text, as the free-text box sent before.
+function ProductPicker({ id, products, value, onChange, t, describedBy }) {
+  const [other, setOther] = useState(() => value !== '' && !products.includes(value))
+  const choice = other ? '__other' : value
+  return (
+    <>
+      <select id={id} aria-describedby={describedBy} value={choice}
+        onChange={e => {
+          if (e.target.value === '__other') { setOther(true); onChange('') }
+          else { setOther(false); onChange(e.target.value) }
+        }}>
+        <option value="">{t('-- Select --')}</option>
+        {products.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__other">{t('Other (type the name)')}</option>
+      </select>
+      {other && (
+        <input type="text" aria-label={t('Product name')} value={value} autoFocus
+          onChange={e => onChange(e.target.value)} placeholder={t('Product name')} style={{ marginTop: 8 }} />
+      )}
+    </>
   )
 }

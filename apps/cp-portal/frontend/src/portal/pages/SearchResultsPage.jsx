@@ -37,11 +37,11 @@ export default function SearchResultsPage() {
   const filtered = typeFilter === 'all' ? results : results.filter(r => r.type === typeFilter)
 
   return (
-    <div className="pp-container" style={{ maxWidth: 760, paddingTop: 32, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{t('Search')}</h1>
-      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
-        {q ? <>{t('Results for “')}<strong>{q}</strong>”</> : 'Enter a search term.'}
-      </p>
+    <div className="pp-container pp-page-content pp-page-narrow">
+      <div className="pp-page-header">
+        <h1>{t('Search')}</h1>
+        <p>{q ? <>{t('Results for “')}<strong>{q}</strong>”</> : 'Enter a search term.'}</p>
+      </div>
 
       {!user ? (
         <div className="pp-empty-state" style={{ textAlign: 'left' }}>

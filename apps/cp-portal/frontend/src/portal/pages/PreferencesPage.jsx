@@ -53,11 +53,11 @@ export default function PreferencesPage() {
   if (loading) return <div className="pp-loading">{t('Loading preferences…')}</div>
 
   return (
-    <div className="pp-container" style={{ maxWidth: 600, paddingTop: 40, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>{t('Notification Preferences')}</h1>
-      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
-        {t('Choose which types of notifications you receive when new content is published.')}
-      </p>
+    <div className="pp-container pp-page-content pp-page-narrow">
+      <div className="pp-page-header">
+        <h1>{t('Notification Preferences')}</h1>
+        <p>{t('Choose which types of notifications you receive when new content is published.')}</p>
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {NOTIF_TYPES.map(({ key, label, desc }) => (

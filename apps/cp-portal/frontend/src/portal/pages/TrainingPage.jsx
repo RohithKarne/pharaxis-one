@@ -37,10 +37,10 @@ export default function TrainingPage() {
   }
 
   return (
-    <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
-      <div className="pp-page-header" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>{t('CME and REMS Training')}</h1>
-        <p style={{ color: '#4B5563', fontSize: 14 }}>{t('Read each module’s document, answer its questions, and download a certificate when you pass.')}</p>
+    <div className="pp-container pp-page-content">
+      <div className="pp-page-header">
+        <h1>{t('CME and REMS Training')}</h1>
+        <p>{t('Read each module’s document, answer its questions, and download a certificate when you pass.')}</p>
       </div>
 
       {loading ? <SkeletonCards count={3} /> : modules.length === 0 ? (
