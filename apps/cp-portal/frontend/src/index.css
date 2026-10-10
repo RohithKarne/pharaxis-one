@@ -1173,6 +1173,37 @@ body { background: var(--cp-bg); }
 .cp-nav-subitem:hover { background: rgba(255,255,255,.07); color: #F1F5F9; }
 .cp-nav-subitem.active { color: #fff; font-weight: 700; background: var(--cp-sidebar-act); }
 
+/* Phase 3 row 18 (CP ease-of-use plan): Submissions as an inbox. A row opens its
+   case beside the list; on a narrow screen the case fills the screen. */
+.cp-inbox.with-panel {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 48%); gap: 12px; align-items: start;
+}
+.cp-inbox-row { cursor: pointer; }
+.cp-inbox-row:focus-visible { outline: 2px solid var(--cp-primary); outline-offset: -2px; }
+.cp-inbox-row.selected > td { background: #FFF8E6 !important; }
+.cp-row-ae > td:first-child { box-shadow: inset 4px 0 0 #DC2626; }
+.cp-ae-type { color: #B91C1C; }
+.cp-inbox-panel {
+  position: sticky; top: 0; max-height: calc(100vh - 110px); overflow: auto;
+  background: var(--cp-surface); border: 1px solid var(--cp-border); padding: 12px 14px;
+}
+.cp-inbox-panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.cp-inbox-panel-title { font-size: 15px; font-weight: 700; }
+.cp-inbox-panel-sub { font-size: 12px; color: #4B5563; margin-top: 2px; overflow-wrap: anywhere; }
+.cp-inbox-panel-nav { display: flex; gap: 4px; flex-shrink: 0; }
+.cp-inbox-panel-flags { margin-top: 10px; }
+.cp-inbox-panel-flags > :first-child { margin-left: 0; }
+.cp-inbox-ae-note {
+  margin-top: 10px; padding: 8px 10px; font-size: 13px; font-weight: 600;
+  background: #FEF2F2; border-left: 4px solid #DC2626; color: #991B1B;
+}
+.cp-inbox-panel-row { margin-top: 10px; font-size: 12px; }
+.cp-inbox-detail { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--cp-border); }
+@media (max-width: 1000px) {
+  .cp-inbox.with-panel { display: block; }
+  .cp-inbox-panel { position: fixed; inset: 0; z-index: 60; max-height: none; border: 0; }
+}
+
 /* ── Toggle Switch ────────────────────────────────────────────── */
 
 .cp-toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }

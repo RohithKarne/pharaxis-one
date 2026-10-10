@@ -60,6 +60,10 @@ const WORDS = {
     file:        'File',
     hidden:      'Hidden',
   },
+  formField: {
+    ae_screen_answer: 'Did anyone become unwell?',
+    ae_screen_detail: 'What happened',
+  },
   auditEntity: {
     msl: 'MSL',
     faq: 'FAQ',

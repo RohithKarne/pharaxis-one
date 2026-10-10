@@ -1,10 +1,10 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
-import { formatDateTime } from '../../shared/utils/datetime'
-import { labelsOf } from '../../shared/utils/labels'
+import { formatDateTime, formatUtc } from '../../shared/utils/datetime'
+import { label, labelsOf } from '../../shared/utils/labels'
 import Pager, { PAGE_SIZE } from '../components/Pager'
 
 const TYPE_LABELS = labelsOf('submissionType')
@@ -208,7 +208,7 @@ export default function SubmissionsPage() {
   const [typeFilter, setTypeFilter]   = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]     = useState('')
-  const [expanded, setExpanded] = useState(null)
+  const [openId, setOpenId]     = useState(null)  // phase 3 row 18: the case open beside the list
   const [msg, setMsg]           = useState(null)  // { type, text }
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
@@ -218,6 +218,18 @@ export default function SubmissionsPage() {
   const [mineCount, setMineCount] = useState(0)
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search, dateFrom, dateTo, mineOnly, page])
+
+  // Escape closes the open case, unless the person is typing (an unsaved answer is kept).
+  useEffect(() => {
+    if (!openId) return
+    const onKey = e => {
+      if (e.key !== 'Escape' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+      if (document.querySelector('.cp-modal-overlay')) return
+      setOpenId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [openId])
 
   // `quiet` reloads the rows without swapping the whole page for "Loading…", which
   // would close a hand-over box that is still open (CPPM-61).
@@ -331,10 +343,145 @@ export default function SubmissionsPage() {
     URL.revokeObjectURL(url)
   }
 
+  const refOf = s => s.reference || `CP-${String(s.id).padStart(6, '0')}`
+  const submitterName = s => s.submitter_name || (s.first_name ? `${s.first_name} ${s.last_name}` : '—')
+  // A side-effect report, or any submission where someone said they became unwell.
+  const isAe = s => s.submission_type === 'adverse_event' || !!s.ae_task_status
+
+  // PD-2: the submitter reported that someone became unwell. Shown here as well as
+  // in the Safety Queue so it is visible in the list an admin already works from.
+  // The type itself is never changed by the flag; that is a clinical decision.
+  // CPPM-63: the person replied after the last thing we sent.
+  function flags(s) {
+    return <>
+      {s.replies_waiting > 0 && (
+        <span title="The person replied to our answer and is waiting for a follow-up"
+          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
+          Reply received
+        </span>
+      )}
+      {s.ae_task_status && (
+        <span
+          title={s.ae_task_status === 'open' ? 'Reported harm, waiting for safety review' : 'Reported harm, safety review closed'}
+          style={{
+            marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px',
+            borderRadius: 10, whiteSpace: 'nowrap',
+            background: s.ae_task_status === 'open' ? '#FEE2E2' : '#F1F5F9',
+            color:      s.ae_task_status === 'open' ? '#B91C1C' : '#475569',
+          }}
+        >
+          {s.ae_task_status === 'open' ? 'Safety review open' : 'Safety review closed'}
+        </span>
+      )}
+    </>
+  }
+
+  function refCell(s) {
+    return <>
+      <div style={{ fontWeight: 500 }}>{refOf(s)}</div>
+      {s.external_ref ? (
+        s.mims_case_url ? (
+          <a href={s.mims_case_url} target="_blank" rel="noopener noreferrer"
+             onClick={e => e.stopPropagation()}
+             style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS {s.mims_case_number || `#${s.external_ref}`} ↗</a>
+        ) : (
+          <span style={{ color: '#4B5563' }}>MIMS {s.mims_case_number || `#${s.external_ref}`}</span>
+        )
+      ) : null}
+      {/* Bridge plan P5: MIMS confirmed it received exactly what was sent. */}
+      {s.external_ref && s.mims_fingerprint ? (
+        <div style={{ color: '#047857' }} title={`Received by MIMS as case ${s.mims_case_number || s.external_ref}, exactly as sent. Fingerprint ${s.mims_fingerprint.slice(0, 12)}…`}>✓ Receipt</div>
+      ) : null}
+    </>
+  }
+
+  function actions(s) {
+    return <span onClick={e => e.stopPropagation()}>
+      <span style={{ display: 'inline-flex', gap: 6, marginRight: 6, verticalAlign: 'middle' }}>
+        <OwnerButtons item={s} open={s.status !== 'closed'}
+          base={`/api/admin/submissions/${clientId}/${s.id}`}
+          staffUrl={`/api/admin/submissions/${clientId}/staff`}
+          label={`enquiry ${refOf(s)}`}
+          onChanged={() => load(true)} onMessage={setMsg} />
+      </span>
+      {canEdit ? <select
+        aria-label={`Status of ${refOf(s)}`}
+        value={s.status}
+        onChange={e => updateStatus(s.id, e.target.value)}
+        style={{ fontSize: 12, padding: '2px 6px', border: '1px solid var(--cp-border)', borderRadius: 4 }}
+      >
+        {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+      </select> : null}
+      {s.status === 'failed_sync' && canEdit && (
+        <button onClick={() => retrySync(s.id)}
+          style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
+          Retry
+        </button>
+      )}
+    </span>
+  }
+
+  function detail(s) {
+    return <div className="cp-inbox-detail">
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>What they sent</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+        {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (
+          <div key={k}>
+            <div style={{ fontSize: 11, color: '#5F6B7A' }} title={k}>{label('formField', k)}</div>
+            <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
+          </div>
+        ))}
+      </div>
+      {s.attachments && s.attachments.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Attachments ({s.attachments.length})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {s.attachments.map(a => a.scan_status && a.scan_status !== 'clean' ? (
+              /* CPPM-39: only files cleared by the virus scan are downloadable. */
+              <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4B5563' }}>
+                {a.file_name}{' '}
+                <span style={{ color: a.scan_status === 'infected' ? '#B91C1C' : '#92400E', fontSize: 11, fontWeight: 600 }}>
+                  {{ infected: 'Removed — contained a known virus', missing: 'File no longer available' }[a.scan_status] || 'Held — being checked for viruses'}
+                </span>
+              </span>
+            ) : (
+              <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
+                {a.file_name} <span style={{ color: '#5F6B7A', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+      {/* Bridge row 9: what the person added after sending, and whether it reached MIMS. */}
+      {s.followups?.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Information the person added ({s.followups.length})</div>
+          {s.followups.map(f => (
+            <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 4 }}>
+                <span title={formatUtc(f.created_at)}>{formatDateTime(f.created_at)}</span> · {{
+                  forwarded: 'On the MIMS case',
+                  pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
+                  failed: `Not yet on the MIMS case: ${f.forward_error || 'unknown reason'}`,
+                  local: 'Kept in the portal (this request type does not go to MIMS)',
+                }[f.forward_status] || f.forward_status}
+              </div>
+              <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{f.body}</div>
+            </div>
+          ))}
+        </>
+      )}
+      <AnswerPanel key={s.id} clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} sentToMims={!!s.external_ref} />
+    </div>
+  }
+
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
 
   // Filters, dates and "mine" are applied by the server, across every submission.
   const shown = submissions
+  const openIndex = shown.findIndex(s => s.id === openId)
+  const open = openIndex >= 0 ? shown[openIndex] : null
 
   return (
     <AdminLayout title="Submissions">
@@ -420,6 +567,7 @@ export default function SubmissionsPage() {
       {shown.length === 0 ? (
         <div className="cp-empty"><p>{mineOnly ? 'You are not holding any enquiries.' : 'No submissions found.'}</p></div>
       ) : (
+        <div className={`cp-inbox${open ? ' with-panel' : ''}`}>
         <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
             <thead>
@@ -427,158 +575,89 @@ export default function SubmissionsPage() {
                 <th>Date</th>
                 <th>Type</th>
                 <th>Submitter</th>
-                <th>Email</th>
-                <th>User Type</th>
+                {!open && <th>Email</th>}
+                {!open && <th>User Type</th>}
                 <th>Status</th>
-                <th>Ref</th>
-                <th>Held by</th>
-                <th></th>
+                {!open && <th>Ref</th>}
+                {!open && <th>Held by</th>}
+                {!open && <th></th>}
               </tr>
             </thead>
             <tbody>
               {shown.map(s => (
-                <Fragment key={s.id}>
-                  <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{formatDateTime(s.submitted_at)}</td>
+                  <tr key={s.id} tabIndex={0} aria-selected={s.id === openId}
+                    className={`cp-inbox-row${s.id === openId ? ' selected' : ''}${isAe(s) ? ' cp-row-ae' : ''}`}
+                    onClick={() => setOpenId(s.id === openId ? null : s.id)}
+                    onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); setOpenId(s.id === openId ? null : s.id) } }}>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }} title={formatUtc(s.submitted_at)}>{formatDateTime(s.submitted_at)}</td>
                     <td>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</span>
-                      {/* PD-2: the submitter reported that someone became unwell.
-                          Shown here as well as in the Safety Queue so it is visible
-                          in the list an admin already works from. The type itself is
-                          never changed by the flag — that is a clinical decision. */}
-                      {/* CPPM-63: the person replied after the last thing we sent */}
-                      {s.replies_waiting > 0 && (
-                        <span title="The person replied to our answer and is waiting for a follow-up"
-                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
-                          Reply received
-                        </span>
-                      )}
-                      {s.ae_task_status && (
-                        <span
-                          title={s.ae_task_status === 'open'
-                            ? 'Reported harm — awaiting safety review'
-                            : 'Reported harm — safety review closed'}
-                          style={{
-                            marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                            borderRadius: 10, whiteSpace: 'nowrap',
-                            background: s.ae_task_status === 'open' ? '#FEE2E2' : '#F1F5F9',
-                            color:      s.ae_task_status === 'open' ? '#B91C1C' : '#475569',
-                          }}
-                        >
-                          {s.ae_task_status === 'open' ? 'SAFETY REVIEW' : 'REVIEWED'}
-                        </span>
-                      )}
+                      <span className={isAe(s) ? 'cp-ae-type' : undefined} style={{ fontSize: 12, fontWeight: 600 }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</span>
+                      {flags(s)}
                     </td>
-                    <td>{s.submitter_name || (s.first_name ? `${s.first_name} ${s.last_name}` : '—')}</td>
-                    <td style={{ fontSize: 12 }}>{s.submitter_email || s.user_email || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{s.submitter_type || '—'}</td>
+                    <td>{submitterName(s)}</td>
+                    {!open && <td style={{ fontSize: 12 }}>{s.submitter_email || s.user_email || '—'}</td>}
+                    {!open && <td style={{ fontSize: 12 }}>{s.submitter_type || '—'}</td>}
                     <td>
                       <span className="cp-status-badge" style={STATUS_COLORS[s.status] || {}}>
                         {STATUS_LABELS[s.status] || s.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12 }}>
-                      <div style={{ fontWeight: 500 }}>{s.reference || `CP-${String(s.id).padStart(6, '0')}`}</div>
-                      {s.external_ref ? (
-                        s.mims_case_url ? (
-                          <a href={s.mims_case_url} target="_blank" rel="noopener noreferrer"
-                             onClick={e => e.stopPropagation()}
-                             style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS {s.mims_case_number || `#${s.external_ref}`} ↗</a>
-                        ) : (
-                          <span style={{ color: '#4B5563' }}>MIMS {s.mims_case_number || `#${s.external_ref}`}</span>
-                        )
-                      ) : null}
-                      {/* Bridge plan P5: MIMS confirmed it received exactly what was sent. */}
-                      {s.external_ref && s.mims_fingerprint ? (
-                        <div style={{ color: '#047857' }} title={`Received by MIMS as case ${s.mims_case_number || s.external_ref}, exactly as sent. Fingerprint ${s.mims_fingerprint.slice(0, 12)}…`}>✓ Receipt</div>
-                      ) : null}
-                    </td>
-                    <td style={{ fontSize: 12 }}>{s.status === 'closed' && !s.owner_id ? '—' : <OwnerCell item={s} />}</td>
-                    <td>
-                      <span style={{ display: 'inline-flex', gap: 6, marginRight: 6, verticalAlign: 'middle' }}>
-                        <OwnerButtons item={s} open={s.status !== 'closed'}
-                          base={`/api/admin/submissions/${clientId}/${s.id}`}
-                          staffUrl={`/api/admin/submissions/${clientId}/staff`}
-                          label={`enquiry ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
-                          onChanged={() => load(true)} onMessage={setMsg} />
-                      </span>
-                      {canEdit ? <select
-                        aria-label={`Status of ${s.reference || `CP-${String(s.id).padStart(6, '0')}`}`}
-                        value={s.status}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => updateStatus(s.id, e.target.value)}
-                        style={{ fontSize: 12, padding: '2px 6px', border: '1px solid var(--cp-border)', borderRadius: 4 }}
-                      >
-                        {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
-                      </select> : null}
-                      {s.status === 'failed_sync' && canEdit && (
-                        <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
-                          style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
-                          Retry
-                        </button>
-                      )}
-                    </td>
+                    {!open && <td style={{ fontSize: 12 }}>{refCell(s)}</td>}
+                    {!open && <td style={{ fontSize: 12 }}>{s.status === 'closed' && !s.owner_id ? '—' : <OwnerCell item={s} />}</td>}
+                    {!open && <td>{actions(s)}</td>}
                   </tr>
-                  {expanded === s.id && (
-                    <tr key={`${s.id}-detail`}>
-                      <td colSpan={9} style={{ background: '#F9FAFB', padding: '12px 16px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Form Data</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-                          {Object.entries(parseFormData(s.form_data)).map(([k, v]) => (
-                            <div key={k}>
-                              <div style={{ fontSize: 11, color: '#5F6B7A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
-                              <div style={{ fontSize: 13, color: '#111827', wordBreak: 'break-word' }}>{v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {s.attachments && s.attachments.length > 0 && (
-                          <>
-                            <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Attachments ({s.attachments.length})</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {s.attachments.map(a => a.scan_status && a.scan_status !== 'clean' ? (
-                                /* CPPM-39: only files cleared by the virus scan are downloadable. */
-                                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4B5563' }}>
-                                  {a.file_name}{' '}
-                                  <span style={{ color: a.scan_status === 'infected' ? '#B91C1C' : '#92400E', fontSize: 11, fontWeight: 600 }}>
-                                    {{ infected: 'Removed — contained a known virus', missing: 'File no longer available' }[a.scan_status] || 'Held — being checked for viruses'}
-                                  </span>
-                                </span>
-                              ) : (
-                                <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
-                                  {a.file_name} <span style={{ color: '#5F6B7A', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
-                                </a>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                        {/* Bridge row 9: what the person added after sending, and whether it reached MIMS. */}
-                        {s.followups?.length > 0 && (
-                          <>
-                            <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Information the person added ({s.followups.length})</div>
-                            {s.followups.map(f => (
-                              <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
-                                <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 4 }}>
-                                  {new Date(f.created_at).toLocaleString()} · {{
-                                    forwarded: 'On the MIMS case',
-                                    pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
-                                    failed: `Not yet on the MIMS case: ${f.forward_error || 'unknown reason'}`,
-                                    local: 'Kept in the portal (this request type does not go to MIMS)',
-                                  }[f.forward_status] || f.forward_status}
-                                </div>
-                                <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{f.body}</div>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} canEdit={canEdit} onChanged={() => load(true)} sentToMims={!!s.external_ref} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Phase 3 row 18 (CP ease-of-use plan): the case opens beside the list, like an
+            email inbox, instead of as a row stretched across the table underneath. */}
+        {open && (
+          <aside className="cp-inbox-panel" aria-label={`Case ${refOf(open)}`}>
+            <div className="cp-inbox-panel-head">
+              <div style={{ minWidth: 0 }}>
+                <div className="cp-inbox-panel-title">
+                  <span className={isAe(open) ? 'cp-ae-type' : undefined}>{TYPE_LABELS[open.submission_type] || open.submission_type}</span>
+                  {' · '}{refOf(open)}
+                </div>
+                <div className="cp-inbox-panel-sub">
+                  {submitterName(open)} · {open.submitter_email || open.user_email || 'no email'}{open.submitter_type ? ` · ${open.submitter_type}` : ''}
+                </div>
+                <div className="cp-inbox-panel-sub">
+                  Received <span title={formatUtc(open.submitted_at)}>{formatDateTime(open.submitted_at)}</span>
+                </div>
+              </div>
+              <div className="cp-inbox-panel-nav">
+                <button type="button" className="cp-btn cp-btn-sm cp-btn-outline" disabled={openIndex <= 0}
+                  onClick={() => setOpenId(shown[openIndex - 1].id)} aria-label="Previous case">‹</button>
+                <button type="button" className="cp-btn cp-btn-sm cp-btn-outline" disabled={openIndex >= shown.length - 1}
+                  onClick={() => setOpenId(shown[openIndex + 1].id)} aria-label="Next case">›</button>
+                <button type="button" className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setOpenId(null)}>Close</button>
+              </div>
+            </div>
+            <div className="cp-inbox-panel-flags">
+              <span className="cp-status-badge" style={STATUS_COLORS[open.status] || {}}>{STATUS_LABELS[open.status] || open.status}</span>
+              {flags(open)}
+            </div>
+            {isAe(open) && (
+              <div className="cp-inbox-ae-note" role="note">
+                {open.ae_task_status === 'open'
+                  ? 'Someone reported becoming unwell. This case is in the Safety Queue waiting for review.'
+                  : open.ae_task_status
+                    ? 'Someone reported becoming unwell. The safety review of this case is closed.'
+                    : 'This is a side-effect report.'}
+              </div>
+            )}
+            <div className="cp-inbox-panel-row">{refCell(open)}</div>
+            <div className="cp-inbox-panel-row">
+              <span style={{ fontSize: 12, color: '#4B5563' }}>Held by </span>
+              {open.status === 'closed' && !open.owner_id ? '—' : <OwnerCell item={open} />}
+            </div>
+            <div className="cp-inbox-panel-row">{actions(open)}</div>
+            {detail(open)}
+          </aside>
+        )}
         </div>
       )}
       <Pager page={page} shown={submissions.length} total={matched} note={matched !== total ? ` (${total} in all)` : ''} onPage={setPage} />
