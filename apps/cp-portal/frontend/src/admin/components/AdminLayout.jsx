@@ -435,7 +435,10 @@ export default function AdminLayout({ children }) {
           )}
           {scanner && !scanner.up && (
             <div className="cp-error" role="alert" style={{ marginBottom: 16 }}>
-              The virus scanner is not running. Portal attachments are held and admin uploads are refused until it starts. It starts with the portal (npm run dev or npm start in apps/cp-portal/backend).
+              {/* Client admins were told to run a developer command (CP screen review, 10 Oct 2026); only the platform superadmin can act on it. */}
+              {admin?.role === 'superadmin'
+                ? 'The virus scanner is not running. Portal attachments are held and admin uploads are refused until it starts. It starts with the portal (npm run dev or npm start in apps/cp-portal/backend).'
+                : 'Files cannot be checked for viruses right now, so uploads are paused. Doctors\' attachments are held and appear by themselves once checking resumes. If this lasts, contact your platform team.'}
             </div>
           )}
           {scanner?.up && scanner.listAgeDays >= 2 && (

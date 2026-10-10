@@ -5,7 +5,7 @@
  * CSS namespace: cf- (case form)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -216,6 +216,29 @@ export default function CasesPage() {
   }, [activeTab, headers, search, searchScope])
 
   useEffect(() => { loadCases() }, [loadCases])
+
+  // An empty My Cases while cases wait unassigned: say how many and open them.
+  // With no tab in the address, the page moves there once by itself.
+  const [unassignedCount, setUnassignedCount] = useState(0)
+  const autoOpenedUnassigned = useRef(false)
+  const myCasesEmpty = !loading && activeTab === 'my' && cases.length === 0 && !search.trim()
+  useEffect(() => {
+    if (!myCasesEmpty) return
+    let cancelled = false
+    httpFetch(`${API}/cases/dashboard-summary`, { headers })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled) return
+        const count = Number(data?.stats?.unassigned_cases || 0)
+        setUnassignedCount(count)
+        if (count > 0 && !searchParams.get('tab') && !autoOpenedUnassigned.current) {
+          autoOpenedUnassigned.current = true
+          handleTabChange('unassigned')
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [myCasesEmpty]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSavedViews = useCallback(async () => {
     if (!token) return
@@ -641,6 +664,13 @@ export default function CasesPage() {
                 ? 'No active cases match your global search and filters.'
                 : 'No cases match your filters/search.')
               : `No ${activeTab === 'my' ? 'cases assigned to you' : activeTab + ' cases'} yet.`}
+            {activeTab === 'my' && !search && unassignedCount > 0 && (
+              <div className="cf-cases-empty-action">
+                <button type="button" className="cf-cases-tab" onClick={() => handleTabChange('unassigned')}>
+                  See {unassignedCount} unassigned {unassignedCount === 1 ? 'case' : 'cases'}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <table className="cf-cases-table">

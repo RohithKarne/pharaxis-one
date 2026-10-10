@@ -7,6 +7,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const log = require('../../utils/logger');
+const { PEOPLE_ONLY } = require('../../utils/audit');
 
 // One listing for both screens: a client's records, or (CPPM-62) the records that
 // belong to no client — platform-admin sign-ins, failed sign-ins for unknown
@@ -25,6 +26,7 @@ async function listRecords(req, res, scope) {
     if (req.query.action) { conditions.push('UPPER(l.action) = UPPER(?)'); params.push(req.query.action); }
     if (req.query.from)   { conditions.push('DATE(l.created_at) >= DATE(?)'); params.push(req.query.from); }
     if (req.query.to)     { conditions.push('DATE(l.created_at) <= DATE(?)'); params.push(req.query.to); }
+    if (req.query.people === '1') conditions.push(PEOPLE_ONLY);
 
     const where = conditions.join(' AND ');
 

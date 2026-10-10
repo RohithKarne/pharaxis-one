@@ -2251,6 +2251,11 @@ body { background: var(--cp-bg); }
 .pp-auth-form { display: flex; flex-direction: column; gap: 18px; }
 .pp-auth-footer { font-size: 13px; text-align: center; color: var(--pp-text-muted); }
 .pp-error-msg { background: #FEE2E2; color: #B91C1C; padding: 10px 14px; border-radius: var(--pp-radius); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.pp-error-summary { border: 2px solid #B91C1C; background: #FEF2F2; border-radius: var(--pp-radius); padding: 12px 16px; margin-bottom: 20px; }
+.pp-error-summary:focus { outline: 3px solid #FCA5A5; outline-offset: 2px; }
+.pp-error-summary-title { margin: 0 0 6px; color: #B91C1C; font-weight: 700; font-size: 14px; }
+.pp-error-summary ul { margin: 0; padding-left: 20px; }
+.pp-error-summary a { color: #B91C1C; font-size: 14px; text-decoration: underline; }
 .pp-info-box { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: var(--pp-radius); padding: 20px; color: var(--pp-text-muted); font-size: 14px; }
 
 /* ── Therapeutic Areas layout ────────────────────────────── */

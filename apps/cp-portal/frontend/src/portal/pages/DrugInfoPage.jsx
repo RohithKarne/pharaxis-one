@@ -30,7 +30,11 @@ export default function DrugInfoPage() {
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/drugs`)
-      .then(r => r.json()).then(d => { setDrugs(d.items || []); setLoading(false) }).catch(() => setLoading(false))
+      .then(r => r.json()).then(d => {
+        setDrugs(d.items || []); setLoading(false)
+        // Open the first product straight away instead of an empty "select one" panel (CP screen review, 10 Oct 2026).
+        if (d.items?.length) setSelected(s => s || d.items[0])
+      }).catch(() => setLoading(false))
   }, [clientCode])
 
   const filtered = drugs.filter(d =>

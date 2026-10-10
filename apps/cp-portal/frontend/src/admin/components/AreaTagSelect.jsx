@@ -4,7 +4,7 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 // CPPM-122: tag a news post, document or event with one of this client's therapeutic
 // areas, so doctors who work in that area see it first in "For you". Saves on change.
 const areaCache = new Map()
-function loadAreas(clientId) {
+export function loadAreas(clientId) {
   if (!areaCache.has(clientId)) {
     areaCache.set(clientId, fetch(`/api/admin/content/${clientId}/therapeutic-areas`, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : { therapeutic_areas: [] })
