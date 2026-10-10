@@ -7,8 +7,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
+import Icon from './Icon'
 
-export default function MIMSHeader({ onBellClick, onHelpClick }) {
+export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menuOpen = false }) {
   const { user, token, orgName, orgId, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials } = useAuth()
   const navigate = useNavigate()
 
@@ -96,6 +97,13 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
 
   return (
     <header className="mims-header">
+      {/* Shown below 900px wide, where the left menu folds away (MIMS screen review, row 8). */}
+      {onMenuClick && (
+        <button type="button" className="mims-header-menu-btn" onClick={onMenuClick}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}>
+          <Icon name={menuOpen ? 'close' : 'menu'} size={20} />
+        </button>
+      )}
       {/* Logo */}
       <div className="mims-header-logo">
         {orgLogoUrl ? (
