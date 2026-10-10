@@ -5141,6 +5141,10 @@ a.nav-item { text-decoration: none; color: inherit; }
   flex-shrink: 0;
   border-radius: 2px;
   border: 1px solid rgba(255,255,255,0.08);
+  /* When the tabs and the Tenant picker do not fit on one line, the picker
+     wraps to a second line instead of being scrolled off the right edge with
+     no visible scrollbar (Rohith, 2026-10-10: clipped at 100% zoom on a laptop). */
+  flex-wrap: wrap;
   overflow-x: auto;
   scrollbar-width: none;
   margin: 0 18px 16px;
