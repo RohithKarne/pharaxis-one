@@ -13,7 +13,7 @@
  *   'apikey' — api_key sent as X-API-Key
  */
 
-const { decryptSecret } = require('../utils/secretCrypto');
+const { encryptSecret, decryptSecret } = require('../utils/secretCrypto');
 const { assertSafeOutboundUrl, safeFetch } = require('../utils/networkGuard');
 const { pool } = require('../database/db');
 
@@ -45,13 +45,15 @@ async function fetchOauthToken(integration) {
   const ttlMs = Math.max((Number(data.expires_in) || 3600) * 1000 - EXPIRY_SAFETY_MS, 30 * 1000);
   const expiresAt = new Date(Date.now() + ttlMs);
 
-  // Update DB cache
+  // Update DB cache. The token is encrypted like the client secret it was bought
+  // with: for its hour it opens every case this connection sent (bridge plan P7).
+  // A row written before this change is plain and still reads.
   try {
     await pool.execute(
       `INSERT INTO cp_mims_token_cache (integration_id, access_token, expires_at)
        VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE access_token = VALUES(access_token), expires_at = VALUES(expires_at)`,
-      [integration.id, data.access_token, expiresAt]
+      [integration.id, encryptSecret(data.access_token), expiresAt]
     );
   } catch (err) {
     // Fallback to process memory if DB update fails transiently
@@ -76,7 +78,7 @@ async function getAuthHeaders(integration) {
         [integration.id]
       );
       if (dbToken?.access_token) {
-        token = dbToken.access_token;
+        token = decryptSecret(dbToken.access_token);
       }
     } catch (err) {
       // Memory fallback check

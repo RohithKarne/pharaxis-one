@@ -16,6 +16,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 100+    | Reserved                    | Future        | eMDR combination products + future themes. |
 | 151–160 | **MIMS end-to-end walk (MIPM-131)** | **DONE** | Within the 100+ block. Closed-version locks, session fingerprint and last use, reviewer content access, template evidence status, contact fields step, MI categories seed, content-usage backfill, AE product links, orphan logo removal. |
 | 161–162 | **MIMS walk — Rohith's decisions of 2026-10-04 (MIPM-131)** | **DONE** | Within the 100+ block. Organisation support-access grants (161); review mode and reviewer order for sequential review, MIPM-204 (162). |
+| 164–165 | **CP Portal to MIMS bridge plan (Rohith's decisions of 2026-10-10)** | **DONE** | Within the 100+ block. 163 is the MIMS screen review's (MIPM-222). Fingerprint of the report a bridge case came from, P5 (164); a connection's previous secret while a new one beds in, P7 (165). |
 
 ## Rules
 

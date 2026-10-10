@@ -7,7 +7,7 @@ const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
-const { issueClientCredentials, createApiClient } = require('../services/api-platform/tokenIssuer');
+const { issueClientCredentials, createApiClient, rotateClientSecret } = require('../services/api-platform/tokenIssuer');
 
 // Scopes a client may be granted. '*'/unknown scopes are rejected. (H-04)
 const ALLOWED_API_SCOPES = ['cases:read', 'cases:write', 'webhooks:read', 'webhooks:write'];
@@ -100,6 +100,7 @@ router.get('/api/admin/api-clients', authenticate, requireRole('admin', 'platfor
     const [clients] = await pool.execute(
       `SELECT c.id, c.client_id, c.name, c.scopes, c.status, c.rate_limit_per_min, c.default_site_id, c.initial_status_id,
               c.created_at, c.last_used_at,
+              CASE WHEN c.previous_secret_expires_at > NOW() THEN c.previous_secret_expires_at END AS previous_secret_expires_at,
               (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY) AS calls_24h,
               (SELECT COUNT(*) FROM api_call_log l WHERE l.client_id = c.id AND l.created_at > NOW() - INTERVAL 1 DAY AND l.status_code >= 400) AS failures_24h,
               (SELECT MAX(l.created_at) FROM api_call_log l WHERE l.client_id = c.id) AS last_call_at,
@@ -143,6 +144,23 @@ router.put('/api/admin/api-clients/:id', authenticate, requireRole('admin', 'pla
     });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: 'Could not save the connection.' }); }
+});
+
+// Bridge plan P7: a new secret for a connection without creating a new connection
+// (which would orphan every case the old one sent). The old secret keeps working
+// for 7 days; tokens already issued run out within the hour as usual.
+router.post('/api/admin/api-clients/:id/new-secret', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id, org_id, name, status FROM api_clients WHERE id = ?', [req.params.id]);
+    if (!client || (!hasGlobalAdminScope(req.user) && Number(client.org_id) !== Number(req.user.orgId))) {
+      return res.status(404).json({ error: 'Connection not found.' });
+    }
+    if (client.status !== 'active') return res.status(400).json({ error: 'Switch the connection on before giving it a new secret.' });
+    const rotated = await rotateClientSecret(client.id);
+    await writeAuditLog(req.user.userId, req.user.email, 'SECRET_ROTATED', 'api_client', client.id,
+      { previous_secret_works_until: rotated.previous_secret_expires_at });
+    res.json(rotated);
+  } catch (err) { res.status(500).json({ error: 'Could not issue a new secret.' }); }
 });
 
 router.get('/api/openapi.yaml', (_req, res) => {
