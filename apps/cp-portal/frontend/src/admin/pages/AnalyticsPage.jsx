@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { activityActor } from '../../shared/utils/activityActor'
+import { label } from '../../shared/utils/labels'
 import {
   ResponsiveContainer,
   AreaChart, Area,
@@ -13,12 +14,6 @@ import {
 
 const COLORS = ['#1F4E8C', '#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
-const TYPE_LABELS = {
-  medical_inquiry:   'Medical Inquiry',
-  adverse_event:     'Adverse Event',
-  product_complaint: 'Product Complaint',
-  other_inquiry:     'Other Inquiry',
-}
 
 function StatCard({ label, value }) {
   return <span>{label}: <b>{value ?? '—'}</b></span>
@@ -98,7 +93,7 @@ export default function AnalyticsPage() {
 
   const stats           = data?.stats            || {}
   const submissionTypes = (data?.submission_types || []).map(r => ({
-    ...r, name: TYPE_LABELS[r.form_type] || r.form_type,
+    ...r, name: label('submissionType', r.form_type),
   }))
   const topDocuments   = data?.top_documents     || []
   const topSafety      = data?.top_safety        || []
@@ -243,9 +238,9 @@ export default function AnalyticsPage() {
                 padding: '5px 0', borderBottom: i < recentActivity.length - 1 ? '1px solid #F1F5F9' : 'none',
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{row.action}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{label('auditAction', row.action)}</span>
                   {' '}
-                  <span style={{ fontSize: 13, color: '#4B5563' }}>{row.entity || ''}</span>
+                  <span style={{ fontSize: 13, color: '#4B5563' }}>{label('auditEntity', row.entity)}</span>
                   <span style={{ fontSize: 12, color: '#5F6B7A' }}> · {activityActor(row)}</span>
                 </div>
                 <div style={{ fontSize: 11, color: '#5F6B7A', whiteSpace: 'nowrap', flexShrink: 0 }}>

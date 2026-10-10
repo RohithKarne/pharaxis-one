@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import { label } from '../../shared/utils/labels'
 
 // FIX-2: the Sync Health dashboard — live view over the O2 sync-health API.
 // Answers "is the MIMS integration healthy, and what failed?" at a glance.
@@ -156,13 +157,13 @@ export default function SyncHealthPage() {
                 {failures.map(f => (
                   <tr key={f.id}>
                     <td><Link to={`/admin/clients/${clientId}/submissions`}>{f.reference}</Link></td>
-                    <td>{f.submission_type}</td>
+                    <td>{label('submissionType', f.submission_type)}</td>
                     <td>{f.sync_attempts}</td>
                     <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.sync_error || '—'}</td>
                     <td>{f.updated_at ? new Date(f.updated_at).toLocaleString() : '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
+                        <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${label('submissionType', f.submission_type)}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
                           Inspect
                         </button>
                         <CanChange area="submissions">

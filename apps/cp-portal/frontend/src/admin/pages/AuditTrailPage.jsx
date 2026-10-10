@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { label } from '../../shared/utils/labels'
 
 // The filter drop-downs list what the server has actually recorded for this
 // scope (sent with every page), so nothing recorded is impossible to filter for.
@@ -166,8 +167,8 @@ export default function AuditTrailPage() {
             </div>
             <div className="cp-modal-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 16 }}>
-                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Entity</span><div>{detailRecord.entity || '—'}</div></div>
-                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Action</span><div>{detailRecord.action || '—'}</div></div>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Entity</span><div>{label('auditEntity', detailRecord.entity) || '—'}</div></div>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Action</span><div>{label('auditAction', detailRecord.action) || '—'}</div></div>
                 <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Entity ID</span><div style={{ fontFamily: 'monospace' }}>{detailRecord.entity_id != null ? detailRecord.entity_id : '—'}</div></div>
                 <div><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Performed by</span><div>{detailRecord.admin_name || detailRecord.admin_email || '—'}</div></div>
                 <div style={{ gridColumn: '1 / -1' }}><span style={{ fontWeight: 600, fontSize: 12, color: '#475569' }}>Timestamp</span><div>{detailRecord.created_at ? new Date(detailRecord.created_at).toLocaleString() : '—'}</div></div>
@@ -189,14 +190,14 @@ export default function AuditTrailPage() {
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Entity</label>
             <select aria-label="Entity" value={filterEntity} onChange={e => setFilterEntity(e.target.value)}>
-              {['All', ...options.entities].map(e => <option key={e} value={e}>{e}</option>)}
+              {['All', ...options.entities].map(e => <option key={e} value={e}>{e === 'All' ? e : label('auditEntity', e)}</option>)}
             </select>
           </div>
 
           <div className="cp-field" style={{ minWidth: 160 }}>
             <label>Action</label>
             <select aria-label="Action" value={filterAction} onChange={e => setFilterAction(e.target.value)}>
-              {['All', ...options.actions].map(a => <option key={a} value={a}>{a}</option>)}
+              {['All', ...options.actions].map(a => <option key={a} value={a}>{a === 'All' ? a : label('auditAction', a)}</option>)}
             </select>
           </div>
 
@@ -273,11 +274,11 @@ export default function AuditTrailPage() {
                         <span className="cp-status-badge" style={{
                           ...(ACTION_BADGE_STYLES[r.action] || { background: '#f1f5f9', color: '#475569' }),
                         }}>
-                          {r.action}
+                          {label('auditAction', r.action)}
                         </span>
                       ) : '—'}
                     </td>
-                    <td>{r.entity || '—'}</td>
+                    <td>{label('auditEntity', r.entity) || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
                       {r.entity_id != null ? r.entity_id : '—'}
                     </td>

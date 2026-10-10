@@ -4,13 +4,9 @@ import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
 import { formatDateTime } from '../../shared/utils/datetime'
+import { labelsOf } from '../../shared/utils/labels'
 
-const TYPE_LABELS = {
-  medical_inquiry:   'Medical Inquiry',
-  adverse_event:     'Adverse Event',
-  product_complaint: 'Product Complaint',
-  other_inquiry:     'Other Inquiry',
-}
+const TYPE_LABELS = labelsOf('submissionType')
 
 const STATUS_COLORS = {
   submitted:     { background: '#DBEAFE', color: '#1E40AF' },
@@ -20,13 +16,7 @@ const STATUS_COLORS = {
   closed:        { background: '#F3F4F6', color: '#4B5563' },
 }
 
-const STATUS_LABELS = {
-  submitted: 'New submission',
-  pending_sync: 'Sync pending',
-  synced: 'Synced',
-  failed_sync: 'Sync failed',
-  closed: 'Closed',
-}
+const STATUS_LABELS = labelsOf('submissionStatus')
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
 function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, sentToMims }) {
@@ -382,7 +372,7 @@ export default function SubmissionsPage() {
           onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
         >
           <option value="">All Statuses</option>
-          {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
+          {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
         </select>
         <input
           value={search}
@@ -520,7 +510,7 @@ export default function SubmissionsPage() {
                         onChange={e => updateStatus(s.id, e.target.value)}
                         style={{ fontSize: 12, padding: '2px 6px', border: '1px solid var(--cp-border)', borderRadius: 4 }}
                       >
-                        {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{st}</option>)}
+                        {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
                       </select> : null}
                       {s.status === 'failed_sync' && canEdit && (
                         <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { label } from '../../shared/utils/labels'
 
 // NEW-C: the MIMS intake fields a portal field can map onto, per form type.
 // Dot paths address the nested /api/v1/cases payload (see buildMimsPayload).
@@ -18,7 +19,6 @@ const MIMS_TARGETS = {
   product_complaint: [...MIMS_COMMON_FIELDS, 'pc_intake.product_name', 'pc_intake.batch_lot_number',
                       'pc_intake.complaint_category', 'pc_intake.complaint_description', 'pc_intake.purchase_date'],
 }
-const FORM_TYPE_LABELS = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint' }
 
 // NEW-C: per-integration field-mapping builder — the admin answer to "how do the
 // two systems know which field maps to which" (config, not code).
@@ -77,7 +77,7 @@ function FieldMappingSection({ clientId, integration }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <strong>Field Mapping</strong>
         <select value={formType} onChange={e => setFormType(e.target.value)}>
-          {Object.keys(MIMS_TARGETS).map(t => <option key={t} value={t}>{FORM_TYPE_LABELS[t]}</option>)}
+          {Object.keys(MIMS_TARGETS).map(t => <option key={t} value={t}>{label('submissionType', t)}</option>)}
         </select>
         <span style={{ fontSize: 12, color: '#475569' }}>Portal form field → MIMS case field. Mappings override the built-in defaults.</span>
       </div>
