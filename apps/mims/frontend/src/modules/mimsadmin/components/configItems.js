@@ -42,7 +42,6 @@ export const SYSTEM_NAV = [
       { label: 'Auth Policy',      value: 'sys-sec-auth-policy' },
       { label: '2FA Configuration', value: 'sys-setup-2fa-config' },
       { label: 'Logged In Users',  value: 'sys-sec-logged-in'},
-      { label: 'Support Access',   value: 'sys-sec-support-access' },
     ],
   },
   {

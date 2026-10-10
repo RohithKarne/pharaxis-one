@@ -378,27 +378,8 @@ async function getActiveOrgRowsForUser(userId) {
   return orgRows;
 }
 
-// Organisations holding an active support grant (Rohith, 2026-10-04). For a
-// platform admin the grant is the membership: it puts the organisation in their
-// list and lets them switch into it; middleware/supportAccess.js then scopes
-// their case requests to it.
-async function getSupportGrantOrgRows() {
-  const [rows] = await pool.execute(
-    `SELECT o.id AS org_id, NULL AS primary_site_id, 'admin' AS role_at_org, NULL AS site_permission, NULL AS last_accessed_at,
-            o.name AS org_name, o.session_timeout_minutes, o.two_factor_enabled, o.two_factor_methods, o.two_factor_remember_days,
-            NULL AS site_name
-     FROM organisations o
-     WHERE o.is_active = 1
-       AND EXISTS (SELECT 1 FROM org_support_access g WHERE g.org_id = o.id AND g.revoked_at IS NULL AND g.expires_at > NOW())
-     ORDER BY o.name`
-  );
-  return rows;
-}
-
 async function resolvePlatformAdminContext(user, requestedOrgId = null) {
-  const memberRows = await getActiveOrgRowsForUser(user.id);
-  const memberIds = new Set(memberRows.map((row) => Number(row.org_id)));
-  const orgRows = [...memberRows, ...(await getSupportGrantOrgRows()).filter((row) => !memberIds.has(Number(row.org_id)))];
+  const orgRows = await getActiveOrgRowsForUser(user.id);
   const allOrgs = orgRows.map((row) => ({
     orgId: row.org_id,
     orgName: row.org_name,
@@ -1891,17 +1872,6 @@ const authController = {
       const modules = await getUserModules(user.id);
       const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
       const config = await getSystemConfig();
-      // The screen names the organisation this context picked; the session must
-      // name the same one, or case requests are refused for "no organisation"
-      // while the header shows one (a support grant arriving mid-session).
-      if (platformContext.orgId && Number(platformContext.orgId) !== Number(req.user.orgId) && !req.user.passwordResetRequired) {
-        const token = issueToken({
-          userId: user.id, email: user.email, role: user.role,
-          orgId: platformContext.orgId, siteId: platformContext.siteId, platformAdmin: true,
-        });
-        await trackSessionToken(user.id, token);
-        attachAuthCookie(res, token, getPlatformAdminSessionTimeout(config) * 60 * 1000);
-      }
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
         modules,
@@ -1956,17 +1926,9 @@ const authController = {
         [req.user.userId, orgId]
       );
 
-      // A platform admin may also switch into an organisation that has granted
-      // support access (Rohith, 2026-10-04); the grant stands in for membership.
-      const supportRow = !access && hasGlobalAdminScope(req.user)
-        ? (await getSupportGrantOrgRows()).find((row) => Number(row.org_id) === Number(orgId)) || null
-        : null;
-      if (!access && !supportRow) return res.status(403).json({ error: 'You do not have access to this organisation.' });
-      const target = access || supportRow;
+      if (!access) return res.status(403).json({ error: 'You do not have access to this organisation.' });
 
-      const orgRows = hasGlobalAdminScope(req.user)
-        ? (await resolvePlatformAdminContext({ id: req.user.userId })).orgRows
-        : await getActiveOrgRowsForUser(req.user.userId);
+      const orgRows = await getActiveOrgRowsForUser(req.user.userId);
       const allOrgs = orgRows.map(o => ({
         orgId: o.org_id,
         orgName: o.org_name,
@@ -1975,15 +1937,13 @@ const authController = {
         roleAtOrg: o.role_at_org,
       }));
 
-      if (access) {
-        await pool.execute(
-          'UPDATE user_org_access SET last_accessed_at = NOW() WHERE user_id = ? AND org_id = ?',
-          [req.user.userId, orgId]
-        );
-      }
+      await pool.execute(
+        'UPDATE user_org_access SET last_accessed_at = NOW() WHERE user_id = ? AND org_id = ?',
+        [req.user.userId, orgId]
+      );
 
-      const siteId = target.primary_site_id;
-      const roleForOrg = target.role_at_org || req.user.role;
+      const siteId = access.primary_site_id;
+      const roleForOrg = access.role_at_org || req.user.role;
       const token = issueToken({
         userId: req.user.userId,
         email: req.user.email,
@@ -1993,7 +1953,7 @@ const authController = {
         ...(hasGlobalAdminScope(req.user) ? { platformAdmin: true } : {}),
       });
       await trackSessionToken(req.user.userId, token);
-      attachAuthCookie(res, token, Number(target.session_timeout_minutes || 30) * 60 * 1000);
+      attachAuthCookie(res, token, Number(access.session_timeout_minutes || 30) * 60 * 1000);
 
       await logLoginAudit({
         userId: req.user.userId,
@@ -2009,10 +1969,10 @@ const authController = {
         message: 'Org switched.',
         orgId: Number(orgId),
         siteId,
-        orgName: target.org_name,
-        siteName: target.site_name,
+        orgName: access.org_name,
+        siteName: access.site_name,
         allOrgs,
-        sessionTimeout: target.session_timeout_minutes ?? 30,
+        sessionTimeout: access.session_timeout_minutes ?? 30,
         role: roleForOrg,
       });
     } catch (err) {

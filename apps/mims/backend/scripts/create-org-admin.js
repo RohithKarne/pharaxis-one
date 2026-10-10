@@ -2,9 +2,8 @@
 'use strict';
 /**
  * create-org-admin.js — make (or repair) an organisation's own administrator on a
- * local or staging MIMS, without mail. The account is the one that can grant
- * Pharaxis support access to the organisation's cases (System › Security ›
- * Support Access); a platform admin cannot grant it for them.
+ * local or staging MIMS, without mail: an account to try the product as that
+ * organisation's admin, where the Add User screen would need working reset mail.
  *
  *   cd apps/mims/backend
  *   node scripts/create-org-admin.js <email> "<Full name>" "<Organisation name>"
@@ -87,8 +86,6 @@ if (!emailArg || !nameArg || !orgArg) {
     console.log('One-time password (shown once, never stored in the clear): ' + oneTime);
     console.log('Sign in with it; MIMS asks for a new password straight away.');
   }
-  console.log('');
-  console.log('Next, as this account: MIMS Admin › System › Security › Support Access › grant, with a reason and a number of days.');
   await pool.end();
 })().catch(async (err) => {
   console.error(err.message || err);

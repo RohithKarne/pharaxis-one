@@ -108,7 +108,6 @@ const SYSTEM_VALUE_CAP = {
   'sys-sec-users':       'admin.users',
   'sys-sec-group':       'admin.security_groups',
   'sys-sec-auth-policy': 'admin.auth_policy',
-  'sys-sec-support-access': 'admin.auth_policy',
   'sys-exception-log':   'admin.exception_log',
 }
 function capForSystemValue(value) {
