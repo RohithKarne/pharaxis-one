@@ -90,10 +90,72 @@ async function applyProgress(integ, sub, change) {
   return true;
 }
 
+// Bridge features F1-F3: what MIMS says beyond the state — a side effect held as
+// serious and the day it is due to the authorities, when somebody first took the case
+// on, and questions for the person who reported.
+async function applyBridgeDetails(integ, sub, change) {
+  if ('serious' in change || change.triaged_at) {
+    const due = typeof change.report_due_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(change.report_due_date) ? change.report_due_date : null;
+    const triaged = typeof change.triaged_at === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(change.triaged_at) ? change.triaged_at : null;
+    await pool.execute(
+      `UPDATE cp_submissions SET mims_serious = ?, mims_due_date = ?, mims_triaged_at = COALESCE(?, mims_triaged_at), updated_at = updated_at WHERE id = ?`,
+      ['serious' in change ? (change.serious ? 1 : 0) : sub.mims_serious, 'serious' in change ? due : sub.mims_due_date, triaged, sub.id]);
+  }
+  if (!Array.isArray(change.questions)) return;
+  for (const q of change.questions) {
+    const qid = Number(q?.id);
+    if (!qid || typeof q.question !== 'string') continue;
+    const status = q.answered_at ? 'answered' : q.withdrawn ? 'withdrawn' : 'open';
+    const [[mine]] = await pool.execute(
+      'SELECT id, status FROM cp_submission_questions WHERE submission_id = ? AND mims_question_id = ?', [sub.id, qid]);
+    if (mine) {
+      // MIMS has the last word on withdrawn and answered; an answer sent from here
+      // stays answered while it is on its way.
+      if (mine.status !== status && status !== 'open') {
+        await pool.execute('UPDATE cp_submission_questions SET status = ?, answered_at = COALESCE(answered_at, ?) WHERE id = ?',
+          [status, q.answered_at || null, mine.id]);
+      }
+      continue;
+    }
+    // A visitor who was not signed in has no page to answer on. MIMS stops this for
+    // new cases; for one sent before it knew, the team here is told.
+    const deliverable = status === 'open' && sub.user_id && !sub.identity_erased_at;
+    await pool.execute(
+      `INSERT IGNORE INTO cp_submission_questions (submission_id, client_id, mims_question_id, question, asked_at, status, answered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [sub.id, integ.client_id, qid, q.question.slice(0, 2000), q.asked_at || null,
+       status === 'open' && !deliverable ? 'undeliverable' : status, q.answered_at || null]);
+    if (status !== 'open') continue;
+    const ref = `CP-${String(sub.id).padStart(6, '0')}`;
+    systemAudit('MIMS integration', integ.client_id, 'QUESTION_FROM_MIMS', 'submission', sub.id,
+      { mims_case_id: change.id, mims_question_id: qid, shown_to_person: !!deliverable });
+    if (!deliverable) {
+      await raiseAlert(integ.client_id, {
+        kind: 'mims_question_undeliverable', audience: 'integration',
+        title: `${ref}: the medical team asked a question the person cannot see`,
+        body: 'The request was sent without signing in, so the person has no page to answer on. Contact them directly and add their answer to the MIMS case.',
+        linkPath: `/admin/clients/${integ.client_id}/submissions?search=${ref}`,
+        relatedType: 'submission', relatedId: sub.id, dedupeKey: `question:${sub.id}:${qid}`,
+      });
+      continue;
+    }
+    // Where to read it, without the question itself: email is not where medical
+    // details travel.
+    const [[who]] = await pool.execute('SELECT u.email FROM cp_portal_users u WHERE u.id = ?', [sub.user_id]);
+    if (who?.email && who.email.includes('@')) {
+      queueEmail(integ.client_id, {
+        to: who.email, subject: `A question about your request ${ref}`,
+        text: `The medical information team has a question about your request ${ref}. Sign in and open My Submissions to read and answer it.`,
+        html: `<p>The medical information team has a question about your request <strong>${ref}</strong>.</p><p>Sign in and open <em>My Submissions</em> to read and answer it.</p>`,
+      }, { kind: 'question_from_mims', relatedType: 'submission', relatedId: sub.id });
+    }
+  }
+}
+
 /** Apply one MIMS change to the request linked to that case. Returns 'closed', 'reopened' or null. */
 async function applyChange(integ, change) {
   const [[sub]] = await pool.execute(
-    `SELECT id, status, identity_erased_at FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
+    `SELECT id, status, identity_erased_at, user_id, mims_serious, mims_due_date FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
     [integ.client_id, String(change.id)]);
   if (!sub) return null;
   // Bridge row 10: the reporter's identity was erased on the MIMS case — blank it on
@@ -129,6 +191,7 @@ async function applyChange(integ, change) {
   }
 
   // Answers always travel — an amended answer can go out after the case closed.
+  await applyBridgeDetails(integ, sub, change);
   await applyProgress(integ, sub, change);
 
   // Bridge plan P4: the case was deleted in MIMS without a merge. The request closes,

@@ -47,6 +47,11 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
              s.submitter_type, s.status, s.external_ref, s.mims_case_number, s.mims_fingerprint, s.submitted_at,
              s.sync_attempts, s.form_data,
+             -- Bridge features F1 and F2: the request's journey through MIMS, and a side
+             -- effect MIMS holds as serious with the day it is due to the authorities.
+             s.synced_at, s.mims_triaged_at, s.mims_serious, DATE_FORMAT(s.mims_due_date, '%Y-%m-%d') AS mims_due_date,
+             (SELECT a.sent_at FROM cp_submission_answers a WHERE a.submission_id = s.id AND a.status = 'sent' LIMIT 1) AS answered_at,
+             (SELECT MAX(e.created_at) FROM cp_submission_status_events e WHERE e.submission_id = s.id AND e.status = 'closed') AS closed_at,
              u.first_name, u.last_name, u.email AS user_email,
              -- CPPM-63: an enquiry can now hold more than one safety task (one per
              -- reply that reported harm); an open one wins, otherwise the latest.
@@ -96,11 +101,18 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       rows.forEach(r => { r.attachments = bySub[r.id] || []; });
       // Bridge row 9: information the person added after sending, with where it got to.
       const [fus] = await pool.execute(
-        `SELECT id, submission_id, body, forward_status, forward_error, created_at
+        `SELECT id, submission_id, body, forward_status, forward_error, created_at, question_id
            FROM cp_submission_followups WHERE submission_id IN (${ph}) ORDER BY id ASC`, ids);
       const fuBySub = {};
       fus.forEach(f => { (fuBySub[f.submission_id] = fuBySub[f.submission_id] || []).push(f); });
       rows.forEach(r => { r.followups = fuBySub[r.id] || []; });
+      // Bridge feature F3: questions MIMS asked the person, and where each one stands.
+      const [qs] = await pool.execute(
+        `SELECT id, submission_id, question, asked_at, status, answered_at
+           FROM cp_submission_questions WHERE submission_id IN (${ph}) ORDER BY id ASC`, ids);
+      const qBySub = {};
+      qs.forEach(q => { (qBySub[q.submission_id] = qBySub[q.submission_id] || []).push(q); });
+      rows.forEach(r => { r.questions = qBySub[r.id] || []; });
     }
 
     // Summary counts

@@ -26,7 +26,7 @@ async function getCaseSupervisors(orgId) {
   return rows.map(r => r.id);
 }
 
-async function notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName }) {
+async function notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, sourceName, serious = false, seriousText = null }) {
   if (!['AE', 'PC'].includes(caseType)) return;
   try {
     const users = await getCaseSupervisors(orgId);
@@ -34,13 +34,24 @@ async function notifyIntakeArrival({ orgId, caseId, caseNumber, caseType, source
       logger.warn({ org_id: orgId, case_id: caseId }, 'intake alert: organisation has no case supervisor to notify');
       return;
     }
+    // Bridge feature F2: a side effect reported as serious has a short legal clock, so it
+    // is critical and stays on screen until someone acknowledges it, with its due date.
+    let due = null;
+    if (serious && caseType === 'AE') {
+      const { computeAeHandoffClock } = require('./caseGovernanceService');
+      due = await computeAeHandoffClock(caseId).catch(() => null);
+    }
+    const isSerious = serious && caseType === 'AE';
     await createNotifications(users, {
       category: 'intake',
-      severity: caseType === 'AE' ? 'warning' : 'info',
-      title: `${caseType === 'AE' ? 'New side-effect report' : 'New product complaint'} from ${sourceName}: ${caseNumber}`,
-      message: 'It arrived unassigned. Open it to assign an owner.',
+      severity: isSerious ? 'critical' : caseType === 'AE' ? 'warning' : 'info',
+      title: `${isSerious ? 'Serious side-effect report' : caseType === 'AE' ? 'New side-effect report' : 'New product complaint'} from ${sourceName}: ${caseNumber}`,
+      message: isSerious
+        ? `Reported as serious (${seriousText || 'see the case'}), to be confirmed at triage. It arrived unassigned: assign an owner now.${due?.dueDate ? ` Report due ${due.dueDate}.` : ''}`
+        : 'It arrived unassigned. Open it to assign an owner.',
       linkUrl: `/cases/${caseId}`,
-      metadata: { case_id: caseId, source: sourceName },
+      metadata: { case_id: caseId, source: sourceName, ...(isSerious ? { serious: true, due_date: due?.dueDate || null } : {}) },
+      requiresAcknowledgement: isSerious,
       eventKey: `intake:${caseId}`,
     });
   } catch (err) {

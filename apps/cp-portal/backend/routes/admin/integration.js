@@ -27,6 +27,79 @@ const { encryptSecret } = require('../../utils/secretCrypto');
 const { audit } = require('../../utils/audit');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const log = require('../../utils/logger');
+const { loadFormFields } = require('../../services/formFields');
+
+// Bridge feature F4: the bridge version this portal is built for. MIMS reports its own
+// at /api/v1/cases/bridge; an older MIMS is missing what the portal relies on.
+const BRIDGE_VERSION = 2;
+
+// A made-up answer for every question on a form, so the trial report exercises the
+// real form and its field mappings without anyone's details.
+function sampleAnswers(fields) {
+  const today = new Date().toISOString().slice(0, 10);
+  const out = {};
+  for (const f of fields) {
+    const first = String(f.options || '').split('\n').map(o => o.trim()).filter(Boolean)[0];
+    out[f.field_key] = f.field_type === 'email' ? 'connection-test@example.invalid'
+      : f.field_type === 'date' ? today
+      : f.field_type === 'checkbox' ? true
+      : f.field_type === 'phone' ? '+440000000000'
+      : first || `Connection test (${f.label || f.field_key})`;
+  }
+  return out;
+}
+
+// Bridge feature F4: after the sign-in check, ask MIMS which bridge it speaks, then send
+// one trial report per form that goes to MIMS. MIMS checks it as a real report and keeps
+// nothing (dry run). Each form also lists the questions that reach MIMS only inside
+// the case comment, because no MIMS field takes them.
+async function bridgeChecks(cfg, safeUrl, headers) {
+  const submit = require('../portal/submit');
+  const call = async (url, opts = {}) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try { return await safeFetch(url, { headers, signal: controller.signal, ...opts }); } finally { clearTimeout(timer); }
+  };
+  const out = { mims_bridge_version: null, portal_bridge_version: BRIDGE_VERSION, version_message: null, forms: [] };
+  const v = await call(new URL('/api/v1/cases/bridge', safeUrl).toString());
+  if (v.ok) {
+    const d = await v.json().catch(() => ({}));
+    out.mims_bridge_version = Number(d.bridge_version) || null;
+  }
+  out.version_message = !out.mims_bridge_version
+    ? 'MIMS does not say which bridge version it runs, so it is older than this portal. Reports still arrive, but serious-report dates, the journey, questions to the reporter and duplicate warnings will not work until MIMS is updated.'
+    : out.mims_bridge_version < BRIDGE_VERSION
+      ? `MIMS runs bridge version ${out.mims_bridge_version}; this portal expects ${BRIDGE_VERSION}. Update MIMS.`
+      : out.mims_bridge_version > BRIDGE_VERSION
+        ? `MIMS runs bridge version ${out.mims_bridge_version}, newer than this portal's ${BRIDGE_VERSION}. Reports still arrive; update the portal to use what is new.`
+        : `Both sides run bridge version ${BRIDGE_VERSION}.`;
+  // An older MIMS does not know trial reports and would keep a real case (a made-up
+  // side effect included), so none is sent to it.
+  if (!out.mims_bridge_version || out.mims_bridge_version < 2) return out;
+  for (const formType of Object.keys(submit.FORM_TYPE_TO_CASE_TYPE)) {
+    const { fields } = await loadFormFields(cfg.client_id, formType);
+    if (!fields.length) continue;
+    const formData = sampleAnswers(fields);
+    const used = new Set(['awareness_date', 'related_reference']);
+    const payload = submit.buildMimsPayload(formType, formData, 0, new Date(), used);
+    payload.reference = 'CONNECTION-TEST';
+    const other = await submit.addMappedAndOtherAnswers({ clientId: cfg.client_id, integrationId: cfg.id, formType, formData, payload, used });
+    const form = { form_type: formType, comment_only: other.map(o => o.question), ok: false, message: null };
+    try {
+      const r = await call(new URL('/api/v1/cases?dry_run=1', safeUrl).toString(), { method: 'POST', body: JSON.stringify(payload) });
+      const d = await r.json().catch(() => ({}));
+      // A case kept despite the dry run must not pass as fine.
+      if (r.ok && d.dry_run) { form.ok = true; form.message = 'MIMS would accept this report.'; }
+      else if (r.ok && d.idempotent) { form.ok = true; form.message = 'MIMS would treat this as a report it already holds.'; }
+      else if (r.ok) form.message = `MIMS does not support trial reports and created case ${d.case_number || d.id}. Delete it in MIMS.`;
+      else form.message = `MIMS would refuse this report: ${d.error || `HTTP ${r.status}`}`;
+    } catch (err) {
+      form.message = `The trial report could not be sent: ${err.message}`;
+    }
+    out.forms.push(form);
+  }
+  return out;
+}
 
 // Mask a secret field — show only last 4 chars with **** prefix
 function maskSecret(value) {
@@ -162,8 +235,13 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
         `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = ?, last_sync_error = ? WHERE id = ?`,
         [syncStatus, r.ok ? null : message, cfg.id]
       );
-      await audit(req.admin, req.params.clientId, 'TEST_CONNECTION', 'integration', cfg.id, { success: r.ok, status: r.status, message });
-      res.json({ success: r.ok, status: r.status, message });
+      // Only an older MIMS can be asked nothing more; a failing sign-in is the answer.
+      const bridge = r.ok ? await bridgeChecks(cfg, safeUrl, headers).catch(err => ({ error: err.message })) : null;
+      await audit(req.admin, req.params.clientId, 'TEST_CONNECTION', 'integration', cfg.id, {
+        success: r.ok, status: r.status, message,
+        ...(bridge ? { mims_bridge_version: bridge.mims_bridge_version || null, trial_reports: (bridge.forms || []).map(f => ({ form: f.form_type, ok: f.ok })) } : {}),
+      });
+      res.json({ success: r.ok, status: r.status, message, bridge });
     } catch (fetchErr) {
       await pool.execute(
         `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = 'failure', last_sync_error = ? WHERE id = ?`,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { OwnerCell, OwnerButtons } from '../components/WorkOwnership'
@@ -15,6 +15,47 @@ const STATUS_COLORS = {
   synced:        { background: '#DCFCE7', color: '#166534' },
   failed_sync:   { background: '#FEE2E2', color: '#991B1B' },
   closed:        { background: '#F3F4F6', color: '#4B5563' },
+}
+
+const QUESTION_STATUS = {
+  open: 'Waiting for the person to answer',
+  answered: 'Answered',
+  withdrawn: 'Withdrawn by the medical team',
+  undeliverable: 'Not shown: the person was not signed in, so contact them directly',
+}
+
+function formatDate(value) {
+  const d = new Date(`${value}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// Bridge feature F1: where the request has got to — on the portal, in MIMS, and back.
+function Journey({ s }) {
+  const steps = [
+    ['Sent by the person', s.submitted_at],
+    [`Received by MIMS as case ${s.mims_case_number || `#${s.external_ref}`}`, s.synced_at],
+    ['Taken on by the medical team', s.mims_triaged_at],
+    ['Answered', s.answered_at],
+    ['Closed', s.status === 'closed' ? s.closed_at : null],
+  ]
+  const reached = steps.map(([, at]) => !!at)
+  return (
+    <>
+      <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Journey</div>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {steps.map(([label, at], i) => (
+          <li key={label} style={{
+            padding: '6px 10px', borderRadius: 6, fontSize: 12, minWidth: 150,
+            border: `1px solid ${reached[i] ? '#86EFAC' : '#E5E7EB'}`, background: reached[i] ? '#F0FDF4' : '#fff',
+            color: reached[i] ? '#14532D' : '#6B7280',
+          }}>
+            <div style={{ fontWeight: 600 }}>{reached[i] ? '✓ ' : ''}{label}</div>
+            <div style={{ fontSize: 11 }}>{at ? formatDateTime(at) : 'Not yet'}</div>
+          </li>
+        ))}
+      </ol>
+    </>
+  )
 }
 
 const STATUS_LABELS = labelsOf('submissionStatus')
@@ -207,7 +248,10 @@ export default function SubmissionsPage() {
   const [loading, setLoading]   = useState(true)
   const [typeFilter, setTypeFilter]   = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [search, setSearch]     = useState('')
+  // Bridge feature F1: a MIMS case links here with ?search=CP-000123; that request opens.
+  const [searchParams] = useSearchParams()
+  const linkedRef = searchParams.get('search') || ''
+  const [search, setSearch]     = useState(linkedRef)
   const [openId, setOpenId]     = useState(null)  // phase 3 row 18: the case open beside the list
   const [msg, setMsg]           = useState(null)  // { type, text }
   const [dateFrom, setDateFrom] = useState('')
@@ -249,6 +293,7 @@ export default function SubmissionsPage() {
       if (!res.ok) throw new Error('Failed to load submissions.')
       const d   = await res.json()
       setSubmissions(d.submissions || [])
+      if (linkedRef && search === linkedRef && (d.submissions || []).length === 1) setOpenId(d.submissions[0].id)
       setCounts(d.counts || [])
       setTotal(d.total || 0)
       setMatched(d.matched || 0)
@@ -373,6 +418,14 @@ export default function SubmissionsPage() {
           {s.ae_task_status === 'open' ? 'Safety review open' : 'Safety review closed'}
         </span>
       )}
+      {/* Bridge feature F2: MIMS holds it as serious; the date it must reach
+          the authorities by, while the request is open. */}
+      {Number(s.mims_serious) === 1 && (
+        <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#B91C1C', whiteSpace: 'nowrap' }}
+          title="MIMS holds this side effect as serious (as reported, confirmed at triage). The date is when it must be reported to the authorities.">
+          Serious{s.mims_due_date && s.status !== 'closed' ? ` · due to authorities ${formatDate(s.mims_due_date)}` : ''}
+        </div>
+      )}
     </>
   }
 
@@ -460,7 +513,7 @@ export default function SubmissionsPage() {
           {s.followups.map(f => (
             <div key={f.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', marginBottom: 6 }}>
               <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 4 }}>
-                <span title={formatUtc(f.created_at)}>{formatDateTime(f.created_at)}</span> · {{
+                <span title={formatUtc(f.created_at)}>{formatDateTime(f.created_at)}</span>{f.question_id ? ' · Answer to a question from the medical team' : ''} · {{
                   forwarded: 'On the MIMS case',
                   pending: s.external_ref ? 'Being sent to MIMS' : 'Goes to MIMS with the report',
                   failed: `Not yet on the MIMS case: ${f.forward_error || 'unknown reason'}`,
@@ -468,6 +521,22 @@ export default function SubmissionsPage() {
                 }[f.forward_status] || f.forward_status}
               </div>
               <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{f.body}</div>
+            </div>
+          ))}
+        </>
+      )}
+      {s.external_ref && <Journey s={s} />}
+      {/* Bridge feature F3: questions the medical team asked the person. */}
+      {s.questions?.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Questions from the medical team ({s.questions.length})</div>
+          {s.questions.map(q => (
+            <div key={q.id} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff', border: '1px solid #E5E7EB', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: '#4B5563', marginBottom: 4 }}>
+                Asked {q.asked_at ? formatDateTime(q.asked_at) : ''} · {QUESTION_STATUS[q.status] || q.status}
+                {q.answered_at ? ` ${formatDateTime(q.answered_at)}` : ''}
+              </div>
+              <div style={{ fontSize: 13, color: '#111827', whiteSpace: 'pre-wrap' }}>{q.question}</div>
             </div>
           ))}
         </>

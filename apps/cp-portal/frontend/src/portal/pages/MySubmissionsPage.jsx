@@ -167,11 +167,30 @@ export default function MySubmissionsPage() {
                   </div>
                 )}
 
+                {/* Bridge feature F3: a question the medical team asked about this request. */}
+                {s.questions?.map(q => (
+                  <div key={`q-${q.id}`} style={{ marginTop: 14, padding: '14px 16px', borderRadius: 8, background: q.status === 'open' ? '#FFFBEB' : '#f8fafc', border: `1px solid ${q.status === 'open' ? '#FCD34D' : '#e2e8f0'}` }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: q.status === 'open' ? '#92400E' : '#334155', marginBottom: 6 }}>
+                      {t('A question from the medical team')}{q.asked_at ? ` · ${formatDate(q.asked_at)}` : ''}
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#1f2937', lineHeight: 1.55 }}>{q.question}</div>
+                    {q.status === 'open'
+                      ? <AddInformation submission={s} question={q} screening={screening} clientCode={clientCode} onAdded={load} />
+                      : (
+                        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '0.8rem', color: '#166534', marginBottom: 4 }}>{t('Your answer')}{q.answered_at ? ` · ${formatDate(q.answered_at)}` : ''}</div>
+                          <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{s.followups?.find(f => f.question_id === q.id)?.body}</div>
+                        </div>
+                      )}
+                  </div>
+                ))}
+
                 {/* Bridge row 9: what the person added after sending, and a way to add more. */}
-                {s.followups?.length > 0 && (
+                {/* An answer to a question shows under that question, not here. */}
+                {s.followups?.some(f => !f.question_id) && (
                   <div style={{ marginTop: 14 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>{t('Information you added')}</div>
-                    {s.followups.map((f, i) => (
+                    {s.followups.filter(f => !f.question_id).map((f, i) => (
                       <div key={i} style={{ padding: '10px 12px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 6 }}>
                         <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>{formatDate(f.at)}</div>
                         <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{f.body}</div>
@@ -222,7 +241,8 @@ export default function MySubmissionsPage() {
 // Bridge row 9: add something to a request already sent — a new detail, a correction,
 // a file — instead of sending a second, unconnected request. Asks the same question as
 // the form and a reply (PD-2): did anyone become unwell; a Yes goes to the safety team.
-function AddInformation({ submission: s, screening, clientCode, onAdded }) {
+// Bridge feature F3: with `question`, the same form answers a question the medical team asked.
+function AddInformation({ submission: s, screening, clientCode, onAdded, question }) {
   const { t } = usePortal()
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
@@ -235,6 +255,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
   const ask = screening.find(f => f.field_key === 'ae_screen_answer')
   const askMore = screening.find(f => f.field_key === 'ae_screen_detail')
   const needsScreen = s.reply_needs_screening && ask
+  const key = `${s.id}${question ? `-q${question.id}` : ''}` // two forms can be open on one request
 
   async function send(e) {
     e.preventDefault()
@@ -243,6 +264,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
     setBusy(true)
     const fd = new FormData()
     fd.append('text', text)
+    if (question) fd.append('question_id', question.id)
     if (needsScreen) { fd.append('ae_screen_answer', unwell); fd.append('ae_screen_detail', unwell === 'Yes' ? detail : '') }
     files.forEach(f => fd.append('attachments', f))
     try {
@@ -266,31 +288,31 @@ function AddInformation({ submission: s, screening, clientCode, onAdded }) {
     return (
       <div style={{ marginTop: 12 }}>
         {done && <div role="status" style={{ fontSize: '0.85rem', color: '#166534', marginBottom: 8 }}>{done}</div>}
-        <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => { setOpen(true); setDone('') }}>{t('Add information')}</button>
+        <button className={`pp-btn pp-btn-sm ${question ? 'pp-btn-primary' : 'pp-btn-outline'}`} onClick={() => { setOpen(true); setDone('') }}>{t(question ? 'Answer' : 'Add information')}</button>
       </div>
     )
   }
   return (
     <form onSubmit={send} style={{ marginTop: 12, padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }} htmlFor={`fu-${s.id}`}>
-        {t('What would you like to add?')}
+      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }} htmlFor={`fu-${key}`}>
+        {t(question ? 'Your answer' : 'What would you like to add?')}
       </label>
-      <textarea id={`fu-${s.id}`} value={text} onChange={e => setText(e.target.value)} rows={4} maxLength={5000} disabled={busy}
+      <textarea id={`fu-${key}`} value={text} onChange={e => setText(e.target.value)} rows={4} maxLength={5000} disabled={busy}
         style={{ width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', font: 'inherit' }}
-        placeholder={t('For example: a new symptom, a date you remembered, a batch number.')} />
+        placeholder={question ? '' : t('For example: a new symptom, a date you remembered, a batch number.')} />
       {needsScreen && (
         <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0' }}>
           <legend style={{ fontWeight: 600, fontSize: '0.85rem' }}>{ask.label} *</legend>
           {ask.help_text && <div style={{ fontSize: '0.8rem', color: '#475569', margin: '2px 0 6px' }}>{ask.help_text}</div>}
           {String(ask.options || '').split('\n').map(o => (
             <label key={o} style={{ marginRight: 16, fontSize: '0.85rem' }}>
-              <input type="radio" name={`fu-unwell-${s.id}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}
+              <input type="radio" name={`fu-unwell-${key}`} value={o} checked={unwell === o} disabled={busy} onChange={() => setUnwell(o)} /> {o}
             </label>
           ))}
           {unwell === 'Yes' && askMore && (
             <div style={{ marginTop: 8 }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }} htmlFor={`fu-unwell-detail-${s.id}`}>{askMore.label}</label>
-              <textarea id={`fu-unwell-detail-${s.id}`} rows={3} value={detail} maxLength={5000} disabled={busy} onChange={e => setDetail(e.target.value)}
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }} htmlFor={`fu-unwell-detail-${key}`}>{askMore.label}</label>
+              <textarea id={`fu-unwell-detail-${key}`} rows={3} value={detail} maxLength={5000} disabled={busy} onChange={e => setDetail(e.target.value)}
                 placeholder={askMore.placeholder || ''}
                 style={{ width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', font: 'inherit' }} />
             </div>
