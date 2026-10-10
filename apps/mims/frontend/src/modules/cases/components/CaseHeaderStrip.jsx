@@ -76,7 +76,9 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
     }
     loadLatest()
     return () => { cancelled = true }
-  }, [caseId, headers?.Authorization])
+    // updated_at changes on every save, so the line shows the save just made
+    // rather than the activity from when the case was opened.
+  }, [caseId, headers?.Authorization, caseData?.updated_at])
 
   const statusLabel = (value) => statuses.find(s => String(s.id) === String(value))?.name
   const ownerLabel = (value) => users.find(u => String(u.id) === String(value))?.name || 'Unassigned'
