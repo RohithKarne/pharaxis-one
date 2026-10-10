@@ -21,10 +21,10 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
     return [
       {
         id: 'unassigned_intake',
-        title: 'Unassigned intake',
+        title: 'Unassigned cases',
         value: Number(summary.stats.unassigned_cases || 0),
         body: 'Claim new work quickly so the queue does not age without an owner.',
-        actionLabel: 'Open unassigned queue',
+        actionLabel: 'Open unassigned cases',
         actionTo: '/cases?tab=unassigned',
         tone: 'warning',
       },
