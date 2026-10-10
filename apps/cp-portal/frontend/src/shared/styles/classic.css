@@ -24,6 +24,12 @@
 :root .cp-admin-sidebar.compact .cp-nav-item { position: relative; justify-content: center; padding: 8px 6px; }
 :root .cp-admin-sidebar.compact .cp-nav-item.active { padding-left: 2px; }
 :root .cp-admin-sidebar.compact .cp-nav-badge { position: absolute; top: 2px; right: 4px; padding: 0 4px; font-size: 10px; }
+:root .cp-nav-group-head { color: #1d3557; }
+:root .cp-nav-group-head.current { color: #000; }
+:root .cp-nav-sub { margin: 0; border-bottom: 1px solid #d5dbe2; background: #f3f5f8; }
+:root .cp-nav-subitem { border-radius: 0; padding: 4px 12px 4px 34px; color: #0645ad; font-size: 12px; }
+:root .cp-nav-subitem:hover { background: #dde3ea; color: #000; }
+:root .cp-nav-subitem.active { background: #fff; color: #000; font-weight: bold; border-left: 4px solid var(--cp-brand); padding-left: 30px; }
 :root .cp-sidebar-footer { border-top: 1px solid #b9c2cd; padding: 10px 12px; }
 :root .cp-admin-name { color: #1d3557; }
 :root .cp-logout-btn { background: #f5f6f7; border: 1px solid #a9b2bd; color: #222; }

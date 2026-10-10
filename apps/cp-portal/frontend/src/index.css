@@ -1157,6 +1157,22 @@ body { background: var(--cp-bg); }
 }
 .cp-subnav-tab .cp-nav-badge { margin-left: 0; }
 
+/* Phase 3 row 14 (CP ease-of-use plan): the sidebar is the one map. A main screen
+   opens in place to list its screens; the tabs above the page show only when the
+   sidebar is collapsed to icons. */
+.cp-nav-group-head { width: 100%; border: 0; background: none; font: inherit; cursor: pointer; text-align: left; }
+.cp-nav-group-head.current { font-weight: 700; }
+.cp-nav-caret { margin-left: auto; font-size: 10px; opacity: .7; }
+.cp-nav-group-head .cp-nav-badge { margin-left: auto; }
+.cp-nav-group-head .cp-nav-badge + .cp-nav-caret { margin-left: 6px; }
+.cp-nav-sub { display: flex; flex-direction: column; margin-bottom: 4px; }
+.cp-nav-subitem {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 38px;
+  font-size: 12.5px; color: var(--cp-sidebar-text); text-decoration: none; border-radius: var(--cp-radius-sm);
+}
+.cp-nav-subitem:hover { background: rgba(255,255,255,.07); color: #F1F5F9; }
+.cp-nav-subitem.active { color: #fff; font-weight: 700; background: var(--cp-sidebar-act); }
+
 /* ── Toggle Switch ────────────────────────────────────────────── */
 
 .cp-toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
@@ -1815,6 +1831,21 @@ body { background: var(--cp-bg); }
   gap: 8px;
   padding: 4px 0;
 }
+
+/* Phase 3 row 14 (CP ease-of-use plan): the Overview's "To do today" list. */
+.ck-todo .ck-panel-title { margin-top: 0; }
+.ck-todo-list { list-style: none; margin: 0; padding: 0; }
+.ck-todo-list .ck-issue {
+  width: 100%; border: 0; text-align: left; font: inherit; font-size: 13px; color: inherit;
+}
+.ck-issue-blue { background: #EFF6FF; border-left: 3px solid #3B82F6 !important; }
+.ck-issue-blue:hover { background: #DBEAFE; }
+.ck-issue-blue .ck-issue-dot { background: #3B82F6; }
+.ck-todo-list .ck-issue-red   { border-left: 3px solid #EF4444; }
+.ck-todo-list .ck-issue-amber { border-left: 3px solid #F59E0B; }
+.ck-todo-hint { display: block; font-weight: 400; font-size: 12px; color: #4B5563; }
+.ck-todo-checked { font-size: 12px; color: #4B5563; margin: 10px 0 0; }
+.ck-todo-unread { color: #B91C1C; font-weight: 600; }
 
 /* ── Activity ────────────────────────────────────────────────── */
 

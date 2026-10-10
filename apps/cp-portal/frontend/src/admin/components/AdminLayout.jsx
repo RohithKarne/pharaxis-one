@@ -281,6 +281,21 @@ export default function AdminLayout({ children }) {
     }))
   }, [clientId, location.pathname, badgeTick])
 
+  // A screen's count, as its sidebar entry and tab show it.
+  function tabBadge(t) {
+    if (!t.badge || !(badges[t.badge] > 0)) return null
+    if (t.badge === 'safety' && badges.safetyMine > 0) return `${badges.safetyMine} yours · ${badges.safety} open`
+    if (t.badge === 'review' && badges.reviewMine > 0) return `${badges.reviewMine} yours · ${badges.review} to review`
+    return badges[t.badge]
+  }
+
+  // Phase 3 row 14 (CP ease-of-use plan): which main screens are open in the sidebar.
+  // The one you are on opens by itself.
+  const [openSections, setOpenSections] = useState(() => new Set(currentSection ? [currentSection.key] : []))
+  function toggleSection(key) {
+    setOpenSections(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
+  }
+
   // Client logo — fetch branding when a client is selected
   const [clientLogo, setClientLogo] = useState(null)
   const [clientName, setClientName] = useState(null)
@@ -373,20 +388,52 @@ export default function AdminLayout({ children }) {
               {sections.map(sec => {
                 const count = sec.tabs.reduce((n, t) => n + (t.badge ? badges[t.badge] : 0), 0)
                 const mine  = sec.tabs.reduce((n, t) => n + (t.badge ? badges[`${t.badge}Mine`] || 0 : 0), 0)
-                return (
+                const isCurrent = sec.key === currentSection?.key
+                const badge = count > 0 && (
+                  <span className="cp-nav-badge">
+                    {mine > 0 && !sidebarCompact ? `${mine} yours · ${count}` : count}
+                  </span>
+                )
+                // Collapsed to icons, or a main screen with one screen: a plain link, as before.
+                if (sidebarCompact || sec.tabs.length === 1) return (
                   <NavLink
                     key={sec.key} to={tabUrl(sec.tabs[0])} end
                     title={sec.label}
-                    className={`cp-nav-item${sec.key === currentSection?.key ? ' active' : ''}`}
+                    className={`cp-nav-item${isCurrent ? ' active' : ''}`}
                   >
                     <span className="cp-nav-icon"><Icon name={sec.icon} size={17} /></span>
                     <span className="cp-nav-text">{sec.label}</span>
-                    {count > 0 && (
-                      <span className="cp-nav-badge">
-                        {mine > 0 && !sidebarCompact ? `${mine} yours · ${count}` : count}
-                      </span>
-                    )}
+                    {badge}
                   </NavLink>
+                )
+                const isOpen = openSections.has(sec.key)
+                return (
+                  <div key={sec.key}>
+                    <button
+                      type="button" aria-expanded={isOpen} aria-controls={`cp-nav-sub-${sec.key}`}
+                      className={`cp-nav-item cp-nav-group-head${isCurrent ? ' current' : ''}`}
+                      onClick={() => toggleSection(sec.key)}
+                    >
+                      <span className="cp-nav-icon"><Icon name={sec.icon} size={17} /></span>
+                      <span className="cp-nav-text">{sec.label}</span>
+                      {!isOpen && badge}
+                      <span className="cp-nav-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="cp-nav-sub" id={`cp-nav-sub-${sec.key}`}>
+                        {sec.tabs.map(t => (
+                          <NavLink
+                            key={t.path} to={tabUrl(t)} end
+                            aria-current={t.path === currentPath ? 'page' : undefined}
+                            className={`cp-nav-subitem${t.path === currentPath ? ' active' : ''}`}
+                          >
+                            <span>{t.label}</span>
+                            {tabBadge(t) && <span className="cp-nav-badge">{tabBadge(t)}</span>}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -458,7 +505,9 @@ export default function AdminLayout({ children }) {
               Your role is view-only. You can look at everything here, but changes will not be saved. Ask an admin if you need to make changes.
             </div>
           )}
-          {shownSection && shownSection.tabs.length > 1 && (
+          {/* Phase 3 row 14: the open sidebar lists these screens already, so the tabs
+              show only when it is collapsed to icons (the default on a phone). */}
+          {sidebarCompact && shownSection && shownSection.tabs.length > 1 && (
             <nav className="cp-subnav" aria-label={shownSection.label}>
               {shownSection.tabs.map(t => (
                 <NavLink
@@ -466,15 +515,7 @@ export default function AdminLayout({ children }) {
                   className={`cp-subnav-tab${t.path === currentPath ? ' active' : ''}`}
                 >
                   {t.label}
-                  {t.badge && badges[t.badge] > 0 && (
-                    <span className="cp-nav-badge">
-                      {t.badge === 'safety' && badges.safetyMine > 0
-                        ? `${badges.safetyMine} yours · ${badges.safety} open`
-                        : t.badge === 'review' && badges.reviewMine > 0
-                          ? `${badges.reviewMine} yours · ${badges.review} to review`
-                          : badges[t.badge]}
-                    </span>
-                  )}
+                  {tabBadge(t) && <span className="cp-nav-badge">{tabBadge(t)}</span>}
                 </NavLink>
               ))}
             </nav>
