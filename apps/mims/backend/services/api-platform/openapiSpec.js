@@ -24,9 +24,6 @@ paths:
       summary: List cases
     post:
       summary: Create a case
-  /cases/{id}:
-    put:
-      summary: Update a case
   /cases/{id}/redact-reporter:
     post:
       summary: Remove the reporter's identity from a case, keeping the case (GDPR erasure)
