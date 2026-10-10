@@ -49,11 +49,19 @@ if (!emailArg || !nameArg || !orgArg) {
     oneTime = crypto.randomBytes(12).toString('base64url');
     const hash = await bcrypt.hash(oneTime, 12);
     const initials = name.split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase() || 'AD';
+    // users.user_id is a separate unique short id; pick one that is free.
+    const base = email.split('@')[0].slice(0, 45);
+    let userId = base;
+    for (let n = 2; ; n++) {
+      const [[taken]] = await pool.execute('SELECT id FROM users WHERE user_id = ? LIMIT 1', [userId]);
+      if (!taken) break;
+      userId = `${base}${n}`;
+    }
     const [r] = await pool.execute(
       `INSERT INTO users (user_id, name, email, password, role, initials, org_id, is_active, email_verified, email_verified_at,
                           password_reset_required, is_primary_ref, is_disabled, access_admin_site, case_admin)
        VALUES (?, ?, ?, ?, 'admin', ?, ?, 1, 1, NOW(), 1, 0, 0, 1, 1)`,
-      [email.split('@')[0].slice(0, 50), name, email, hash, initials, org.id]);
+      [userId, name, email, hash, initials, org.id]);
     user = { id: r.insertId, email, role: 'admin', is_active: 1 };
     console.log(`Created ${email} as an administrator of ${org.name}.`);
   } else {
@@ -65,15 +73,14 @@ if (!emailArg || !nameArg || !orgArg) {
     }
   }
 
-  const [[access]] = await pool.execute('SELECT id FROM user_org_access WHERE user_id = ? AND org_id = ? LIMIT 1', [user.id, org.id]);
-  if (access) {
-    await pool.execute(`UPDATE user_org_access SET is_active = 1, role_at_org = 'admin', site_permission = 'full' WHERE id = ?`, [access.id]);
-  } else {
-    await pool.execute(
-      `INSERT INTO user_org_access (user_id, org_id, site_id, is_active, role_at_org, site_permission, primary_site_id, site_access_scope, access_reason, approved_by, approved_at)
-       VALUES (?, ?, ?, 1, 'admin', 'full', ?, 'primary', 'create-org-admin script', ?, NOW())`,
-      [user.id, org.id, site.id, site.id, user.id]);
-  }
+  // Same columns the platform admin's "assign to organisation" screen writes
+  // (routes/platformAdmin.js), so this works on every copy's schema.
+  await pool.execute(
+    `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission)
+     VALUES (?, ?, ?, 'admin', 'full')
+     ON DUPLICATE KEY UPDATE primary_site_id = VALUES(primary_site_id),
+       role_at_org = 'admin', site_permission = 'full', is_active = 1`,
+    [user.id, org.id, site.id]);
   console.log(`${email} administers ${org.name} (site: ${site.name}).`);
   if (oneTime) {
     console.log('');
