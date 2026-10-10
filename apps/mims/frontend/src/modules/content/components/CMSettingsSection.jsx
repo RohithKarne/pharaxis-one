@@ -300,7 +300,7 @@ export default function CMSettingsSection({ token }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Display Label</label>
-              <input
+              <input aria-label="Display Label"
                 style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                 value={form.label}
                 onChange={e => setForm(p => ({ ...p, label: e.target.value }))}
@@ -309,7 +309,7 @@ export default function CMSettingsSection({ token }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Order</label>
-              <input
+              <input aria-label="Order"
                 type="number"
                 style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                 value={form.sort_order}

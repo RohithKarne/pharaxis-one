@@ -154,13 +154,13 @@ export default function Users() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input
+          <input aria-label="Search users"
             className="ma-usr-search"
             placeholder="Search name, email, user ID…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0) }}
           />
-          <select
+          <select aria-label="Filter by role"
             value={fltRole}
             onChange={e => { setFltRole(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
@@ -171,7 +171,7 @@ export default function Users() {
             <option value="reviewer">Reviewer</option>
             <option value="content_manager">Content Manager</option>
           </select>
-          <select
+          <select aria-label="Filter by status"
             value={fltStatus}
             onChange={e => { setFltStatus(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
@@ -181,7 +181,7 @@ export default function Users() {
             <option value="inactive">Inactive</option>
             <option value="disabled">Disabled</option>
           </select>
-          <select
+          <select aria-label="Filter by group"
             value={fltGroup}
             onChange={e => { setFltGroup(e.target.value); setPage(0) }}
             style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, background: 'var(--surface)' }}
@@ -588,7 +588,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 {switchingOff && (
                   <div className="ma-usr-field" style={{ marginTop: 10 }}>
                     <label>Reason for switching off</label>
-                    <input
+                    <input aria-label="Reason for switching off"
                       className="ma-usr-input"
                       value={form.inactive_reason}
                       onChange={e => set('inactive_reason', e.target.value)}
@@ -612,7 +612,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 </div>
                 <div className="ma-usr-field">
                   <label>Initials</label>
-                  <input
+                  <input aria-label="Initials"
                     className="ma-usr-input"
                     value={form.initials}
                     onChange={e => set('initials', e.target.value.toUpperCase().slice(0, 5))}
@@ -663,7 +663,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 </div>
                 <div className="ma-usr-field">
                   <label>Department</label>
-                  <input
+                  <input aria-label="Department"
                     className="ma-usr-input"
                     value={form.department}
                     onChange={e => set('department', e.target.value)}
@@ -758,7 +758,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   <div className="ma-usr-section-title">Set New Password</div>
                   <div className="ma-usr-field">
                     <label>New Password</label>
-                    <input
+                    <input aria-label="New Password"
                       type="password"
                       className="ma-usr-input"
                       value={newPwd}
@@ -768,7 +768,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   </div>
                   <div className="ma-usr-field">
                     <label>Confirm Password</label>
-                    <input
+                    <input aria-label="Confirm Password"
                       type="password"
                       className="ma-usr-input"
                       value={confirmPwd}

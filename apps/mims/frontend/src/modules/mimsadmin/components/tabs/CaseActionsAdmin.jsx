@@ -88,7 +88,7 @@ function TemplatesPane() {
     <div style={{ padding: 20 }}>
       {flash && <Flash flash={flash} />}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...ipt, width: 140 }}>
+        <select aria-label="Filter by type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...ipt, width: 140 }}>
           <option value="">All types</option>
           {CASE_TYPES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
         </select>

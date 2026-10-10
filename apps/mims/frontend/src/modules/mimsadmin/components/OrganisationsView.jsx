@@ -250,7 +250,7 @@ export default function OrganisationsView({ H, flash }) {
             <form onSubmit={createOrg} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Organisation Name *</label>
-                <input className="form-control" style={{ fontSize: 13 }} value={orgForm.name}
+                <input aria-label="Organisation Name" className="form-control" style={{ fontSize: 13 }} value={orgForm.name}
                   onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Pfizer India" />
               </div>
               <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Create</button>
@@ -263,7 +263,7 @@ export default function OrganisationsView({ H, flash }) {
             <form onSubmit={cloneOrg} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Source Organisation *</label>
-                <select className="form-control" style={{ fontSize: 13 }} value={cloneForm.source_org_id}
+                <select aria-label="Source Organisation" className="form-control" style={{ fontSize: 13 }} value={cloneForm.source_org_id}
                   onChange={e => setCloneForm(f => ({ ...f, source_org_id: e.target.value }))}>
                   <option value="">Select source org...</option>
                   {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -271,7 +271,7 @@ export default function OrganisationsView({ H, flash }) {
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>New Organisation Name *</label>
-                <input className="form-control" style={{ fontSize: 13 }} value={cloneForm.target_name}
+                <input aria-label="New Organisation Name" className="form-control" style={{ fontSize: 13 }} value={cloneForm.target_name}
                   onChange={e => setCloneForm(f => ({ ...f, target_name: e.target.value }))} placeholder="e.g. Pfizer US" />
               </div>
               <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Clone</button>
@@ -535,7 +535,7 @@ export default function OrganisationsView({ H, flash }) {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               <div>
                                 <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Site Name</label>
-                                <input
+                                <input aria-label="Site Name"
                                   className="form-control"
                                   style={{ fontSize: 13, minWidth: 180 }}
                                   value={siteEditForm.name}
@@ -544,7 +544,7 @@ export default function OrganisationsView({ H, flash }) {
                               </div>
                               <div>
                                 <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Country</label>
-                                <input
+                                <input aria-label="Country"
                                   className="form-control"
                                   style={{ fontSize: 13, minWidth: 140 }}
                                   value={siteEditForm.country}
@@ -588,12 +588,12 @@ export default function OrganisationsView({ H, flash }) {
                 <form onSubmit={createSite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div>
                     <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Site Name *</label>
-                    <input className="form-control" style={{ fontSize: 13 }} value={siteForm.name}
+                    <input aria-label="Site Name" className="form-control" style={{ fontSize: 13 }} value={siteForm.name}
                       onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mumbai HQ" />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Country</label>
-                    <input className="form-control" style={{ fontSize: 13 }} value={siteForm.country}
+                    <input aria-label="Country" className="form-control" style={{ fontSize: 13 }} value={siteForm.country}
                       onChange={e => setSiteForm(f => ({ ...f, country: e.target.value }))} placeholder="India" />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
@@ -630,7 +630,7 @@ export default function OrganisationsView({ H, flash }) {
             </div>
             <div className="form-group">
               <label>Organisation Name</label>
-              <input
+              <input aria-label="Organisation Name"
                 className="form-control"
                 value={editOrgName}
                 onChange={e => setEditOrgName(e.target.value)}

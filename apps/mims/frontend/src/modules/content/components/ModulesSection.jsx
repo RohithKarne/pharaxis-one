@@ -82,7 +82,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div className="cm-form-group">
               <label className="cm-form-label">Module Type</label>
-              <select className="cm-form-select" value={form.module_type} onChange={e => setForm(p => ({ ...p, module_type: e.target.value }))}>
+              <select aria-label="Module Type" className="cm-form-select" value={form.module_type} onChange={e => setForm(p => ({ ...p, module_type: e.target.value }))}>
                 <option>SRD</option>
                 <option>Enclosure</option>
                 <option>Information Document</option>
@@ -91,7 +91,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
             </div>
             <div className="cm-form-group">
               <label className="cm-form-label">Status</label>
-              <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+              <select aria-label="Status" className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
                 <option>Draft</option>
                 <option>Pending</option>
                 {/* A new module starts as Draft or Pending (MIPM-220). */}
@@ -106,9 +106,9 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
             {signing && (
               <div className="cm-form-group">
                 <label className="cm-form-label">Electronic signature — your password *</label>
-                <input type="password" className="cm-form-input" value={esign.password} onChange={e => setEsign(p => ({ ...p, password: e.target.value }))} autoComplete="current-password" />
+                <input aria-label="Electronic signature — your password" type="password" className="cm-form-input" value={esign.password} onChange={e => setEsign(p => ({ ...p, password: e.target.value }))} autoComplete="current-password" />
                 <label className="cm-form-label" style={{ marginTop: 8 }}>Reason *</label>
-                <input className="cm-form-input" value={esign.reason} onChange={e => setEsign(p => ({ ...p, reason: e.target.value }))} placeholder={`Why this module is ${form.status.toLowerCase()}`} />
+                <input aria-label="Reason" className="cm-form-input" value={esign.reason} onChange={e => setEsign(p => ({ ...p, reason: e.target.value }))} placeholder={`Why this module is ${form.status.toLowerCase()}`} />
               </div>
             )}
           </div>
@@ -120,7 +120,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
 
           <div className="cm-form-group">
             <label className="cm-form-label">Response Text</label>
-            <textarea className="cm-form-textarea" rows={2} value={form.standard_response_text} onChange={e => setForm(p => ({ ...p, standard_response_text: e.target.value }))} />
+            <textarea aria-label="Response Text" className="cm-form-textarea" rows={2} value={form.standard_response_text} onChange={e => setForm(p => ({ ...p, standard_response_text: e.target.value }))} />
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -144,21 +144,21 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div className="cm-form-group">
               <label className="cm-form-label">Activation Date</label>
-              <input type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
+              <input aria-label="Activation Date" type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
             </div>
             <div className="cm-form-group">
               <label className="cm-form-label">Expiry Date</label>
-              <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+              <input aria-label="Expiry Date" type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
             </div>
           </div>
 
           <div className="cm-form-group">
             <label className="cm-form-label">Search Tags</label>
-            <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
+            <input aria-label="Search Tags" className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Usage Instructions</label>
-            <textarea className="cm-form-textarea" rows={2} value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} />
+            <textarea aria-label="Usage Instructions" className="cm-form-textarea" rows={2} value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>

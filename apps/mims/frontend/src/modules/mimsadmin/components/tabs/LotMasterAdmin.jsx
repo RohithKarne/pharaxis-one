@@ -61,7 +61,7 @@ export default function LotMasterAdmin() {
       <Header flash={flash} title="Lot Master"
         sub="Per-tenant lot registry. Used by PC investigations and recall actions." />
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lot number..." style={{ ...ipt, maxWidth: 280 }} />
+        <input aria-label="Search lot number" value={q} onChange={e => setQ(e.target.value)} placeholder="Search lot number..." style={{ ...ipt, maxWidth: 280 }} />
         <span style={{ flex: 1 }} />
         <button onClick={() => setEdit({ product_id: '', lot_number: '', status: 'active', notes: '' })} style={primaryBtn}>+ New lot</button>
       </div>

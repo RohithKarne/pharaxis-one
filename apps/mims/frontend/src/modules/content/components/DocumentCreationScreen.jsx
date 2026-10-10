@@ -322,7 +322,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           </div>
           <div className="cm-form-group" style={{ margin: 0 }}>
             <label className="cm-form-label">Document ID</label>
-            <input className="cm-form-input" value={isEdit ? doc.doc_id || '—' : 'Auto'} readOnly style={{ background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'default' }} />
+            <input aria-label="Document ID" className="cm-form-input" value={isEdit ? doc.doc_id || '—' : 'Auto'} readOnly style={{ background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'default' }} />
           </div>
         </div>
 
@@ -353,7 +353,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               <div className="cm-form-group" style={{ margin: 0, minWidth: 160 }}>
                 <label className="cm-form-label">Response Doc Type</label>
-                <select
+                <select aria-label="Response Doc Type"
                   className="cm-form-select"
                   value={form.response_doc_type}
                   onChange={e => setForm(p => ({ ...p, response_doc_type: e.target.value, selected_modules: [] }))}
@@ -417,7 +417,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               <div className="cm-form-group" style={{ margin: 0, flex: 1, minWidth: 200 }}>
                 <label className="cm-form-label">Standard Response / Cover Letter</label>
-                <textarea
+                <textarea aria-label="Standard Response / Cover Letter"
                   className="cm-form-input"
                   rows={3}
                   value={form.standard_response_text}
@@ -429,7 +429,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               <div className="cm-form-group" style={{ margin: 0, minWidth: 180 }}>
                 <label className="cm-form-label">MI Category</label>
-                <select className="cm-form-select" value={form.mi_category_id} onChange={e => setForm(p => ({ ...p, mi_category_id: e.target.value }))}>
+                <select aria-label="MI Category" className="cm-form-select" value={form.mi_category_id} onChange={e => setForm(p => ({ ...p, mi_category_id: e.target.value }))}>
                   <option value="">— Select —</option>
                   {miCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -488,7 +488,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   </div>
                   <div className="cm-form-group" style={{ margin: 0 }}>
                     <label className="cm-form-label">Share / View URL</label>
-                    <input
+                    <input aria-label="Share / View URL"
                       className="cm-form-input"
                       value={form.external_share_url}
                       onChange={e => setForm(p => ({ ...p, external_share_url: e.target.value }))}
@@ -497,7 +497,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   </div>
                   <div className="cm-form-group" style={{ margin: 0 }}>
                     <label className="cm-form-label">Document ID</label>
-                    <input
+                    <input aria-label="Document ID"
                       className="cm-form-input"
                       value={form.external_document_id}
                       onChange={e => setForm(p => ({ ...p, external_document_id: e.target.value }))}
@@ -506,7 +506,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   </div>
                   <div className="cm-form-group" style={{ margin: 0 }}>
                     <label className="cm-form-label">Drive / Library ID</label>
-                    <input
+                    <input aria-label="Drive / Library ID"
                       className="cm-form-input"
                       value={form.external_drive_id}
                       onChange={e => setForm(p => ({ ...p, external_drive_id: e.target.value }))}
@@ -515,7 +515,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   </div>
                   <div className="cm-form-group" style={{ margin: 0 }}>
                     <label className="cm-form-label">Linked Microsoft Account Email</label>
-                    <input
+                    <input aria-label="Linked Microsoft Account Email"
                       className="cm-form-input"
                       value={form.external_account_email}
                       onChange={e => setForm(p => ({ ...p, external_account_email: e.target.value }))}
@@ -524,7 +524,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                   </div>
                   <div className="cm-form-group" style={{ margin: 0 }}>
                     <label className="cm-form-label">Microsoft API Endpoint</label>
-                    <input
+                    <input aria-label="Microsoft API Endpoint"
                       className="cm-form-input"
                       value={form.external_api_endpoint}
                       onChange={e => setForm(p => ({ ...p, external_api_endpoint: e.target.value }))}
@@ -645,7 +645,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Search Tags</label>
-                <input
+                <input aria-label="Search Tags"
                   className="cm-form-input"
                   value={form.search_tags}
                   onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))}
@@ -654,7 +654,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Document Category</label>
-                <select className="cm-form-select" value={form.document_category} onChange={e => setForm(p => ({ ...p, document_category: e.target.value }))}>
+                <select aria-label="Document Category" className="cm-form-select" value={form.document_category} onChange={e => setForm(p => ({ ...p, document_category: e.target.value }))}>
                   <option value="">— Select —</option>
                   {docCategories.length > 0
                     ? docCategories.map(c => <option key={c.id} value={c.value}>{c.label || c.value}</option>)
@@ -664,11 +664,11 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Activation Date</label>
-                <input type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
+                <input aria-label="Activation Date" type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Expiry Date</label>
-                <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                <input aria-label="Expiry Date" type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
               </div>
             </div>
 
@@ -786,12 +786,12 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               <div className="cm-form-group">
                 <label className="cm-form-label">Version Notes</label>
-                <input className="cm-form-input" value={form.version_notes || ''} onChange={e => setForm(p => ({ ...p, version_notes: e.target.value }))} placeholder="What changed in this version?" />
+                <input aria-label="Version Notes" className="cm-form-input" value={form.version_notes || ''} onChange={e => setForm(p => ({ ...p, version_notes: e.target.value }))} placeholder="What changed in this version?" />
               </div>
 
               <div className="cm-form-group">
                 <label className="cm-form-label">Review Cycle</label>
-                <select className="cm-form-select" value={form.review_cycle_days || ''} onChange={e => setForm(p => ({ ...p, review_cycle_days: e.target.value }))}>
+                <select aria-label="Review Cycle" className="cm-form-select" value={form.review_cycle_days || ''} onChange={e => setForm(p => ({ ...p, review_cycle_days: e.target.value }))}>
                   <option value="">— Select —</option>
                   {[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
                 </select>
@@ -799,7 +799,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
               <div className="cm-form-group">
                 <label className="cm-form-label">Regulatory Reference #</label>
-                <input className="cm-form-input" value={form.regulatory_ref || ''} onChange={e => setForm(p => ({ ...p, regulatory_ref: e.target.value }))} placeholder="e.g. EMA/2024/001" />
+                <input aria-label="Regulatory Reference #" className="cm-form-input" value={form.regulatory_ref || ''} onChange={e => setForm(p => ({ ...p, regulatory_ref: e.target.value }))} placeholder="e.g. EMA/2024/001" />
               </div>
             </div>
 

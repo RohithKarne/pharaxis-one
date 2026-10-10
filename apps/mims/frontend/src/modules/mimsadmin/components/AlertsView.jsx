@@ -172,8 +172,8 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
             {!form.id && ' New rules are active by default.'}
           </div>
           <form onSubmit={saveRule} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <div><label style={{ fontSize: 12 }}>Rule Name</label><input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-            <div><label style={{ fontSize: 12 }}>Event</label><select className="form-control" value={form.event_type} onChange={e => {
+            <div><label style={{ fontSize: 12 }}>Rule Name</label><input aria-label="Rule Name" className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><label style={{ fontSize: 12 }}>Event</label><select aria-label="Event" className="form-control" value={form.event_type} onChange={e => {
               const eventType = e.target.value
               const option = ALERT_EVENT_OPTIONS.find(item => item.value === eventType)
               setForm(f => ({
@@ -185,12 +185,12 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
             }}>
               {ALERT_EVENT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select></div>
-            <div><label style={{ fontSize: 12 }}>Severity</label><select className="form-control" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}><option value="medium">Medium</option><option value="high">High</option></select></div>
-            <div><label style={{ fontSize: 12 }}>Channels</label><select className="form-control" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))}><option value="email">Email only</option><option value="in_app">In-app only</option><option value="email,in_app">Email + In-app</option></select></div>
+            <div><label style={{ fontSize: 12 }}>Severity</label><select aria-label="Severity" className="form-control" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}><option value="medium">Medium</option><option value="high">High</option></select></div>
+            <div><label style={{ fontSize: 12 }}>Channels</label><select aria-label="Channels" className="form-control" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))}><option value="email">Email only</option><option value="in_app">In-app only</option><option value="email,in_app">Email + In-app</option></select></div>
             {isThresholdRule ? (
               <>
-                <div><label style={{ fontSize: 12 }}>Threshold</label><input className="form-control" type="number" min="1" value={form.threshold_value} onChange={e => setForm(f => ({ ...f, threshold_value: Number(e.target.value) || 1 }))} /></div>
-                <div><label style={{ fontSize: 12 }}>Window (min)</label><input className="form-control" type="number" min="1" value={form.window_minutes} onChange={e => setForm(f => ({ ...f, window_minutes: Number(e.target.value) || 15 }))} /></div>
+                <div><label style={{ fontSize: 12 }}>Threshold</label><input aria-label="Threshold" className="form-control" type="number" min="1" value={form.threshold_value} onChange={e => setForm(f => ({ ...f, threshold_value: Number(e.target.value) || 1 }))} /></div>
+                <div><label style={{ fontSize: 12 }}>Window (min)</label><input aria-label="Window (min)" className="form-control" type="number" min="1" value={form.window_minutes} onChange={e => setForm(f => ({ ...f, window_minutes: Number(e.target.value) || 15 }))} /></div>
               </>
             ) : (
               <div style={{ gridColumn: 'span 2', paddingTop: 22 }}>
@@ -199,8 +199,8 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
                 </div>
               </div>
             )}
-            <div><label style={{ fontSize: 12 }}>Cooldown (min)</label><input className="form-control" type="number" min="0" value={form.cooldown_minutes} onChange={e => setForm(f => ({ ...f, cooldown_minutes: Number(e.target.value) || 0 }))} /></div>
-            <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12 }}>Recipient Emails</label><input className="form-control" placeholder="comma-separated emails" value={form.recipient_emails} onChange={e => setForm(f => ({ ...f, recipient_emails: e.target.value }))} /></div>
+            <div><label style={{ fontSize: 12 }}>Cooldown (min)</label><input aria-label="Cooldown (min)" className="form-control" type="number" min="0" value={form.cooldown_minutes} onChange={e => setForm(f => ({ ...f, cooldown_minutes: Number(e.target.value) || 0 }))} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12 }}>Recipient Emails</label><input aria-label="Recipient Emails" className="form-control" placeholder="comma-separated emails" value={form.recipient_emails} onChange={e => setForm(f => ({ ...f, recipient_emails: e.target.value }))} /></div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
               <input type="checkbox" checked={!!form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
               Rule active (if off, this rule will not fire events or notifications)
@@ -274,7 +274,7 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
             </div>
             <div className="form-group" style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Subject</label>
-              <input
+              <input aria-label="Subject"
                 className="form-control"
                 style={{ fontSize: 13 }}
                 value={emailTemplate.subject}
@@ -283,7 +283,7 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
             </div>
             <div className="form-group" style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Body</label>
-              <textarea
+              <textarea aria-label="Body"
                 className="form-control"
                 rows={6}
                 style={{ fontSize: 13, fontFamily: 'monospace', resize: 'vertical' }}
@@ -313,7 +313,7 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{eventsTotal} event{eventsTotal !== 1 ? 's' : ''}</span>
         </div>
         <div className="card-body" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
+          <select aria-label="Filter by event type"
             className="form-control"
             style={{ maxWidth: 220, fontSize: 13 }}
             value={eventFilter.event_type}
@@ -322,7 +322,7 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
             <option value="">All event types</option>
             {ALERT_EVENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
-          <select
+          <select aria-label="Filter by severity"
             className="form-control"
             style={{ maxWidth: 160, fontSize: 13 }}
             value={eventFilter.severity}

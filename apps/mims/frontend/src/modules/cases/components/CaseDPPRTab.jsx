@@ -127,18 +127,18 @@ export default function CaseDPPRTab({ id, headers }) {
                 <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', background: '#fff' }}>
                   <div className="cf-form-field" style={{ minWidth: 140, margin: 0 }}>
                     <label style={{ fontSize: 11 }}>Action</label>
-                    <select value={form.action} onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, action: e.target.value } }))}>
+                    <select aria-label="Action" value={form.action} onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, action: e.target.value } }))}>
                       {['None', 'Anonymize', 'Delete'].filter(a => ACTION_RANK[a] >= ACTION_RANK[maxTenantAction]).map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   <div className="cf-form-field" style={{ minWidth: 120, margin: 0 }}>
                     <label style={{ fontSize: 11 }}>Retention (days)</label>
-                    <input type="number" min={1} max={minTenantRetention} value={form.retention_days}
+                    <input aria-label="Retention (days)" type="number" min={1} max={minTenantRetention} value={form.retention_days}
                       onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, retention_days: e.target.value } }))} />
                   </div>
                   <div className="cf-form-field" style={{ flex: 1, minWidth: 180, margin: 0 }}>
                     <label style={{ fontSize: 11 }}>Override Reason</label>
-                    <input type="text" placeholder="Reason for this override…" value={form.override_reason}
+                    <input aria-label="Override Reason" type="text" placeholder="Reason for this override…" value={form.override_reason}
                       onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, override_reason: e.target.value } }))} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

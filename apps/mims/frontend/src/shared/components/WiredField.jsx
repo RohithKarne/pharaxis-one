@@ -121,7 +121,7 @@ export function WiredField({
   const onBlur  = () => ctx?.presence?.actions?.blur?.(field)
 
   const wrap = (children) => (
-    <div className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}${error ? ' cf-form-field--error' : ''}${className ? ' ' + className : ''}`}>
+    <div data-field={field} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}${error ? ' cf-form-field--error' : ''}${className ? ' ' + className : ''}`}>
       <FieldLabel label={label} required={required} section={section} field={field} />
       {children}
       <FieldFooter error={error} warning={warning} />

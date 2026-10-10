@@ -29,7 +29,6 @@ const CaseFormPage             = lazy(() => import('../cases/pages/CaseFormPage'
 const CaseTransmissionPage     = lazy(() => import('../cases/pages/CaseTransmissionPage'))
 const CaseResponsePage         = lazy(() => import('../cases/pages/CaseResponsePage'))
 const ICSRBuilderPage          = lazy(() => import('../cases/pages/ICSRBuilderPage'))
-const CaseQueryPage            = lazy(() => import('../cases/pages/CaseQueryPage'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
 const ReportsPage              = lazy(() => import('../reports/pages/ReportsPage'))
 const ExceptionLogsPage        = lazy(() => import('./pages/ExceptionLogsPage'))
@@ -307,13 +306,8 @@ function AppRoutes() {
           } />
           {/* PARK (rationalization): public API developer portal removed from GA surface. */}
           <Route path="/developer" element={<Navigate to="/cases" replace />} />
-          <Route path="/case-query" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
-                <CaseQueryPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* Case Query is now the Correspondence view of Case Management (Phase 3). */}
+          <Route path="/case-query" element={<Navigate to="/cases?view=correspondence" replace />} />
           <Route path="/reports" element={
             <ProtectedRoute loginPath="/reports/login">
               {/* The admin's Reports grant is the gate (T10 / M-31): an agent it is

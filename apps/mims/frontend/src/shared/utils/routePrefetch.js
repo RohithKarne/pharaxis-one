@@ -10,7 +10,6 @@ const routeLoaders = [
   { key: 'session-management', match: (path) => path === '/session-management', load: () => import('../../modules/max/pages/SessionManagementPage') },
   { key: 'cases', match: (path) => path === '/cases', load: () => import('../../modules/cases/pages/CasesPage') },
   { key: 'case-form', match: (path) => path.startsWith('/cases/'), load: () => import('../../modules/cases/pages/CaseFormPage') },
-  { key: 'case-query', match: (path) => path === '/case-query', load: () => import('../../modules/cases/pages/CaseQueryPage') },
   { key: 'transmissions', match: (path) => path === '/transmissions', load: () => import('../../modules/transmissions/pages/TransmissionsPage') },
   { key: 'response-log', match: (path) => path === '/response-log', load: () => import('../../modules/responselog/pages/ResponseLogPage') },
   { key: 'exceptions', match: (path) => path === '/exceptions', load: () => import('../../modules/max/pages/ExceptionLogsPage') },

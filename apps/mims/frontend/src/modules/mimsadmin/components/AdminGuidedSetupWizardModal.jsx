@@ -152,15 +152,15 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
               <h4 style={{ marginBottom: 16 }}>Step 1: Org Details & Primary Site</h4>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Organisation Name *</label>
-                <input className="form-control" style={{ width: '100%' }} value={orgDetails.name} onChange={e => setOrgDetails({...orgDetails, name: e.target.value})} />
+                <input aria-label="Organisation Name" className="form-control" style={{ width: '100%' }} value={orgDetails.name} onChange={e => setOrgDetails({...orgDetails, name: e.target.value})} />
               </div>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Country</label>
-                <input className="form-control" style={{ width: '100%' }} value={orgDetails.country} onChange={e => setOrgDetails({...orgDetails, country: e.target.value})} placeholder="e.g. India" />
+                <input aria-label="Country" className="form-control" style={{ width: '100%' }} value={orgDetails.country} onChange={e => setOrgDetails({...orgDetails, country: e.target.value})} placeholder="e.g. India" />
               </div>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Primary Site Name *</label>
-                <input className="form-control" style={{ width: '100%' }} value={orgDetails.primarySite} onChange={e => setOrgDetails({...orgDetails, primarySite: e.target.value})} placeholder="e.g. HQ" />
+                <input aria-label="Primary Site Name" className="form-control" style={{ width: '100%' }} value={orgDetails.primarySite} onChange={e => setOrgDetails({...orgDetails, primarySite: e.target.value})} placeholder="e.g. HQ" />
               </div>
             </div>
           )}
@@ -171,15 +171,15 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
               <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Create the first admin for this organisation, in the Administrators group. Leave all three empty to add people later from Add / Edit Users. The admin sets their own password with "Forgot Password?" on the sign-in page.</p>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>User ID</label>
-                <input className="form-control" style={{ width: '100%' }} value={adminUser.userId} onChange={e => setAdminUser({...adminUser, userId: e.target.value})} />
+                <input aria-label="User ID" className="form-control" style={{ width: '100%' }} value={adminUser.userId} onChange={e => setAdminUser({...adminUser, userId: e.target.value})} />
               </div>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Admin Email</label>
-                <input type="email" className="form-control" style={{ width: '100%' }} value={adminUser.email} onChange={e => setAdminUser({...adminUser, email: e.target.value})} />
+                <input aria-label="Admin Email" type="email" className="form-control" style={{ width: '100%' }} value={adminUser.email} onChange={e => setAdminUser({...adminUser, email: e.target.value})} />
               </div>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Full Name</label>
-                <input className="form-control" style={{ width: '100%' }} value={adminUser.fullName} onChange={e => setAdminUser({...adminUser, fullName: e.target.value})} />
+                <input aria-label="Full Name" className="form-control" style={{ width: '100%' }} value={adminUser.fullName} onChange={e => setAdminUser({...adminUser, fullName: e.target.value})} />
               </div>
             </div>
           )}

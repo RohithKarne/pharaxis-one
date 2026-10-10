@@ -61,14 +61,14 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleReset}>
           <div className="form-group">
             <label>New Password</label>
-            <input className="form-control" type="password" required minLength={8}
+            <input aria-label="New Password" className="form-control" type="password" required minLength={8}
               placeholder="Min. 8 characters"
               value={form.newPassword}
               onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} />
           </div>
           <div className="form-group">
             <label>Confirm Password</label>
-            <input className="form-control" type="password" required minLength={8}
+            <input aria-label="Confirm Password" className="form-control" type="password" required minLength={8}
               placeholder="Re-enter new password"
               value={form.confirm}
               onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} />

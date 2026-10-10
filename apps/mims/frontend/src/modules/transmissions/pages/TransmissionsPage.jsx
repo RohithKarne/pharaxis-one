@@ -131,7 +131,7 @@ export default function TransmissionsPage() {
 
         {/* ── Filters ─────────────────────────────────────────────────── */}
         <div className="tx-filters">
-          <input
+          <input aria-label="Search transmissions"
             className="tx-search"
             placeholder="Search case number, system, user, payload…"
             value={search}

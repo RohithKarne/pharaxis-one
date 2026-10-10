@@ -174,15 +174,15 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>SMTP Host *</label>
-                <input className="form-control" value={systemForm.smtp_host} onChange={e => setSystemForm(f => ({ ...f, smtp_host: e.target.value }))} />
+                <input aria-label="SMTP Host" className="form-control" value={systemForm.smtp_host} onChange={e => setSystemForm(f => ({ ...f, smtp_host: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>SMTP Port *</label>
-                <input className="form-control" value={systemForm.smtp_port} onChange={e => setSystemForm(f => ({ ...f, smtp_port: e.target.value }))} />
+                <input aria-label="SMTP Port" className="form-control" value={systemForm.smtp_port} onChange={e => setSystemForm(f => ({ ...f, smtp_port: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Encryption *</label>
-                <select className="form-control" value={systemForm.smtp_encryption} onChange={e => setSystemForm(f => ({ ...f, smtp_encryption: e.target.value }))}>
+                <select aria-label="Encryption" className="form-control" value={systemForm.smtp_encryption} onChange={e => setSystemForm(f => ({ ...f, smtp_encryption: e.target.value }))}>
                   <option value="STARTTLS">STARTTLS</option>
                   <option value="SSL/TLS">SSL/TLS</option>
                   <option value="None">None</option>
@@ -190,19 +190,19 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>SMTP Username *</label>
-                <input className="form-control" value={systemForm.smtp_username} onChange={e => setSystemForm(f => ({ ...f, smtp_username: e.target.value }))} />
+                <input aria-label="SMTP Username" className="form-control" value={systemForm.smtp_username} onChange={e => setSystemForm(f => ({ ...f, smtp_username: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>SMTP Password *</label>
-                <input className="form-control" type="password" value={systemForm.smtp_password} onChange={e => setSystemForm(f => ({ ...f, smtp_password: e.target.value }))} placeholder="Leave blank to keep current" />
+                <input aria-label="SMTP Password" className="form-control" type="password" value={systemForm.smtp_password} onChange={e => setSystemForm(f => ({ ...f, smtp_password: e.target.value }))} placeholder="Leave blank to keep current" />
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>From Email *</label>
-                <input className="form-control" value={systemForm.smtp_from_email} onChange={e => setSystemForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
+                <input aria-label="From Email" className="form-control" value={systemForm.smtp_from_email} onChange={e => setSystemForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>From Name</label>
-                <input className="form-control" value={systemForm.smtp_from_name} onChange={e => setSystemForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
+                <input aria-label="From Name" className="form-control" value={systemForm.smtp_from_name} onChange={e => setSystemForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
               </div>
             </div>
             <button className="btn btn-primary" type="submit" disabled={savingSystemConfig}>
@@ -250,7 +250,7 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Timeout (minutes)</label>
-              <input
+              <input aria-label="Timeout (minutes)"
                 className="form-control"
                 type="number"
                 min={15}
@@ -326,6 +326,7 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
                     </td>
                     <td>
                       <input
+                        aria-label={`Remember device for ${org.name}, in days`}
                         className="form-control"
                         style={{ width: 100 }}
                         type="number"

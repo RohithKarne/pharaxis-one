@@ -560,7 +560,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
           <form onSubmit={handleLogin}>
               <div className="form-group">
                 <label>Work Email / Username</label>
-                <input
+                <input aria-label="Work Email / Username"
                   className="form-control"
                   type="text"
                   placeholder="you@company.com"
@@ -774,7 +774,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       {twoFactor.twoFactorRequired && (
                         <div className="form-group" style={{ marginTop: 8 }}>
                           <label>Backup Code</label>
-                          <input
+                          <input aria-label="Backup Code"
                             className="form-control"
                             type="text"
                             placeholder="Use a backup code instead"
@@ -871,7 +871,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                 <>
                   <div className="form-group">
                     <label>New Password</label>
-                    <input
+                    <input aria-label="New Password"
                       className="form-control"
                       type="password"
                       minLength={8}
@@ -881,7 +881,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                   </div>
                   <div className="form-group">
                     <label>Confirm Password</label>
-                    <input
+                    <input aria-label="Confirm Password"
                       className="form-control"
                       type="password"
                       minLength={8}

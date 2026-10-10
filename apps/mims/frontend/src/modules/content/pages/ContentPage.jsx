@@ -72,61 +72,55 @@ export default function ContentPage() {
   const allTabs = tabGroups.flatMap((group) => group.items)
   const activeTabMeta = allTabs.find((tab) => tab.key === activeTab) || allTabs[0]
   const activeGroup = tabGroups.find((group) => group.items.some((tab) => tab.key === activeTab)) || tabGroups[0]
+  // One content menu (Phase 3): the sections run across the top of the panel,
+  // grouped, so the table below gets the full width. It replaces a 320px card
+  // rail that sat between the app menu and the content.
   const content = (
     <div className="workspace-page workspace-page--content">
-      <div className="workspace-main-grid workspace-main-grid--content">
-        <aside className="workspace-rail">
+      <section className="workspace-panel workspace-panel--content">
+        <nav className="cm-tabbar" aria-label="Content sections">
           {tabGroups.map((group) => (
-            <section key={group.key} className="workspace-rail-group">
-              <div className="workspace-rail-title">{group.label}</div>
-              <div className="workspace-rail-copy">{group.description}</div>
-              <div className="workspace-rail-stack">
-                {group.items.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    className={`workspace-rail-button ${activeTab === tab.key ? 'active' : ''}`}
-                    onClick={() => startTransition(() => setActiveTab(tab.key))}
-                  >
-                    <strong>{tab.label}</strong>
-                    <span>{tab.description}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </aside>
-
-        <section className="workspace-panel workspace-panel--content">
-          <div className="workspace-panel-head">
-            <div>
-              <div className="workspace-panel-kicker">{activeGroup.label}</div>
-              <h2>{activeTabMeta.label}</h2>
-              <p>{activeTabMeta.description}</p>
+            <div key={group.key} className="cm-tabbar-group" role="group" aria-label={group.label} title={group.description}>
+              {group.items.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`cm-tabbar-tab ${activeTab === tab.key ? 'active' : ''}`}
+                  aria-current={activeTab === tab.key ? 'page' : undefined}
+                  title={tab.description}
+                  onClick={() => startTransition(() => setActiveTab(tab.key))}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <button className="btn btn-outline" onClick={() => setShowFolders(true)}>Folder Manager</button>
-          </div>
+          ))}
+        </nav>
 
-          <div className="cm-content workspace-panel-body">
-            <Suspense fallback={<ContentSectionLoader />}>
-              {activeTab === 'documents' && <DocumentsSection token={token} user={user} initialSubTab={openReviews ? 'reviews' : 'all'} />}
-              {activeTab === 'modules' && <ModulesSection token={token} />}
-              {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
-              {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
-              {activeTab === 'templates' && <TemplatesSection token={token} />}
-              {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
-              {activeTab === 'browse' && <BrowseSection token={token} />}
-              {activeTab === 'settings' && <CMSettingsSection token={token} />}
-              {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-              {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-              {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-              {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-              {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-              {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
-            </Suspense>
-          </div>
-        </section>
-      </div>
+        <div className="cm-panel-head">
+          <p><span className="cm-panel-kicker">{activeGroup.label}</span> {activeTabMeta.description}</p>
+          <button className="btn btn-outline" onClick={() => setShowFolders(true)}>Folder Manager</button>
+        </div>
+
+        <div className="cm-content workspace-panel-body">
+          <Suspense fallback={<ContentSectionLoader />}>
+            {activeTab === 'documents' && <DocumentsSection token={token} user={user} initialSubTab={openReviews ? 'reviews' : 'all'} />}
+            {activeTab === 'modules' && <ModulesSection token={token} />}
+            {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
+            {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
+            {activeTab === 'templates' && <TemplatesSection token={token} />}
+            {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
+            {activeTab === 'browse' && <BrowseSection token={token} />}
+            {activeTab === 'settings' && <CMSettingsSection token={token} />}
+            {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
+            {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
+            {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
+            {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
+            {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
+            {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
+          </Suspense>
+        </div>
+      </section>
 
       {showFolders && (
         <Suspense fallback={null}>

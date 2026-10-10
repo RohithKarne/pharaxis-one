@@ -94,11 +94,11 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Category</label>
-            <input className="cm-form-input" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Dosage, Side Effects…" />
+            <input aria-label="Category" className="cm-form-input" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Dosage, Side Effects…" />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Tags</label>
-            <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
+            <input aria-label="Tags" className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Question <span className="required">*</span></label>
@@ -265,7 +265,7 @@ export default function FAQsSection({ token }) {
           <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 16px' }}>Bulk Tag — {selectedFaqIds.length} FAQs</h3>
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Tags (comma-separated)</label>
-            <input className="cm-form-input" value={bulkTagInput} onChange={e => setBulkTagInput(e.target.value)} placeholder="e.g. safety, dosage, oncology" />
+            <input aria-label="Tags (comma-separated)" className="cm-form-input" value={bulkTagInput} onChange={e => setBulkTagInput(e.target.value)} placeholder="e.g. safety, dosage, oncology" />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button className="cm-btn cm-btn-secondary" onClick={() => { setShowBulkTag(false); setBulkTagInput('') }}>Cancel</button>
               <button className="cm-btn cm-btn-primary" onClick={async () => {
@@ -287,7 +287,7 @@ export default function FAQsSection({ token }) {
           <option value="">All Statuses</option>
           <option>Draft</option><option>Pending</option><option>Approved</option><option>Published</option><option>Archived</option>
         </select>
-        <input className="cm-form-input" style={{ width: 160 }} placeholder="Category…" value={filters.category} onChange={e => setFilters(p => ({ ...p, category: e.target.value }))} />
+        <input aria-label="Category" className="cm-form-input" style={{ width: 160 }} placeholder="Category…" value={filters.category} onChange={e => setFilters(p => ({ ...p, category: e.target.value }))} />
         <input className="cm-form-input" style={{ width: 220 }} placeholder="Search question, category, tags…" value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
         <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
@@ -341,9 +341,9 @@ export default function FAQsSection({ token }) {
             <h3 style={{ margin: '0 0 4px' }}>{faqEsign.action === 'approve' ? 'Approve FAQ' : 'Publish FAQ'}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-muted)' }}>Electronic signature required</p>
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
-            <input type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={faqEsignPw} onChange={e => setFaqEsignPw(e.target.value)} placeholder="Enter your password" />
+            <input aria-label="Your Password" type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={faqEsignPw} onChange={e => setFaqEsignPw(e.target.value)} placeholder="Enter your password" />
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>
-            <input className="cm-form-input" style={{ marginBottom: 16 }} value={faqEsignReason} onChange={e => setFaqEsignReason(e.target.value)} placeholder="Reason for this action" />
+            <input aria-label="Reason" className="cm-form-input" style={{ marginBottom: 16 }} value={faqEsignReason} onChange={e => setFaqEsignReason(e.target.value)} placeholder="Reason for this action" />
             {faqEsignErr && <p style={{ color: '#dc2626', fontSize: 13, margin: '0 0 12px' }}>{faqEsignErr}</p>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="cm-btn cm-btn-secondary" onClick={() => setFaqEsign({ open: false, faq: null, action: null })} disabled={faqEsignLoading}>Cancel</button>

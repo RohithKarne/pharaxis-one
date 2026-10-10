@@ -120,7 +120,7 @@ export default function AdminMICategoriesSection({ H }) {
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Name *</label>
-              <input
+              <input aria-label="Name"
                 style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -130,7 +130,7 @@ export default function AdminMICategoriesSection({ H }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Description</label>
-              <input
+              <input aria-label="Description"
                 style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                 value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -139,7 +139,7 @@ export default function AdminMICategoriesSection({ H }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Sort Order</label>
-              <input
+              <input aria-label="Sort Order"
                 type="number"
                 style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                 value={form.sort_order}

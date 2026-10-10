@@ -338,7 +338,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
       return (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button style={buttonStyle()} onClick={() => loadOverview()} disabled={!selectedOrgId || loading}>{loading ? 'Loading...' : 'Refresh'}</button>
-          <input className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
+          <input aria-label="Reason for access changes" className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
           <button style={buttonStyle(true)} onClick={downloadAuditReport} disabled={!selectedOrgId}>Download Access Audit Report (GxP)</button>
         </div>
       )
@@ -346,11 +346,11 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     return (
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, fontWeight: 700 }}>Organisation</label>
-        <select className="form-control" style={{ maxWidth: 300 }} value={selectedOrgId} onChange={e => setSelectedOrgId(e.target.value)}>
+        <select aria-label="Organisation" className="form-control" style={{ maxWidth: 300 }} value={selectedOrgId} onChange={e => setSelectedOrgId(e.target.value)}>
           {orgs.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
         </select>
         <button style={buttonStyle()} onClick={() => loadOverview()} disabled={!selectedOrgId || loading}>{loading ? 'Loading...' : 'Refresh'}</button>
-        <input className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
+        <input aria-label="Reason for access changes" className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
         <button style={buttonStyle(true)} onClick={downloadAuditReport} disabled={!selectedOrgId}>Download Access Audit Report (GxP)</button>
       </div>
     )

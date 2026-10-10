@@ -131,7 +131,7 @@ function ClassificationCard({ miTabId, H, onChange }) {
           {offLabel && (
             <div>
               <label style={{ ...lbl, display: 'block', marginBottom: 4 }}>Off-label indication described:</label>
-              <input value={state.off_label_indication || ''}
+              <input aria-label="Off-label indication described:" value={state.off_label_indication || ''}
                 onBlur={e => save({ off_label_indication: e.target.value })}
                 style={{ width: '100%', padding: '6px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4 }}
                 placeholder="e.g. Pediatric dosing for off-label indication X" />
@@ -260,11 +260,11 @@ function ApprovalCard({ responseId, H, onChange }) {
                 : 'I approve this MI response for release.'}
             </p>
             <label style={{ ...lbl, marginBottom: 4 }}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            <input aria-label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sign()}
               style={{ width: '100%', padding: '7px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 6 }} />
             <label style={{ ...lbl, marginTop: 10, marginBottom: 4 }}>Reason (optional)</label>
-            <input value={reason} onChange={e => setReason(e.target.value)}
+            <input aria-label="Reason (optional)" value={reason} onChange={e => setReason(e.target.value)}
               style={{ width: '100%', padding: '7px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 6 }} />
             {flash && (
               <div style={{ marginTop: 10, padding: '8px 10px', fontSize: 12,

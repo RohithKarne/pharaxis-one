@@ -489,7 +489,7 @@ export default function DPPRPage({ embedded = false } = {}) {
               <div className="dp-form-grid">
                 <div className="dp-form-row">
                   <label className="dp-label">Record Type *</label>
-                  <select className="dp-select" value={holdForm.entity_type}
+                  <select aria-label="Record Type" className="dp-select" value={holdForm.entity_type}
                     onChange={e => setHoldForm(f => ({ ...f, entity_type: e.target.value }))}>
                     <option value="case">Case</option>
                     <option value="inquiry">Inquiry</option>
@@ -536,14 +536,14 @@ export default function DPPRPage({ embedded = false } = {}) {
 
             <div className="dp-form-row">
               <label className="dp-label">Rule Name *</label>
-              <input className="dp-input" value={form.rule_name}
+              <input aria-label="Rule Name" className="dp-input" value={form.rule_name}
                 onChange={e => setForm(f => ({ ...f, rule_name: e.target.value }))}
                 placeholder="e.g. GDPR Contact Anonymisation — EU" />
             </div>
 
             <div className="dp-form-row">
               <label className="dp-label">Data Domain *</label>
-              <select className="dp-select" value={form.domain}
+              <select aria-label="Data Domain" className="dp-select" value={form.domain}
                 onChange={e => setForm(f => ({ ...f, domain: e.target.value }))}>
                 <option value="">— Select domain —</option>
                 {domains.map(d => (
@@ -558,14 +558,14 @@ export default function DPPRPage({ embedded = false } = {}) {
             <div className="dp-form-grid">
               <div className="dp-form-row">
                 <label className="dp-label">Contact Type</label>
-                <select className="dp-select" value={form.contact_type}
+                <select aria-label="Contact Type" className="dp-select" value={form.contact_type}
                   onChange={e => setForm(f => ({ ...f, contact_type: e.target.value }))}>
                   {CONTACT_TYPES.map(t => <option key={t} value={t}>{t === 'all' ? 'All types' : t}</option>)}
                 </select>
               </div>
               <div className="dp-form-row">
                 <label className="dp-label">Consent Type</label>
-                <select className="dp-select" value={form.consent_type}
+                <select aria-label="Consent Type" className="dp-select" value={form.consent_type}
                   onChange={e => setForm(f => ({ ...f, consent_type: e.target.value }))}>
                   {CONSENT_TYPES.map(t => <option key={t} value={t}>{t === 'all' ? 'All consent types' : t}</option>)}
                 </select>
@@ -575,14 +575,14 @@ export default function DPPRPage({ embedded = false } = {}) {
             <div className="dp-form-grid">
               <div className="dp-form-row">
                 <label className="dp-label">Action *</label>
-                <select className="dp-select" value={form.action}
+                <select aria-label="Action" className="dp-select" value={form.action}
                   onChange={e => setForm(f => ({ ...f, action: e.target.value }))}>
                   {ACTION_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className="dp-form-row">
                 <label className="dp-label">Retention (days) *</label>
-                <input className="dp-input" type="number" min="1" value={form.retention_days}
+                <input aria-label="Retention (days)" className="dp-input" type="number" min="1" value={form.retention_days}
                   onChange={e => setForm(f => ({ ...f, retention_days: parseInt(e.target.value, 10) || 365 }))} />
                 <div className="dp-hint">Data older than this will be processed.</div>
               </div>

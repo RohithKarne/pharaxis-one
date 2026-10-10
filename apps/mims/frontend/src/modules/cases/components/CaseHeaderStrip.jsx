@@ -8,6 +8,9 @@ const CaseTimelineView = lazy(() => import('./CaseTimelineView'))
 // step; anything a user only glances at belongs here. Nothing lives in both —
 // that duplication is what made the old case form show Status, Owner and
 // Priority twice on the same screen.
+// Status and Owner are shortcuts, not second editors: a click opens step 3 at
+// that field, and "Assign to me" fills the owner field there, unsaved, like a
+// change made in the field itself (MIMS screen review, row 10).
 
 const PRIORITY_LABEL = { normal: 'Normal', high: 'High', urgent: 'Urgent' }
 
@@ -43,7 +46,7 @@ function formatActivity(event) {
 // visible before saving without the strip claiming it is saved. It used to
 // show the edit as the case's value — a refused close, or a restored draft,
 // read as "Status: Closed" on a case that was New (M-109).
-export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = [], users = [], caseId, headers }) {
+export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = [], users = [], caseId, headers, currentUserId, onEditField, onAssignToMe }) {
   const [latest, setLatest] = useState(null)
   const [auditOpen, setAuditOpen] = useState(false)
   // Bridge row 6: cases linked to this one (e.g. a side effect raised from an enquiry).
@@ -95,13 +98,25 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
   const priorityPending = infoForm.priority ? pending(infoForm.priority, caseData?.priority, priorityLabel) : null
   const age = ageInDays(received)
   const activity = formatActivity(latest)
+  const ownerNow = infoForm.case_owner_id ?? caseData?.case_owner_id
+  const canAssignToMe = onAssignToMe && currentUserId
+    && users.some(u => String(u.id) === String(currentUserId))
+    && String(ownerNow ?? '') !== String(currentUserId)
+  const shortcut = (field, title, text) => (onEditField
+    ? <button type="button" className="cf-strip-value-btn" title={title} onClick={() => onEditField(field)}>{text}</button>
+    : text)
 
   return (
     <>
       <div className="cf-header-strip">
-        <span className="cf-strip-item"><span className="cf-strip-key">Status</span>{statusName}{statusPending}</span>
+        <span className="cf-strip-item"><span className="cf-strip-key">Status</span>{shortcut('status_id', 'Change status', statusName)}{statusPending}</span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>
-        <span className="cf-strip-item"><span className="cf-strip-key">Owner</span>{ownerName}{ownerPending}</span>
+        <span className="cf-strip-item">
+          <span className="cf-strip-key">Owner</span>{shortcut('case_owner_id', 'Change owner', ownerName)}{ownerPending}
+          {canAssignToMe && (
+            <button type="button" className="cf-strip-assign-btn" onClick={onAssignToMe}>Assign to me</button>
+          )}
+        </span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>
         <span className="cf-strip-item"><span className="cf-strip-key">Priority</span>{priority}{priorityPending}</span>
         <span className="cf-strip-sep" aria-hidden="true">·</span>

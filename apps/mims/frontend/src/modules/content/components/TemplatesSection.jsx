@@ -100,7 +100,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Folder</label>
-            <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
+            <select aria-label="Folder" className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
               <option value="">— No folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
@@ -111,7 +111,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Subject</label>
-            <input className="cm-form-input" value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} placeholder="Email or document subject" />
+            <input aria-label="Subject" className="cm-form-input" value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} placeholder="Email or document subject" />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Body <span className="required">*</span></label>
@@ -119,7 +119,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Expiry Date</label>
-            <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+            <input aria-label="Expiry Date" type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
               After this date the template is hidden from the response builder. Leave blank for no expiry.
             </p>

@@ -209,6 +209,7 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     const {
       type, status_id, owner_id, deleted, search,
       has_correspondence, corr_from, corr_to, corr_box, corr_party,
+      reporter, patient_initials,
       sort_by, sort_dir, include_meta,
     } = req.query;
     const limit  = clamp(parseIntSafe(req.query.limit, 50), 1, 500);
@@ -351,6 +352,18 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
       params.push(`%${corr_party}%`, `%${corr_party}%`);
       countQuery += ' AND EXISTS (SELECT 1 FROM inquiries iq WHERE iq.case_id = c.id AND (iq.sender LIKE ? OR iq.recipient LIKE ?))';
       countParams.push(`%${corr_party}%`, `%${corr_party}%`);
+    }
+    // People filters — what the Cross-Case Search pop-up searched, now part of
+    // the one case search (Phase 3): the reporter by name, email or phone, and
+    // the patient by initials.
+    if (reporter) {
+      const like = `%${String(reporter).trim()}%`;
+      addFilter(`EXISTS (SELECT 1 FROM case_reporter cr WHERE cr.case_id = c.id
+                   AND (cr.first_name LIKE ? OR cr.last_name LIKE ? OR CONCAT_WS(' ', cr.first_name, cr.last_name) LIKE ?
+                        OR cr.email LIKE ? OR cr.phone LIKE ?))`, like, like, like, like, like);
+    }
+    if (patient_initials) {
+      addFilter('EXISTS (SELECT 1 FROM case_patient cp WHERE cp.case_id = c.id AND cp.initials LIKE ?)', `%${String(patient_initials).trim()}%`);
     }
     query += ` ORDER BY ${sortBy} ${sortDir}, c.id DESC LIMIT ${limit} OFFSET ${offset}`;
 

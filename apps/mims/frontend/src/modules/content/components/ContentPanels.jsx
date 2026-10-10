@@ -97,7 +97,7 @@ export function AssociatedDocsPanel({ docId, token }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, marginBottom: 10 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Search Document</label>
-              <input
+              <input aria-label="Search Document"
                 className="cm-form-input" style={{ margin: 0 }}
                 value={search} onChange={e => doSearch(e.target.value)}
                 placeholder="Type to search by name..."
@@ -117,7 +117,7 @@ export function AssociatedDocsPanel({ docId, token }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Relation Type</label>
-              <select className="cm-form-select" style={{ margin: 0 }} value={relationType} onChange={e => setRelationType(e.target.value)}>
+              <select aria-label="Relation Type" className="cm-form-select" style={{ margin: 0 }} value={relationType} onChange={e => setRelationType(e.target.value)}>
                 {RELATION_TYPES.map(r => <option key={r}>{r}</option>)}
               </select>
             </div>
@@ -221,7 +221,7 @@ export function VersionDiffPanel({ docId, token }) {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version A</label>
-              <select className="cm-form-select" style={{ width: 160 }} value={v1} onChange={e => setV1(e.target.value)}>
+              <select aria-label="Version A" className="cm-form-select" style={{ width: 160 }} value={v1} onChange={e => setV1(e.target.value)}>
                 <option value="">— select —</option>
                 {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
               </select>
@@ -229,7 +229,7 @@ export function VersionDiffPanel({ docId, token }) {
             <span style={{ marginTop: 16, color: 'var(--text-muted)' }}>vs</span>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version B</label>
-              <select className="cm-form-select" style={{ width: 160 }} value={v2} onChange={e => setV2(e.target.value)}>
+              <select aria-label="Version B" className="cm-form-select" style={{ width: 160 }} value={v2} onChange={e => setV2(e.target.value)}>
                 <option value="">— select —</option>
                 {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
               </select>
@@ -408,7 +408,7 @@ export function VersionAlertsPanel({ docId, token }) {
 
       <div className="cm-form-group">
         <label className="cm-form-label">Alert Email Account (SMTP)</label>
-        <select className="cm-form-select" value={config.alert_email_account_id || ''} onChange={e => setConfig(p => ({ ...p, alert_email_account_id: e.target.value }))}>
+        <select aria-label="Alert Email Account (SMTP)" className="cm-form-select" value={config.alert_email_account_id || ''} onChange={e => setConfig(p => ({ ...p, alert_email_account_id: e.target.value }))}>
           <option value="">— Use org default —</option>
           {emailAccounts.map(ea => (
             <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>

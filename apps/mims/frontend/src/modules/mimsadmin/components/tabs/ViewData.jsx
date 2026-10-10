@@ -292,21 +292,21 @@ export default function ViewData({ selectedItem = 'admin', onSelect }) {
         </div>
 
         <div style={{ padding: '12px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="date" value={activeView === 'admin' ? adminFilter.from : loginFilter.from} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, from: e.target.value })) : setLoginFilter(f => ({ ...f, from: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
-          <input type="date" value={activeView === 'admin' ? adminFilter.to : loginFilter.to} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, to: e.target.value })) : setLoginFilter(f => ({ ...f, to: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
-          <input placeholder="User" value={activeView === 'admin' ? adminFilter.user : loginFilter.user} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, user: e.target.value })) : setLoginFilter(f => ({ ...f, user: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 150, background: 'var(--surface)' }} />
+          <input aria-label="From date" type="date" value={activeView === 'admin' ? adminFilter.from : loginFilter.from} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, from: e.target.value })) : setLoginFilter(f => ({ ...f, from: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
+          <input aria-label="To date" type="date" value={activeView === 'admin' ? adminFilter.to : loginFilter.to} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, to: e.target.value })) : setLoginFilter(f => ({ ...f, to: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }} />
+          <input aria-label="User" placeholder="User" value={activeView === 'admin' ? adminFilter.user : loginFilter.user} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, user: e.target.value })) : setLoginFilter(f => ({ ...f, user: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 150, background: 'var(--surface)' }} />
           {activeView === 'admin' ? (
-            <select value={adminFilter.action} onChange={e => setAdminFilter(f => ({ ...f, action: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
+            <select aria-label="Filter by action" value={adminFilter.action} onChange={e => setAdminFilter(f => ({ ...f, action: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
               <option value="">All Actions</option>
               {ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}
             </select>
           ) : (
-            <select value={loginFilter.status} onChange={e => setLoginFilter(f => ({ ...f, status: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
+            <select aria-label="Filter by status" value={loginFilter.status} onChange={e => setLoginFilter(f => ({ ...f, status: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)' }}>
               <option value="">All Statuses</option>
               {LOGIN_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
             </select>
           )}
-          <input placeholder="Search" value={activeView === 'admin' ? adminFilter.search : loginFilter.search} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, search: e.target.value })) : setLoginFilter(f => ({ ...f, search: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 220, background: 'var(--surface)' }} />
+          <input aria-label="Search" placeholder="Search" value={activeView === 'admin' ? adminFilter.search : loginFilter.search} onChange={e => activeView === 'admin' ? setAdminFilter(f => ({ ...f, search: e.target.value })) : setLoginFilter(f => ({ ...f, search: e.target.value }))} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 0, minWidth: 220, background: 'var(--surface)' }} />
           <button onClick={refine} style={{ padding: '7px 18px', border: 'none', borderRadius: 0, background: 'var(--primary)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Refine</button>
           <button onClick={resetFilters} style={{ padding: '7px 14px', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>Reset</button>
         </div>

@@ -550,14 +550,14 @@ export default function CaseAETab({
           <div className="cf-form-grid">
             <div className="cf-form-field">
               <label>Assign To (PV Team)</label>
-              <select value={aeTxForm.assigned_to_id} onChange={e => setAeTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
+              <select aria-label="Assign To (PV Team)" value={aeTxForm.assigned_to_id} onChange={e => setAeTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
                 <option value="">— Select Assignee —</option>
                 {handoffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
             <div className="cf-form-field">
               <label>Priority</label>
-              <select value={aeTxForm.priority} onChange={e => setAeTxForm(p => ({ ...p, priority: e.target.value }))}>
+              <select aria-label="Priority" value={aeTxForm.priority} onChange={e => setAeTxForm(p => ({ ...p, priority: e.target.value }))}>
                 <option value="routine">Routine (30 days)</option>
                 <option value="expedited">Expedited (15 days)</option>
                 <option value="urgent">Urgent (7 days)</option>
@@ -569,7 +569,7 @@ export default function CaseAETab({
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Clinical Narrative</label>
-              <textarea rows={3} value={aeTxForm.narrative} onChange={e => setAeTxForm(p => ({ ...p, narrative: e.target.value }))} placeholder="Clinical narrative for PV team…" />
+              <textarea aria-label="Clinical Narrative" rows={3} value={aeTxForm.narrative} onChange={e => setAeTxForm(p => ({ ...p, narrative: e.target.value }))} placeholder="Clinical narrative for PV team…" />
             </div>
           </div>
           <div className="cf-form-actions">

@@ -90,45 +90,45 @@ export default function AdminCaseImportPanel({ H }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 700 }}>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Case Type</label>
-            <select className="form-input" value={caseExportFilters.case_type} onChange={e => setCaseExportFilters(f => ({ ...f, case_type: e.target.value }))}>
+            <select aria-label="Case Type" className="form-input" value={caseExportFilters.case_type} onChange={e => setCaseExportFilters(f => ({ ...f, case_type: e.target.value }))}>
               <option value="">All Types</option><option value="MI">MI</option><option value="AE">AE</option><option value="PC">PC</option>
             </select>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Export Format</label>
-            <select className="form-input" value={caseExportFilters.format || 'csv'} onChange={e => setCaseExportFilters(f => ({ ...f, format: e.target.value }))}>
+            <select aria-label="Export Format" className="form-input" value={caseExportFilters.format || 'csv'} onChange={e => setCaseExportFilters(f => ({ ...f, format: e.target.value }))}>
               <option value="csv">CSV</option><option value="xlsx">Excel (XLSX)</option><option value="json">JSON</option><option value="e2b_r3">E2B R3 (Regulatory XML)</option>
             </select>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Date Field</label>
-            <select className="form-input" value={caseExportFilters.date_field || 'created_at'} onChange={e => setCaseExportFilters(f => ({ ...f, date_field: e.target.value }))}>
+            <select aria-label="Date Field" className="form-input" value={caseExportFilters.date_field || 'created_at'} onChange={e => setCaseExportFilters(f => ({ ...f, date_field: e.target.value }))}>
               <option value="created_at">Created Date</option><option value="updated_at">Updated Date</option><option value="date_received">Date Received</option><option value="date_of_intake">Date of Intake</option>
             </select>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Priority</label>
-            <select className="form-input" value={caseExportFilters.priority || ''} onChange={e => setCaseExportFilters(f => ({ ...f, priority: e.target.value }))}>
+            <select aria-label="Priority" className="form-input" value={caseExportFilters.priority || ''} onChange={e => setCaseExportFilters(f => ({ ...f, priority: e.target.value }))}>
               <option value="">All Priorities</option><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
             </select>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Date From</label>
-            <input className="form-input" type="date" value={caseExportFilters.date_from} onChange={e => setCaseExportFilters(f => ({ ...f, date_from: e.target.value }))} />
+            <input aria-label="Date From" className="form-input" type="date" value={caseExportFilters.date_from} onChange={e => setCaseExportFilters(f => ({ ...f, date_from: e.target.value }))} />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Date To</label>
-            <input className="form-input" type="date" value={caseExportFilters.date_to} onChange={e => setCaseExportFilters(f => ({ ...f, date_to: e.target.value }))} />
+            <input aria-label="Date To" className="form-input" type="date" value={caseExportFilters.date_to} onChange={e => setCaseExportFilters(f => ({ ...f, date_to: e.target.value }))} />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Intake Channel</label>
-            <select className="form-input" value={caseExportFilters.intake_channel || ''} onChange={e => setCaseExportFilters(f => ({ ...f, intake_channel: e.target.value }))}>
+            <select aria-label="Intake Channel" className="form-input" value={caseExportFilters.intake_channel || ''} onChange={e => setCaseExportFilters(f => ({ ...f, intake_channel: e.target.value }))}>
               <option value="">All Channels</option><option value="manual">Manual</option><option value="email">Email</option><option value="emir">EMIR</option><option value="api">API</option><option value="import">Import</option>
             </select>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Is Serious (AE only)</label>
-            <select className="form-input" value={caseExportFilters.is_serious || ''} onChange={e => setCaseExportFilters(f => ({ ...f, is_serious: e.target.value }))}>
+            <select aria-label="Is Serious (AE only)" className="form-input" value={caseExportFilters.is_serious || ''} onChange={e => setCaseExportFilters(f => ({ ...f, is_serious: e.target.value }))}>
               <option value="">All</option><option value="1">Serious Only</option><option value="0">Non-Serious Only</option>
             </select>
           </div>
@@ -165,12 +165,12 @@ export default function AdminCaseImportPanel({ H }) {
         </div>
         <IntegrationSectionHeader title="Import Configuration" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 700, marginBottom: 20 }}>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Import Format</label><select className="form-input"><option value="csv">CSV</option><option value="xlsx">Excel XLSX</option><option value="xml">XML</option><option value="json">JSON</option></select></div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Default Case Type</label><select className="form-input"><option value="MI">MI — Medical Information</option><option value="AE">AE — Adverse Event</option><option value="PC">PC — Product Complaint</option></select></div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Encoding</label><select className="form-input"><option value="UTF-8">UTF-8</option><option value="ISO-8859-1">ISO-8859-1</option><option value="Windows-1252">Windows-1252</option></select></div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Date Format</label><select className="form-input"><option value="YYYY-MM-DD">YYYY-MM-DD</option><option value="MM/DD/YYYY">MM/DD/YYYY</option><option value="DD/MM/YYYY">DD/MM/YYYY</option><option value="DD-MMM-YYYY">DD-MMM-YYYY</option></select></div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>CSV Delimiter</label><select className="form-input"><option value=",">Comma (,)</option><option value=";">Semicolon (;)</option><option value="\t">Tab</option><option value="|">Pipe (|)</option></select></div>
-          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>On Validation Error</label><select className="form-input"><option value="abort">Abort Import</option><option value="skip_row">Skip Invalid Rows</option><option value="quarantine">Quarantine Invalid Rows</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Import Format</label><select aria-label="Import Format" className="form-input"><option value="csv">CSV</option><option value="xlsx">Excel XLSX</option><option value="xml">XML</option><option value="json">JSON</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Default Case Type</label><select aria-label="Default Case Type" className="form-input"><option value="MI">MI — Medical Information</option><option value="AE">AE — Adverse Event</option><option value="PC">PC — Product Complaint</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Encoding</label><select aria-label="Encoding" className="form-input"><option value="UTF-8">UTF-8</option><option value="ISO-8859-1">ISO-8859-1</option><option value="Windows-1252">Windows-1252</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Date Format</label><select aria-label="Date Format" className="form-input"><option value="YYYY-MM-DD">YYYY-MM-DD</option><option value="MM/DD/YYYY">MM/DD/YYYY</option><option value="DD/MM/YYYY">DD/MM/YYYY</option><option value="DD-MMM-YYYY">DD-MMM-YYYY</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>CSV Delimiter</label><select aria-label="CSV Delimiter" className="form-input"><option value=",">Comma (,)</option><option value=";">Semicolon (;)</option><option value="\t">Tab</option><option value="|">Pipe (|)</option></select></div>
+          <div><label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>On Validation Error</label><select aria-label="On Validation Error" className="form-input"><option value="abort">Abort Import</option><option value="skip_row">Skip Invalid Rows</option><option value="quarantine">Quarantine Invalid Rows</option></select></div>
         </div>
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500, cursor: 'pointer', marginBottom: 8 }}><input type="checkbox" /> Has Header Row</label>

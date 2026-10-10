@@ -295,6 +295,7 @@ export default function CustomizeForms() {
                             <input
                               type="checkbox"
                               className="ma-cf-cb"
+                              aria-label={`${s.label} disabled`}
                               checked={!!s.is_disabled}
                               onChange={() => toggle(s.key, 'disabled')}
                             />
@@ -369,6 +370,7 @@ export default function CustomizeForms() {
                               <input
                                 type="text"
                                 className="ma-cf-label-input"
+                                aria-label={`Custom label for ${f.label}`}
                                 value={f.custom_label || ''}
                                 placeholder={f.label}
                                 onChange={e => setCustomLabel(f.key, e.target.value)}
@@ -380,6 +382,7 @@ export default function CustomizeForms() {
                               <input
                                 type="checkbox"
                                 className="ma-cf-cb"
+                                aria-label={`${f.label} required`}
                                 checked={!!f.is_required}
                                 onChange={() => toggle(f.key, 'required')}
                                 disabled={f.is_disabled}
@@ -392,6 +395,7 @@ export default function CustomizeForms() {
                             <input
                               type="checkbox"
                               className="ma-cf-cb"
+                              aria-label={`${f.label} disabled`}
                               checked={!!f.is_disabled}
                               onChange={() => toggle(f.key, 'disabled')}
                             />

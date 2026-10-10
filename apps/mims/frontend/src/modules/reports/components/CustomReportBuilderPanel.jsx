@@ -119,12 +119,12 @@ export default function CustomReportBuilderPanel({ headers, onSavePreset }) {
         <div style={{ background: 'var(--surface-subtle, #f9fafb)', padding: 16, borderRadius: 8, border: '1px solid var(--border-color, #e5e7eb)' }}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Report Title</label>
-            <input className="input" style={{ width: '100%' }} value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+            <input aria-label="Report Title" className="input" style={{ width: '100%' }} value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Primary Dataset</label>
-            <select className="select" style={{ width: '100%' }} value={selectedDataset} onChange={e => {
+            <select aria-label="Primary Dataset" className="select" style={{ width: '100%' }} value={selectedDataset} onChange={e => {
               setSelectedDataset(e.target.value)
               const ds = DATASETS.find(d => d.key === e.target.value)
               if (ds) setSelectedColumns(ds.columns.slice(0, 5))
@@ -147,7 +147,7 @@ export default function CustomReportBuilderPanel({ headers, onSavePreset }) {
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Group By & Aggregation</label>
-            <select className="select" style={{ width: '100%' }} value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+            <select aria-label="Group By & Aggregation" className="select" style={{ width: '100%' }} value={groupBy} onChange={e => setGroupBy(e.target.value)}>
               {datasetConfig.columns.map(col => <option key={col} value={col}>Group by {col}</option>)}
             </select>
           </div>

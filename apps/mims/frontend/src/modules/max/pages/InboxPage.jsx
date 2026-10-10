@@ -1177,7 +1177,7 @@ export default function InboxPage() {
 
               {/* Search (F6) */}
               <div className="inbox-search-bar">
-                <input type="text" placeholder="Search sender, subject or body..."
+                <input aria-label="Search messages" type="text" placeholder="Search sender, subject or body..."
                   value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
               </div>
 
@@ -1744,13 +1744,13 @@ export default function InboxPage() {
             <div className="compose-modal-body">
               <div className="compose-field">
                 <label>To</label>
-                <input type="email" value={compose.to}
+                <input aria-label="To" type="email" value={compose.to}
                   onChange={e => setCompose(c => ({ ...c, to: e.target.value }))}
                   disabled={compose.sending} placeholder="recipient@example.com" />
               </div>
               <div className="compose-field">
                 <label>Subject</label>
-                <input type="text" value={compose.subject}
+                <input aria-label="Subject" type="text" value={compose.subject}
                   onChange={e => setCompose(c => ({ ...c, subject: e.target.value }))}
                   disabled={compose.sending} />
               </div>
@@ -1758,7 +1758,7 @@ export default function InboxPage() {
               {templates.length > 0 && (
                 <div className="compose-field">
                   <label>Template</label>
-                  <select className="compose-template-select" defaultValue=""
+                  <select aria-label="Template" className="compose-template-select" defaultValue=""
                     onChange={e => {
                       const tpl = templates.find(t => t.id === Number(e.target.value))
                       if (tpl) {
@@ -1778,7 +1778,7 @@ export default function InboxPage() {
               )}
               <div className="compose-field compose-field-body">
                 <label>Message</label>
-                <textarea value={compose.body}
+                <textarea aria-label="Message" value={compose.body}
                   onChange={e => setCompose(c => ({ ...c, body: e.target.value }))}
                   disabled={compose.sending} rows={10} />
               </div>
@@ -1811,7 +1811,7 @@ export default function InboxPage() {
                 <>
                   <div className="compose-field">
                     <label>Case Type</label>
-                    <select
+                    <select aria-label="Case Type"
                       value={caseFlow.caseType}
                       onChange={e => setCaseFlow(prev => ({ ...prev, caseType: e.target.value }))}
                       disabled={caseFlow.actionBusy}

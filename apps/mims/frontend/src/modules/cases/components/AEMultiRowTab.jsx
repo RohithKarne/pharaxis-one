@@ -268,14 +268,14 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   {field('lab_name', 'Lab Name', <input value={form.lab_name} onChange={e => set('lab_name', e.target.value)} />)}
                   {field('test_name', 'Test Name', <input value={form.test_name} onChange={e => set('test_name', e.target.value)} />)}
                   {field('result', 'Result', <input value={form.result} onChange={e => set('result', e.target.value)} />)}
-                  <div className="cf-form-field"><label>Unit</label><input value={form.unit} onChange={e => set('unit', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Unit</label><input aria-label="Unit" value={form.unit} onChange={e => set('unit', e.target.value)} /></div>
                   {field('normal_range', 'Normal Range', <input value={form.normal_range} onChange={e => set('normal_range', e.target.value)} />)}
                   {field('test_date', 'Test Date', <input type="date" value={form.test_date} onChange={e => set('test_date', e.target.value)} />)}
                 </>}
                 {tabKey === 'medical-history' && <>
                   {field('condition_name', 'Condition Name', <input value={form.condition_name} onChange={e => set('condition_name', e.target.value)} />)}
-                  <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
-                  <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Start Date</label><input aria-label="Start Date" type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>End Date</label><input aria-label="End Date" type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
                   <div className="cf-form-field">
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input type="checkbox" checked={form.is_ongoing} onChange={e => set('is_ongoing', e.target.checked)} />
@@ -301,7 +301,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   {products.length > 0 && (
                     <div className="cf-form-field">
                       <label>From Product Dictionary</label>
-                      <select value={form.product_id || ''} onChange={e => {
+                      <select aria-label="From Product Dictionary" value={form.product_id || ''} onChange={e => {
                         const picked = products.find(p => String(p.id) === e.target.value)
                         editForm({ ...form, product_id: picked ? picked.id : '', product_name: picked ? picked.trade_name : form.product_name })
                       }}>
@@ -311,19 +311,19 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                     </div>
                   )}
                   {field('product_name', 'Product Name', <input value={form.product_name} onChange={e => editForm({ ...form, product_name: e.target.value, product_id: '' })} />)}
-                  <div className="cf-form-field"><label>Product Type</label><select value={form.product_type} onChange={e => set('product_type', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Type').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
-                  <div className="cf-form-field"><label>Product Category</label><select value={form.product_category} onChange={e => set('product_category', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Category').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Product Type</label><select aria-label="Product Type" value={form.product_type} onChange={e => set('product_type', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Type').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Product Category</label><select aria-label="Product Category" value={form.product_category} onChange={e => set('product_category', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Category').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   {field('batch_lot_number', 'Batch / Lot Number', <input value={form.batch_lot_number} onChange={e => set('batch_lot_number', e.target.value)} />)}
                   {field('dose', 'Dose', <input value={form.dose} onChange={e => set('dose', e.target.value)} />)}
                   {field('dose_unit', 'Dose Unit', <select value={form.dose_unit} onChange={e => set('dose_unit', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dose Unit').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('route_of_admin', 'Route of Admin', <select value={form.route_of_admin} onChange={e => set('route_of_admin', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Route of Administration').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
-                  <div className="cf-form-field"><label>Frequency</label><input value={form.frequency} onChange={e => set('frequency', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Frequency</label><input aria-label="Frequency" value={form.frequency} onChange={e => set('frequency', e.target.value)} /></div>
                   {field('start_date', 'Start Date', <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} />)}
                   {field('end_date', 'End Date', <input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} />)}
                   {field('indication', 'Indication', <input value={form.indication} onChange={e => set('indication', e.target.value)} />, { full: true })}
                   {field('action_taken', 'Action Taken', <select value={form.action_taken} onChange={e => set('action_taken', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Action Taken').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
-                  <div className="cf-form-field"><label>Dechallenge</label><select value={form.dechallenge} onChange={e => set('dechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
-                  <div className="cf-form-field"><label>Rechallenge</label><select value={form.rechallenge} onChange={e => set('rechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Rechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Dechallenge</label><select aria-label="Dechallenge" value={form.dechallenge} onChange={e => set('dechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Rechallenge</label><select aria-label="Rechallenge" value={form.rechallenge} onChange={e => set('rechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Rechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field">
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input type="checkbox" checked={form.is_suspect} onChange={e => set('is_suspect', e.target.checked)} />

@@ -153,7 +153,7 @@ export default function SetupWorkflowEngine() {
               </div>
             ))}
           </div>
-          <details><summary>Advanced JSON</summary><textarea defaultValue={json} rows={12} onBlur={e => importJson(e.target.value)} /></details>
+          <details><summary>Advanced JSON</summary><textarea aria-label="Workflow as JSON" defaultValue={json} rows={12} onBlur={e => importJson(e.target.value)} /></details>
         </section>
 
         <section className="ma-flow-inspector">

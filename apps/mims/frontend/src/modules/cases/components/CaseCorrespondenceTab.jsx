@@ -305,15 +305,15 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
             <div className="cf-corr-compose-body">
               <div className="cf-form-field">
                 <label>To</label>
-                <input type="email" value={corrCompose.to} onChange={e => setCorrCompose(prev => ({ ...prev, to: e.target.value }))} disabled={corrCompose.sending} />
+                <input aria-label="To" type="email" value={corrCompose.to} onChange={e => setCorrCompose(prev => ({ ...prev, to: e.target.value }))} disabled={corrCompose.sending} />
               </div>
               <div className="cf-form-field">
                 <label>Subject</label>
-                <input type="text" value={corrCompose.subject} onChange={e => setCorrCompose(prev => ({ ...prev, subject: e.target.value }))} disabled={corrCompose.sending} />
+                <input aria-label="Subject" type="text" value={corrCompose.subject} onChange={e => setCorrCompose(prev => ({ ...prev, subject: e.target.value }))} disabled={corrCompose.sending} />
               </div>
               <div className="cf-form-field">
                 <label>Message</label>
-                <textarea rows={14} value={corrCompose.body} onChange={e => setCorrCompose(prev => ({ ...prev, body: e.target.value }))} disabled={corrCompose.sending} />
+                <textarea aria-label="Message" rows={14} value={corrCompose.body} onChange={e => setCorrCompose(prev => ({ ...prev, body: e.target.value }))} disabled={corrCompose.sending} />
               </div>
               {corrCompose.error && <div className="cf-corr-error">{corrCompose.error}</div>}
             </div>

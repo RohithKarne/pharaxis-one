@@ -117,7 +117,7 @@ export default function AdminRoutingRulesPanel({ H }) {
             {field('name', 'Rule name *', 'e.g. Safety mailbox → PV queue')}
             <div>
               <label style={lbl}>Priority</label>
-              <input style={inp} type="number" value={edit.priority} onChange={e => setEdit({ ...edit, priority: e.target.value })} />
+              <input aria-label="Priority" style={inp} type="number" value={edit.priority} onChange={e => setEdit({ ...edit, priority: e.target.value })} />
             </div>
           </div>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', margin: '4px 0 8px' }}>MATCH WHEN (all provided conditions match)</div>
