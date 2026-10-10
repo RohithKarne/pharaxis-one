@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
@@ -54,7 +54,7 @@ function AdminTenantPicker() {
   // With one organisation there is nothing to choose (M-112).
   if (loading || tenants.length <= 1) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Tenant</span>
       <select
         value={tenantId}
@@ -180,19 +180,48 @@ function getAnchorPosition(anchorEl, direction = 'bottom') {
   return { top: rect.bottom + 2, left: rect.left }
 }
 
+// A menu level always opened to the right (or below) of its parent with no
+// check for room, so the System tab's third level — Setup › Integrations &
+// Platform — was drawn off the right edge of the window at 100% zoom (Rohith,
+// 2026-10-10). After the menu mounts, measure it: a level that would not fit
+// on the right opens to the left of its parent instead; one that would run
+// past the bottom is moved up. Returns the style to apply and a ref for the menu.
+const EDGE = 8
+function useMenuPosition(anchorEl, direction = 'bottom') {
+  const menuRef = useRef(null)
+  const [pos, setPos] = useState(() => getAnchorPosition(anchorEl, direction))
+  useLayoutEffect(() => {
+    const start = getAnchorPosition(anchorEl, direction)
+    const el = menuRef.current
+    if (!start || !el) return
+    const rect = anchorEl.getBoundingClientRect()
+    const { offsetWidth: w, offsetHeight: h } = el
+    let { top, left } = start
+    if (left + w > window.innerWidth - EDGE) {
+      left = direction === 'right' ? rect.left - w - 2 : window.innerWidth - w - EDGE
+    }
+    if (top + h > window.innerHeight - EDGE) top = window.innerHeight - h - EDGE
+    setPos({ top: Math.max(EDGE, top), left: Math.max(EDGE, left) })
+  }, [anchorEl, direction])
+  return { menuRef, pos }
+}
+
 // ── Flyout submenu rendered via portal ───────────────────────────────────────
 function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl, 'right')
+  const { menuRef, pos } = useMenuPosition(anchorEl, 'right')
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9999,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -273,17 +302,20 @@ function DropdownRow({ item, onSelect, onCloseAll }) {
 
 // ── Main config dropdown rendered via portal ──────────────────────────────────
 function ConfigDropdown({ anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl)
+  const { menuRef, pos } = useMenuPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9998,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -309,17 +341,20 @@ function ConfigDropdown({ anchorEl, onSelect, onClose }) {
 
 // ── Tables dropdown rendered via portal (uses DropdownRow for Shift flyout) ───
 function TablesDropdown({ anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl)
+  const { menuRef, pos } = useMenuPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9998,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -389,17 +424,20 @@ function TablesTab({ isActive, onTabClick, onSelect }) {
 
 // ── Documents dropdown rendered via portal ────────────────────────────────────
 function DocumentsDropdown({ anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl)
+  const { menuRef, pos } = useMenuPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9998,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -472,17 +510,20 @@ function DocumentsTab({ isActive, onTabClick, onSelect }) {
 
 // ── Escalation dropdown rendered via portal ───────────────────────────────────
 function EscalationDropdown({ anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl)
+  const { menuRef, pos } = useMenuPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9998,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -555,17 +596,20 @@ function EscalationTab({ isActive, onTabClick, onSelect }) {
 
 // ── Generic portal dropdown (leaf + nested via DropdownRow) ──────────────────
 function NavDropdown({ nav, anchorEl, onSelect, onClose }) {
-  const pos = getAnchorPosition(anchorEl)
+  const { menuRef, pos } = useMenuPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={() => {}}
       onMouseLeave={onClose}
       style={{
         position:      'fixed',
         top:           pos.top,
         left:          pos.left,
+        maxHeight:     `calc(100vh - ${EDGE * 2}px)`,
+        overflowY:     'auto',
         zIndex:        9998,
         background:    'var(--surface)',
         border:        '1px solid var(--border)',
@@ -1056,8 +1100,9 @@ function MIMSAdminShellInner() {
             </button>
           )
         )}
-        <AdminTenantPicker />
-        <div style={{ marginRight: 12 }}>
+        {/* One unit, so when the bar wraps the picker and its help button move together. */}
+        <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', marginRight: 12 }}>
+          <AdminTenantPicker />
           <HelpHint
             featureKey={helpKeyFor({ activeTab, systemItem, tablesItem })}
             label={helpLabelFor({ activeTab, systemItem })}
