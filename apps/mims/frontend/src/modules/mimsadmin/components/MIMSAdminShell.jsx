@@ -128,13 +128,15 @@ function isSystemItemAllowed(effectiveAccess, value) {
   return effHasCap(effectiveAccess, capForSystemValue(value))
 }
 
-function AdminAccessDenied({ label = 'this admin screen' }) {
+function AdminAccessDenied({ label = 'this admin screen', platformOnly = false }) {
   return (
     <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 32 }}>
       <div style={{ maxWidth: 480, textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28 }}>
         <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--text-primary)' }}>Access not available</h2>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>
-          Your security group does not allow access to {label}. Ask an administrator to update Group Security.
+          {platformOnly
+            ? `${label} is kept to platform administrators, because it reaches every organisation.`
+            : `Your security group does not allow access to ${label}. Ask an administrator to update Group Security.`}
         </p>
       </div>
     </div>
@@ -145,7 +147,8 @@ function AdminAccessDenied({ label = 'this admin screen' }) {
 // Division reaches every organisation). The server refuses them too.
 // The server keeps these to platform admins: each holds every organisation's data
 // (MIPM-149). A tenant admin saw the menu items and a screen whose data was refused.
-const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(['sys-maint-copy-division', 'sys-reports-access', 'sys-exception-log'])
+const PLATFORM_ONLY_LABELS = { 'sys-maint-copy-division': 'Copy Division', 'sys-reports-access': 'Reports Access', 'sys-exception-log': 'The Exception Log' }
+const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(Object.keys(PLATFORM_ONLY_LABELS))
 
 function withoutPlatformOnly(nav) {
   return nav.reduce((acc, item) => {
@@ -1113,8 +1116,10 @@ function MIMSAdminShellInner() {
 
       <div className="mims-admin-tab-content">
         <Suspense fallback={<AdminTabLoader />}>
-          {activeTab === 'system' && systemItem && !isSystemItemAllowed(effectiveAccess, systemItem)
-            ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
+          {activeTab === 'system' && systemItem && (!isSystemItemAllowed(effectiveAccess, systemItem)
+              // Reached by link or address: the menu hides these, the screen should too.
+              || (PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)))
+            ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem] || helpLabelFor({ activeTab, systemItem }) || 'this system option'} platformOnly={PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem)} />
             : activeTab === 'service-log'
             ? <ServiceLogTab selectedItem={serviceItem} />
             : activeTab === 'system-activity'

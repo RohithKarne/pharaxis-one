@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import adminRouteMap from '../../../../shared/config/adminRouteMap.json'
+import { hasGlobalAdminScope } from '../../../../shared/utils/adminScope.js'
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
@@ -25,7 +26,7 @@ const COLS = [
 ]
 
 export default function ServiceDashboard() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const navigate  = useNavigate()
 
   const [services,  setServices]  = useState([])
@@ -126,13 +127,14 @@ export default function ServiceDashboard() {
           <section style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Top Error Endpoints</div>
-              <button
+              {/* The exceptions page is for platform admins only; anyone else met "Access Denied". */}
+              {hasGlobalAdminScope(user) && <button
                 type="button"
                 onClick={() => navigate('/exceptions')}
                 style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}
               >
                 Open Exceptions
-              </button>
+              </button>}
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {(observability?.error_endpoints || []).slice(0, 8).map((item, idx) => (
