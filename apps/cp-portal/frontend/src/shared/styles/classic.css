@@ -140,6 +140,10 @@
 :root .pp-hero { background: #eef0f4; border-bottom: 1px solid #c9ced6; padding: 24px 0; }
 :root .pp-hero-title { font-size: 26px; font-weight: bold; color: #222; }
 :root .pp-hero-subtitle { font-size: 14px; color: #333; }
+:root .pp-page-content { padding-top: 28px; padding-bottom: 48px; }
+:root .pp-page-header { margin-bottom: 20px; }
+:root .pp-page-header h1, :root .pp-page-title { font-size: 22px; font-weight: bold; color: #222; line-height: 1.3; margin-bottom: 4px; }
+:root .pp-page-header p { font-size: 14px; }
 :root .pp-hero-search-wrap { border: 1px solid #a9b2bd; background: #fff; }
 :root .pp-hero-search-btn { border-radius: 2px; }
 :root .pp-search-suggestions { margin-top: 8px; }

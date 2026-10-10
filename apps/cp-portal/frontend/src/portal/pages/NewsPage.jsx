@@ -112,12 +112,12 @@ export default function NewsPage() {
     }
   }
 
-  if (loading) return <div className="pp-news-page"><SkeletonCards count={4} /></div>
-  if (error)   return <div className="pp-news-page"><div className="pp-error-state">{error}</div></div>
+  if (loading) return <div className="pp-container pp-page-content"><SkeletonCards count={4} /></div>
+  if (error)   return <div className="pp-container pp-page-content"><div className="pp-error-state">{error}</div></div>
 
   return (
-    <div className="pp-news-page">
-      <h1 className="pp-page-header-title" style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>{t('News & Announcements')}</h1>
+    <div className="pp-container pp-page-content">
+      <div className="pp-page-header"><h1>{t('News & Announcements')}</h1></div>
 
       <div className="pp-docs-search" style={{ marginBottom: 12 }}>
         <input

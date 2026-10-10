@@ -46,10 +46,10 @@ export default function EventDetailPage() {
   }
 
   return (
-    <div className="pp-container pp-page-content" style={{ maxWidth: 820 }}>
+    <div className="pp-container pp-page-content pp-page-narrow">
       <Link to={`${base}/events`} className="pp-back-btn">{t('All events')}</Link>
       <div className="pp-event-type-tag" style={{ marginTop: 16 }}>{ev.event_type || 'Event'}</div>
-      <h1 style={{ margin: '4px 0 12px' }}>{ev.title}</h1>
+      <h1 className="pp-page-title">{ev.title}</h1>
       <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '6px 16px', margin: '0 0 20px' }}>
         <dt style={{ fontWeight: 600 }}>{t('When')}</dt>
         <dd style={{ margin: 0 }}>

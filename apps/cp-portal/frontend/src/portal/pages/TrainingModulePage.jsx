@@ -54,7 +54,7 @@ export default function TrainingModulePage() {
 
   if (error && !data) {
     return (
-      <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
+      <div className="pp-container pp-page-content pp-page-narrow">
         <div className="pp-error-msg" role="alert">{error}</div>
         <Link to={`${base}/training`}>{t('Back to training')}</Link>
       </div>
@@ -69,9 +69,9 @@ export default function TrainingModulePage() {
   const docUrl = `/api/portal/documents/${doc.id}/download`
 
   return (
-    <div className="pp-container pp-page-content" style={{ padding: '24px 0', maxWidth: 820 }}>
+    <div className="pp-container pp-page-content pp-page-narrow">
       <Link to={`${base}/training`} style={{ fontSize: 13 }}>{t('All training modules')}</Link>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E', margin: '10px 0 4px' }}>{module.title}</h1>
+      <h1 className="pp-page-title" style={{ marginTop: 10 }}>{module.title}</h1>
       <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 20 }}>
         {module.type} · {module.duration} · Pass mark {module.pass_score}% · Version {module.version}
       </p>

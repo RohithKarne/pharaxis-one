@@ -140,11 +140,11 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="pp-container pp-page-content" style={{ maxWidth: 640, paddingTop: 40, paddingBottom: 60 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A2E', marginBottom: 4 }}>{t('My Account')}</h1>
-      <p style={{ color: '#4B5563', fontSize: 14, marginBottom: 28 }}>
-        {t('Update your personal details and manage your password.')}
-      </p>
+    <div className="pp-container pp-page-content pp-page-narrow">
+      <div className="pp-page-header">
+        <h1>{t('My Account')}</h1>
+        <p>{t('Update your personal details and manage your password.')}</p>
+      </div>
 
       {/* Profile details */}
       <form onSubmit={saveProfile} style={cardStyle}>

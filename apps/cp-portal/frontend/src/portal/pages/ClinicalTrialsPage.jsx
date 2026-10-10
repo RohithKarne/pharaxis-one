@@ -22,10 +22,10 @@ export default function ClinicalTrialsPage() {
   )
 
   return (
-    <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
-      <div className="pp-page-header" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>{t('Clinical Trials & Real-World Evidence')}</h1>
-        <p style={{ color: '#4B5563', fontSize: 14 }}>{t('Browse clinical trials: their status, indication, study sites and investigators.')}</p>
+    <div className="pp-container pp-page-content">
+      <div className="pp-page-header">
+        <h1>{t('Clinical Trials & Real-World Evidence')}</h1>
+        <p>{t('Browse clinical trials: their status, indication, study sites and investigators.')}</p>
       </div>
 
       <div className="pp-filter-bar" style={{ marginBottom: 20 }}>

@@ -138,12 +138,12 @@ export default function SafetyPage() {
     )
   }
 
-  if (loading) return <div className="pp-safety-page"><div className="pp-loading">{t('Loading…')}</div></div>
-  if (error)   return <div className="pp-safety-page"><div className="pp-error-state">{error}</div></div>
+  if (loading) return <div className="pp-container pp-page-content pp-page-narrow"><div className="pp-loading">{t('Loading…')}</div></div>
+  if (error)   return <div className="pp-container pp-page-content pp-page-narrow"><div className="pp-error-state">{error}</div></div>
 
   return (
-    <div className="pp-safety-page">
-      <h1 className="pp-safety-section-title">{t('Safety Alerts')}</h1>
+    <div className="pp-container pp-page-content pp-page-narrow">
+      <div className="pp-page-header"><h1>{t('Safety Alerts')}</h1></div>
       {ackError && <div className="pp-error-msg" role="alert">{ackError}</div>}
 
       {availableSeverities.length > 1 && (

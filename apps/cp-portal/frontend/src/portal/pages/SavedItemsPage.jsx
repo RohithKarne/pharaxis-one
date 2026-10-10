@@ -55,7 +55,7 @@ export default function SavedItemsPage() {
 
   if (!user) {
     return (
-      <div className="pp-docs-page">
+      <div className="pp-container pp-page-content">
         <div className="pp-empty-state">
           <p style={{ marginTop: 12, color: '#4B5563', fontSize: 15 }}>
             <Link to={`${base}/login`} className="pp-btn pp-btn-outline" style={{ marginLeft: 0 }}>{t('Sign in')}</Link>
@@ -71,8 +71,8 @@ export default function SavedItemsPage() {
   const tabItems      = tab === 'news' ? newsItems : documentItems
 
   return (
-    <div className="pp-docs-page">
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>{t('Saved Items')}</h1>
+    <div className="pp-container pp-page-content">
+      <div className="pp-page-header"><h1>{t('Saved Items')}</h1></div>
 
       {/* Tabs */}
       <div className="pp-news-filters" style={{ marginBottom: 20 }}>

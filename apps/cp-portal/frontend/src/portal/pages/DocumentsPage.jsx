@@ -221,12 +221,12 @@ export default function DocumentsPage() {
     return badges
   }
 
-  if (loading) return <div className="pp-docs-page" style={{ padding: '24px' }}><SkeletonCards count={6} /></div>
-  if (error)   return <div className="pp-docs-page"><div className="pp-error-state">{error}</div></div>
+  if (loading) return <div className="pp-container pp-page-content"><SkeletonCards count={6} /></div>
+  if (error)   return <div className="pp-container pp-page-content"><div className="pp-error-state">{error}</div></div>
 
   return (
-    <div className="pp-docs-page">
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>{t('Document Library')}</h1>
+    <div className="pp-container pp-page-content">
+      <div className="pp-page-header"><h1>{t('Document Library')}</h1></div>
       {docNotice && <div className="pp-info-box" role="status" style={{ marginBottom: 16 }}>{docNotice}</div>}
 
       <div className="pp-docs-search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
