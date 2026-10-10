@@ -155,7 +155,9 @@ export default function SubmitPage() {
     formFields.filter(f => f.is_required && isVisible(f)).forEach(f => {
       const v = formValues[f.field_key]
       if (!v || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')) {
-        errors[f.field_key] = `${f.field_label || f.label} is required.`
+        // The message sits under the question, so it does not repeat the label:
+        // "You are a is required." read as broken English (CP screen review, 10 Oct 2026).
+        errors[f.field_key] = t('Please answer this question.')
       }
     })
     setFieldErrors(errors)
@@ -193,7 +195,7 @@ export default function SubmitPage() {
         else if (Array.isArray(data.fields)) {
           setFieldErrors(Object.fromEntries(data.fields.map(k => {
             const f = formFields.find(x => x.field_key === k)
-            return [k, `${f?.field_label || f?.label || k} is required.`]
+            return [k, t('Please answer this question.')]
           })))
         }
         return
