@@ -309,10 +309,10 @@ export default function SubmissionsPage() {
       const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v))
       return `"${s.replace(/"/g, '""')}"`
     }
-    const header = ['ID', 'Date', 'Type', 'Submitter', 'Email', 'User Type', 'Status', 'Ref', 'Form Data']
+    const header = ['ID', 'Date (UTC)', 'Type', 'Submitter', 'Email', 'User Type', 'Status', 'Ref', 'Form Data']
     const rows = submissions.map(s => [
       s.id,
-      s.submitted_at || '',
+      s.submitted_at ? new Date(s.submitted_at).toISOString().replace('T', ' ').slice(0, 19) : '',
       TYPE_LABELS[s.submission_type] || s.submission_type,
       s.submitter_name || (s.first_name ? `${s.first_name} ${s.last_name}` : ''),
       s.submitter_email || s.user_email || '',
