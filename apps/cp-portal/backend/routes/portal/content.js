@@ -169,7 +169,7 @@ router.get('/:clientCode/trials', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT id, nct_id, title, phase, indication, status, site_location, pi
          FROM cp_clinical_trials
-        WHERE client_id = ? AND is_active = 1
+        WHERE client_id = ? AND is_active = 1 AND publish_status = 'published'
         ORDER BY id DESC`,
       [client.id]
     );

@@ -60,6 +60,20 @@ const WORDS = {
     file:        'File',
     hidden:      'Hidden',
   },
+  // Phase 3 row 21: one set of status words for every content screen.
+  contentStatus: {
+    draft:     'Draft',
+    review:    'Needs review',
+    approved:  'Approved to publish',
+    scheduled: 'Scheduled',
+    published: 'Live in portal',
+    archived:  'Archived',
+    active:    'Live in portal', // a safety alert being shown
+    resolved:  'Resolved',
+    in_review: 'Needs review',  // Library items
+    in_progress: 'In progress',
+    expired:   'Expired',
+  },
   formField: {
     ae_screen_answer: 'Did anyone become unwell?',
     ae_screen_detail: 'What happened',

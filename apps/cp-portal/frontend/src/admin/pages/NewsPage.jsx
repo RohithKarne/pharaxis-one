@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import { loadAreas } from '../components/AreaTagSelect' // CPPM-122
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { toLocalInput, fromLocalInput, formatDateTime } from '../../shared/utils/datetime'
+import { labelsOf } from '../../shared/utils/labels'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -18,14 +19,7 @@ const EMPTY_FORM = {
   therapeutic_area_id: '',
 }
 
-const STATUS_LABELS = {
-  draft: 'Draft',
-  review: 'Needs review',
-  approved: 'Approved to publish',
-  scheduled: 'Scheduled',
-  published: 'Live in portal',
-  archived: 'Archived',
-}
+const STATUS_LABELS = labelsOf('contentStatus')
 
 export default function NewsPage() {
   const { clientId }              = useParams()
@@ -242,12 +236,12 @@ export default function NewsPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
-                    <option value="draft">Draft</option>
-                    <option value="review">In Review</option>
-                    {canPublish && <option value="approved">Approved</option>}
-                    {canPublish && <option value="scheduled">Scheduled</option>}
-                    {canPublish && <option value="published">Published</option>}
-                    {canPublish && <option value="archived">Archived</option>}
+                    <option value="draft">{STATUS_LABELS.draft}</option>
+                    <option value="review">{STATUS_LABELS.review}</option>
+                    {canPublish && <option value="approved">{STATUS_LABELS.approved}</option>}
+                    {canPublish && <option value="scheduled">{STATUS_LABELS.scheduled}</option>}
+                    {canPublish && <option value="published">{STATUS_LABELS.published}</option>}
+                    {canPublish && <option value="archived">{STATUS_LABELS.archived}</option>}
                   </select>
                 </div>
               </div>

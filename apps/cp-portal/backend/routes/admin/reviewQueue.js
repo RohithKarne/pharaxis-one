@@ -25,13 +25,18 @@ router.get('/:clientId/count', authenticateAdmin, requireClientAccess, async (re
       "SELECT COUNT(*) as cnt FROM cp_documents WHERE client_id = ? AND status = 'review' AND is_active = 1",
       [clientId]
     );
+    // Phase 3 row 21: clinical trials waiting for review count too.
+    const [[trialRow]] = await pool.execute(
+      "SELECT COUNT(*) as cnt FROM cp_clinical_trials WHERE client_id = ? AND publish_status = 'review'",
+      [clientId]
+    );
     // CPPM-61: how many items in the queue (awaiting review or publish) this person holds.
     const [[mineRow]] = await pool.execute(
       `SELECT (SELECT COUNT(*) FROM cp_news_posts WHERE client_id = ? AND status IN ('review', 'approved') AND owner_id = ?)
             + (SELECT COUNT(*) FROM cp_documents  WHERE client_id = ? AND status IN ('review', 'approved') AND is_active = 1 AND owner_id = ?) AS mine`,
       [clientId, req.admin.adminId, clientId, req.admin.adminId]
     );
-    res.json({ count: newsRow.cnt + docRow.cnt, mine: Number(mineRow.mine) });
+    res.json({ count: newsRow.cnt + docRow.cnt + trialRow.cnt, mine: Number(mineRow.mine) });
   } catch (err) {
     log.error('admin.reviewQueue.error', { err, route: 'GET /:clientId/count', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -63,8 +68,21 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       [clientId]
     );
 
+    // Phase 3 row 21: trials waiting for review. They are published from the Clinical
+    // Trials screen, which knows who sent each one; nobody holds a trial.
+    const [trialItems] = await pool.execute(
+      `SELECT t.id, t.title, t.publish_status AS status, t.created_at, t.updated_at, 'trial' as item_type,
+              t.indication AS category, NULL as doc_type, NULL AS owner_id, NULL AS owner_since, NULL AS owner_name,
+              s.name AS submitted_by_name
+       FROM cp_clinical_trials t
+       LEFT JOIN cp_admin_users s ON s.id = t.submitted_by
+       WHERE t.client_id = ? AND t.publish_status = 'review'
+       ORDER BY t.updated_at DESC`,
+      [clientId]
+    );
+
     // Merge and sort by updated_at desc
-    const items = [...newsItems, ...docItems].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    const items = [...newsItems, ...docItems, ...trialItems].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
     items.forEach(i => { i.owned_by_me = i.owner_id != null && i.owner_id === req.admin.adminId; }); // CPPM-61
     res.json({ items });
   } catch (err) {

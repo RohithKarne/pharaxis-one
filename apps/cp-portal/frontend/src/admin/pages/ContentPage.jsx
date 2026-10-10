@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import AreaTagSelect from '../components/AreaTagSelect' // CPPM-122
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { label } from '../../shared/utils/labels'
 
 const TABS = ['Therapeutic Areas', 'Drugs', 'Events', 'Resources']
 
@@ -20,10 +21,10 @@ const STATUS_COLORS = {
 
 function statusBadge(item) {
   if (item.status && STATUS_COLORS[item.status]) {
-    return <span style={{ ...STATUS_COLORS[item.status], padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{item.status}</span>
+    return <span style={{ ...STATUS_COLORS[item.status], padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{label('contentStatus', item.status)}</span>
   }
   const active = item.is_active !== 0
-  return <span style={{ background: active ? '#DCFCE7' : '#F3F4F6', color: active ? '#166534' : '#4B5563', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{active ? 'active' : 'inactive'}</span>
+  return <span style={{ background: active ? '#DCFCE7' : '#F3F4F6', color: active ? '#166534' : '#4B5563', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{active ? 'Live in portal' : 'Hidden'}</span>
 }
 
 export default function ContentPage() {
@@ -82,7 +83,7 @@ export default function ContentPage() {
 
   async function deactivate(endpoint, id) {
     // Every other remove in the console asks first; taking an item off the portal should too.
-    if (!confirm('Deactivate this item? It leaves the portal immediately. You can reactivate it with "Show inactive".')) return
+    if (!confirm('Deactivate this item? It leaves the portal immediately. You can bring it back with "Show hidden".')) return
     setError('')
     try {
       const res = await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, { method: 'DELETE', headers: adminHeaders() })
@@ -148,7 +149,7 @@ export default function ContentPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#4B5563', cursor: 'pointer' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
-            Show inactive
+            Show hidden
           </label>
           <CanChange area="content">
           <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setSlugManuallyEdited(false); setShowForm(true) }}>+ Add</button>
@@ -261,7 +262,7 @@ export default function ContentPage() {
               <div className="cp-field">
                 <label>Status</label>
                 <select value={editForm.status||'draft'} onChange={e=>setEditForm(f=>({...f,status:e.target.value}))}>
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{label('contentStatus', s)}</option>)}
                 </select>
               </div>
               {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
