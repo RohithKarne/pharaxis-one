@@ -252,8 +252,12 @@ CREATE TABLE IF NOT EXISTS cp_submissions (
   mims_serious    TINYINT(1)   NULL,   -- bridge features (0046): serious, due date, triaged
   mims_due_date   DATE         NULL,
   mims_triaged_at DATETIME     NULL,
+  visitor_token_hash CHAR(64)  NULL,   -- visitor link (0048): checks the private link
+  visitor_token_enc VARCHAR(255) NULL, -- the link's secret, encrypted, to send it again
+  visitor_token_expires_at DATETIME NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_cp_submissions_sync_key (sync_key),
+  UNIQUE KEY uq_cp_submissions_visitor_token (visitor_token_hash),
   KEY idx_cp_submissions_client (client_id),
   KEY idx_cp_submissions_status (status),
   KEY idx_cp_submissions_type (submission_type),
@@ -1325,4 +1329,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0044_add_mims_delivery_receipt.sql',        NULL),
   ('0045_add_mims_reconciliation.sql',          NULL),
   ('0046_add_mims_bridge_features.sql',         NULL),
-  ('0047_add_trial_review.sql',                 NULL);
+  ('0047_add_trial_review.sql',                 NULL),
+  ('0048_add_visitor_request_link.sql',         NULL);

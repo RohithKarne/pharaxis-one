@@ -19,7 +19,7 @@ function formatWhen(value) {
 
 const CANNOT_ASK = {
   reporter_erased: "The reporter's details were erased, so they cannot be asked anything.",
-  reporter_not_signed_in: 'The reporter was not signed in to the portal, so they have no page to answer on. Contact them another way.',
+  reporter_not_signed_in: 'The reporter was not signed in to the portal and left no email for a private link, so they have no page to answer on. Contact them another way.',
   portal_not_ready: 'This case was sent before the portal could take questions. Contact the reporter another way.',
 }
 

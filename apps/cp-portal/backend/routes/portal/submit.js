@@ -23,6 +23,7 @@ const { loadFormFields, missingRequired, invalidAnswers } = require('../../servi
 const { reportFingerprint } = require('../../services/reportFingerprint');
 const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
+const { LINK_DAYS, newVisitorToken, visitorLink, visitorOwner } = require('../../services/visitorLink');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -197,15 +198,21 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     const submitter_email = (String(req.body.submitter_email || '').trim() || String(formEmail).trim()).slice(0, 255) || null;
     const submitter_type = (String(req.body.submitter_type || '').trim() || String(parsedForm.user_type || parsedForm.reporter_type || '').trim()).slice(0, 100) || null;
 
+    // A visitor who gives an email gets a private link to follow the request, since
+    // they have no My Submissions page. A signed-in person uses that page instead.
+    const visitor = !req.portalUser && submitter_email ? newVisitorToken() : null;
+
     const [info] = await pool.execute(`
-      INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data, ip_address,
+                                  visitor_token_hash, visitor_token_enc, visitor_token_expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${visitor ? `NOW() + INTERVAL ${LINK_DAYS} DAY` : 'NULL'})
     `, [
       client.id, formType,
       req.portalUser?.userId || null,
       submitter_name, submitter_email || null, submitter_type || null,
       formDataStr,
       ip_address,
+      visitor?.hash || null, visitor?.enc || null,
     ]);
 
     const submissionId = info.insertId;
@@ -256,11 +263,18 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       const typeLabel = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint', other_inquiry: 'Other Inquiry' }[formType] || formType;
       // CPPM-36: recorded in the durable outbox — retried, and visible to an
       // administrator if it finally fails, rather than lost on restart.
+      const link = visitor ? visitorLink(client.code, visitor.token) : null;
+      const linkHtml = link
+        ? `<p>To follow your request, add information, or answer a question from our team, open this private link: <a href="${link}">${link}</a></p><p>Keep this email. Anyone with the link can see this request.</p>`
+        : '';
+      const linkText = link
+        ? `\n\nTo follow your request, add information, or answer a question from our team, open this private link:\n${link}\n\nKeep this email. Anyone with the link can see this request.`
+        : '';
       queueEmail(client.id, {
         to: recipientEmail,
         subject: `Submission Received — ${typeLabel} (${ref})`,
-        html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>`,
-        text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.`,
+        html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>${linkHtml}`,
+        text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.${linkText}`,
       }, { kind: 'submission_ack', relatedType: 'submission', relatedId: submissionId });
     }
 
@@ -297,94 +311,123 @@ function requestText(formData) {
   return typed[0]?.[1].trim() || null;
 }
 
+// The requests one person may see, as the portal shows them: what they wrote, the
+// history behind each status (CPPM-4), the sent answer (CPPM-14), the conversation
+// after it (CPPM-63), what they added (bridge row 9) and the medical team's questions
+// (bridge feature F3). `owner` says whose: a signed-in person's (s.user_id) or the one
+// request a visitor's private link opens. Every read repeats it, so nobody can ever
+// see another person's request.
+async function describeRequests(clientId, owner) {
+  // CPPM-14: a sent answer travels with the request. Only 'sent' — a draft or an
+  // unapproved answer must never reach the person who asked.
+  const [rows] = await pool.execute(`
+    SELECT s.id, s.submission_type, s.status, s.external_ref, s.submitted_at, s.updated_at,
+           s.form_data, a.body AS answer, a.sent_at AS answered_at
+    FROM cp_submissions s
+    LEFT JOIN cp_submission_answers a ON a.submission_id = s.id AND a.status = 'sent'
+    WHERE s.client_id = ? AND ${owner.sql} ORDER BY s.submitted_at DESC
+  `, [clientId, ...owner.params]);
+  const byId = new Map(rows.map(r => [r.id, []]));
+  const convById = new Map(rows.map(r => [r.id, []]));
+  if (rows.length) {
+    const ph = rows.map(() => '?').join(',');
+    const scope = [...rows.map(r => r.id), clientId, ...owner.params];
+    const [events] = await pool.execute(
+      `SELECT e.submission_id, e.status, e.note, e.created_at
+         FROM cp_submission_status_events e
+         JOIN cp_submissions s ON s.id = e.submission_id
+        WHERE e.submission_id IN (${ph}) AND s.client_id = ? AND ${owner.sql}
+        ORDER BY e.id ASC`, scope);
+    events.forEach(e => byId.get(e.submission_id)?.push(e));
+    // Bridge row 9: what the person added after sending, oldest first.
+    const [fus] = await pool.execute(
+      `SELECT f.submission_id, f.body, f.created_at, f.question_id
+         FROM cp_submission_followups f
+         JOIN cp_submissions s ON s.id = f.submission_id
+        WHERE f.submission_id IN (${ph}) AND s.client_id = ? AND ${owner.sql}
+        ORDER BY f.id ASC`, scope);
+    fus.forEach(f => { const r = rows.find(x => x.id === f.submission_id); (r.followups = r.followups || []).push({ body: f.body, at: f.created_at, question_id: f.question_id || null }); });
+    // Bridge feature F3: questions the medical team asked. A withdrawn one is not shown.
+    const [qs] = await pool.execute(
+      `SELECT q.id, q.submission_id, q.question, q.asked_at, q.status, q.answered_at
+         FROM cp_submission_questions q
+         JOIN cp_submissions s ON s.id = q.submission_id
+        WHERE q.submission_id IN (${ph}) AND s.client_id = ? AND ${owner.sql} AND q.status IN ('open', 'answered')
+        ORDER BY q.id ASC`, scope);
+    qs.forEach(q => { const r = rows.find(x => x.id === q.submission_id); (r.questions = r.questions || []).push({ id: q.id, question: q.question, asked_at: q.asked_at, status: q.status, answered_at: q.answered_at }); });
+    // CPPM-63: the conversation after the first answer — the person's own replies
+    // and the follow-ups staff have sent. A draft never leaves the admin area.
+    const [msgs] = await pool.execute(
+      `SELECT m.submission_id, m.direction, m.body, m.created_at, m.sent_at
+         FROM cp_submission_messages m
+         JOIN cp_submissions s ON s.id = m.submission_id
+        WHERE m.submission_id IN (${ph}) AND s.client_id = ? AND ${owner.sql}
+          AND (m.direction = 'in' OR m.status = 'sent')
+        ORDER BY m.id ASC`, scope);
+    msgs.forEach(m => convById.get(m.submission_id)?.push({
+      from: m.direction === 'in' ? 'you' : 'team', body: m.body, at: m.direction === 'in' ? m.created_at : m.sent_at,
+    }));
+  }
+  return rows.map(({ form_data, ...r }) => ({
+    ...r,
+    // CPPM-86: what the person actually wrote, not a stock sentence. Only the
+    // free-text request goes back — never the whole form.
+    request_text: requestText(form_data),
+    // Surface the user-facing case reference (matches the confirmation email/response).
+    reference: `CP-${String(r.id).padStart(6, '0')}`,
+    timeline: publicTimeline(byId.get(r.id) || []),
+    followups: r.followups || [],
+    questions: r.questions || [],
+    can_follow_up: r.status !== 'closed',
+    conversation: convById.get(r.id) || [],
+    // Screened types ask "did anyone become unwell" on a reply too (PD-2).
+    reply_needs_screening: isScreenedType(r.submission_type),
+  }));
+}
+
+// A signed-in person's own requests, all of them; or just the one named in the path.
+function signedInOwner(req, idParam) {
+  return idParam
+    ? { sql: 's.id = ? AND s.user_id = ?', params: [req.params[idParam], req.portalUser.userId] }
+    : { sql: 's.user_id = ?', params: [req.portalUser.userId] };
+}
+
+// The request a visitor's private link opens. Anything else — a link that never
+// existed, expired, or whose person's details were erased — is "not found".
+function requireVisitorLink(req, res, next) {
+  const owner = visitorOwner(req.params.token);
+  if (!owner) return res.status(404).json({ error: 'This link is not valid or has expired.' });
+  req.requestOwner = owner;
+  next();
+}
+
 // GET /api/portal/submit/:clientCode/submissions — user's own submissions (auth required)
 router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
   try {
     if (!req.portalUser) return res.status(401).json({ error: 'Login required to view submissions.' });
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
-    // CPPM-14: a sent answer travels with the request. Only 'sent' — a draft or an
-    // unapproved answer must never reach the person who asked.
-    const [rows] = await pool.execute(`
-      SELECT s.id, s.submission_type, s.status, s.external_ref, s.submitted_at, s.updated_at,
-             s.form_data, a.body AS answer, a.sent_at AS answered_at
-      FROM cp_submissions s
-      LEFT JOIN cp_submission_answers a ON a.submission_id = s.id AND a.status = 'sent'
-      WHERE s.client_id = ? AND s.user_id = ? ORDER BY s.submitted_at DESC
-    `, [client.id, req.portalUser.userId]);
-    // CPPM-4: the history behind each status. Read back with the same client_id
-    // and user_id the list was built from, so a person can only ever see the
-    // history of their own submissions.
-    const byId = new Map(rows.map(r => [r.id, []]));
-    if (rows.length) {
-      const ph = rows.map(() => '?').join(',');
-      const [events] = await pool.execute(
-        `SELECT e.submission_id, e.status, e.note, e.created_at
-           FROM cp_submission_status_events e
-           JOIN cp_submissions s ON s.id = e.submission_id
-          WHERE e.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
-          ORDER BY e.id ASC`,
-        [...rows.map(r => r.id), client.id, req.portalUser.userId]
-      );
-      events.forEach(e => byId.get(e.submission_id)?.push(e));
-      // Bridge row 9: what the person added after sending, oldest first.
-      const [fus] = await pool.execute(
-        `SELECT f.submission_id, f.body, f.created_at, f.question_id
-           FROM cp_submission_followups f
-           JOIN cp_submissions s ON s.id = f.submission_id
-          WHERE f.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
-          ORDER BY f.id ASC`,
-        [...rows.map(r => r.id), client.id, req.portalUser.userId]
-      );
-      fus.forEach(f => { const r = rows.find(x => x.id === f.submission_id); (r.followups = r.followups || []).push({ body: f.body, at: f.created_at, question_id: f.question_id || null }); });
-      // Bridge feature F3: questions the medical team asked. A withdrawn one is not shown.
-      const [qs] = await pool.execute(
-        `SELECT q.id, q.submission_id, q.question, q.asked_at, q.status, q.answered_at
-           FROM cp_submission_questions q
-           JOIN cp_submissions s ON s.id = q.submission_id
-          WHERE q.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ? AND q.status IN ('open', 'answered')
-          ORDER BY q.id ASC`,
-        [...rows.map(r => r.id), client.id, req.portalUser.userId]
-      );
-      qs.forEach(q => { const r = rows.find(x => x.id === q.submission_id); (r.questions = r.questions || []).push({ id: q.id, question: q.question, asked_at: q.asked_at, status: q.status, answered_at: q.answered_at }); });
-    }
-    // Surface the user-facing case reference (matches the confirmation email/response).
-    // CPPM-63: the conversation after the first answer — the person's own replies
-    // and the follow-ups staff have sent. A draft never leaves the admin area.
-    const convById = new Map(rows.map(r => [r.id, []]));
-    if (rows.length) {
-      const ph = rows.map(() => '?').join(',');
-      const [msgs] = await pool.execute(
-        `SELECT m.submission_id, m.direction, m.body, m.created_at, m.sent_at
-           FROM cp_submission_messages m
-           JOIN cp_submissions s ON s.id = m.submission_id
-          WHERE m.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
-            AND (m.direction = 'in' OR m.status = 'sent')
-          ORDER BY m.id ASC`,
-        [...rows.map(r => r.id), client.id, req.portalUser.userId]
-      );
-      msgs.forEach(m => convById.get(m.submission_id)?.push({
-        from: m.direction === 'in' ? 'you' : 'team', body: m.body, at: m.direction === 'in' ? m.created_at : m.sent_at,
-      }));
-    }
-    const submissions = rows.map(({ form_data, ...r }) => ({
-      ...r,
-      // CPPM-86: what the person actually wrote, not a stock sentence. Only the
-      // free-text request goes back — never the whole form.
-      request_text: requestText(form_data),
-      reference: `CP-${String(r.id).padStart(6, '0')}`,
-      timeline: publicTimeline(byId.get(r.id) || []),
-      followups: r.followups || [],
-      questions: r.questions || [],
-      can_follow_up: r.status !== 'closed',
-      conversation: convById.get(r.id) || [],
-      // Screened types ask "did anyone become unwell" on a reply too (PD-2).
-      reply_needs_screening: isScreenedType(r.submission_type),
-    }));
+    const submissions = await describeRequests(client.id, signedInOwner(req));
     // The screening question as worded in one place (services/aeScreening.js), for the reply form.
     res.json({ submissions, reply_screening: AE_SCREEN_FIELDS });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/portal/submit/:clientCode/request/:token — the one request a visitor's
+// private link opens, shaped as My Submissions shows it.
+router.get('/:clientCode/request/:token', requireVisitorLink, async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    const [submission] = await describeRequests(client.id, req.requestOwner);
+    if (!submission) return res.status(404).json({ error: 'This link is not valid or has expired.' });
+    res.json({ submission, reply_screening: AE_SCREEN_FIELDS });
+  } catch (err) {
+    // Never the path: it holds the link's secret.
+    log.error('portal.submit.error', { err, route: 'GET /:clientCode/request/:token', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -394,8 +437,11 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
 // unconnected one. Stored with the request, then sent to the MIMS case as a comment.
 // Files go through the same checks as a new report and join the request's files.
 const FOLLOWUP_MAX = 5000;
-router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requirePortalAuth, handleUpload, async (req, res) => {
+// The same for a signed-in person and for a visitor's private link; `req.requestOwner`
+// says whose request it is.
+async function addFollowUp(req, res) {
   const clientCode = req.params.clientCode;
+  const owner = req.requestOwner;
   // A refused follow-up must not leave its files behind on disk.
   const refuse = (status, error) => {
     for (const f of req.files || []) { try { fs.unlinkSync(f.path); } catch { /* already gone */ } }
@@ -408,9 +454,9 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
     const [[s]] = await pool.execute(
       `SELECT s.id, s.client_id, s.status, s.submission_type, s.external_ref
          FROM cp_submissions s JOIN cp_clients c ON c.id = s.client_id
-        WHERE s.id = ? AND c.code = ? AND c.is_active = 1 AND s.user_id = ?`,
-      [req.params.id, clientCode, req.portalUser.userId]);
-    if (!s) return refuse(404, 'Request not found.');
+        WHERE ${owner.sql} AND c.code = ? AND c.is_active = 1`,
+      [...owner.params, clientCode]);
+    if (!s) return refuse(404, req.portalUser ? 'Request not found.' : 'This link is not valid or has expired.');
     // Bridge feature F3: an answer to a question the medical team asked. It can be
     // answered once, also after the request closed (the team asked, so they want it).
     let question = null;
@@ -502,10 +548,14 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
       }
     }
   } catch (err) {
-    log.error('portal.submit.error', { err, route: 'POST /:clientCode/submissions/:id/followups', path: req.path, request_id: req.requestId || null });
+    // Never the path: a visitor's holds the link's secret.
+    log.error('portal.submit.error', { err, route: 'POST followups', visitor: !req.portalUser, request_id: req.requestId || null });
     if (!res.headersSent) res.status(500).json({ error: 'Server error.' });
   }
-});
+}
+router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requirePortalAuth, handleUpload,
+  (req, res) => { req.requestOwner = signedInOwner(req, 'id'); return addFollowUp(req, res); });
+router.post('/:clientCode/request/:token/followups', requireVisitorLink, handleUpload, addFollowUp);
 
 // POST /api/portal/submit/:clientCode/submissions/:submissionId/reply — CPPM-63
 // The person replies to the answer they received. Only on their own enquiry, only
@@ -515,7 +565,8 @@ router.post('/:clientCode/submissions/:id/followups', authenticatePortal, requir
 // on the enquiry gains the new detail; otherwise a new task is raised for this reply
 // (a closed task is never silently appended to). A reply to a closed enquiry reopens it.
 const MAX_REPLIES_WAITING = 10;
-router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, requirePortalAuth, async (req, res) => {
+async function replyToAnswer(req, res) {
+  const owner = req.requestOwner;
   const conn = await pool.getConnection();
   try {
     const [[client]] = await conn.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
@@ -527,9 +578,9 @@ router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, 
 
     // Someone else's enquiry looks exactly like one that does not exist.
     const [[sub]] = await conn.execute(
-      'SELECT id, submission_type, status, external_ref FROM cp_submissions WHERE id = ? AND client_id = ? AND user_id = ?',
-      [req.params.submissionId, client.id, req.portalUser.userId]);
-    if (!sub) return res.status(404).json({ error: 'Request not found.' });
+      `SELECT s.id, s.submission_type, s.status, s.external_ref FROM cp_submissions s WHERE ${owner.sql} AND s.client_id = ?`,
+      [...owner.params, client.id]);
+    if (!sub) return res.status(404).json({ error: req.portalUser ? 'Request not found.' : 'This link is not valid or has expired.' });
     // Bridge row 8: a request in MIMS is answered there; what the person says next goes
     // to the MIMS case as added information (row 9), not to a second answer path here.
     if (sub.external_ref) return res.status(409).json({ error: 'This request is with the medical team. Use "Add information" to tell them more.' });
@@ -616,12 +667,15 @@ router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, 
     });
   } catch (err) {
     await conn.rollback().catch(() => {});
-    log.error('portal.submit.reply_failed', { err, route: 'POST /:clientCode/submissions/:submissionId/reply', request_id: req.requestId || null });
+    log.error('portal.submit.reply_failed', { err, route: 'POST reply', visitor: !req.portalUser, request_id: req.requestId || null });
     res.status(500).json({ error: 'Your reply could not be sent. Please try again.' });
   } finally {
     conn.release();
   }
-});
+}
+router.post('/:clientCode/submissions/:submissionId/reply', authenticatePortal, requirePortalAuth,
+  (req, res) => { req.requestOwner = signedInOwner(req, 'submissionId'); return replyToAnswer(req, res); });
+router.post('/:clientCode/request/:token/reply', requireVisitorLink, replyToAnswer);
 
 // ── Integration sync helper ───────────────────────────────────
 
@@ -899,8 +953,9 @@ async function syncToIntegration(clientId, submissionId, formType) {
 
     // Bridge feature F1: the request's own page on this portal, opened from the MIMS case.
     payload.source_link = `${FRONTEND_BASE}/admin/clients/${clientId}/submissions?search=${payload.reference}`;
-    // Bridge feature F3: only a person who was signed in can see and answer a question.
-    payload.reporter_can_reply = !!submission.user_id;
+    // Bridge feature F3: a question needs a page to answer on — My Submissions for a
+    // person who was signed in, the private link for a visitor who gave an email.
+    payload.reporter_can_reply = !!(submission.user_id || submission.visitor_token_hash);
 
     await addMappedAndOtherAnswers({ clientId, integrationId: integration.id, formType, formData, payload, used });
     // Bridge plan P5: MIMS checks the report arrived as sent, and answers with the same value.

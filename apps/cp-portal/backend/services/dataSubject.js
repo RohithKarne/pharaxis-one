@@ -238,6 +238,7 @@ async function eraseSubmissionIdentity(conn, clientId, subIds) {
     await conn.execute(
       `UPDATE cp_submissions
           SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+              visitor_token_hash = NULL, visitor_token_enc = NULL, visitor_token_expires_at = NULL,
               form_data = ?, identity_erased_at = NOW()
         WHERE id = ?`, [ERASED, ERASED, redactJsonText(r.form_data, ids, true), r.id]);
     const [ans] = await conn.execute('SELECT id, body FROM cp_submission_answers WHERE submission_id = ?', [r.id]);
@@ -329,6 +330,7 @@ async function eraseUser(userId, clientId) {
       // Bridge row 10: stamped, so a later report of the same erasure from MIMS changes nothing.
       await conn.execute(
         `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL,
+                visitor_token_hash = NULL, visitor_token_enc = NULL, visitor_token_expires_at = NULL,
                 identity_erased_at = COALESCE(identity_erased_at, NOW()) WHERE id IN (${ph})`,
         [ERASED, ERASED, ...retainIds]
       );

@@ -23,6 +23,7 @@ const { recordStatusEvent } = require('../utils/submissionStatus');
 const { queueEmail } = require('../utils/emailOutbox');
 const log = require('../utils/logger');
 const { recordConnectionResult, raiseAlert } = require('./adminAlerts');
+const { linkFromStored } = require('./visitorLink');
 
 const PAGE = 200;
 const MAX_PAGES_PER_TICK = 10;
@@ -117,9 +118,11 @@ async function applyBridgeDetails(integ, sub, change) {
       }
       continue;
     }
-    // A visitor who was not signed in has no page to answer on. MIMS stops this for
-    // new cases; for one sent before it knew, the team here is told.
-    const deliverable = status === 'open' && sub.user_id && !sub.identity_erased_at;
+    // A question needs a page to answer on: My Submissions for a person who was signed
+    // in, the private link for a visitor (while it still works). MIMS stops a question
+    // to anyone else for new cases; for one sent before it knew, the team here is told.
+    const visitorLinkLive = !sub.user_id && sub.visitor_token_enc && sub.visitor_link_live;
+    const deliverable = status === 'open' && (sub.user_id || visitorLinkLive) && !sub.identity_erased_at;
     await pool.execute(
       `INSERT IGNORE INTO cp_submission_questions (submission_id, client_id, mims_question_id, question, asked_at, status, answered_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -133,7 +136,7 @@ async function applyBridgeDetails(integ, sub, change) {
       await raiseAlert(integ.client_id, {
         kind: 'mims_question_undeliverable', audience: 'integration',
         title: `${ref}: the medical team asked a question the person cannot see`,
-        body: 'The request was sent without signing in, so the person has no page to answer on. Contact them directly and add their answer to the MIMS case.',
+        body: 'The request was sent without signing in and has no working private link, so the person has no page to answer on. Contact them directly and add their answer to the MIMS case.',
         linkPath: `/admin/clients/${integ.client_id}/submissions?search=${ref}`,
         relatedType: 'submission', relatedId: sub.id, dedupeKey: `question:${sub.id}:${qid}`,
       });
@@ -141,6 +144,18 @@ async function applyBridgeDetails(integ, sub, change) {
     }
     // Where to read it, without the question itself: email is not where medical
     // details travel.
+    if (!sub.user_id) {
+      // A visitor: the same private link their confirmation email carried.
+      const link = linkFromStored(sub.client_code, sub.visitor_token_enc);
+      if (link && sub.submitter_email && sub.submitter_email.includes('@')) {
+        queueEmail(integ.client_id, {
+          to: sub.submitter_email, subject: `A question about your request ${ref}`,
+          text: `The medical information team has a question about your request ${ref}. Open your private link to read and answer it:\n${link}`,
+          html: `<p>The medical information team has a question about your request <strong>${ref}</strong>.</p><p>Open your private link to read and answer it: <a href="${link}">${link}</a></p>`,
+        }, { kind: 'question_from_mims', relatedType: 'submission', relatedId: sub.id });
+      }
+      continue;
+    }
     const [[who]] = await pool.execute('SELECT u.email FROM cp_portal_users u WHERE u.id = ?', [sub.user_id]);
     if (who?.email && who.email.includes('@')) {
       queueEmail(integ.client_id, {
@@ -155,7 +170,10 @@ async function applyBridgeDetails(integ, sub, change) {
 /** Apply one MIMS change to the request linked to that case. Returns 'closed', 'reopened' or null. */
 async function applyChange(integ, change) {
   const [[sub]] = await pool.execute(
-    `SELECT id, status, identity_erased_at, user_id, mims_serious, mims_due_date FROM cp_submissions WHERE client_id = ? AND external_ref = ? LIMIT 1`,
+    `SELECT s.id, s.status, s.identity_erased_at, s.user_id, s.mims_serious, s.mims_due_date,
+            s.submitter_email, s.visitor_token_enc, s.visitor_token_expires_at > NOW() AS visitor_link_live, c.code AS client_code
+       FROM cp_submissions s JOIN cp_clients c ON c.id = s.client_id
+      WHERE s.client_id = ? AND s.external_ref = ? LIMIT 1`,
     [integ.client_id, String(change.id)]);
   if (!sub) return null;
   // Bridge row 10: the reporter's identity was erased on the MIMS case — blank it on
@@ -174,7 +192,9 @@ async function applyChange(integ, change) {
       conn.release();
     }
     systemAudit('MIMS integration', integ.client_id, 'REPORTER_ERASED_FROM_MIMS', 'submission', sub.id,
-      { mims_case_id: change.id, source: 'mims-close-sync' });
+      { mims_case_id: change.id, source: 'mims-close-sync' });    // The rest of this change reads `sub`: it must see the person as erased too, or a
+    // question that arrives with the erasure would still be emailed to them.
+    Object.assign(sub, { identity_erased_at: new Date(), user_id: null, submitter_email: null, visitor_token_enc: null, visitor_link_live: 0 });
   }
   // Bridge plan P4: MIMS merged the case into another (a duplicate report). The change
   // already carries that case's state and answer; the admin trail says where it went,

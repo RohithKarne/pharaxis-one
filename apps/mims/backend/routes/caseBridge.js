@@ -38,7 +38,8 @@ async function bridgeInfo(caseId) {
     possible_duplicate: c.possible_duplicate_of && c.duplicate_number && !Number(c.duplicate_deleted)
       ? { id: c.possible_duplicate_of, case_number: c.duplicate_number } : null,
     // A question can be asked only on a case a portal sent, while the reporter is known
-    // and the portal said they can answer there. A visitor has no page to answer on, and
+    // and the portal said they can answer there (signed in, or a visitor with a private
+    // link). Someone with neither has no page to answer on, and
     // a portal that never said so (an older one, or a case sent before) would not show
     // the question at all — it would wait for an answer that cannot come.
     can_ask: !!c.source_api_client_id && !c.reporter_erased_at && c.source_can_reply === 1,
@@ -70,7 +71,7 @@ router.post('/cases/:id/reporter-questions', authenticate, async (req, res) => {
       return res.status(409).json({ error: {
         not_from_portal: 'This case did not come from a portal, so there is nobody to send a question to.',
         reporter_erased: "The reporter's details were erased on this case, so they cannot be asked anything.",
-        reporter_not_signed_in: 'The reporter was not signed in to the portal, so they have no page to answer on. Contact them another way.',
+        reporter_not_signed_in: 'The reporter was not signed in to the portal and left no email for a private link, so they have no page to answer on. Contact them another way.',
         portal_not_ready: 'This case was sent before the portal could take questions. Contact the reporter another way.',
       }[info.cannot_ask_reason] });
     }
