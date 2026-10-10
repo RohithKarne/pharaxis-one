@@ -35,6 +35,8 @@ const PATHS = {
   external:  '<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   beaker:    '<path d="M9 3h6M10 3v5.5L5.2 17a2 2 0 0 0 1.8 3h10a2 2 0 0 0 1.8-3L14 8.5V3"/><path d="M7.5 14h9"/>',
   pill:      '<path d="M10.5 3.5a4.95 4.95 0 0 1 7 7l-7 7a4.95 4.95 0 0 1-7-7Z"/><path d="m7 7 7 7"/>',
+  bell:      '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  menu:      '<path d="M4 6h16M4 12h16M4 18h16"/>',
   book:      '<path d="M5 4a2 2 0 0 1 2-2h11v16H7a2 2 0 0 0-2 2Z"/><path d="M5 20a2 2 0 0 1 2-2h11"/>',
 }
 

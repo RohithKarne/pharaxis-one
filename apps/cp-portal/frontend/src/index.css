@@ -1991,6 +1991,21 @@ body { background: var(--cp-bg); }
 .pp-nav-dropdown-item { display: block; padding: 10px 16px; font-size: 14px; color: #1E293B; text-decoration: none; transition: background 0.12s; }
 .pp-nav-dropdown-item:hover { background: #F1F5F9; }
 .pp-header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.pp-nav .pp-nav-cta { display: none; }
+/* Tablet width: the account button lost its place off the right edge once the five menu
+   places and Submit Inquiry shared the row (CP ease-of-use plan, phase 2 row 10). */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .pp-header-inner { gap: 10px; padding: 0 16px; }
+  .pp-logo-text { font-size: 18px; }
+  .pp-nav-link { padding: 7px 6px; }
+  .pp-user-name { display: none; }
+}
+@media (min-width: 769px) and (max-width: 900px) {
+  .pp-logo-text { font-size: 16px; }
+  .pp-header-cta { padding: 8px 10px; font-size: 13px; }
+  .pp-header-inner, .pp-header-actions { gap: 6px; }
+  .pp-nav-link { padding: 6px 4px; }
+}
 .pp-mobile-menu-btn { display: none; background: none; border: 1px solid var(--pp-border); color: var(--pp-text); border-radius: 2px; font-size: 20px; cursor: pointer; padding: 4px 8px; }
 .pp-mobile-menu-btn:focus-visible { outline: 2px solid var(--pp-header-text, #fff); outline-offset: 2px; -webkit-focus-ring-color: var(--pp-header-text, #fff); }
 
@@ -2497,13 +2512,21 @@ body { background: var(--cp-bg); }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .pp-header-inner { gap: 10px; height: auto; min-height: 66px; padding: 10px 16px; flex-wrap: wrap; }
+  /* One line on a phone: name, bell, account, menu. Submit Inquiry moves into the menu
+     (CP ease-of-use plan, phase 2 row 10). */
+  .pp-header-inner { gap: 8px; height: auto; min-height: 56px; padding: 8px 16px; flex-wrap: nowrap; }
+  .pp-logo { min-width: 0; flex-shrink: 1; }
+  .pp-logo-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pp-logo-img { height: 36px; }
+  .pp-header-cta, .pp-user-name { display: none; }
+  .pp-nav .pp-nav-cta { display: flex; margin: 4px 0 8px; }
+  .pp-user-btn { padding: 4px 6px; }
   .pp-logo-text { font-size: 15px; }
   /* CP walk 2026-10-07: the open menu sits below the whole header (which wraps to two or three rows on a phone), not at a fixed 66px where it covered Submit Inquiry, Sign In and the Menu button itself. */
   .pp-nav { display: none; flex-direction: column; align-items: stretch; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border-bottom: 1px solid var(--pp-border); padding: 8px; z-index: 99; }
   .pp-nav-open { display: flex; }
   .pp-nav-link { color: var(--pp-text); }
-  .pp-header-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; width: 100%; margin-left: 0; }
+  .pp-header-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
   .pp-header-search { grid-column: 1 / -1; order: 3; width: 100%; min-width: 0; max-width: none; height: 36px; }
   /* 2026-10-09: a longer label in another language ("Soumettre une demande") must wrap, or the header row grows past the phone's width. */
   .pp-header-actions > .pp-btn-primary { padding: 8px 10px; font-size: 12px; white-space: normal; min-width: 0; line-height: 1.2; }
@@ -2725,7 +2748,7 @@ textarea:focus-visible {
 .pp-news-widget-more   { margin-top: 12px; font-size: 13px; color: var(--pp-primary, #6B3FA0); text-decoration: none; font-weight: 600; }
 
 /* ── S4-3: Notification Bell ────────────────────────────────────── */
-.pp-bell-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 18px; position: relative; padding: 4px 8px; }
+.pp-bell-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 18px; position: relative; padding: 6px 8px; display: inline-flex; align-items: center; }
 .pp-bell-badge { position: absolute; top: 0; right: 0; background: #EF4444; color: #fff; font-size: 10px; font-weight: 700; border-radius: 2px; padding: 1px 5px; min-width: 16px; text-align: center; }
 .pp-notif-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: 300px; background: #fff; border: 1px solid #E2E8F0; border-radius: 2px; box-shadow: none; z-index: 300; overflow: hidden; }
 .pp-notif-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #F1F5F9; font-size: 13px; font-weight: 700; color: #1E293B; }
@@ -2792,26 +2815,7 @@ textarea:focus-visible {
 /* Language switcher in the header — shown only when the client offers 2+ languages. */
 .pp-lang-select { font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--pp-border); background: var(--pp-surface, #fff); color: var(--pp-text); cursor: pointer; max-width: 140px; }
 @media (max-width: 768px) {
-  .pp-lang-select { grid-column: 1 / -1; width: 100%; max-width: none; }
-}
-
-/* Persistent local date/time clock in the header (all portal pages). */
-.pp-clock       { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--pp-text-muted); white-space: nowrap; }
-.pp-clock-date  { font-weight: 600; color: var(--pp-text); }
-.pp-clock-time  { font-variant-numeric: tabular-nums; }
-/* Step the clock down as header space tightens so it never overflows the row:
-   1250px → drop the date (time only); 1120px → hide the clock entirely until
-   the mobile layout brings it back on its own row. */
-@media (max-width: 1400px) and (min-width: 769px) {
-  .pp-clock-date, .pp-clock-sep { display: none; }
-}
-@media (max-width: 1300px) and (min-width: 769px) {
-  .pp-clock { display: none; }
-}
-/* On mobile the header wraps; give the clock its own full-width row. */
-@media (max-width: 768px) {
-  .pp-clock { grid-column: 1 / -1; order: -1; justify-content: flex-start; font-size: 12px; }
-  .pp-clock-date, .pp-clock-sep { display: inline; }
+  .pp-lang-select { max-width: 90px; padding: 4px; }
 }
 
 /* ── Accessibility (CP-32) ─────────────────────────────────────────────────
