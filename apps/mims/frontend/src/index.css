@@ -5132,55 +5132,101 @@ a.nav-item { text-decoration: none; color: inherit; }
 }
 
 /* ─── MIMS Admin (new) ────────────────────────────────────────── */
+/* The admin frame: a settings list that stays on the left, a trail and the
+   tenant picker above the page (MIMS screen review, row 6). It replaced a bar of
+   hover menus up to four levels deep. */
 .mims-admin-shell {
   display: flex;
-  flex-direction: column;
   height: 100%;
   overflow: hidden;
   background: #f3f7fb;
 }
 
-.mims-admin-topnav {
-  display: flex;
-  align-items: stretch;
-  background: #1a3150;
+.mims-admin-sidenav {
+  width: 248px;
   flex-shrink: 0;
-  border-radius: 2px;
-  border: 1px solid rgba(255,255,255,0.08);
-  /* When the tabs and the Tenant picker do not fit on one line, the picker
-     wraps to a second line instead of being scrolled off the right edge with
-     no visible scrollbar (Rohith, 2026-10-10: clipped at 100% zoom on a laptop). */
-  flex-wrap: wrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 18px 16px;
-  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
 }
-.mims-admin-topnav::-webkit-scrollbar { display: none; }
-
-.mims-admin-tab {
-  padding: 0 18px;
-  height: 46px;
+.mims-admin-nav-search {
+  margin: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 13px;
+}
+.mims-admin-nav-list { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+.mims-admin-nav-group,
+.mims-admin-nav-leaf,
+.mims-admin-nav-result {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: none;
   border: none;
-  border-bottom: 3px solid transparent;
-  color: rgba(255,255,255,0.72);
+  border-left: 3px solid transparent;
+  padding: 6px 12px;
+  font: inherit;
   font-size: 13px;
-  font-weight: 500;
-  font-family: var(--font);
+  color: var(--text-primary);
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.mims-admin-tab:hover { color: #fff; background: rgba(255,255,255,0.07); }
-.mims-admin-tab.active { color: #fff; border-bottom-color: #e8890c; font-weight: 700; }
+.mims-admin-nav-group.top { font-weight: bold; margin-top: 2px; }
+.mims-admin-nav-caret { display: inline-block; width: 14px; color: var(--text-muted); }
+.mims-admin-nav-leaf:hover,
+.mims-admin-nav-group:hover,
+.mims-admin-nav-result:hover { background: #eef2f6; }
+.mims-admin-nav-leaf.current { background: #e3ebf5; border-left-color: var(--accent); font-weight: bold; }
+.mims-admin-nav-result-trail { display: block; font-size: 11px; color: var(--text-muted); }
+.mims-admin-nav-empty { padding: 8px 12px; font-size: 13px; color: var(--text-muted); }
+
+.mims-admin-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.mims-admin-trailbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 18px;
+  min-height: 42px;
+  background: var(--panel-head, #eef1f5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mims-admin-trail { font-size: 13px; color: var(--text-muted); }
+.mims-admin-trail .here { color: var(--text-primary); font-weight: bold; }
+.mims-admin-nav-toggle { display: none; }
+
+/* Narrow screens: the settings list folds away behind "All settings". */
+@media (max-width: 900px) {
+  .mims-admin-shell { position: relative; }
+  .mims-admin-sidenav {
+    display: none;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(320px, 100%);
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
+  }
+  .mims-admin-sidenav.open { display: flex; }
+  .mims-admin-nav-toggle {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+}
 
 .mims-admin-tab-content {
   flex: 1;
   overflow-y: auto;
   background: transparent;
-  margin: 0 18px 18px;
+  margin: 14px 18px 18px;
   border-radius: 2px;
 }
 
@@ -5477,7 +5523,6 @@ a.nav-item { text-decoration: none; color: inherit; }
   .mims-admin-launch-grid {
     grid-template-columns: 1fr;
   }
-  .mims-admin-topnav,
   .mims-admin-tab-content {
     margin-left: 14px;
     margin-right: 14px;
