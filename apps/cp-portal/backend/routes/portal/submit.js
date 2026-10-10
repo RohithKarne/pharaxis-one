@@ -282,6 +282,10 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
 // not a name, an email or the screening question.
 const REQUEST_TEXT_KEYS = ['question', 'event_description', 'description', 'message', 'inquiry_details', 'complaint_details'];
 const NOT_REQUEST_TEXT = /name|email|phone|contact|^ae_screen/;
+// Bridge plan P2: answers with no field of their own in MIMS travel as "other answers"
+// and become a case comment. Never the person's identity (an erasure request clears
+// the reporter fields in MIMS, not comments) and never the screening question (MIMS-64).
+const NOT_OTHER_ANSWER = /name|email|phone|contact|address|post_?code|zip|birth|^ae_screen/i;
 function requestText(formData) {
   let d = formData;
   if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return null; } }
@@ -610,9 +614,12 @@ function toDateOnly(d) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
 
-function buildMimsPayload(formType, formData, submissionId, submittedAt) {
+// `used` collects every form key the payload reads, so the caller can send the rest
+// as other answers.
+function buildMimsPayload(formType, formData, submissionId, submittedAt, used = new Set()) {
   const caseType = FORM_TYPE_TO_CASE_TYPE[formType];
   const pick = (...keys) => {
+    keys.forEach(k => used.add(k));
     for (const k of keys) {
       const v = formData[k];
       if (v !== undefined && v !== null && String(v).trim() !== '') return v;
@@ -659,6 +666,8 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       mi_category:       pick('mi_category', 'category'),
       question_summary:  pick('question_summary', 'subject') || (question ? String(question).slice(0, 255) : null),
       detailed_question: question,
+      // Bridge plan P2: MIMS matches the name to its product list.
+      product_name:      pick('product', 'product_name', 'drug_name'),
     };
   } else if (caseType === 'AE') {
     payload.patient = {
@@ -673,6 +682,9 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       reaction_description: reaction,
       reaction_onset_date:  pick('event_date', 'onset_date', 'reaction_onset_date', 'date_of_event'),
       outcome:              pick('outcome'),
+      // Bridge plan P2: the reporter's own answer; MIMS ticks the matching criteria as
+      // reported, to be confirmed at triage.
+      seriousness_reported: pick('seriousness', 'seriousness_criteria', 'serious'),
     };
     payload.description = reaction;
   } else if (caseType === 'PC') {
@@ -682,6 +694,9 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
       batch_lot_number:      pick('lot_number', 'batch_lot_number', 'batch_number', 'lot'),
       complaint_category:    pick('complaint_category', 'complaint_type', 'category'),
       complaint_description: complaint,
+      // Stored on the MIMS intake record. No MIMS complaint screen shows it, so it is
+      // also left for the other answers (not added to `used`).
+      purchase_date:         formData.purchase_date || null,
     };
     payload.description = complaint;
   }
@@ -795,7 +810,8 @@ async function syncToIntegration(clientId, submissionId, formType) {
     const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
     // Default structured payload — works out-of-the-box for the seeded portal forms.
-    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
+    const used = new Set(['awareness_date', 'related_reference']);
+    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at, used);
 
     // Post-merge review: this request's own key, so MIMS never hands it another report's
     // case that happens to have the same number (a portal set up again, or a second
@@ -828,7 +844,20 @@ async function syncToIntegration(clientId, submissionId, formType) {
         obj = obj[k];
       }
       obj[segs[0]] = value;
+      used.add(m.cp_field);
     }
+
+    // Bridge plan P2: every other answer reaches the case, under its question as the
+    // person saw it. Before, anything the payload did not name was dropped.
+    const { fields } = await loadFormFields(clientId, formType);
+    const labelOf = Object.fromEntries(fields.map(f => [f.field_key, f.label]));
+    const other = Object.entries(formData)
+      .filter(([k, v]) => !used.has(k) && !NOT_OTHER_ANSWER.test(k) && v !== null && v !== undefined && String(v).trim() !== '')
+      .map(([k, v]) => ({
+        question: String(labelOf[k] || k).slice(0, 200),
+        answer: (Array.isArray(v) ? v.join(', ') : v === true ? 'Yes' : v === false ? 'No' : String(v)).slice(0, 2000),
+      }));
+    if (other.length) payload.other_answers = other.slice(0, 50);
   } catch (err) {
     const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
     log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });

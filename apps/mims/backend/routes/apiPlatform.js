@@ -322,6 +322,30 @@ const INTAKE_LIMITS = {
   'mi_intake.mi_category': 255,
 };
 
+// Bridge plan P2 (decision 1, option A): the reporter's own seriousness answer ticks
+// the matching criteria, recorded as reported and to be confirmed at triage, and a
+// serious report starts at high priority. The portal offers Death, Life-threatening,
+// Hospitalization, Disability, Congenital anomaly, Other and None of these.
+const SERIOUSNESS_WORDS = [
+  [/death|died|fatal/i, 'is_death'],
+  [/life[\s-]*threat/i, 'is_life_threatening'],
+  [/hospital/i, 'is_hospitalization'],
+  [/disab|incapacit/i, 'is_disability'],
+  [/congenital|birth defect/i, 'is_congenital_anomaly'],
+  [/^other\b|medically important/i, 'is_other_medically_important'],
+];
+function reportedSeriousness(ae) {
+  const raw = ae && typeof ae === 'object' ? ae.seriousness_reported : null;
+  if (raw == null) return null;
+  const answers = (Array.isArray(raw) ? raw : String(raw).split(/[\n,;]+/)).map(s => String(s).trim()).filter(Boolean);
+  if (!answers.length) return null;
+  const flags = {};
+  for (const a of answers) for (const [re, key] of SERIOUSNESS_WORDS) if (re.test(a)) flags[key] = 1;
+  if (Object.keys(flags).length) flags.is_serious = 1;
+  const unmatched = answers.filter(a => !/^none\b/i.test(a) && !SERIOUSNESS_WORDS.some(([re]) => re.test(a)));
+  return { text: answers.join(', ').slice(0, 500), flags, unmatched };
+}
+
 function fitIntakeToLimits(body) {
   const shortened = [];
   for (const [path, max] of Object.entries(INTAKE_LIMITS)) {
@@ -374,7 +398,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     // number where that number is free, so the case can be found by it in MIMS.
     const reference = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
     const desc = req.body.description || req.body.subject || null;
-    const priority = req.body.priority || 'normal';
+    const seriousness = caseType === 'AE' ? reportedSeriousness(req.body.ae_intake) : null;
+    if (seriousness) Object.assign(req.body.ae_intake, seriousness.flags);
+    const priority = req.body.priority || (seriousness?.flags.is_serious ? 'high' : 'normal');
     // CPPM-18: when the report first reached the company, per the source portal
     // (e.g. the day a person reported it in chat, not the day a reviewer
     // confirmed it). It starts the regulatory clock on the awareness basis
@@ -548,11 +574,22 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
 
     // C2: MI question fields → case_mi tab (not just the case description).
     const mi = req.body.mi_intake;
+    let unmatchedProduct = null;
     if (mi && typeof mi === 'object' && caseType === 'MI') {
+      // Bridge plan P2: the product the person named, matched by name to this
+      // organisation's products. A name that matches none is kept in the case comment.
+      let productId = null;
+      const productName = mi.product_name ? String(mi.product_name).trim().slice(0, 255) : '';
+      if (productName) {
+        const [[p]] = await conn.execute(
+          'SELECT id FROM products WHERE org_id = ? AND is_active = 1 AND LOWER(trade_name) = LOWER(?) ORDER BY id LIMIT 1',
+          [orgId, productName]);
+        if (p) productId = p.id; else unmatchedProduct = productName;
+      }
       await conn.execute(
-        `INSERT INTO case_mi (case_id, tab_index, mi_category, question_summary, detailed_question, status)
-         VALUES (?, 1, ?, ?, ?, 'Open')`,
-        [caseId, mi.mi_category || null, mi.question_summary || null, mi.detailed_question || null]
+        `INSERT INTO case_mi (case_id, tab_index, mi_category, product_id, question_summary, detailed_question, status)
+         VALUES (?, 1, ?, ?, ?, ?, 'Open')`,
+        [caseId, mi.mi_category || null, productId, mi.question_summary || null, mi.detailed_question || null]
       );
     }
 
@@ -656,6 +693,28 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     }
     if (unmatchedOutcome) {
       await writeCaseAudit(caseId, 0, apiActor, 'INTAKE_VALUE_NOT_MATCHED', 'ae_intake.outcome', unmatchedOutcome, 'unknown', conn);
+    }
+
+    // Bridge plan P2: what the reporter said that has no field of its own on the case
+    // screen, in one comment the case handler sees, so nothing from the form is lost.
+    const lines = [];
+    if (seriousness) {
+      lines.push(seriousness.flags.is_serious
+        ? `Seriousness, as reported: ${seriousness.text}. The matching criteria are ticked; confirm them at triage.`
+        : `Seriousness, as reported: ${seriousness.text}. No serious criterion is ticked; confirm at triage.`);
+      if (seriousness.unmatched.length) lines.push(`Not matched to a seriousness criterion: ${seriousness.unmatched.join(', ')}. Assess at triage.`);
+      await writeCaseAudit(caseId, 0, apiActor, 'SERIOUSNESS_AS_REPORTED', 'ae_intake.seriousness', null,
+        `${seriousness.text} (as reported, to be confirmed at triage)`, conn);
+    }
+    if (unmatchedProduct) lines.push(`Product named: ${unmatchedProduct} (no MIMS product has this name).`);
+    const others = Array.isArray(req.body.other_answers) ? req.body.other_answers.slice(0, 50) : [];
+    for (const o of others) {
+      if (!o || typeof o !== 'object' || o.answer == null || String(o.answer).trim() === '') continue;
+      lines.push(`${String(o.question || 'Answer').slice(0, 200)}: ${String(o.answer).slice(0, 2000)}`);
+    }
+    if (lines.length) {
+      await conn.execute('INSERT INTO case_comments (case_id, user_id, comment) VALUES (?, NULL, ?)',
+        [caseId, `From the report on ${req.apiClient.name}${reference ? ` (${reference})` : ''}:\n${lines.join('\n')}`]);
     }
 
     await conn.commit();
