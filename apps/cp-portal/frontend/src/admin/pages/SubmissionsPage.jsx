@@ -21,7 +21,7 @@ const QUESTION_STATUS = {
   open: 'Waiting for the person to answer',
   answered: 'Answered',
   withdrawn: 'Withdrawn by the medical team',
-  undeliverable: 'Not shown: the person was not signed in, so contact them directly',
+  undeliverable: 'Not shown: the person has no page to answer on (not signed in, no private link), so contact them directly',
 }
 
 function formatDate(value) {

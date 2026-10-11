@@ -52,6 +52,7 @@ const ResourcesPage            = lazy(() => import('./portal/pages/ResourcesPage
 const DrugInfoPage             = lazy(() => import('./portal/pages/DrugInfoPage'))
 const FindMSLPage              = lazy(() => import('./portal/pages/FindMSLPage'))
 const MySubmissionsPage        = lazy(() => import('./portal/pages/MySubmissionsPage'))
+const VisitorRequestPage       = lazy(() => import('./portal/pages/VisitorRequestPage'))
 const ContactPage              = lazy(() => import('./portal/pages/ContactPage'))
 const PortalNotFoundPage       = lazy(() => import('./portal/pages/PortalNotFoundPage'))
 const PortalUnavailablePage   = lazy(() => import('./portal/pages/PortalUnavailablePage'))
@@ -170,6 +171,7 @@ function PortalRoutes() {
           <Route path="drug-info"         element={<FeatureGuard featureKey="drug_info"><DrugInfoPage /></FeatureGuard>} />
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
           <Route path="my-submissions"    element={<PortalAuthGuard><MySubmissionsPage /></PortalAuthGuard>} />
+          <Route path="request/:token"    element={<VisitorRequestPage />} />
           <Route path="my-activity"       element={<PortalAuthGuard><MyActivityPage /></PortalAuthGuard>} />
           <Route path="contact"           element={<ContactPage />} />
           <Route path="safety"            element={<SafetyPortalPage />} />

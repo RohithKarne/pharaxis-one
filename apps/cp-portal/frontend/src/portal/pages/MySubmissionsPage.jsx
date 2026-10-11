@@ -124,112 +124,10 @@ export default function MySubmissionsPage() {
           </div>
         ) : (
         <div className="pp-submissions-list">
-          {shown.map(s => {
-            const status = STATUS_LABELS[s.status] || { label: 'In progress', cls: 'pp-status-pending' }
-
-            return (
-              <div key={s.id} className="pp-submission-card" style={{ padding: '20px', borderRadius: '10px', background: 'var(--pp-card-bg, #ffffff)', border: '1px solid var(--pp-border-color, #e2e8f0)', marginBottom: '16px' }}>
-                <div className="pp-submission-header">
-                  <div>
-                    <div className="pp-submission-ref" style={{ fontWeight: 700, fontSize: '1.1rem' }}>CP-{String(s.id).padStart(6, '0')}</div>
-                    <div className="pp-submission-type" style={{ color: '#475569' }}>{t(TYPE_LABELS[s.submission_type] || s.submission_type)}</div>
-                  </div>
-                  <span className={`pp-status-badge ${status.cls}`}>{t(status.label)}</span>
-                </div>
-                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#475569', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span>Submitted {formatDate(s.submitted_at)}</span>
-                  {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
-                </div>
-
-                {/* CPPM-4: what has actually happened to this request, and when.
-                    Each step is a recorded status change — nothing is inferred. */}
-                {s.timeline?.length > 0 && (
-                  <ol className="pp-timeline">
-                    {s.timeline.map((step, idx) => (
-                      <li key={idx} className="pp-timeline-step">
-                        <span className="pp-timeline-label">{t(step.label)}</span>
-                        <span className="pp-timeline-date">{formatDayOnly(step.at)}</span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-
-                {/* CPPM-14: the approved medical answer, once it has been sent. */}
-                {s.answer && (
-                  <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#166534', marginBottom: 6 }}>
-                      {t('Our answer')}{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
-                      {t('A copy was emailed to you. If you need anything further, reply below.')}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bridge feature F3: a question the medical team asked about this request. */}
-                {s.questions?.map(q => (
-                  <div key={`q-${q.id}`} style={{ marginTop: 14, padding: '14px 16px', borderRadius: 8, background: q.status === 'open' ? '#FFFBEB' : '#f8fafc', border: `1px solid ${q.status === 'open' ? '#FCD34D' : '#e2e8f0'}` }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: q.status === 'open' ? '#92400E' : '#334155', marginBottom: 6 }}>
-                      {t('A question from the medical team')}{q.asked_at ? ` · ${formatDate(q.asked_at)}` : ''}
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#1f2937', lineHeight: 1.55 }}>{q.question}</div>
-                    {q.status === 'open'
-                      ? <AddInformation submission={s} question={q} screening={screening} clientCode={clientCode} onAdded={load} />
-                      : (
-                        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: '0.8rem', color: '#166534', marginBottom: 4 }}>{t('Your answer')}{q.answered_at ? ` · ${formatDate(q.answered_at)}` : ''}</div>
-                          <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{s.followups?.find(f => f.question_id === q.id)?.body}</div>
-                        </div>
-                      )}
-                  </div>
-                ))}
-
-                {/* Bridge row 9: what the person added after sending, and a way to add more. */}
-                {/* An answer to a question shows under that question, not here. */}
-                {s.followups?.some(f => !f.question_id) && (
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>{t('Information you added')}</div>
-                    {s.followups.filter(f => !f.question_id).map((f, i) => (
-                      <div key={i} style={{ padding: '10px 12px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 6 }}>
-                        <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>{formatDate(f.at)}</div>
-                        <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{f.body}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* One box per request. A request in MIMS is answered there, so what the person
-                    adds goes to the MIMS case (bridge row 9). Otherwise, once answered, they reply
-                    to the answer (CPPM-63); before that, they add information. */}
-                {s.external_ref ? (
-                  s.can_follow_up ? <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} /> : null
-                ) : s.answer ? (
-                  <Conversation submission={s} screening={screening} clientCode={clientCode} portalHeaders={portalHeaders}
-                    formatDate={formatDate} onSent={load} />
-                ) : s.can_follow_up ? (
-                  <AddInformation submission={s} screening={screening} clientCode={clientCode} onAdded={load} />
-                ) : null}
-
-                {/* Expandable Activity Details */}
-                <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
-                    {t('View Request Details & Activity History')}
-                  </summary>
-                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>{t('What you wrote:')}</div>
-                    {/* CPPM-86: the person's own words, from the server. */}
-                    <p style={{ margin: 0, fontSize: '13px', color: '#475569', whiteSpace: 'pre-wrap' }}>
-                      {s.request_text || 'No written details were included with this request.'}
-                    </p>
-                    <div style={{ marginTop: 8, fontSize: '11px', color: '#5f6b7a' }}>
-                      Last update: {formatDate(s.timeline?.length ? s.timeline[s.timeline.length - 1].at : s.submitted_at)}
-                    </div>
-                  </div>
-                </details>
-
-              </div>
-            )
-          })}
+          {shown.map(s => (
+            <RequestCard key={s.id} s={s} screening={screening} portalHeaders={portalHeaders}
+              base={`/api/portal/submit/${clientCode}/submissions/${s.id}`} onChanged={load} />
+          ))}
         </div>
         )}
         </>
@@ -238,11 +136,123 @@ export default function MySubmissionsPage() {
   )
 }
 
+// One request as its person sees it: status, history, the answer, questions from the
+// medical team, what they added, and a way to add more or reply. `base` is where the
+// request's own calls go: the signed-in path on My Submissions, or the visitor's
+// private link (VisitorRequestPage), so both pages show and do exactly the same.
+export function RequestCard({ s, screening, base, onChanged, portalHeaders }) {
+  const { t } = usePortal()
+  const formatDate = (str) => formatDateTime(str)
+  const status = STATUS_LABELS[s.status] || { label: 'In progress', cls: 'pp-status-pending' }
+  return (
+    <div className="pp-submission-card" style={{ padding: '20px', borderRadius: '10px', background: 'var(--pp-card-bg, #ffffff)', border: '1px solid var(--pp-border-color, #e2e8f0)', marginBottom: '16px' }}>
+      <div className="pp-submission-header">
+        <div>
+          <div className="pp-submission-ref" style={{ fontWeight: 700, fontSize: '1.1rem' }}>CP-{String(s.id).padStart(6, '0')}</div>
+          <div className="pp-submission-type" style={{ color: '#475569' }}>{t(TYPE_LABELS[s.submission_type] || s.submission_type)}</div>
+        </div>
+        <span className={`pp-status-badge ${status.cls}`}>{t(status.label)}</span>
+      </div>
+      <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#475569', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span>Submitted {formatDate(s.submitted_at)}</span>
+        {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
+      </div>
+
+      {/* CPPM-4: what has actually happened to this request, and when.
+          Each step is a recorded status change — nothing is inferred. */}
+      {s.timeline?.length > 0 && (
+        <ol className="pp-timeline">
+          {s.timeline.map((step, idx) => (
+            <li key={idx} className="pp-timeline-step">
+              <span className="pp-timeline-label">{t(step.label)}</span>
+              <span className="pp-timeline-date">{formatDayOnly(step.at)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* CPPM-14: the approved medical answer, once it has been sent. */}
+      {s.answer && (
+        <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#166534', marginBottom: 6 }}>
+            {t('Our answer')}{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
+          <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
+            {t('A copy was emailed to you. If you need anything further, reply below.')}
+          </div>
+        </div>
+      )}
+
+      {/* Bridge feature F3: a question the medical team asked about this request. */}
+      {s.questions?.map(q => (
+        <div key={`q-${q.id}`} style={{ marginTop: 14, padding: '14px 16px', borderRadius: 8, background: q.status === 'open' ? '#FFFBEB' : '#f8fafc', border: `1px solid ${q.status === 'open' ? '#FCD34D' : '#e2e8f0'}` }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: q.status === 'open' ? '#92400E' : '#334155', marginBottom: 6 }}>
+            {t('A question from the medical team')}{q.asked_at ? ` · ${formatDate(q.asked_at)}` : ''}
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#1f2937', lineHeight: 1.55 }}>{q.question}</div>
+          {q.status === 'open'
+            ? <AddInformation submission={s} question={q} screening={screening} base={base} onAdded={onChanged} />
+            : (
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.8rem', color: '#166534', marginBottom: 4 }}>{t('Your answer')}{q.answered_at ? ` · ${formatDate(q.answered_at)}` : ''}</div>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{s.followups?.find(f => f.question_id === q.id)?.body}</div>
+              </div>
+            )}
+        </div>
+      ))}
+
+      {/* Bridge row 9: what the person added after sending, and a way to add more. */}
+      {/* An answer to a question shows under that question, not here. */}
+      {s.followups?.some(f => !f.question_id) && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: 6 }}>{t('Information you added')}</div>
+          {s.followups.filter(f => !f.question_id).map((f, i) => (
+            <div key={i} style={{ padding: '10px 12px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 6 }}>
+              <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>{formatDate(f.at)}</div>
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: '#334155' }}>{f.body}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* One box per request. A request in MIMS is answered there, so what the person
+          adds goes to the MIMS case (bridge row 9). Otherwise, once answered, they reply
+          to the answer (CPPM-63); before that, they add information. */}
+      {s.external_ref ? (
+        s.can_follow_up ? <AddInformation submission={s} screening={screening} base={base} onAdded={onChanged} /> : null
+      ) : s.answer ? (
+        <Conversation submission={s} screening={screening} base={base} portalHeaders={portalHeaders}
+          formatDate={formatDate} onSent={onChanged} />
+      ) : s.can_follow_up ? (
+        <AddInformation submission={s} screening={screening} base={base} onAdded={onChanged} />
+      ) : null}
+
+      {/* Expandable Activity Details */}
+      <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
+          {t('View Request Details & Activity History')}
+        </summary>
+        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>{t('What you wrote:')}</div>
+          {/* CPPM-86: the person's own words, from the server. */}
+          <p style={{ margin: 0, fontSize: '13px', color: '#475569', whiteSpace: 'pre-wrap' }}>
+            {s.request_text || 'No written details were included with this request.'}
+          </p>
+          <div style={{ marginTop: 8, fontSize: '11px', color: '#5f6b7a' }}>
+            Last update: {formatDate(s.timeline?.length ? s.timeline[s.timeline.length - 1].at : s.submitted_at)}
+          </div>
+        </div>
+      </details>
+
+    </div>
+  )
+}
+
 // Bridge row 9: add something to a request already sent — a new detail, a correction,
 // a file — instead of sending a second, unconnected request. Asks the same question as
 // the form and a reply (PD-2): did anyone become unwell; a Yes goes to the safety team.
 // Bridge feature F3: with `question`, the same form answers a question the medical team asked.
-function AddInformation({ submission: s, screening, clientCode, onAdded, question }) {
+function AddInformation({ submission: s, screening, base, onAdded, question }) {
   const { t } = usePortal()
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
@@ -268,7 +278,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded, questio
     if (needsScreen) { fd.append('ae_screen_answer', unwell); fd.append('ae_screen_detail', unwell === 'Yes' ? detail : '') }
     files.forEach(f => fd.append('attachments', f))
     try {
-      const res = await fetch(`/api/portal/submit/${clientCode}/submissions/${s.id}/followups`, {
+      const res = await fetch(`${base}/followups`, {
         method: 'POST', credentials: 'include', body: fd,
       })
       const data = await res.json().catch(() => ({}))
@@ -336,7 +346,7 @@ function AddInformation({ submission: s, screening, clientCode, onAdded, questio
 // request that is screened (every type but a side effect report) the reply asks the
 // same question as the original form — "did anyone become unwell" — and it must be
 // answered; a Yes goes to the safety team.
-function Conversation({ submission: s, screening, clientCode, portalHeaders, formatDate, onSent }) {
+function Conversation({ submission: s, screening, base, portalHeaders, formatDate, onSent }) {
   const { t } = usePortal()
   const [open, setOpen]       = useState(false)
   const [body, setBody]       = useState('')
@@ -355,7 +365,7 @@ function Conversation({ submission: s, screening, clientCode, portalHeaders, for
     if (needsScreen && !unwell) { setError('Please answer whether anyone became unwell after using the product.'); return }
     setBusy(true)
     try {
-      const res = await fetch(`/api/portal/submit/${clientCode}/submissions/${s.id}/reply`, {
+      const res = await fetch(`${base}/reply`, {
         method: 'POST', headers: portalHeaders(),
         body: JSON.stringify({ body, ...(needsScreen ? { ae_screen_answer: unwell, ae_screen_detail: unwell === 'Yes' ? detail : '' } : {}) }),
       })
