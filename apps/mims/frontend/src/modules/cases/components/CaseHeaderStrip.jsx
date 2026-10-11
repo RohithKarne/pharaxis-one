@@ -12,7 +12,7 @@ const CaseTimelineView = lazy(() => import('./CaseTimelineView'))
 // that field, and "Assign to me" fills the owner field there, unsaved, like a
 // change made in the field itself (MIMS screen review, row 10).
 
-const PRIORITY_LABEL = { normal: 'Normal', high: 'High', urgent: 'Urgent' }
+const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' }
 
 function formatDate(value) {
   if (!value) return '—'
@@ -76,7 +76,9 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
     }
     loadLatest()
     return () => { cancelled = true }
-  }, [caseId, headers?.Authorization])
+    // updated_at changes on every save, so the line shows the save just made
+    // rather than the activity from when the case was opened.
+  }, [caseId, headers?.Authorization, caseData?.updated_at])
 
   const statusLabel = (value) => statuses.find(s => String(s.id) === String(value))?.name
   const ownerLabel = (value) => users.find(u => String(u.id) === String(value))?.name || 'Unassigned'

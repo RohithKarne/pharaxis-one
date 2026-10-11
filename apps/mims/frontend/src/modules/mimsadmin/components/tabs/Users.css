@@ -41,7 +41,7 @@
 
 /* ── Modal tabs ── */
 .ma-usr-modal-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; background: var(--surface-alt, #f9f9f9); }
-.ma-usr-modal-tab  { padding: 12px 18px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.ma-usr-modal-tab  { background: none; border: none; font-family: inherit; padding: 12px 18px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .ma-usr-modal-tab:hover  { color: var(--text-primary); }
 .ma-usr-modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 

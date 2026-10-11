@@ -32,7 +32,10 @@ const GROUP_TEMPLATES = [
     name: 'MIMS Administrator',
     role: 'admin',
     description: 'Tenant administrator with access configuration, reports, content, and case oversight.',
-    privileges: ['admin.access.manage', 'admin.access.approve', 'case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.create', 'transmission.approve', 'content.author', 'content.review', 'content.approve', 'content.publish', 'reports.view', 'reports.manage', 'reports.export'],
+    // No content.author: writing and approving content in one group breaks the
+    // blocking Segregation of Duties rule, so applying this template on Group
+    // Security was refused. Content Managers write; administrators approve.
+    privileges: ['admin.access.manage', 'admin.access.approve', 'case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.create', 'transmission.approve', 'content.review', 'content.approve', 'content.publish', 'reports.view', 'reports.manage', 'reports.export'],
   },
   {
     key: 'mi_agent',
@@ -65,7 +68,9 @@ const GROUP_TEMPLATES = [
   {
     key: 'readonly_auditor',
     name: 'Read-only Auditor',
-    role: 'reviewer',
+    // Not 'reviewer': a role's defaults are added to the group's grants, and the
+    // reviewer's include changing cases (migration 167).
+    role: 'auditor',
     description: 'Read-only inspection support with reports and audit visibility, no mutation privileges.',
     privileges: ['reports.view'],
   },

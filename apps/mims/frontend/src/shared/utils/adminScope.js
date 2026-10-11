@@ -44,6 +44,7 @@ export function formatAdminRoleLabel(subject) {
   if (role === 'agent') return 'MI Agent'
   if (role === 'reviewer') return 'Reviewer'
   if (role === 'content_manager') return 'Content Manager'
+  if (role === 'auditor') return 'Auditor'
   return role || 'User'
 }
 

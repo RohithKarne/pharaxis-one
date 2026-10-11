@@ -90,7 +90,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Inbox */}
       <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox"
         active={isActive('/inbox')}
-        disabled={!canAccess('mims_core')} />
+        disabled={!canAccess('inbox')} />
 
 
       {/* Case Management — accordion */}
@@ -167,7 +167,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
           onMouseEnter={() => canCreateCase && prefetchRoutePath('/cases')}
           onFocus={() => canCreateCase && prefetchRoutePath('/cases')}
-          onClick={() => canCreateCase && navigate('/cases')}
+          onClick={() => canCreateCase && navigate('/cases?new=1')}
           disabled={!canCreateCase}
           aria-label="Create new case"
           title={!canCreateCase ? 'Your security group does not allow Add New Case.' : undefined}>

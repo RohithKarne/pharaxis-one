@@ -170,6 +170,7 @@ export default function Users() {
             <option value="agent">Agent</option>
             <option value="reviewer">Reviewer</option>
             <option value="content_manager">Content Manager</option>
+            <option value="auditor">Auditor (read only)</option>
           </select>
           <select aria-label="Filter by status"
             value={fltStatus}
@@ -524,13 +525,17 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         </div>
 
         {/* Tabs */}
-        <div className="ma-usr-modal-tabs">
+        <div className="ma-usr-modal-tabs" role="tablist">
           {[
             { key: 'general',  label: 'General Information' },
             { key: 'actions',  label: 'Quick Actions',       hidden: !isEdit },
             { key: 'tenants',  label: 'Divisions / Tenants' },
           ].filter(t => !t.hidden).map(t => (
-            <div
+            // Buttons, not divs: the tabs could not be reached with the keyboard.
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
               key={t.key}
               className={`ma-usr-modal-tab${tab === t.key ? ' active' : ''}${
                 (t.key === 'general' && (errors.user_id || errors.name || errors.security_group_id || errors.email)) ||
@@ -544,7 +549,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 (t.key === 'tenants' && errors.tenant_ids)) && (
                 <span style={{ color: 'var(--error,#c00)', marginLeft: 5 }}>*</span>
               )}
-            </div>
+            </button>
           ))}
         </div>
 
@@ -575,7 +580,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 {switchingOn && (
                   <div className="ma-usr-field" style={{ marginTop: 10 }}>
                     <label>Reason for switching back on <span className="req">*</span></label>
-                    <input
+                    <input aria-label="Reason for switching back on" aria-required="true"
                       className={`ma-usr-input${errors.reactivation_reason ? ' err' : ''}`}
                       value={form.reactivation_reason}
                       onChange={e => set('reactivation_reason', e.target.value)}
@@ -602,7 +607,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
               <div className="ma-usr-row">
                 <div className="ma-usr-field">
                   <label>User ID <span className="req">*</span></label>
-                  <input
+                  <input aria-label="User ID" aria-required="true"
                     className={`ma-usr-input${errors.user_id ? ' err' : ''}`}
                     value={form.user_id}
                     onChange={e => set('user_id', e.target.value)}
@@ -625,7 +630,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
               <div className="ma-usr-row">
                 <div className="ma-usr-field">
                   <label>Full Name <span className="req">*</span></label>
-                  <input
+                  <input aria-label="Full Name" aria-required="true"
                     className={`ma-usr-input${errors.name ? ' err' : ''}`}
                     value={form.name}
                     onChange={e => set('name', e.target.value)}
@@ -635,7 +640,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 </div>
                 <div className="ma-usr-field">
                   <label>Email Account <span className="req">*</span></label>
-                  <input
+                  <input aria-label="Email Account" aria-required="true"
                     className={`ma-usr-input${errors.email ? ' err' : ''}`}
                     type="email"
                     value={form.email}
@@ -649,7 +654,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
               <div className="ma-usr-row">
                 <div className="ma-usr-field">
                   <label>Security Group <span className="req">*</span></label>
-                  <select
+                  <select aria-label="Security Group" aria-required="true"
                     className={`ma-usr-select${errors.security_group_id ? ' err' : ''}`}
                     value={form.security_group_id}
                     onChange={e => set('security_group_id', e.target.value)}

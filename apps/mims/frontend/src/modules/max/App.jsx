@@ -232,7 +232,7 @@ function AppRoutes() {
           } />
           <Route path="/inbox" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
+              <ModuleAccessGuard moduleKey="inbox">
                 <InboxPage />
               </ModuleAccessGuard>
             </ProtectedRoute>

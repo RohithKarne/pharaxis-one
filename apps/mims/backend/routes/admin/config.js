@@ -319,6 +319,15 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
     query += ` ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
     const [[countRow]] = await pool.execute(countQuery, params);
     const [logs] = await pool.execute(query, params);
+    // Some writers record only the actor's id (creating a user, setting a
+    // password, changing privileges), and the admin home showed "Unknown user"
+    // for changes an administrator made. Name them from the users table.
+    const unnamedIds = [...new Set(logs.filter(l => l.user_id && !l.user_name).map(l => l.user_id))];
+    if (unnamedIds.length) {
+      const [people] = await pool.query('SELECT id, email FROM users WHERE id IN (?)', [unnamedIds]);
+      const emailById = new Map(people.map(p => [p.id, p.email]));
+      for (const l of logs) if (l.user_id && !l.user_name) l.user_name = emailById.get(l.user_id) || null;
+    }
     const total = Number(countRow?.total || 0);
     res.json({ logs, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
