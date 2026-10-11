@@ -3388,6 +3388,7 @@ retires it.
 | 2026-07-15 | Bala | CP↔MIMS integration SHIPPED and browser-verified (approved by Rohith). Outbound sync to MIMS `POST /api/v1/cases` (OAuth client-credentials with auto-refresh — `services/mimsAuth.js`), idempotent on CP reference, attachments forwarded, close-sync poller auto-closes CP inquiries, retry poller (incl. stale `pending_sync`), audit trail. Admin: Integration page gained an OAuth auth type + per-form-type Field Mapping builder (`cp_field_mapping`, dot-path targets); new Sync Health dashboard page (`/admin/clients/:id/sync-health`). Secrets encrypted at rest; provisioning scripts must load `.env` (see `docs/lessons.md` L-011). |
 | 2026-10-03 | Saad | Doctor Review release merged in PR #709 (CPPM-84–95, CPPM-106–117, CPPM-119, CPPM-121, CPPM-122). Fixes: forms, drafts, submissions and feature switches. Doctors gain: check-your-answers before sending, request access, "I have read this" on high and critical safety letters, notifications that open the exact item, "For you" on Home, an event page with Register and Add to calendar. Admins gain: approve or decline access requests, therapeutic-area tags on news, documents and events, on/off switches for Clinical Trials and Training. Migrations 0039–0042, folded into the baseline. Not yet done: the revalidation flag and a tagged release. |
 | 2026-10-07 | Saad | CP Portal end-to-end walk, 4–7 Oct 2026, on Rohith's instruction and with no Jira: every admin screen, every portal page, every admin role and every portal user type opened on a local copy with its own test users, happy path and failing path, and fixed as found. 30 fixes and features in three pull requests (#723, #724, #727), each verified on the real screen; the change log under "CP Portal end-to-end walk" lists them by area. Excluded by decision: the CP–MIMS bridge, SSO round trips and anything calling out. Open at the close: the Clinical Trials page hides itself while no trial is active (documented as intended); the client admin opening the platform audit page sees the server's refusal text rather than being sent away; a visitor's cookie consent before sign-in is recorded to the account only from this release on. |
+| 2026-10-10 | Saad | CP Portal ease-of-use plan, all 22 rows (drag-to-reorder on Features left out), merged in three pull requests (#739, #742, #744), alongside the CP-to-MIMS bridge work (#740, #743). Admins gain: a sidebar that opens each area to its screens, a "To do today" list on the client Overview, Submissions as an inbox with the case open beside the list, four ready Branding themes with a live preview, grouped Features, and one set of status words on every content screen. Decisions (Rohith, 10 Oct): a clinical trial goes live only after a second person publishes it (migration 0047); safety alerts stay direct, with no review step; screens show local time with UTC on hover, while exports and the audit trail stay in UTC. Checked the same day: every CP Portal migration on MySQL 8.0.46, fresh and as an upgrade; every admin screen as superadmin and client admin, every portal page as a doctor and as a visitor, and one failing path on 20 forms. Four faults found were fixed: the audit trail showed local time, a client admin opening the platform audit page saw empty filters, two client lists counted open submissions under "Submissions", and Features misdescribed Coming soon training modules. Not checked: screen readers, phone widths for Branding and Features, real MIMS traffic after #744. |
 
 ---
 
@@ -3601,12 +3602,13 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 |------|-------|-------------|
 | DashboardPage | `/admin` | Stats, open submissions, recent activity across all clients |
 | ClientsPage | `/admin/clients` | List all clients, create new client |
-| ClientDetailPage | `/admin/clients/:id` | Cockpit — health score, KPIs, real audit activity |
-| BrandingPage | `:id/branding` | Colors, fonts, logos, portal name, favicon |
-| FeaturesPage | `:id/features` | Toggle feature flags on/off per client |
+| ClientDetailPage | `/admin/clients/:id` | Overview — a "To do today" list of what is waiting, alerts, recent activity, setup checklist |
+| BrandingPage | `:id/branding` | Four ready themes with a live preview; single colours under Advanced; fonts, logo, portal name |
+| FeaturesPage | `:id/features` | Feature switches grouped into Content, Asking and reporting, and Accounts |
 | ContentPage | `:id/content` | TAs, drugs, events, resources tabs |
 | NewsPage | `:id/news` | Create/edit news posts (rich text, auto-translated) |
-| SafetyPage | `:id/safety` | Create/edit safety alerts with severity |
+| SafetyPage | `:id/safety` | Create/edit safety alerts with severity. No review step: an alert reaches doctors when saved as live, or at its scheduled time (Rohith, 2026-10-10) |
+| TrialsAdminPage | `:id/trials` | Clinical trials: Draft → Needs review → Live in portal. Whoever sent a trial for review cannot publish it; the server enforces this (Rohith, 2026-10-10) |
 | DocumentsPage | `:id/documents` | Upload PDFs, manage document library |
 | MSLPage | `:id/msls` | Add/edit MSL profiles |
 | FAQPage | `:id/faq` | Create/edit FAQ items with categories |
@@ -3616,8 +3618,8 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 | ChatboxConfigPage | `:id/chatbox` | AI chatbox welcome message, enable/disable |
 | IntegrationPage | `:id/integration` | CRM field mappings |
 | PortalUsersPage | `:id/users` | View/manage portal user accounts |
-| SubmissionsPage | `:id/submissions` | View medical inquiry submissions |
-| AuditTrailPage | `:id/audit` | Full audit log with filters |
+| SubmissionsPage | `:id/submissions` | Inbox: the case opens beside the list, side-effect reports are flagged, MIMS links open the case |
+| AuditTrailPage | `:id/audit` | Full audit log with filters; times in UTC to the second |
 | AnalyticsPage | `:id/analytics` | Page views, submissions, user metrics |
 | FeedbackPage | `:id/feedback` | Portal user feedback responses |
 | ReviewQueuePage | `:id/review-queue` | Content pending review (badge count in nav) |
@@ -3682,7 +3684,9 @@ CP Portal reopened to feature development on 2026-08-08, when §46 introduced th
 - Process Explorer — 47 flows, 295+ captures
 - MySQL migration complete — Docker-based MySQL
 
-**Last test result:** every screen, role and user type walked on the real screens 4–7 Oct 2026 (CP Portal end-to-end walk, PRs #723, #724, #727); what was not checked is listed in each pull request. Before that: all core flows stable at Sprint 6 close (2026-03-24).
+**Time on screen:** screens show the viewer's local time with UTC on hover; exports and the audit trail are in UTC (Rohith, 2026-10-10).
+
+**Last test result:** 10 Oct 2026, after the ease-of-use plan merged: every admin screen as superadmin and client admin, every portal page as a doctor and as a visitor, one failing path on 20 forms, and every migration on MySQL 8.0.46 (see Version History). Before that, every screen, role and user type walked on the real screens 4–7 Oct 2026 (CP Portal end-to-end walk, PRs #723, #724, #727); what was not checked is listed in each pull request. Before that: all core flows stable at Sprint 6 close (2026-03-24).
 
 ---
 

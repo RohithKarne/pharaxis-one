@@ -163,7 +163,7 @@ export default function ClientsPage() {
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">
           <thead>
-            <tr><th>Name</th><th>Code</th><th>Portal URL</th><th>Contact</th><th>Submissions</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Code</th><th>Portal URL</th><th>Contact</th><th>Open submissions</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {clients.filter(c => !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.code?.toLowerCase().includes(search.toLowerCase())).map(c => (

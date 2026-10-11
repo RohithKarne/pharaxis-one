@@ -46,6 +46,14 @@ const WORDS = {
     safety_update:             'Safety Update',
     other:                     'Other',
   },
+  // The portal's default user types (clients.js DEFAULT_GATE_TYPES).
+  userType: {
+    hcp:       'Healthcare Professional (HCP)',
+    physician: 'Physician / Specialist',
+    patient:   'Patient / Caregiver',
+    non_hcp:   'Non-HCP Professional',
+    other:     'Other',
+  },
   fieldType: {
     text:        'Short text',
     textarea:    'Long text',
