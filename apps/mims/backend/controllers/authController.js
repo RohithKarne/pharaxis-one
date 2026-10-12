@@ -2467,7 +2467,17 @@ const authController = {
         req,
       });
 
-      // Resolve login context and issue session — same path as password login
+      // Resolve login context and issue session — same path as password login.
+      // A platform admin gets a platform session, as after the password and the
+      // code; an organisation session left them scoped to one organisation and
+      // with that organisation's timeout (Tier 2 walk, 2026-10-12).
+      const privileges = await resolveUserRuntimePrivileges(user);
+      if (privileges.platformAdmin) {
+        const config = await getSystemConfig();
+        const platformContext = await resolvePlatformAdminContext(user, null);
+        const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent: 'webauthn_login_success' });
+        return res.status(200).json(payload);
+      }
       const context = await resolveRegularLoginContext(user, null);
       return finalizeRegularLogin({ res, req, user, context, authEvent: 'webauthn_login_success' });
     } catch (err) {
