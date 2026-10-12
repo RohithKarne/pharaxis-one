@@ -56,7 +56,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [twoFactorMethod, setTwoFactorMethod] = useState('email')
   const [twoFactorCode, setTwoFactorCode] = useState('')
   const [backupCode, setBackupCode] = useState('')
-  const [rememberDevice, setRememberDevice] = useState(true)
+  // Off by default: ticked, the second step was skipped for days on a shared
+  // computer unless the person noticed (MIPM-108, Rohith's Tier 1, 2026-10-12).
+  const [rememberDevice, setRememberDevice] = useState(false)
   const [emailCodeSent, setEmailCodeSent] = useState(false)
   const [totpSetup, setTotpSetup] = useState(null)
   const [postLoginData, setPostLoginData] = useState(null)
@@ -356,7 +358,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       if (data.twoFactorRequired || data.twoFactorSetupAvailable) {
         setTwoFactor(data)
         setTwoFactorMethod(data.preferredMethod || data.availableMethods?.[0] || 'email')
-        setRememberDevice(true)
+        setRememberDevice(false)
         setTwoFactorCode('')
         setBackupCode('')
         setEmailCodeSent(false)
