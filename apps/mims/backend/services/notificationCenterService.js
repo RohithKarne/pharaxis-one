@@ -2,7 +2,6 @@
 
 const pool = require('../database/db');
 const { emitDataSync, emitNotificationSync } = require('./appRealtimeService');
-const { sendPushNotificationsToUsers } = require('./mobilePushService');
 
 function serializeMetadata(metadata) {
   if (metadata === undefined) return null;
@@ -67,14 +66,6 @@ async function createNotification(userId, payload) {
       reason: 'notification.created',
       payload: { notificationId: result.insertId, category, eventKey },
     });
-    sendPushNotificationsToUsers([userId], {
-      category,
-      eventKey,
-      linkUrl,
-      message: message || title,
-      metadata: { notificationId: result.insertId, ...(metadata || {}) },
-      title,
-    }).catch(() => {});
   }
   return result.insertId || null;
 }
