@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth, adminHeaders } from '../context/AdminAuthContext'
+import { browserLabel } from '../../shared/utils/browserLabel'
 import PageLoader from './PageLoader'
 import Icon from '../../shared/components/Icon'
 
@@ -219,6 +220,134 @@ function ChangePasswordModal({ onClose }) {
   )
 }
 
+// Security (Rohith's sign-in Tier 2, 12 Oct 2026): the signed-in person's own
+// passkeys and sessions. Add this device, remove one; see where they are signed
+// in and end any other session, or all of them.
+function SecurityModal({ onClose }) {
+  const [passkeys, setPasskeys] = useState(null)
+  const [sessions, setSessions] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const supported = typeof window.PublicKeyCredential !== 'undefined'
+
+  async function loadSessions() {
+    const res = await fetch('/api/admin/auth/sessions', { credentials: 'same-origin' })
+    const d = await res.json().catch(() => ({}))
+    setSessions(res.ok ? d.sessions || [] : [])
+  }
+  useEffect(() => { loadSessions().catch(() => setSessions([])) }, [])
+
+  async function endSession(id) {
+    setError(''); setBusy(true)
+    try {
+      const res = await fetch(id ? `/api/admin/auth/sessions/${id}/end` : '/api/admin/auth/sessions/end-others', { method: 'POST', credentials: 'same-origin' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'The session could not be ended.'); return }
+      await loadSessions()
+    } catch { setError('Network error. Please try again.') } finally { setBusy(false) }
+  }
+
+  async function loadPasskeys() {
+    const res = await fetch('/api/admin/auth/passkeys', { credentials: 'same-origin' })
+    const d = await res.json().catch(() => ({}))
+    setPasskeys(res.ok ? d.passkeys || [] : [])
+  }
+  useEffect(() => { loadPasskeys().catch(() => setPasskeys([])) }, [])
+
+  async function addPasskey() {
+    setError(''); setBusy(true)
+    try {
+      const startRes = await fetch('/api/admin/auth/passkeys/register/start', { method: 'POST', credentials: 'same-origin' })
+      const start = await startRes.json().catch(() => ({}))
+      if (!startRes.ok) { setError(start.error || 'Could not start adding the passkey.'); return }
+      const { startRegistration } = await import('@simplewebauthn/browser')
+      const registrationResponse = await startRegistration({ optionsJSON: start.options })
+      const finishRes = await fetch('/api/admin/auth/passkeys/register/finish', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationResponse, deviceName: `${navigator.platform || 'This device'} — ${new Date().toLocaleDateString()}` }),
+      })
+      const d = await finishRes.json().catch(() => ({}))
+      if (!finishRes.ok) { setError(d.error || 'The passkey could not be added.'); return }
+      await loadPasskeys()
+    } catch (err) {
+      setError(err?.name === 'NotAllowedError' ? 'The passkey prompt was cancelled.' : 'The passkey could not be added on this device.')
+    } finally { setBusy(false) }
+  }
+
+  async function removePasskey(id) {
+    setError(''); setBusy(true)
+    try {
+      const res = await fetch(`/api/admin/auth/passkeys/${id}`, { method: 'DELETE', credentials: 'same-origin' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'The passkey could not be removed.'); return }
+      await loadPasskeys()
+    } catch { setError('Network error. Please try again.') } finally { setBusy(false) }
+  }
+
+  const when = (v) => v ? new Date(v).toLocaleString() : 'never'
+  return (
+    <div className="cp-modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="cp-modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()} role="dialog" aria-label="Security">
+        <div className="cp-modal-header"><span>Security</span><button className="cp-modal-close" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="cp-modal-body">
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Passkeys</div>
+            <p style={{ fontSize: 13, color: '#4B5563', margin: '0 0 10px' }}>
+              A passkey signs you in with this device's fingerprint, face or PIN instead of your password and code. Add one on each device you use.
+            </p>
+            {passkeys === null ? <div style={{ fontSize: 13 }}>Loading…</div> : passkeys.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 10 }} data-testid="no-passkeys">No passkey yet.</div>
+            ) : (
+              <table className="cp-table" style={{ marginBottom: 10 }} data-testid="passkey-list">
+                <thead><tr><th>Device</th><th>Added</th><th>Last used</th><th></th></tr></thead>
+                <tbody>
+                  {passkeys.map(p => (
+                    <tr key={p.id}>
+                      <td>{p.device_name || 'Device'}</td>
+                      <td>{when(p.created_at)}</td>
+                      <td>{when(p.last_used_at)}</td>
+                      <td><button type="button" className="cp-btn cp-btn-outline cp-btn-sm" disabled={busy} onClick={() => removePasskey(p.id)}>Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {supported
+              ? <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={addPasskey}>{busy ? 'Waiting for your device…' : 'Add a passkey for this device'}</button>
+              : <div style={{ fontSize: 13, color: '#4B5563' }}>This browser does not support passkeys.</div>}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Where you are signed in</div>
+            <p style={{ fontSize: 13, color: '#4B5563', margin: '0 0 10px' }}>
+              Every browser you are signed in on. End one you do not recognise, or sign out everywhere else.
+            </p>
+            {sessions === null ? <div style={{ fontSize: 13 }}>Loading…</div> : (
+              <table className="cp-table" style={{ marginBottom: 10 }} data-testid="session-list">
+                <thead><tr><th>Browser</th><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                  {sessions.map(sn => (
+                    <tr key={sn.id}>
+                      <td style={{ maxWidth: 240 }} title={sn.user_agent || ''}>
+                        {browserLabel(sn.user_agent)}{sn.is_current ? <strong> (this one)</strong> : null}
+                      </td>
+                      <td>{when(sn.created_at)}</td>
+                      <td>{when(sn.last_seen_at)}</td>
+                      <td>{!sn.is_current && <button type="button" className="cp-btn cp-btn-outline cp-btn-sm" disabled={busy} onClick={() => endSession(sn.id)}>End</button>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <button type="button" className="cp-btn cp-btn-secondary" disabled={busy || !sessions || sessions.length < 2} onClick={() => endSession(null)}>Sign out everywhere else</button>
+          </div>
+          {error && <div className="cp-error">{error}</div>}
+          <div className="cp-modal-footer"><button type="button" className="cp-btn cp-btn-outline" onClick={onClose}>Close</button></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminLayout({ children }) {
   const { admin, signOut, hasRole, canChange, loadFailed } = useAdminAuth()
   const navigate  = useNavigate()
@@ -245,6 +374,7 @@ export default function AdminLayout({ children }) {
     }))) : []),
   ]
   const [showPassword, setShowPassword] = useState(false)
+  const [showSecurity, setShowSecurity] = useState(false)
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     const saved = sessionStorage.getItem('cp_sidebar_compact')
     // CPPM-126: on a phone the full sidebar leaves the page too little room.
@@ -445,11 +575,13 @@ export default function AdminLayout({ children }) {
           <div className="cp-admin-role">{String(admin?.role || '').replace(/_/g, ' ')}</div>
           {/* CP walk, 4 Oct 2026: the server could change a password, no screen offered it. */}
           <button className="cp-logout-btn" style={{ marginBottom: 6 }} onClick={() => setShowPassword(true)}>Change password</button>
+          <button className="cp-logout-btn" style={{ marginBottom: 6 }} onClick={() => setShowSecurity(true)}>Security</button>
           <button className="cp-logout-btn" onClick={handleLogout}>Sign Out</button>
         </div>
       </aside>
 
       {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
+      {showSecurity && <SecurityModal onClose={() => setShowSecurity(false)} />}
       <div className="cp-admin-main">
         {clientId && <div className="cp-brandbar" />}
         <div className="cp-admin-topbar">

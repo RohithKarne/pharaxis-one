@@ -175,7 +175,7 @@ app.use('/uploads', (req, res, next) => {
 // CPPM-60: one table says which roles may change what. It sits in front of every
 // admin router, so an area cannot be added without a rule applying to it.
 app.use('/api/admin', require('./middleware/adminWritePolicy').adminWritePolicy);
-app.use(['/api/admin/auth/login', '/api/admin/auth/2fa', '/api/portal/auth/login'], loginLimiter);
+app.use(['/api/admin/auth/login', '/api/admin/auth/2fa', '/api/admin/auth/passkeys/login', '/api/portal/auth/login'], loginLimiter);
 app.use('/api/admin/auth',         authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',      require('./routes/admin/clients'));
 app.use('/api/admin/branding',     require('./routes/admin/branding'));

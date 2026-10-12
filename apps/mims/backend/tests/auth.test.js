@@ -103,6 +103,10 @@ function sessionCookie(res) {
   return cookies.map(c => c.split(';')[0]).find(c => c.startsWith('mims_token=')) || null;
 }
 
+// The authenticator secret each candidate set up earlier in this run, so a
+// second sign-in answers the code instead of failing as already enrolled.
+const totpSecrets = {};
+
 async function loginWithCandidates() {
   const failures = [];
   const candidates = [
@@ -126,16 +130,24 @@ async function loginWithCandidates() {
       // A platform administrator cannot skip: two-step sign-in is required
       // (Rohith, 2026-10-12). Set up the authenticator app the way the screen
       // does and answer with a code computed from the secret it returns.
+      const { generateTotpToken } = require('../services/twoFactorService');
       if (res.body.twoFactorSetupRequired) {
         const setup = await request(app)
           .post('/api/auth/2fa/setup/totp')
           .send({ challengeToken: res.body.challengeToken });
-        const { generateTotpToken } = require('../services/twoFactorService');
         const verify = await request(app)
           .post('/api/auth/2fa/verify')
           .send({ challengeToken: res.body.challengeToken, method: 'totp', code: generateTotpToken(setup.body.secret) });
-        if (verify.status === 200 && sessionCookie(verify)) return verify;
+        if (verify.status === 200 && sessionCookie(verify)) { totpSecrets[candidate.email] = setup.body.secret; return verify; }
         failures.push(`2fa setup status ${setup.status}/${verify.status} for ${candidate.email}`);
+        continue;
+      }
+      if (res.body.twoFactorRequired && totpSecrets[candidate.email]) {
+        const verify = await request(app)
+          .post('/api/auth/2fa/verify')
+          .send({ challengeToken: res.body.challengeToken, method: 'totp', code: generateTotpToken(totpSecrets[candidate.email]) });
+        if (verify.status === 200 && sessionCookie(verify)) return verify;
+        failures.push(`2fa verify status ${verify.status} for ${candidate.email}`);
         continue;
       }
       failures.push(`challenge status ${skip.status} for ${candidate.email}`);

@@ -4,6 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatLongDate } from '../../shared/utils/datetime'
 import { useToast } from '../../shared/components/Toast'
+import { browserLabel } from '../../shared/utils/browserLabel'
 
 const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
 
@@ -105,6 +106,28 @@ export default function ProfilePage() {
     } finally {
       setSavingPwd(false)
     }
+  }
+
+  // Where you are signed in (Rohith's sign-in Tier 2, 12 Oct 2026)
+  const [sessions, setSessions] = useState(null)
+  const [sessionsBusy, setSessionsBusy] = useState(false)
+  const [sessionsErr, setSessionsErr] = useState('')
+  async function loadSessions() {
+    try {
+      const res = await fetch('/api/portal/auth/sessions', { credentials: 'include' })
+      const d = await res.json().catch(() => ({}))
+      setSessions(res.ok ? d.sessions || [] : [])
+    } catch { setSessions([]) }
+  }
+  useEffect(() => { loadSessions() }, [])
+  async function endSession(id) {
+    setSessionsErr(''); setSessionsBusy(true)
+    try {
+      const res = await fetch(id ? `/api/portal/auth/sessions/${id}/end` : '/api/portal/auth/sessions/end-others', { method: 'POST', credentials: 'include' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setSessionsErr(d.error || t('The session could not be ended.')); return }
+      await loadSessions()
+    } catch { setSessionsErr(t('Network error. Please try again.')) } finally { setSessionsBusy(false) }
   }
 
   if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">{t('Loading…')}</div></div>
@@ -230,6 +253,35 @@ export default function ProfilePage() {
           {pwdErr && <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
         </div>
       </form>
+
+      {/* Where you are signed in (Rohith's sign-in Tier 2, 12 Oct 2026) */}
+      <div style={cardStyle}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>{t('Where you are signed in')}</h2>
+        <p style={{ fontSize: 13, color: '#4B5563', marginBottom: 18 }}>
+          {t('Every browser you are signed in on. End one you do not recognise, or sign out everywhere else.')}
+        </p>
+        {sessions === null ? <div style={{ fontSize: 13 }}>{t('Loading…')}</div> : (
+          <div data-testid="session-list" style={{ marginBottom: 16 }}>
+            {sessions.map(sn => (
+              <div key={sn.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid #E5E7EB', fontSize: 13 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{browserLabel(sn.user_agent)}{sn.is_current ? <span style={{ color: '#166534' }}> {t('(this one)')}</span> : null}</div>
+                  <div style={{ color: '#5F6B7A' }}>{t('Signed in')} {formatLongDate(sn.created_at)} · {t('Last active')} {new Date(sn.last_seen_at).toLocaleString()}</div>
+                </div>
+                {!sn.is_current && (
+                  <button type="button" className="pp-btn pp-btn-outline" disabled={sessionsBusy} onClick={() => endSession(sn.id)}>{t('End')}</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button type="button" className="pp-btn pp-btn-primary" disabled={sessionsBusy || !sessions || sessions.length < 2} onClick={() => endSession(null)}>
+            {t('Sign out everywhere else')}
+          </button>
+          {sessionsErr && <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>{sessionsErr}</span>}
+        </div>
+      </div>
 
       {/* CP-63 — GDPR data-subject rights: self-service export + deletion request */}
       <div style={cardStyle}>

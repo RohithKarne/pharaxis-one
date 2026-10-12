@@ -14,6 +14,7 @@ const { queueEmail } = require('../../utils/emailOutbox');
 const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
 const { systemAudit } = require('../../utils/audit');
+const knownDevices = require('../../utils/knownDevices');
 const lockout = require('../../utils/loginLockout');
 const { raiseAlert, releaseResolved } = require('../../services/adminAlerts');
 const passwordRules = require('../../utils/passwordRules');
@@ -36,7 +37,9 @@ async function getValidTypes(clientId) {
 function makeToken(user, clientId) {
   return jwt.sign(
     // CP-26: embed token_version so a password change/reset can revoke old tokens.
-    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type, tv: user.token_version ?? 0 },
+    // jti: two sign-ins in the same second otherwise produce the same token, which
+    // the session row's unique key refuses (Tier 2 walk, 12 Oct 2026).
+    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type, tv: user.token_version ?? 0, jti: crypto.randomBytes(8).toString('hex') },
     PORTAL_SECRET,
     { expiresIn: '24h' }
   );
@@ -47,6 +50,16 @@ function buildVerifyUrl(origin, clientCode, token) {
 }
 
 // POST /api/portal/auth/register
+// New device (Rohith's sign-in Tier 2, 12 Oct 2026): a browser not seen before
+// is recorded and, unless it is this person's first, emailed through the
+// client's mail set-up. Called on every path that signs a portal user in.
+async function noteNewDevice(req, res, user, clientId) {
+  const device = await knownDevices.noteDevice(req, res, 'portal', user.id);
+  if (!device.isNew) return;
+  await systemAudit('portal sign-in', clientId, 'NEW_DEVICE', 'portal_user', user.id, { first_ever: device.firstEver, emailed: !device.firstEver });
+  if (!device.firstEver) await knownDevices.sendNewDeviceEmail(clientId, { to: user.email, name: user.first_name, req, securityHint: 'sign out everywhere else under My Account' });
+}
+
 router.post('/register', async (req, res) => {
   try {
     return res.status(403).json({
@@ -170,6 +183,7 @@ router.post('/login', async (req, res) => {
     const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
     const token = makeToken(user, client.id);
     await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
+    await noteNewDevice(req, res, user, client.id);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ user: safe });
   } catch (err) {
@@ -292,6 +306,7 @@ router.post('/verify-email', async (req, res) => {
 
     const authToken = makeToken(user, user.client_id);
     await sessions.createSession('portal', user.id, authToken, req.headers['user-agent']);
+    await noteNewDevice(req, res, user, user.client_id);
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty } });
   } catch (err) {
@@ -540,6 +555,7 @@ router.get('/sso/:provider/callback', async (req, res) => {
 
     const token = makeToken(user, client.id);
     await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
+    await noteNewDevice(req, res, user, client.id);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 });
     const safeReturn = typeof parsed.returnTo === 'string' && parsed.returnTo.startsWith(`/portal/${client.code}`)
       ? parsed.returnTo
@@ -552,6 +568,39 @@ router.get('/sso/:provider/callback', async (req, res) => {
 });
 
 // POST /api/portal/auth/logout — clear auth cookie
+// ── Where you are signed in (Rohith's sign-in Tier 2, 12 Oct 2026) ──────────
+router.get('/sessions', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    res.json({ sessions: await sessions.listSessions('portal', req.portalUser.userId, req.cookies?.cp_portal_token) });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'GET /sessions', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/sessions/end-others', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const ended = await sessions.endOtherSessions('portal', req.portalUser.userId, req.cookies?.cp_portal_token);
+    await systemAudit('portal sign-in', req.portalUser.clientId, 'SESSIONS_ENDED', 'portal_user', req.portalUser.userId, { ended });
+    res.json({ ended });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /sessions/end-others', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/sessions/:id/end', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!await sessions.endSessionById('portal', req.portalUser.userId, id)) return res.status(404).json({ error: 'Session not found.' });
+    await systemAudit('portal sign-in', req.portalUser.clientId, 'SESSIONS_ENDED', 'portal_user', req.portalUser.userId, { ended: 1, session_id: id });
+    res.json({ message: 'Session ended.' });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /sessions/:id/end', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   await sessions.endSession(req.cookies?.cp_portal_token, 'logout').catch(() => {});
   res.clearCookie('cp_portal_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
