@@ -140,6 +140,7 @@ the ones a validation plan should name.
 - Sign Out ends the session on the server — CPPM-40 (#671)
 - Doctors can request access, and admins approve or decline it from Inbox › Access Requests — CPPM-113, CPPM-128
 - A client's own staff land on their client, and reviewers on their Inbox — CPPM-129, CPPM-133
+- Rohith's sign-in Tier 1 decisions of 12 Oct 2026 (no Jira, per Rohith): every admin signs in with a second step — a code by email through the client's own mail, or an authenticator app (the only method for a Pharaxis admin with no client), set up at the next sign-in, with ten backup codes, a remembered device for 7 days off by default, a lock after three wrong codes that another admin resets, and the QR code drawn by CP Portal itself (new library `qrcode`); passwords need 12 characters, must not be a common one or hold the person's email, and must not be one of their last five, for admins and portal users alike (a password set before this change is not in the history until it is changed once); a session unseen for 30 minutes (admin) or 60 (portal user) is ended by the server, not only the browser; sign-in allows ten tries per 15 minutes per address plus email. Migrations 0049–0051. **Revalidation impact: Full** — access controls changed (proposed; Saad classifies).
 
 ### Audit trail and records
 - An admin edit's audit entry records what changed, from and to — CPPM-43 (#676)
