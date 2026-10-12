@@ -1339,21 +1339,15 @@ const authController = {
 
       const identity = email.toLowerCase().trim();
 
-      // Check if account is locked (AC-E6)
+      // Lock state (AC-E6). Read here, answered only after the password check:
+      // "Account locked" given before the password was checked told a stranger
+      // which emails have accounts (MIPM-107, Rohith's Tier 1, 2026-10-12).
       const [lockCheck] = await pool.execute(
         'SELECT locked_until, failed_login_attempts FROM users WHERE email = ?',
         [identity]
       );
-      if (lockCheck.length > 0 && lockCheck[0].locked_until) {
-        const lockedUntil = new Date(lockCheck[0].locked_until);
-        if (lockedUntil > new Date()) {
-          return res.status(423).json({
-            error: 'Account locked',
-            message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
-            locked_until: lockedUntil.toISOString()
-          });
-        }
-      }
+      const lockedUntil = lockCheck[0]?.locked_until ? new Date(lockCheck[0].locked_until) : null;
+      const isLocked = !!lockedUntil && lockedUntil > new Date();
 
       const user = await userModel.findByEmail(identity);
       // M-2 / M-3: the password is checked first — against a stand-in hash when
@@ -1397,6 +1391,16 @@ const authController = {
         );
 
         return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+
+      // Right password on a locked account: now, and only now, say so.
+      if (isLocked) {
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account locked', authEvent: 'password_login_failed', req });
+        return res.status(423).json({
+          error: 'Account locked',
+          message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
+          locked_until: lockedUntil.toISOString()
+        });
       }
 
       // MIPM-32: a "Disabled" account passed this check and could sign in with its password.
