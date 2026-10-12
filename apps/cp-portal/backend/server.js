@@ -11,6 +11,8 @@ const express      = require('express');
 const cors         = require('cors');
 const path         = require('path');
 const rateLimit    = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
+const crypto       = require('crypto');
 const cookieParser = require('cookie-parser');
 const { pool, initializeDatabase } = require('./database/db');
 const { runMigrations } = require('./database/migrate');
@@ -70,6 +72,32 @@ const authLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again later.' },
   store: makeStore(),
   skip: () => isDevEnv,
+});
+
+// Sign-in itself (Rohith's sign-in Tier 1, 12 Oct 2026): the general auth limit of
+// 100 tries per quarter hour from one address was a brute-force budget, not a
+// brake. Ten tries per 15 minutes per address plus email, on the sign-in and
+// second-step routes only; a successful sign-in does not count. Kept on in
+// development, off only under test.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.CP_LOGIN_RATE_LIMIT || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  // ipKeyGenerator folds an IPv6 address to its /56, as the library requires, so a
+  // person on IPv6 cannot step past the limit by rotating addresses.
+  // On the second-step routes the body carries a challenge token, not an email, so
+  // the key is the token: one bucket per sign-in attempt, not one shared by every
+  // admin behind the same address.
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const who = email || (req.body?.challengeToken ? crypto.createHash('sha256').update(String(req.body.challengeToken)).digest('hex').slice(0, 16) : 'no-email');
+    return `${ipKeyGenerator(req.ip)}:${who}`;
+  },
+  message: { error: 'Too many sign-in attempts. Please wait 15 minutes and try again.' },
+  store: makeStore(),
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 const submitLimiter = rateLimit({
@@ -147,6 +175,7 @@ app.use('/uploads', (req, res, next) => {
 // CPPM-60: one table says which roles may change what. It sits in front of every
 // admin router, so an area cannot be added without a rule applying to it.
 app.use('/api/admin', require('./middleware/adminWritePolicy').adminWritePolicy);
+app.use(['/api/admin/auth/login', '/api/admin/auth/2fa', '/api/portal/auth/login'], loginLimiter);
 app.use('/api/admin/auth',         authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',      require('./routes/admin/clients'));
 app.use('/api/admin/branding',     require('./routes/admin/branding'));
