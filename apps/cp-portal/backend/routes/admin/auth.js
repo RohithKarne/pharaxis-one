@@ -23,6 +23,7 @@ const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
 const { queueEmail } = require('../../utils/emailOutbox');
 const { getEmailConfig } = require('../../utils/mailer');
 const passkeys = require('../../utils/passkeys');
+const knownDevices = require('../../utils/knownDevices');
 
 // SEC: admin console is same-origin only and never linked cross-site, so Strict
 // SameSite is safe here and gives full CSRF protection on the admin surface.
@@ -53,6 +54,14 @@ async function establishSession(req, res, user, extra = {}) {
   await sessions.createSession('admin', user.id, token, req.headers['user-agent']);
   await pool.execute(`UPDATE cp_admin_users SET updated_at = NOW() WHERE id = ?`, [user.id]);
   await audit({ adminId: user.id, name: user.name }, user.client_id, 'LOGIN', 'admin_user', user.id, { email: user.email, role: user.role, ...extra.auditDetails });
+  // New device (Tier 2, 12 Oct 2026): a browser not seen before is recorded and,
+  // unless it is this person's first, emailed. A Pharaxis superadmin has no
+  // client and so no mail set-up; the audit row is written either way.
+  const device = await knownDevices.noteDevice(req, res, 'admin', user.id);
+  if (device.isNew) {
+    await audit({ adminId: user.id, name: user.name }, user.client_id, 'NEW_DEVICE', 'admin_user', user.id, { email: user.email, first_ever: device.firstEver, emailed: !device.firstEver && !!user.client_id });
+    if (!device.firstEver) await knownDevices.sendNewDeviceEmail(user.client_id, { to: user.email, name: user.name, req, securityHint: 'sign out everywhere else under Security in the admin console' });
+  }
   // SEC: token is delivered only via the httpOnly cookie, never in the body.
   res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: SESSION_HOURS * 60 * 60 * 1000 })
      .json({ admin: adminPayload(user), ...extra.body });

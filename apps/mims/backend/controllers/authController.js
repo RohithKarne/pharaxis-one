@@ -27,6 +27,7 @@ const {
 } = require('../services/twoFactorService');
 const { emitPlatformAdminAlert } = require('../services/alertService');
 const webauthnService = require('../services/webauthnService');
+const knownDeviceService = require('../services/knownDeviceService');
 const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -240,6 +241,25 @@ function platformRememberDays(config = {}) {
   return parseInt(config.platform_admin_two_factor_remember_days || '7', 10) || 7;
 }
 
+// New device (Rohith's sign-in Tier 2, 2026-10-12): a browser not seen before is
+// recorded on every completed sign-in and, unless it is this person's first,
+// emailed. Never fails the sign-in.
+async function recordKnownDevice({ req, res, user, role }) {
+  try {
+    const device = await knownDeviceService.noteDevice(req, res, user.id);
+    if (!device.isNew) return;
+    const ip = resolveIp(req);
+    const location = resolveLocation(ip);
+    let emailed = false;
+    if (!device.firstEver) {
+      emailed = await knownDeviceService.sendNewDeviceEmail({ toEmail: user.email, userName: user.name, req, ip, location });
+    }
+    await logLoginAudit({ userId: user.id, userName: user.email, role, status: 'success', authEvent: 'new_device_login', metadata: { firstEver: device.firstEver, emailed }, req });
+  } catch (err) {
+    console.error('recordKnownDevice error:', err.message);
+  }
+}
+
 async function establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent = 'login_success' }) {
   const modules = await getUserModules(user.id);
   const token = issueToken({
@@ -254,6 +274,7 @@ async function establishPlatformSession({ res, req, user, privileges, platformCo
   const sessionTimeout = getPlatformAdminSessionTimeout(config);
   attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
   await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent, req });
+  await recordKnownDevice({ req, res, user, role: 'platform_admin' });
   return {
     message: 'Login successful.',
     user: toRuntimeUser(user, privileges),
@@ -729,6 +750,7 @@ async function establishRegularSession({ res, req, user, context, trustedDeviceT
     metadata: { orgId: context.orgId },
     req,
   });
+  await recordKnownDevice({ req, res, user, role: roleForOrg });
 
   const allOrgs = (context.orgRows || []).map(o => ({
     orgId: o.orgId ?? o.org_id,
