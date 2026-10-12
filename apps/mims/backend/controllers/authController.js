@@ -165,9 +165,12 @@ function trustedDeviceCookieName(userId) {
 }
 
 function attachTrustedDeviceCookie(res, userId, rawToken, rememberDays) {
+  // Path '/' not '/api/auth': the built app calls the API at /mims/api, so a
+  // cookie scoped to /api/auth was never sent and "Remember this device" never
+  // worked outside the dev server. Found in the Tier 1 walk, 2026-10-12.
   res.cookie(trustedDeviceCookieName(userId), rawToken, {
     httpOnly: true,
-    path: '/api/auth',
+    path: '/',
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     maxAge: Number(rememberDays || 7) * 24 * 60 * 60 * 1000,
