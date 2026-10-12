@@ -226,6 +226,44 @@ async function getSystemConfig() {
   }, {});
 }
 
+// Two-step sign-in for platform administrators (Rohith's Tier 1, 2026-10-12;
+// MIPM-98). Their rows in the two-step tables use org_id 0 (migration 168).
+const PLATFORM_2FA_SCOPE = 0;
+const PLATFORM_2FA_METHODS = ['email', 'totp'];
+function platformTwoFactorRequired(config = {}) {
+  return String(config.platform_admin_two_factor_required ?? '1') !== '0';
+}
+function platformRememberDays(config = {}) {
+  return parseInt(config.platform_admin_two_factor_remember_days || '7', 10) || 7;
+}
+
+async function establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent = 'login_success' }) {
+  const modules = await getUserModules(user.id);
+  const token = issueToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    platformAdmin: true,
+  });
+  await trackSessionToken(user.id, token);
+  const sessionTimeout = getPlatformAdminSessionTimeout(config);
+  attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
+  await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent, req });
+  return {
+    message: 'Login successful.',
+    user: toRuntimeUser(user, privileges),
+    modules,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    orgName: platformContext.orgName,
+    siteName: platformContext.siteName,
+    allOrgs: platformContext.allOrgs,
+    sessionTimeout,
+  };
+}
+
 function getPlatformAdminSessionTimeout(config = {}) {
   return parseInt(
     config.platform_admin_session_timeout_minutes || '60',
@@ -1477,32 +1515,59 @@ const authController = {
       }
 
       if (privileges.platformAdmin) {
-        const modules = await getUserModules(user.id);
         const platformContext = await resolvePlatformAdminContext(user, requestedOrgId);
-        const token = issueToken({
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          orgId: platformContext.orgId,
-          siteId: platformContext.siteId,
-          platformAdmin: true,
-        });
-        await trackSessionToken(user.id, token);
         const config = await getSystemConfig();
-        const sessionTimeout = getPlatformAdminSessionTimeout(config);
-        attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
-        return res.status(200).json({
-          message: 'Login successful.',
-          user: toRuntimeUser(user, privileges),
-          modules,
-          orgId: platformContext.orgId,
-          siteId: platformContext.siteId,
-          orgName: platformContext.orgName,
-          siteName: platformContext.siteName,
-          allOrgs: platformContext.allOrgs,
-          sessionTimeout,
-        });
+        let authEvent = 'login_success';
+        if (platformTwoFactorRequired(config)) {
+          // The most powerful account signed in with a password only, because
+          // two-step was set per organisation and a platform admin has none.
+          const settings = await getUser2faSettings(user.id, PLATFORM_2FA_SCOPE);
+          if (settings?.is_enabled && settings.is_locked) {
+            await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'failed', failReason: '2FA locked.', authEvent: '2fa_locked', req });
+            return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Ask another platform administrator to reset it.' });
+          }
+          const trusted = !!settings?.is_enabled
+            && await isTrustedDevice(user.id, PLATFORM_2FA_SCOPE, readRequestCookie(req, trustedDeviceCookieName(user.id)));
+          if (!trusted) {
+            const enrolled = !!settings?.is_enabled;
+            const challengeToken = issueTwoFactorToken({
+              userId: user.id,
+              email: user.email,
+              role: 'platform_admin',
+              platformAdmin: true,
+              orgId: PLATFORM_2FA_SCOPE,
+              siteId: null,
+              orgName: 'MIMS Platform',
+              siteName: null,
+              modules: [],
+              allOrgs: [],
+              sessionTimeout: getPlatformAdminSessionTimeout(config),
+              twoFactorMethods: PLATFORM_2FA_METHODS,
+              rememberDays: platformRememberDays(config),
+              requestedOrgId: platformContext.orgId,
+              mode: enrolled ? 'verify' : 'setup_required',
+            });
+            await logLoginAudit({
+              userId: user.id, userName: user.email, role: 'platform_admin', status: 'pending',
+              authEvent: enrolled ? '2fa_challenge_started' : '2fa_enrollment_offered',
+              metadata: { platform: true, methods: PLATFORM_2FA_METHODS }, req,
+            });
+            return res.status(200).json({
+              twoFactorRequired: enrolled,
+              twoFactorSetupAvailable: !enrolled,
+              twoFactorSetupRequired: !enrolled,
+              platformAdmin: true,
+              challengeToken,
+              availableMethods: PLATFORM_2FA_METHODS,
+              maskedEmail: maskEmail(user.email),
+              rememberDays: platformRememberDays(config),
+              preferredMethod: settings?.preferred_method || null,
+            });
+          }
+          authEvent = '2fa_trusted_device_bypass';
+        }
+        const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent });
+        return res.status(200).json(payload);
       }
 
       const context = await resolveRegularLoginContext(user, requestedOrgId);
@@ -1789,6 +1854,18 @@ const authController = {
         ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
       if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
+
+      if (pending.platformAdmin) {
+        await logLoginAudit({
+          userId: pending.userId, userName: pending.email, role: 'platform_admin', status: 'success', authEvent,
+          metadata: { platform: true, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice }, req,
+        });
+        const privileges = await resolveUserRuntimePrivileges(user);
+        const config = await getSystemConfig();
+        const platformContext = await resolvePlatformAdminContext(user, pending.requestedOrgId || null);
+        const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config });
+        return res.status(200).json({ ...payload, twoFactorSetupCompleted: setupCompleted, backupCodes: generatedBackupCodes });
+      }
 
       const context = {
         orgId: pending.orgId,

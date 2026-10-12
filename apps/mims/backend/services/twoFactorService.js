@@ -6,7 +6,9 @@ const mailer = require('../utils/mailer');
 const pool = require('../database/db');
 
 const OTP_EXPIRY_MINUTES = 5;
-const BACKUP_CODE_COUNT = 5;
+// Ten, was five: the recovery path for a platform administrator with no
+// organisation to fall back on (Rohith's Tier 1, 2026-10-12). Same for everyone.
+const BACKUP_CODE_COUNT = 10;
 
 function base32Encode(buffer) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';

@@ -689,7 +689,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       : twoFactor.twoFactorRequired
                         ? 'Password is correct. Complete 2FA below to finish signing in.'
                         : twoFactor.twoFactorSetupRequired
-                          ? 'Your organisation requires two-factor authentication. Set it up below to finish signing in.'
+                          ? (twoFactor.platformAdmin
+                              ? 'Platform administrators must use two-factor authentication. Set it up below to finish signing in.'
+                              : 'Your organisation requires two-factor authentication. Set it up below to finish signing in.')
                           : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
                   </div>
 
