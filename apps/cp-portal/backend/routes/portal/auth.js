@@ -169,6 +169,7 @@ router.post('/login', async (req, res) => {
 
     const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
     const token = makeToken(user, client.id);
+    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ user: safe });
   } catch (err) {
@@ -200,6 +201,8 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
 
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
+    await sessions.endSession(req.cookies?.cp_portal_token, 'reissued');
+    await sessions.createSession('portal', updated.id, newToken, req.headers['user-agent']);
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Type confirmed.', user: updated });
   } catch (err) {
@@ -288,6 +291,7 @@ router.post('/verify-email', async (req, res) => {
     await pool.execute(`UPDATE cp_portal_users SET email_verified=1, verification_token=NULL, verification_token_expires_at=NULL WHERE id=?`, [user.id]);
 
     const authToken = makeToken(user, user.client_id);
+    await sessions.createSession('portal', user.id, authToken, req.headers['user-agent']);
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty } });
   } catch (err) {
@@ -535,6 +539,7 @@ router.get('/sso/:provider/callback', async (req, res) => {
     }
 
     const token = makeToken(user, client.id);
+    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 });
     const safeReturn = typeof parsed.returnTo === 'string' && parsed.returnTo.startsWith(`/portal/${client.code}`)
       ? parsed.returnTo
@@ -547,7 +552,8 @@ router.get('/sso/:provider/callback', async (req, res) => {
 });
 
 // POST /api/portal/auth/logout — clear auth cookie
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (req, res) => {
+  await sessions.endSession(req.cookies?.cp_portal_token, 'logout').catch(() => {});
   res.clearCookie('cp_portal_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
      .json({ message: 'Logged out.' });
 });

@@ -8,6 +8,7 @@
 
 const jwt        = require('jsonwebtoken');
 const { pool }   = require('../database/db');
+const sessions   = require('../utils/sessions');
 
 if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET) {
@@ -45,6 +46,14 @@ async function authenticateAdmin(req, res, next) {
     // CPPM-60: the role is the account's role now, not the one in the token. A token
     // lasts 12 hours, so an admin made a viewer kept an admin's rights until it expired.
     req.admin.role = row.role;
+    // Idle limit (Rohith's sign-in Tier 1, 12 Oct 2026): the cookie lasted 12 hours
+    // however long the browser sat idle. A session row is kept per sign-in; one
+    // not seen for 30 minutes is ended here. A token with no row — issued before
+    // sessions existed, or already ended — is refused too.
+    const state = await sessions.touchSession('admin', token);
+    if (state !== 'ok') {
+      return res.status(401).json({ error: state === 'idle' ? sessions.idleMessage('admin') : 'Session expired. Please sign in again.' });
+    }
     next();
   } catch (err) {
     next(err);
@@ -67,6 +76,14 @@ async function authenticatePortal(req, _res, next) {
       // CP-26: drop deactivated users AND tokens revoked by a password change.
       if (!userRecord || !userRecord.is_active || (userRecord.token_version ?? 0) !== (payload.tv ?? 0)) {
         req.portalUser = null; // treat as anonymous
+      } else {
+        // Idle limit (Rohith's sign-in Tier 1, 12 Oct 2026): 60 minutes unseen and
+        // the person is anonymous again; the screen that needs them signed in says why.
+        const state = await sessions.touchSession('portal', token);
+        if (state !== 'ok') {
+          req.portalUser = null;
+          req.portalSessionEnded = state === 'idle' ? sessions.idleMessage('portal') : 'Session expired. Please sign in again.';
+        }
       }
     } catch {
       req.portalUser = null; // ignore invalid token for anonymous access
@@ -77,7 +94,7 @@ async function authenticatePortal(req, _res, next) {
 
 async function requirePortalAuth(req, res, next) {
   if (!req.portalUser) {
-    return res.status(401).json({ error: 'Portal login required.' });
+    return res.status(401).json({ error: req.portalSessionEnded || 'Portal login required.' });
   }
   try {
     const [[userRecord]] = await pool.execute(
