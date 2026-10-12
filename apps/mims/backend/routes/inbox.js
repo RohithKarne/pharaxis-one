@@ -314,7 +314,9 @@ async function applyRoutingRules(req, rows) {
 
 // The five inbox tabs, by status. 'archived' is not a tab and is never listed or counted.
 const INBOX_TAB_STATUSES = ['inbox', 'pending', 'processed', 'non_processed', 'outbox'];
-const INBOX_OPEN_STATUSES = ['inbox', 'pending', 'non_processed'];
+// Non-Processed is "no action" (a bounce, an automatic reply, a duplicate): not open
+// work and not SLA risk. It was counted as both (Rohith, 2026-10-12).
+const INBOX_OPEN_STATUSES = ['inbox', 'pending'];
 const INBOX_SLA_STATUSES = ['breached', 'at_risk', 'on_track', 'met'];
 // The screen asks for 50 rows a page; the CSV export asks for this many at once.
 const INBOX_PAGE_SIZE_MAX = 1000;
