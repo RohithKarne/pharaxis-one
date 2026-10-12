@@ -7,6 +7,9 @@
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+// qrcode: draws the authenticator set-up code on our server, so the secret never
+// leaves it (it was sent to an outside QR website). Pure JavaScript, no network.
+const QRCode = require('qrcode');
 const userModel = require('../models/userModel');
 const pool = require('../database/db');
 const JWT_SECRET = require('../utils/jwtSecret');
@@ -1686,7 +1689,10 @@ const authController = {
       const issuer = encodeURIComponent('MIMS');
       const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
       const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauthUrl)}`;
+      // Drawn here, not by an outside QR website that would see the secret
+      // (MIPM-94, Rohith's Tier 1, 2026-10-12). Same field, so the screen is unchanged.
+      const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 220 });
+      const qrUrl = `data:image/svg+xml;utf8,${encodeURIComponent(qrSvg)}`;
       return res.json({ secret, otpauthUrl, qrUrl });
     } catch (err) {
       console.error('beginTotpSetup error:', err);
