@@ -18,7 +18,7 @@
     "migrate:utc": "node scripts/migrate-timestamps-to-utc.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.132.1",
     "@simplewebauthn/server": "^13.3.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
@@ -32,7 +32,7 @@
     "mysql2": "^3.24.5",
     "nodemailer": "^10.0.14",
     "openai": "^6.29.0",
-    "pdfkit": "^0.19.1",
+    "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
