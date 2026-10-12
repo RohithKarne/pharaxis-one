@@ -31,7 +31,8 @@
     "mysql2": "^3.24.5",
     "nodemailer": "^10.0.14",
     "openai": "^6.29.0",
-    "pdfkit": "^0.19.1"
+    "pdfkit": "^0.19.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

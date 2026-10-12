@@ -7,6 +7,9 @@
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+// qrcode: draws the authenticator set-up code on our server, so the secret never
+// leaves it (it was sent to an outside QR website). Pure JavaScript, no network.
+const QRCode = require('qrcode');
 const userModel = require('../models/userModel');
 const pool = require('../database/db');
 const JWT_SECRET = require('../utils/jwtSecret');
@@ -162,9 +165,12 @@ function trustedDeviceCookieName(userId) {
 }
 
 function attachTrustedDeviceCookie(res, userId, rawToken, rememberDays) {
+  // Path '/' not '/api/auth': the built app calls the API at /mims/api, so a
+  // cookie scoped to /api/auth was never sent and "Remember this device" never
+  // worked outside the dev server. Found in the Tier 1 walk, 2026-10-12.
   res.cookie(trustedDeviceCookieName(userId), rawToken, {
     httpOnly: true,
-    path: '/api/auth',
+    path: '/',
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     maxAge: Number(rememberDays || 7) * 24 * 60 * 60 * 1000,
@@ -221,6 +227,44 @@ async function getSystemConfig() {
     acc[row.config_key] = row.config_value;
     return acc;
   }, {});
+}
+
+// Two-step sign-in for platform administrators (Rohith's Tier 1, 2026-10-12;
+// MIPM-98). Their rows in the two-step tables use org_id 0 (migration 168).
+const PLATFORM_2FA_SCOPE = 0;
+const PLATFORM_2FA_METHODS = ['email', 'totp'];
+function platformTwoFactorRequired(config = {}) {
+  return String(config.platform_admin_two_factor_required ?? '1') !== '0';
+}
+function platformRememberDays(config = {}) {
+  return parseInt(config.platform_admin_two_factor_remember_days || '7', 10) || 7;
+}
+
+async function establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent = 'login_success' }) {
+  const modules = await getUserModules(user.id);
+  const token = issueToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    platformAdmin: true,
+  });
+  await trackSessionToken(user.id, token);
+  const sessionTimeout = getPlatformAdminSessionTimeout(config);
+  attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
+  await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent, req });
+  return {
+    message: 'Login successful.',
+    user: toRuntimeUser(user, privileges),
+    modules,
+    orgId: platformContext.orgId,
+    siteId: platformContext.siteId,
+    orgName: platformContext.orgName,
+    siteName: platformContext.siteName,
+    allOrgs: platformContext.allOrgs,
+    sessionTimeout,
+  };
 }
 
 function getPlatformAdminSessionTimeout(config = {}) {
@@ -1339,21 +1383,15 @@ const authController = {
 
       const identity = email.toLowerCase().trim();
 
-      // Check if account is locked (AC-E6)
+      // Lock state (AC-E6). Read here, answered only after the password check:
+      // "Account locked" given before the password was checked told a stranger
+      // which emails have accounts (MIPM-107, Rohith's Tier 1, 2026-10-12).
       const [lockCheck] = await pool.execute(
         'SELECT locked_until, failed_login_attempts FROM users WHERE email = ?',
         [identity]
       );
-      if (lockCheck.length > 0 && lockCheck[0].locked_until) {
-        const lockedUntil = new Date(lockCheck[0].locked_until);
-        if (lockedUntil > new Date()) {
-          return res.status(423).json({
-            error: 'Account locked',
-            message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
-            locked_until: lockedUntil.toISOString()
-          });
-        }
-      }
+      const lockedUntil = lockCheck[0]?.locked_until ? new Date(lockCheck[0].locked_until) : null;
+      const isLocked = !!lockedUntil && lockedUntil > new Date();
 
       const user = await userModel.findByEmail(identity);
       // M-2 / M-3: the password is checked first — against a stand-in hash when
@@ -1397,6 +1435,16 @@ const authController = {
         );
 
         return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+
+      // Right password on a locked account: now, and only now, say so.
+      if (isLocked) {
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account locked', authEvent: 'password_login_failed', req });
+        return res.status(423).json({
+          error: 'Account locked',
+          message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
+          locked_until: lockedUntil.toISOString()
+        });
       }
 
       // MIPM-32: a "Disabled" account passed this check and could sign in with its password.
@@ -1470,32 +1518,59 @@ const authController = {
       }
 
       if (privileges.platformAdmin) {
-        const modules = await getUserModules(user.id);
         const platformContext = await resolvePlatformAdminContext(user, requestedOrgId);
-        const token = issueToken({
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          orgId: platformContext.orgId,
-          siteId: platformContext.siteId,
-          platformAdmin: true,
-        });
-        await trackSessionToken(user.id, token);
         const config = await getSystemConfig();
-        const sessionTimeout = getPlatformAdminSessionTimeout(config);
-        attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
-        return res.status(200).json({
-          message: 'Login successful.',
-          user: toRuntimeUser(user, privileges),
-          modules,
-          orgId: platformContext.orgId,
-          siteId: platformContext.siteId,
-          orgName: platformContext.orgName,
-          siteName: platformContext.siteName,
-          allOrgs: platformContext.allOrgs,
-          sessionTimeout,
-        });
+        let authEvent = 'login_success';
+        if (platformTwoFactorRequired(config)) {
+          // The most powerful account signed in with a password only, because
+          // two-step was set per organisation and a platform admin has none.
+          const settings = await getUser2faSettings(user.id, PLATFORM_2FA_SCOPE);
+          if (settings?.is_enabled && settings.is_locked) {
+            await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'failed', failReason: '2FA locked.', authEvent: '2fa_locked', req });
+            return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Ask another platform administrator to reset it.' });
+          }
+          const trusted = !!settings?.is_enabled
+            && await isTrustedDevice(user.id, PLATFORM_2FA_SCOPE, readRequestCookie(req, trustedDeviceCookieName(user.id)));
+          if (!trusted) {
+            const enrolled = !!settings?.is_enabled;
+            const challengeToken = issueTwoFactorToken({
+              userId: user.id,
+              email: user.email,
+              role: 'platform_admin',
+              platformAdmin: true,
+              orgId: PLATFORM_2FA_SCOPE,
+              siteId: null,
+              orgName: 'MIMS Platform',
+              siteName: null,
+              modules: [],
+              allOrgs: [],
+              sessionTimeout: getPlatformAdminSessionTimeout(config),
+              twoFactorMethods: PLATFORM_2FA_METHODS,
+              rememberDays: platformRememberDays(config),
+              requestedOrgId: platformContext.orgId,
+              mode: enrolled ? 'verify' : 'setup_required',
+            });
+            await logLoginAudit({
+              userId: user.id, userName: user.email, role: 'platform_admin', status: 'pending',
+              authEvent: enrolled ? '2fa_challenge_started' : '2fa_enrollment_offered',
+              metadata: { platform: true, methods: PLATFORM_2FA_METHODS }, req,
+            });
+            return res.status(200).json({
+              twoFactorRequired: enrolled,
+              twoFactorSetupAvailable: !enrolled,
+              twoFactorSetupRequired: !enrolled,
+              platformAdmin: true,
+              challengeToken,
+              availableMethods: PLATFORM_2FA_METHODS,
+              maskedEmail: maskEmail(user.email),
+              rememberDays: platformRememberDays(config),
+              preferredMethod: settings?.preferred_method || null,
+            });
+          }
+          authEvent = '2fa_trusted_device_bypass';
+        }
+        const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent });
+        return res.status(200).json(payload);
       }
 
       const context = await resolveRegularLoginContext(user, requestedOrgId);
@@ -1682,7 +1757,10 @@ const authController = {
       const issuer = encodeURIComponent('MIMS');
       const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
       const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauthUrl)}`;
+      // Drawn here, not by an outside QR website that would see the secret
+      // (MIPM-94, Rohith's Tier 1, 2026-10-12). Same field, so the screen is unchanged.
+      const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 220 });
+      const qrUrl = `data:image/svg+xml;utf8,${encodeURIComponent(qrSvg)}`;
       return res.json({ secret, otpauthUrl, qrUrl });
     } catch (err) {
       console.error('beginTotpSetup error:', err);
@@ -1779,6 +1857,18 @@ const authController = {
         ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
       if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
+
+      if (pending.platformAdmin) {
+        await logLoginAudit({
+          userId: pending.userId, userName: pending.email, role: 'platform_admin', status: 'success', authEvent,
+          metadata: { platform: true, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice }, req,
+        });
+        const privileges = await resolveUserRuntimePrivileges(user);
+        const config = await getSystemConfig();
+        const platformContext = await resolvePlatformAdminContext(user, pending.requestedOrgId || null);
+        const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config });
+        return res.status(200).json({ ...payload, twoFactorSetupCompleted: setupCompleted, backupCodes: generatedBackupCodes });
+      }
 
       const context = {
         orgId: pending.orgId,

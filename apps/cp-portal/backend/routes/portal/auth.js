@@ -16,6 +16,8 @@ const log = require('../../utils/logger');
 const { systemAudit } = require('../../utils/audit');
 const lockout = require('../../utils/loginLockout');
 const { raiseAlert, releaseResolved } = require('../../services/adminAlerts');
+const passwordRules = require('../../utils/passwordRules');
+const sessions = require('../../utils/sessions');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 
@@ -167,6 +169,7 @@ router.post('/login', async (req, res) => {
 
     const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
     const token = makeToken(user, client.id);
+    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ user: safe });
   } catch (err) {
@@ -198,6 +201,8 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
 
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
+    await sessions.endSession(req.cookies?.cp_portal_token, 'reissued');
+    await sessions.createSession('portal', updated.id, newToken, req.headers['user-agent']);
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Type confirmed.', user: updated });
   } catch (err) {
@@ -237,8 +242,6 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
   try {
     const { current_password, new_password } = req.body;
     if (!current_password || !new_password) return res.status(400).json({ error: 'Current and new password are required.' });
-    if (new_password.length < 8)  return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-    if (new_password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
     const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     if (!user || !bcrypt.compareSync(current_password, user.password)) {
@@ -247,13 +250,20 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
     if (bcrypt.compareSync(new_password, user.password)) {
       return res.status(400).json({ error: 'New password must be different from your current password.' });
     }
+    // Rohith's sign-in Tier 1 (12 Oct 2026): 12 characters, not a common password, not one of the last five.
+    const problem = passwordRules.checkPassword(new_password, { email: user.email });
+    if (problem) return res.status(400).json({ error: problem });
+    if (await passwordRules.isRecentPassword('portal', user.id, new_password)) return res.status(400).json({ error: passwordRules.RECENT_MESSAGE });
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
+    await passwordRules.rememberPassword('portal', user.id, hash);
     // CP walk 2026-10-04: re-issue this browser's cookie with the new token version, so the
     // person who changed the password stays signed in; every other browser is signed out.
     // Before, the next page load after a change showed the sign-in page.
     const token = makeToken({ ...user, token_version: (user.token_version ?? 0) + 1 }, req.portalUser.clientId ?? user.client_id);
+    await sessions.endSession(req.cookies?.cp_portal_token, 'reissued');
+    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Password updated successfully.' });
   } catch (err) {
@@ -281,6 +291,7 @@ router.post('/verify-email', async (req, res) => {
     await pool.execute(`UPDATE cp_portal_users SET email_verified=1, verification_token=NULL, verification_token_expires_at=NULL WHERE id=?`, [user.id]);
 
     const authToken = makeToken(user, user.client_id);
+    await sessions.createSession('portal', user.id, authToken, req.headers['user-agent']);
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty } });
   } catch (err) {
@@ -365,21 +376,24 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, new_password } = req.body;
     if (!token || !new_password) return res.status(400).json({ error: 'token and new_password are required.' });
-    if (new_password.length < 8)   return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-    if (new_password.length > 128)  return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const [[user]] = await pool.execute(
-      'SELECT id FROM cp_portal_users WHERE reset_token = ? AND reset_token_expires_at > UTC_TIMESTAMP()',
+      'SELECT id, email FROM cp_portal_users WHERE reset_token = ? AND reset_token_expires_at > UTC_TIMESTAMP()',
       [tokenHash]
     );
     if (!user) return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+    // Rohith's sign-in Tier 1 (12 Oct 2026): 12 characters, not a common password, not one of the last five.
+    const problem = passwordRules.checkPassword(new_password, { email: user.email });
+    if (problem) return res.status(400).json({ error: problem });
+    if (await passwordRules.isRecentPassword('portal', user.id, new_password)) return res.status(400).json({ error: passwordRules.RECENT_MESSAGE });
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute(
       'UPDATE cp_portal_users SET password = ?, token_version = token_version + 1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?',
       [hash, user.id]
     );
+    await passwordRules.rememberPassword('portal', user.id, hash);
     res.json({ message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'POST /reset-password', path: req.path, request_id: req.requestId || null });
@@ -525,6 +539,7 @@ router.get('/sso/:provider/callback', async (req, res) => {
     }
 
     const token = makeToken(user, client.id);
+    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 });
     const safeReturn = typeof parsed.returnTo === 'string' && parsed.returnTo.startsWith(`/portal/${client.code}`)
       ? parsed.returnTo
@@ -537,7 +552,8 @@ router.get('/sso/:provider/callback', async (req, res) => {
 });
 
 // POST /api/portal/auth/logout — clear auth cookie
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (req, res) => {
+  await sessions.endSession(req.cookies?.cp_portal_token, 'logout').catch(() => {});
   res.clearCookie('cp_portal_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
      .json({ message: 'Logged out.' });
 });

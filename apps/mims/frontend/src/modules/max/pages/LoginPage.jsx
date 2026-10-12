@@ -56,7 +56,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [twoFactorMethod, setTwoFactorMethod] = useState('email')
   const [twoFactorCode, setTwoFactorCode] = useState('')
   const [backupCode, setBackupCode] = useState('')
-  const [rememberDevice, setRememberDevice] = useState(true)
+  // Off by default: ticked, the second step was skipped for days on a shared
+  // computer unless the person noticed (MIPM-108, Rohith's Tier 1, 2026-10-12).
+  const [rememberDevice, setRememberDevice] = useState(false)
   const [emailCodeSent, setEmailCodeSent] = useState(false)
   const [totpSetup, setTotpSetup] = useState(null)
   const [postLoginData, setPostLoginData] = useState(null)
@@ -356,7 +358,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       if (data.twoFactorRequired || data.twoFactorSetupAvailable) {
         setTwoFactor(data)
         setTwoFactorMethod(data.preferredMethod || data.availableMethods?.[0] || 'email')
-        setRememberDevice(true)
+        setRememberDevice(false)
         setTwoFactorCode('')
         setBackupCode('')
         setEmailCodeSent(false)
@@ -687,7 +689,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       : twoFactor.twoFactorRequired
                         ? 'Password is correct. Complete 2FA below to finish signing in.'
                         : twoFactor.twoFactorSetupRequired
-                          ? 'Your organisation requires two-factor authentication. Set it up below to finish signing in.'
+                          ? (twoFactor.platformAdmin
+                              ? 'Platform administrators must use two-factor authentication. Set it up below to finish signing in.'
+                              : 'Your organisation requires two-factor authentication. Set it up below to finish signing in.')
                           : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
                   </div>
 

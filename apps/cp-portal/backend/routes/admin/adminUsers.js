@@ -24,6 +24,7 @@ const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
 const lockout = require('../../utils/loginLockout');
 const { releaseWorkHeldBy } = require('../../utils/workOwnership');
+const passwordRules = require('../../utils/passwordRules');
 
 const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'safety_reviewer', 'viewer'];
 
@@ -79,9 +80,8 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, requireRole('s
     if (!ASSIGNABLE_ROLES.includes(role)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${ASSIGNABLE_ROLES.join(', ')}.` });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    }
+    const problem = passwordRules.checkPassword(password, { email });
+    if (problem) return res.status(400).json({ error: problem });
 
     // Non-superadmin can only assign roles below admin
     if (req.admin.role === 'admin' && role === 'admin') {
@@ -97,6 +97,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, requireRole('s
        VALUES (?, ?, ?, ?, ?)`,
       [name, email.toLowerCase().trim(), hash, role, clientId]
     );
+    await passwordRules.rememberPassword('admin', result.insertId, hash);
 
     await audit(req.admin, clientId, 'create', 'admin_user', result.insertId, `Created ${role}: ${email}`);
 
@@ -154,13 +155,16 @@ router.post('/:clientId/:userId/set-password', authenticateAdmin, requireClientA
     const clientId = parseInt(req.params.clientId);
     const userId   = parseInt(req.params.userId);
     const password = String(req.body?.password || '');
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     const [[user]] = await pool.execute('SELECT id, email, role FROM cp_admin_users WHERE id = ? AND client_id = ?', [userId, clientId]);
     if (!user) return res.status(404).json({ error: 'Admin user not found.' });
     if (user.role === 'superadmin') return res.status(403).json({ error: 'Superadmin accounts cannot be changed here.' });
     if (user.id === req.admin.adminId) return res.status(400).json({ error: 'Use "Change password" at the foot of the menu for your own account.' });
+    const problem = passwordRules.checkPassword(password, { email: user.email });
+    if (problem) return res.status(400).json({ error: problem });
+    if (await passwordRules.isRecentPassword('admin', userId, password)) return res.status(400).json({ error: passwordRules.RECENT_MESSAGE });
     const hash = bcrypt.hashSync(password, 12);
     await pool.execute('UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?', [hash, userId]);
+    await passwordRules.rememberPassword('admin', userId, hash);
     await audit(req.admin, clientId, 'PASSWORD_SET', 'admin_user', userId, { email: user.email });
     res.json({ message: `New password set for ${user.email}. Any session they had open is signed out.` });
   } catch (err) {
@@ -183,6 +187,35 @@ router.post('/:clientId/:userId/unlock', authenticateAdmin, requireClientAccess,
     res.json({ message: removed ? 'Sign-in unlocked.' : 'This admin’s sign-in was not locked.' });
   } catch (err) {
     log.error('admin.adminUsers.error', { err, route: 'POST /:clientId/:userId/unlock', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /:clientId/:userId/reset-2fa — start two-step sign-in over for an admin ──
+// Three wrong codes lock the second step, and a lost phone loses it for good;
+// either way another admin of the client (or a superadmin) resets it here. The
+// person is made to set it up again at their next sign-in; remembered devices
+// and unused backup codes are gone too (Rohith's sign-in Tier 1, 12 Oct 2026).
+router.post('/:clientId/:userId/reset-2fa', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.clientId);
+    const userId   = parseInt(req.params.userId);
+    const [[user]] = await pool.execute(
+      req.admin.role === 'superadmin'
+        ? 'SELECT id, email FROM cp_admin_users WHERE id = ?'
+        : 'SELECT id, email FROM cp_admin_users WHERE id = ? AND client_id = ?',
+      req.admin.role === 'superadmin' ? [userId] : [userId, clientId]
+    );
+    if (!user) return res.status(404).json({ error: 'Admin user not found.' });
+    if (user.id === req.admin.adminId) return res.status(400).json({ error: 'Ask another administrator to reset your own two-step sign-in.' });
+    await pool.execute('DELETE FROM cp_admin_2fa WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_2fa_backup_codes WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_2fa_challenges WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_trusted_devices WHERE admin_id = ?', [userId]);
+    await audit(req.admin, clientId || null, 'RESET_2FA', 'admin_user', userId, { email: user.email });
+    res.json({ message: `Two-step sign-in reset for ${user.email}. They will set it up again at their next sign-in.` });
+  } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'POST /:clientId/:userId/reset-2fa', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

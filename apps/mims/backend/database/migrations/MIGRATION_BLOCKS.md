@@ -19,6 +19,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 163 | **MIMS screen review (MIPM-222)** | **DONE** | Within the 100+ block. Organisation case-form fields take the case type of their AE / MI / PC section. |
 | 164–165 | **CP Portal to MIMS bridge plan (Rohith's decisions of 2026-10-10)** | **DONE** | Within the 100+ block. Fingerprint of the report a bridge case came from, P5 (164); a connection's previous secret while a new one beds in, P7 (165). |
 | 166 | **CP Portal to MIMS bridge features F1, F3, F5 (Rohith, 2026-10-10)** | **DONE** | Within the 100+ block. A case's link back to the sending portal (F1), questions MIMS asks the reporter through the portal (F3), and an earlier case flagged as a possible duplicate (F5). |
+| 168 | **MIMS sign-in Tier 1 (Rohith, 2026-10-12; MIPM-98)** | **DONE** | Within the 100+ block. Two-step sign-in for platform administrators: the organisation foreign key is dropped from the four two-step tables so the platform scope can use org_id 0; `platform_admin_two_factor_required` seeded on. |
 | 167 | **MIMS role walk (2026-10-10)** | **DONE** | Within the 100+ block. An "auditor" role that can only view cases and reports, given by the Read-only Auditor template; template groups still giving "reviewer" move to it with their members. |
 
 ## Rules

@@ -122,6 +122,22 @@ async function loginWithCandidates() {
         .post('/api/auth/2fa/skip-setup')
         .send({ challengeToken: res.body.challengeToken });
       if (skip.status === 200 && sessionCookie(skip)) return skip;
+
+      // A platform administrator cannot skip: two-step sign-in is required
+      // (Rohith, 2026-10-12). Set up the authenticator app the way the screen
+      // does and answer with a code computed from the secret it returns.
+      if (res.body.twoFactorSetupRequired) {
+        const setup = await request(app)
+          .post('/api/auth/2fa/setup/totp')
+          .send({ challengeToken: res.body.challengeToken });
+        const { generateTotpToken } = require('../services/twoFactorService');
+        const verify = await request(app)
+          .post('/api/auth/2fa/verify')
+          .send({ challengeToken: res.body.challengeToken, method: 'totp', code: generateTotpToken(setup.body.secret) });
+        if (verify.status === 200 && sessionCookie(verify)) return verify;
+        failures.push(`2fa setup status ${setup.status}/${verify.status} for ${candidate.email}`);
+        continue;
+      }
       failures.push(`challenge status ${skip.status} for ${candidate.email}`);
       continue;
     }
