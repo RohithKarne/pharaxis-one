@@ -42,7 +42,8 @@ const GROUP_TEMPLATES = [
     name: 'MI Agent',
     role: 'agent',
     description: 'Medical information user for intake, case creation, updates, correspondence, and transmission preparation.',
-    privileges: ['case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.assign', 'case.assign_all', 'transmission.create', 'reports.view'],
+    // No reports.view: the agent role has no Reports module, so the grant promised a screen it could not open.
+    privileges: ['case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.assign', 'case.assign_all', 'transmission.create'],
   },
   {
     key: 'reviewer',
@@ -63,7 +64,8 @@ const GROUP_TEMPLATES = [
     name: 'Content Manager',
     role: 'content_manager',
     description: 'Content lifecycle user for authoring and review activities.',
-    privileges: ['content.author', 'content.review', 'reports.view'],
+    // No reports.view: the content_manager role has no Reports module either.
+    privileges: ['content.author', 'content.review'],
   },
   {
     key: 'readonly_auditor',
