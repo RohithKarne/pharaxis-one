@@ -50,7 +50,6 @@ const { attachChatRealtime } = require('./services/chatRealtimeService');
 const { attachCasePresence } = require('./services/casePresenceService');
 const ocrWorker = require('./services/ocrWorker');
 const { attachAppRealtime } = require('./services/appRealtimeService');
-const { ensureMobilePushSchema } = require('./services/mobilePushService');
 const { warnOnUnreachableAlertRules } = require('./services/alertService');
 const changeApprovals = require('./routes/admin/changeApprovals');
 const dependencyCheck = require('./routes/admin/dependencyCheck');
@@ -290,10 +289,6 @@ function mountRoutes(r, prefix = '') {
   // Auth
   r.use(`${prefix}/auth`, authRateLimiter, require('./routes/auth'));
   r.use(`${prefix}/inbox`, require('./routes/inbox'));
-  // PARK: mobile app is pre-GA (no offline sync). Mobile-sync backend off by default.
-  if (process.env.ENABLE_MOBILE === 'true') {
-    r.use(`${prefix}/mobile-sync`, require('./routes/mobileSync'));
-  }
 
   // Admin
   // CUT: the in-app regression runner is dev tooling (belongs in CI), off by default.
@@ -503,7 +498,6 @@ let server;
 const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID;
 if (!isTestEnv) {
   initPromise.then(() => {
-    ensureMobilePushSchema().catch(() => {});
     warnOnUnreachableAlertRules().catch(err => logger.warn({ err }, 'Alert rule reachability check failed'));
     startWorkers();        // forks pollerProcess + schedulerProcess as child processes
     startDpprScheduler();

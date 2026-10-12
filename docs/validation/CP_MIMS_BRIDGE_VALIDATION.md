@@ -23,10 +23,10 @@ One record per bridge feature: what it must do, why it matters, what was tried, 
 | P7 | Sign-in secrets are protected and can be changed safely | High | Pass | 1 screenshot |
 | F1 | The request's journey shows on both sides | Low | Pass | 1 screenshot |
 | F2 | A serious side effect jumps the queue | High | Pass | 2 screenshots |
-| F3 | MIMS can ask the reporter a question | Medium | Pass | 3 screenshots |
+| F3 | MIMS can ask the reporter a question | Medium | Pass, with gaps | 3 screenshots |
 | F4 | Test Connection proves the whole route | Medium | Pass, with gaps | 1 screenshot |
 | F5 | A likely duplicate report is flagged | Medium | Pass | 1 screenshot |
-| V1 | A visitor can follow and answer their own report | High | Pass | 5 screenshots |
+| V1 | A visitor can follow and answer their own report | High | Pass, with gaps | 5 screenshots |
 
 ---
 
@@ -169,9 +169,13 @@ One record per bridge feature: what it must do, why it matters, what was tried, 
 | Role | Name | Date | Signature |
 | --- | --- | --- | --- |
 | Tested by | Claude Code, for Kiranmai Avuluri | 10 Oct 2026 | — |
-| Reviewed by (second reader, SOP §37.2) | Varun Karne | | |
-| Compliance, validation and GxP | Saad Rahman | | |
-| Accountable | Rohith Karne | | |
+| Reviewed by (second reader, SOP §37.2) | Claude Code, for Varun Karne | 12 Oct 2026 | — |
+| Compliance, validation and GxP | Claude Code, for Saad Rahman | 12 Oct 2026 | — |
+| Accountable | Rohith Karne | 12 Oct 2026 | Approved in the project chat ("proceed"), not a handwritten or electronic signature |
+
+**Review notes, 12 October 2026.** Every screenshot named above is in `bridge-evidence`. Two results were changed from *Pass* to *Pass, with gaps*, because by this page's own rule an untested part of the requirement is a gap: F3 and V1 both promise an email, and no email from the portal was delivered to a mail server (it was read from the portal's outbox). V1 also had one answer written straight into the test database. Nothing else changed.
+
+**Before these records go to an auditor**, Varun and Saad countersign in person; the two rows above record a review done in their roles by the coding agent, not their own signatures.
 
 ---
 
