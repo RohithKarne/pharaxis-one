@@ -22,6 +22,7 @@ const twoFactor = require('../../utils/twoFactor');
 const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
 const { queueEmail } = require('../../utils/emailOutbox');
 const { getEmailConfig } = require('../../utils/mailer');
+const passkeys = require('../../utils/passkeys');
 
 // SEC: admin console is same-origin only and never linked cross-site, so Strict
 // SameSite is safe here and gives full CSRF protection on the admin surface.
@@ -340,6 +341,108 @@ router.post('/2fa/verify', async (req, res) => {
 });
 
 // GET /api/admin/auth/me
+// ── Passkeys (Rohith's sign-in Tier 2, 12 Oct 2026) ─────────────────────────
+// A registered device signs in with Touch ID, Face ID or Windows Hello in place
+// of the password and the code: the device itself is the second step. The
+// lock on the password sign-in still applies, and a deactivated account is
+// refused as everywhere else.
+
+// POST /api/admin/auth/passkeys/login/start — the challenge for this email's passkeys
+router.post('/passkeys/login/start', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    if (!email) return res.status(400).json({ error: 'Enter your email first.' });
+    const [[user]] = await pool.execute('SELECT id FROM cp_admin_users WHERE email = ? AND is_active = 1', [email]);
+    // The same answer for an unknown email and one with no passkey, so this route lists nobody.
+    const options = user ? await passkeys.authenticationOptions(user.id) : null;
+    if (!options) return res.json({ available: false });
+    res.json({ available: true, options });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /passkeys/login/start', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/auth/passkeys/login/finish — the signed challenge; signs in on success
+router.post('/passkeys/login/finish', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    const { authenticationResponse } = req.body || {};
+    if (!email || !authenticationResponse) return res.status(400).json({ error: 'Email and passkey response are required.' });
+    const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE email = ? AND is_active = 1', [email]);
+    if (!user) return res.status(401).json({ error: 'The passkey could not be verified.' });
+    const who = { adminId: user.id, name: user.name };
+    if (await lockout.isLocked(lockout.loginKey('admin', null, email))) {
+      await audit(who, user.client_id, 'LOGIN_FAILED', 'admin_user', user.id, { email, reason: 'locked', method: 'passkey' });
+      return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+    }
+    try {
+      await passkeys.finishAuthentication(user.id, authenticationResponse);
+    } catch (err) {
+      await audit(who, user.client_id, 'LOGIN_FAILED', 'admin_user', user.id, { email, reason: 'passkey_failed', method: 'passkey' });
+      return res.status(err.code === 'CHALLENGE_EXPIRED' ? 400 : 401).json({ error: err.message });
+    }
+    return establishSession(req, res, user, { auditDetails: { second_step: 'passkey' } });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /passkeys/login/finish', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/auth/passkeys — the signed-in admin's own devices
+router.get('/passkeys', authenticateAdmin, async (req, res) => {
+  try {
+    res.json({ passkeys: await passkeys.listPasskeys(req.admin.adminId) });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'GET /passkeys', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/auth/passkeys/register/start
+router.post('/passkeys/register/start', authenticateAdmin, async (req, res) => {
+  try {
+    const [[user]] = await pool.execute('SELECT id, name, email FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    res.json({ options: await passkeys.registrationOptions(user) });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /passkeys/register/start', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/auth/passkeys/register/finish
+router.post('/passkeys/register/finish', authenticateAdmin, async (req, res) => {
+  try {
+    const { registrationResponse, deviceName } = req.body || {};
+    if (!registrationResponse) return res.status(400).json({ error: 'Registration response is required.' });
+    const [[user]] = await pool.execute('SELECT id, name, email, client_id FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    let row;
+    try {
+      row = await passkeys.finishRegistration(user, registrationResponse, deviceName);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    await audit(req.admin, user.client_id, 'PASSKEY_ADDED', 'admin_user', user.id, { passkey_id: row.id, device_name: deviceName || null });
+    res.json({ passkey: row });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /passkeys/register/finish', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// DELETE /api/admin/auth/passkeys/:id
+router.delete('/passkeys/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!await passkeys.removePasskey(req.admin.adminId, id)) return res.status(404).json({ error: 'Passkey not found.' });
+    await audit(req.admin, req.admin.clientId ?? null, 'PASSKEY_REMOVED', 'admin_user', req.admin.adminId, { passkey_id: id });
+    res.json({ message: 'Passkey removed.' });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'DELETE /passkeys/:id', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.get('/me', authenticateAdmin, async (req, res) => {
   try {
     const [[user]] = await pool.execute('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);

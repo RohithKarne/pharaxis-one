@@ -30,6 +30,10 @@ export default function LoginPage() {
   const [totpSetup, setTotpSetup] = useState(null)
   const [backupCodes, setBackupCodes] = useState(null)
   const [finished, setFinished] = useState(null)
+  // Passkeys (Rohith's sign-in Tier 2, 12 Oct 2026): a registered device signs
+  // in with Touch ID, Face ID or Windows Hello in place of password and code.
+  const passkeysSupported = typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined'
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
 
   function switchMode(nextMode) {
     setMode(nextMode)
@@ -80,6 +84,26 @@ export default function LoginPage() {
       setError('Network error. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function signInWithPasskey() {
+    const who = email.trim()
+    if (!who) return setError('Enter your email, then choose the passkey.')
+    setError(''); setPasskeyLoading(true)
+    try {
+      const start = await post('/api/admin/auth/passkeys/login/start', { email: who })
+      if (!start.res.ok) return setError(start.data.error || 'Could not start the passkey sign-in.')
+      if (!start.data.available) return setError('No passkey is set up for this email. Sign in with your password, then add one under Security.')
+      const { startAuthentication } = await import('@simplewebauthn/browser')
+      const authenticationResponse = await startAuthentication({ optionsJSON: start.data.options })
+      const { res, data } = await post('/api/admin/auth/passkeys/login/finish', { email: who, authenticationResponse })
+      if (!res.ok) return setError(data.error || 'The passkey could not be verified.')
+      await finish(data)
+    } catch (err) {
+      setError(err?.name === 'NotAllowedError' ? 'The passkey prompt was cancelled.' : 'The passkey could not complete. Sign in with your password instead.')
+    } finally {
+      setPasskeyLoading(false)
     }
   }
 
@@ -235,9 +259,14 @@ export default function LoginPage() {
               </div>
             </div>
             {error && <div className="cp-error">{error}</div>}
-            <button type="submit" className="cp-btn cp-btn-primary" disabled={loading}>
+            <button type="submit" className="cp-btn cp-btn-primary" disabled={loading || passkeyLoading}>
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
+            {passkeysSupported && (
+              <button type="button" className="cp-btn cp-btn-secondary" onClick={signInWithPasskey} disabled={loading || passkeyLoading}>
+                {passkeyLoading ? 'Waiting for your device…' : 'Sign in with a passkey'}
+              </button>
+            )}
             {mode === 'superadmin' ? (
               <button type="button" className="cp-btn cp-btn-secondary" onClick={() => switchMode('admin')} disabled={loading}>
                 Back to App Login
