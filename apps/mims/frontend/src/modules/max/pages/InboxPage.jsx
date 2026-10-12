@@ -1018,8 +1018,11 @@ export default function InboxPage() {
     if (dueStatus === 'overdue') chips.push({ label: 'Overdue', tone: 'risk' })
     if (dueStatus === 'today') chips.push({ label: 'Due today', tone: 'warning' })
     // SLA state is the server's verdict on the row; the chips do not re-derive it.
-    if (inquiry.first_touch_sla_status === 'breached') chips.push({ label: 'First Touch SLA', tone: 'risk' })
-    if (inquiry.response_sla_status === 'breached') chips.push({ label: 'Response SLA', tone: 'risk' })
+    // A Non-Processed row is "no action" (a bounce, an automatic reply): no clock on it.
+    const noAction = inquiry.status === 'non_processed'
+    if (!noAction && inquiry.first_touch_sla_status === 'breached') chips.push({ label: 'First Touch SLA', tone: 'risk' })
+    if (!noAction && inquiry.response_sla_status === 'breached') chips.push({ label: 'Response SLA', tone: 'risk' })
+    if (noAction && inquiry.routing_reason) chips.push({ label: inquiry.routing_reason.split(':')[0], tone: 'neutral' })
     if (inquiry.assigned_to) chips.push({ label: inquiry.assigned_to, tone: 'neutral' })
 
     return chips
@@ -1396,6 +1399,12 @@ export default function InboxPage() {
                           ) : 'Not linked'}
                         </span>
                       </div>
+                      {selected.status === 'non_processed' && selected.routing_reason && (
+                        <div className="inbox-meta-inline-item">
+                          <span className="meta-label">Filed as Non-Processed</span>
+                          <span className="meta-value">{selected.routing_reason}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="inbox-detail-controls">
@@ -1484,6 +1493,9 @@ export default function InboxPage() {
                     </div>
 
                     <div className="inbox-sla-actions-row">
+                      {selected.status === 'non_processed' ? (
+                        <div className="inbox-sla-strip"><span className="inbox-sla-time">No action needed: no first-touch or response clock on this message.</span></div>
+                      ) : (
                       <div className="inbox-sla-strip">
                         {/* H2 FIX: use slaClass() so on_track/met don't show yellow due-today badge */}
                         <span className={`due-badge ${slaClass(selected.first_touch_sla_status)}`}>
@@ -1500,6 +1512,7 @@ export default function InboxPage() {
                         )}
                         <span className="inbox-sla-read-summary">{formatReadReceiptSummary(selected)}</span>
                       </div>
+                      )}
                       <div className="inbox-insight-toolbar">
                         <button
                           className={`inbox-insight-btn ${insightPanel === 'notes' ? 'active' : ''}`}

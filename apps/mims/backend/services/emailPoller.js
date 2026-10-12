@@ -102,8 +102,47 @@ async function* fetchInBatches(client, uids) {
   }
 }
 
+// ── Automatic mail (Rohith, 2026-10-12) ──────────────────────────────────────
+// A bounce ("Delivery Status Notification") or an automatic reply is not an
+// enquiry. It used to land in the Inbox tab as medical information with a
+// first-touch clock. It is now filed straight to Non-Processed, marked no
+// action, with the reason kept in routing_reason. Detected by the mail's own
+// markers, not by guessing from the body.
+const BOUNCE_SUBJECT = /delivery status notification|undeliverable|mail delivery (failed|failure|subsystem)|returned mail|delivery (has )?failed|failure notice/i
+const AUTOREPLY_SUBJECT = /^\s*(re:\s*)?(automatic reply|auto(matic|mated)?[ -]?(reply|response)|out of (the )?office)/i
+
+function automaticMailReason(parsedEmail) {
+  if (!parsedEmail) return null
+  const from = String(parsedEmail.from?.value?.[0]?.address || parsedEmail.from?.text || '').toLowerCase()
+  const subject = String(parsedEmail.subject || '')
+  const headers = parsedEmail.headers
+  const header = (name) => { const h = headers?.get?.(name); return h == null ? '' : (typeof h === 'string' ? h : (h.value || '')) }
+  const contentType = headers?.get?.('content-type')
+  const reportType = String(contentType?.params?.['report-type'] || '').toLowerCase()
+  if (reportType === 'delivery-status' || /^(mailer-daemon|postmaster)@/.test(from) || BOUNCE_SUBJECT.test(subject)) return 'Bounce: the mail server could not deliver a message'
+  const autoSubmitted = String(header('auto-submitted')).toLowerCase()
+  if ((autoSubmitted && autoSubmitted !== 'no') || /^yes$/i.test(String(header('x-autoreply'))) || AUTOREPLY_SUBJECT.test(subject)) return 'Automatic reply'
+  return null
+}
+
+// Messages already held before this rule existed get the same filing, once per
+// fetch, so the Inbox tab does not keep showing old bounces. Only untouched
+// rows move: still in the Inbox tab, no case, nobody has picked them up.
+async function fileHeldAutomaticMail(accountId) {
+  const [r] = await pool.execute(
+    `UPDATE inquiries
+     SET status = 'non_processed', triage_state = 'no_action',
+         routing_reason = IF(LOWER(sender) REGEXP '(mailer-daemon|postmaster)@' OR subject REGEXP ?, 'Bounce: the mail server could not deliver a message', 'Automatic reply')
+     WHERE email_account_id = ? AND status = 'inbox' AND case_id IS NULL AND first_touched_at IS NULL
+       AND (LOWER(sender) REGEXP '(mailer-daemon|postmaster)@' OR subject REGEXP ? OR subject REGEXP ?)`,
+    [BOUNCE_SUBJECT.source, accountId, BOUNCE_SUBJECT.source, AUTOREPLY_SUBJECT.source]
+  )
+  return r.affectedRows
+}
+
 async function ingestAccount(account, sinceDt) {
   const { ImapFlow } = require('imapflow')
+  await fileHeldAutomaticMail(account.id).catch((err) => logger.warn({ account_id: account.id, error: safeText(err?.message || err, 160) }, 'Filing held automatic mail failed'))
 
   const IMAP_CONNECT_TIMEOUT_MS = parseInt(process.env.IMAP_CONNECT_TIMEOUT_MS || '10000', 10);
   const IMAP_SOCKET_TIMEOUT_MS  = parseInt(process.env.IMAP_SOCKET_TIMEOUT_MS  || '30000', 10);
@@ -172,13 +211,14 @@ async function ingestAccount(account, sinceDt) {
         const attachments_count = parsedEmail?.attachments?.length || 0
 
         const message_hash = messageId ? null : hashFallback({ sender, recipient, subject, receivedAt, body: bodyText, attachmentsCount: attachments_count })
+        const automaticReason = automaticMailReason(parsedEmail)
 
         const [result] = await pool.execute(`
           INSERT IGNORE INTO inquiries (
             org_id, email_account_id, message_id, message_hash,
             sender, recipient, subject, body, received_at,
-            status, attachments_count, source_tag
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbox', ?, ?)
+            status, triage_state, routing_reason, attachments_count, source_tag
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           account.org_id || null,
           account.id,
@@ -189,6 +229,9 @@ async function ingestAccount(account, sinceDt) {
           subject,
           bodyText,
           receivedAt,
+          automaticReason ? 'non_processed' : 'inbox',
+          automaticReason ? 'no_action' : null,
+          automaticReason,
           attachments_count,
           'Email'
         ])
@@ -205,7 +248,7 @@ async function ingestAccount(account, sinceDt) {
             ORDER BY id DESC LIMIT 1
           `, [account.id, messageId, message_hash])
 
-          if (inquiry?.id) {
+          if (inquiry?.id && !automaticReason) {
             classifyInquiry(inquiry.id).catch((err) => {
               logger.warn({ inquiry_id: inquiry.id, error: safeText(err?.message || err, 160) }, 'AI inbox classification failed')
             })
@@ -453,4 +496,4 @@ async function stopPoller() {
   }
 }
 
-module.exports = { startPoller, stopPoller, ingestAccount }
+module.exports = { startPoller, stopPoller, ingestAccount, automaticMailReason, fileHeldAutomaticMail }
