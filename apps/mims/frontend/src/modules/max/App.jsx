@@ -214,7 +214,8 @@ function AppRoutes() {
       />
       <Suspense fallback={<PageLoader />}>
       <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* Signed in: the Overview. Signed out: ProtectedRoute sends to sign-in. */}
+          <Route path="/" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/mims-admin/login" element={<LoginPage adminMode />} />
           <Route path="/content/login" element={<LoginPage moduleMode="content" />} />
