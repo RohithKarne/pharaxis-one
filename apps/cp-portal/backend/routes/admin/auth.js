@@ -6,6 +6,7 @@
 const express = require('express');
 const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
+const crypto  = require('crypto');
 // qrcode: draws the authenticator set-up code on our server, so the secret never
 // leaves it. Pure JavaScript, no network. (Rohith's sign-in Tier 1, 12 Oct 2026.)
 const QRCode  = require('qrcode');
@@ -47,7 +48,9 @@ function adminPayload(user) {
 async function establishSession(req, res, user, extra = {}) {
   const token = jwt.sign(
     // CP-26: embed token_version for revocation on password change.
-    { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv: user.token_version ?? 0 },
+    // jti: two sign-ins by the same person in the same second otherwise produce the
+    // same token, and the session row's unique key refused the second (Tier 2 walk, 12 Oct 2026).
+    { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv: user.token_version ?? 0, jti: crypto.randomBytes(8).toString('hex') },
     ADMIN_SECRET,
     { expiresIn: `${SESSION_HOURS}h` }
   );
@@ -213,7 +216,7 @@ router.post('/login', async (req, res) => {
       return res.status(423).json({ error: LOCKED_2FA });
     }
     if (settings?.is_enabled && await isTrustedDevice(user.id, req.cookies?.[TRUSTED_COOKIE])) {
-      return establishSession(req, res, user, { auditDetails: { second_step: 'remembered_device' } });
+      return await establishSession(req, res, user, { auditDetails: { second_step: 'remembered_device' } });
     }
     const methods = await availableMethods(user);
     await audit(who, user.client_id, settings?.is_enabled ? '2FA_CHALLENGE' : '2FA_SETUP_REQUIRED', 'admin_user', user.id, { email: user.email, methods });
@@ -339,7 +342,7 @@ router.post('/2fa/verify', async (req, res) => {
     }
     await audit({ adminId: user.id, name: user.name }, user.client_id, mode === 'setup' ? '2FA_SETUP' : '2FA_VERIFIED', 'admin_user', user.id,
       { email: user.email, method: secondStep, remembered_device: !!rememberDevice });
-    return establishSession(req, res, user, {
+    return await establishSession(req, res, user, {
       auditDetails: { second_step: secondStep },
       body: backupCodes ? { backupCodes } : {},
     });
@@ -391,7 +394,7 @@ router.post('/passkeys/login/finish', async (req, res) => {
       await audit(who, user.client_id, 'LOGIN_FAILED', 'admin_user', user.id, { email, reason: 'passkey_failed', method: 'passkey' });
       return res.status(err.code === 'CHALLENGE_EXPIRED' ? 400 : 401).json({ error: err.message });
     }
-    return establishSession(req, res, user, { auditDetails: { second_step: 'passkey' } });
+    return await establishSession(req, res, user, { auditDetails: { second_step: 'passkey' } });
   } catch (err) {
     log.error('admin.auth.error', { err, route: 'POST /passkeys/login/finish', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -523,7 +526,7 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
     // signed in; any other browser they were signed in on is signed out (CP walk, 4 Oct 2026).
     const tv = (user.token_version ?? 0) + 1;
     const token = jwt.sign(
-      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv },
+      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv, jti: crypto.randomBytes(8).toString('hex') },
       ADMIN_SECRET, { expiresIn: `${SESSION_HOURS}h` }
     );
     await sessions.endSession(req.cookies?.cp_admin_token, 'reissued');

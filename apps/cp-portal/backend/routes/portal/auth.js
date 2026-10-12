@@ -37,7 +37,9 @@ async function getValidTypes(clientId) {
 function makeToken(user, clientId) {
   return jwt.sign(
     // CP-26: embed token_version so a password change/reset can revoke old tokens.
-    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type, tv: user.token_version ?? 0 },
+    // jti: two sign-ins in the same second otherwise produce the same token, which
+    // the session row's unique key refuses (Tier 2 walk, 12 Oct 2026).
+    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type, tv: user.token_version ?? 0, jti: crypto.randomBytes(8).toString('hex') },
     PORTAL_SECRET,
     { expiresIn: '24h' }
   );
