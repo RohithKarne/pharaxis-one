@@ -187,6 +187,35 @@ router.post('/:clientId/:userId/unlock', authenticateAdmin, requireClientAccess,
   }
 });
 
+// ── POST /:clientId/:userId/reset-2fa — start two-step sign-in over for an admin ──
+// Three wrong codes lock the second step, and a lost phone loses it for good;
+// either way another admin of the client (or a superadmin) resets it here. The
+// person is made to set it up again at their next sign-in; remembered devices
+// and unused backup codes are gone too (Rohith's sign-in Tier 1, 12 Oct 2026).
+router.post('/:clientId/:userId/reset-2fa', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.clientId);
+    const userId   = parseInt(req.params.userId);
+    const [[user]] = await pool.execute(
+      req.admin.role === 'superadmin'
+        ? 'SELECT id, email FROM cp_admin_users WHERE id = ?'
+        : 'SELECT id, email FROM cp_admin_users WHERE id = ? AND client_id = ?',
+      req.admin.role === 'superadmin' ? [userId] : [userId, clientId]
+    );
+    if (!user) return res.status(404).json({ error: 'Admin user not found.' });
+    if (user.id === req.admin.adminId) return res.status(400).json({ error: 'Ask another administrator to reset your own two-step sign-in.' });
+    await pool.execute('DELETE FROM cp_admin_2fa WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_2fa_backup_codes WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_2fa_challenges WHERE admin_id = ?', [userId]);
+    await pool.execute('DELETE FROM cp_admin_trusted_devices WHERE admin_id = ?', [userId]);
+    await audit(req.admin, clientId || null, 'RESET_2FA', 'admin_user', userId, { email: user.email });
+    res.json({ message: `Two-step sign-in reset for ${user.email}. They will set it up again at their next sign-in.` });
+  } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'POST /:clientId/:userId/reset-2fa', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── DELETE /:clientId/:userId — deactivate (soft delete) ─────────────────────
 router.delete('/:clientId/:userId', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
   try {
