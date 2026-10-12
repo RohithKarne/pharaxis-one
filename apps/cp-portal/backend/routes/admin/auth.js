@@ -443,6 +443,42 @@ router.delete('/passkeys/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ── Where you are signed in (Rohith's sign-in Tier 2, 12 Oct 2026) ──────────
+// GET /api/admin/auth/sessions — this admin's open sessions, the current one marked
+router.get('/sessions', authenticateAdmin, async (req, res) => {
+  try {
+    res.json({ sessions: await sessions.listSessions('admin', req.admin.adminId, req.cookies?.cp_admin_token) });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'GET /sessions', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/auth/sessions/end-others — sign out everywhere else
+router.post('/sessions/end-others', authenticateAdmin, async (req, res) => {
+  try {
+    const ended = await sessions.endOtherSessions('admin', req.admin.adminId, req.cookies?.cp_admin_token);
+    await audit(req.admin, req.admin.clientId ?? null, 'SESSIONS_ENDED', 'admin_user', req.admin.adminId, { ended });
+    res.json({ ended });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /sessions/end-others', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/auth/sessions/:id/end — end one other session
+router.post('/sessions/:id/end', authenticateAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!await sessions.endSessionById('admin', req.admin.adminId, id)) return res.status(404).json({ error: 'Session not found.' });
+    await audit(req.admin, req.admin.clientId ?? null, 'SESSIONS_ENDED', 'admin_user', req.admin.adminId, { ended: 1, session_id: id });
+    res.json({ message: 'Session ended.' });
+  } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /sessions/:id/end', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.get('/me', authenticateAdmin, async (req, res) => {
   try {
     const [[user]] = await pool.execute('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);

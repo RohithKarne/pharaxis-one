@@ -552,6 +552,39 @@ router.get('/sso/:provider/callback', async (req, res) => {
 });
 
 // POST /api/portal/auth/logout — clear auth cookie
+// ── Where you are signed in (Rohith's sign-in Tier 2, 12 Oct 2026) ──────────
+router.get('/sessions', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    res.json({ sessions: await sessions.listSessions('portal', req.portalUser.userId, req.cookies?.cp_portal_token) });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'GET /sessions', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/sessions/end-others', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const ended = await sessions.endOtherSessions('portal', req.portalUser.userId, req.cookies?.cp_portal_token);
+    await systemAudit('portal sign-in', req.portalUser.clientId, 'SESSIONS_ENDED', 'portal_user', req.portalUser.userId, { ended });
+    res.json({ ended });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /sessions/end-others', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/sessions/:id/end', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!await sessions.endSessionById('portal', req.portalUser.userId, id)) return res.status(404).json({ error: 'Session not found.' });
+    await systemAudit('portal sign-in', req.portalUser.clientId, 'SESSIONS_ENDED', 'portal_user', req.portalUser.userId, { ended: 1, session_id: id });
+    res.json({ message: 'Session ended.' });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /sessions/:id/end', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   await sessions.endSession(req.cookies?.cp_portal_token, 'logout').catch(() => {});
   res.clearCookie('cp_portal_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })

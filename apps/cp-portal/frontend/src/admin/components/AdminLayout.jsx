@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth, adminHeaders } from '../context/AdminAuthContext'
+import { browserLabel } from '../../shared/utils/browserLabel'
 import PageLoader from './PageLoader'
 import Icon from '../../shared/components/Icon'
 
@@ -220,12 +221,31 @@ function ChangePasswordModal({ onClose }) {
 }
 
 // Security (Rohith's sign-in Tier 2, 12 Oct 2026): the signed-in person's own
-// passkeys. Add this device, see the ones already added, remove one.
+// passkeys and sessions. Add this device, remove one; see where they are signed
+// in and end any other session, or all of them.
 function SecurityModal({ onClose }) {
   const [passkeys, setPasskeys] = useState(null)
+  const [sessions, setSessions] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const supported = typeof window.PublicKeyCredential !== 'undefined'
+
+  async function loadSessions() {
+    const res = await fetch('/api/admin/auth/sessions', { credentials: 'same-origin' })
+    const d = await res.json().catch(() => ({}))
+    setSessions(res.ok ? d.sessions || [] : [])
+  }
+  useEffect(() => { loadSessions().catch(() => setSessions([])) }, [])
+
+  async function endSession(id) {
+    setError(''); setBusy(true)
+    try {
+      const res = await fetch(id ? `/api/admin/auth/sessions/${id}/end` : '/api/admin/auth/sessions/end-others', { method: 'POST', credentials: 'same-origin' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'The session could not be ended.'); return }
+      await loadSessions()
+    } catch { setError('Network error. Please try again.') } finally { setBusy(false) }
+  }
 
   async function loadPasskeys() {
     const res = await fetch('/api/admin/auth/passkeys', { credentials: 'same-origin' })
@@ -295,6 +315,30 @@ function SecurityModal({ onClose }) {
             {supported
               ? <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={addPasskey}>{busy ? 'Waiting for your device…' : 'Add a passkey for this device'}</button>
               : <div style={{ fontSize: 13, color: '#4B5563' }}>This browser does not support passkeys.</div>}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Where you are signed in</div>
+            <p style={{ fontSize: 13, color: '#4B5563', margin: '0 0 10px' }}>
+              Every browser you are signed in on. End one you do not recognise, or sign out everywhere else.
+            </p>
+            {sessions === null ? <div style={{ fontSize: 13 }}>Loading…</div> : (
+              <table className="cp-table" style={{ marginBottom: 10 }} data-testid="session-list">
+                <thead><tr><th>Browser</th><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                  {sessions.map(sn => (
+                    <tr key={sn.id}>
+                      <td style={{ maxWidth: 240 }} title={sn.user_agent || ''}>
+                        {browserLabel(sn.user_agent)}{sn.is_current ? <strong> (this one)</strong> : null}
+                      </td>
+                      <td>{when(sn.created_at)}</td>
+                      <td>{when(sn.last_seen_at)}</td>
+                      <td>{!sn.is_current && <button type="button" className="cp-btn cp-btn-outline cp-btn-sm" disabled={busy} onClick={() => endSession(sn.id)}>End</button>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <button type="button" className="cp-btn cp-btn-secondary" disabled={busy || !sessions || sessions.length < 2} onClick={() => endSession(null)}>Sign out everywhere else</button>
           </div>
           {error && <div className="cp-error">{error}</div>}
           <div className="cp-modal-footer"><button type="button" className="cp-btn cp-btn-outline" onClick={onClose}>Close</button></div>

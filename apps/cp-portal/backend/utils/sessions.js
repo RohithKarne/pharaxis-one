@@ -64,4 +64,32 @@ async function endSession(token, reason = 'logout') {
   );
 }
 
-module.exports = { createSession, touchSession, endSession, idleMessage, IDLE_MINUTES };
+// Where this person is signed in (Rohith's sign-in Tier 2, 12 Oct 2026): every
+// open session, the current one marked, so they can end any other or all of them.
+async function listSessions(subjectType, subjectId, currentToken) {
+  const [rows] = await pool.execute(
+    `SELECT id, user_agent, created_at, last_seen_at, token_hash = ? AS is_current
+     FROM cp_sessions WHERE subject_type = ? AND subject_id = ? AND ended_at IS NULL
+     ORDER BY last_seen_at DESC`,
+    [hashToken(currentToken || ''), subjectType, subjectId]
+  );
+  return rows.map(r => ({ id: r.id, user_agent: r.user_agent, created_at: r.created_at, last_seen_at: r.last_seen_at, is_current: !!r.is_current }));
+}
+
+async function endSessionById(subjectType, subjectId, id) {
+  const [r] = await pool.execute(
+    `UPDATE cp_sessions SET ended_at = NOW(), ended_reason = 'ended_by_user' WHERE id = ? AND subject_type = ? AND subject_id = ? AND ended_at IS NULL`,
+    [id, subjectType, subjectId]
+  );
+  return r.affectedRows > 0;
+}
+
+async function endOtherSessions(subjectType, subjectId, currentToken) {
+  const [r] = await pool.execute(
+    `UPDATE cp_sessions SET ended_at = NOW(), ended_reason = 'ended_by_user' WHERE subject_type = ? AND subject_id = ? AND ended_at IS NULL AND token_hash <> ?`,
+    [subjectType, subjectId, hashToken(currentToken || '')]
+  );
+  return r.affectedRows;
+}
+
+module.exports = { createSession, touchSession, endSession, listSessions, endSessionById, endOtherSessions, idleMessage, IDLE_MINUTES };
