@@ -25,7 +25,9 @@ export default function CaseFormPage() {
   const { id }    = useParams()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { token, user } = useAuth()
+  const { token, user, hasCapability } = useAuth()
+  // A read-only role (the auditor) can open a case but the server refuses its save.
+  const canSave = hasCapability('case.update')
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
@@ -115,7 +117,7 @@ export default function CaseFormPage() {
   // Ctrl+S (Cmd+S on a Mac) does what Save Case does, from anywhere on the form,
   // instead of the browser's "save page" dialog.
   const saveShortcut = useRef(null)
-  useEffect(() => { saveShortcut.current = saving ? null : saveCaseAndSections })
+  useEffect(() => { saveShortcut.current = saving || !canSave ? null : saveCaseAndSections })
   useEffect(() => {
     function onKey(e) {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
@@ -196,7 +198,8 @@ export default function CaseFormPage() {
               Response
             </button>
           )}
-          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving} title="Save Case (Ctrl+S)">
+          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving || !canSave}
+            title={canSave ? 'Save Case (Ctrl+S)' : 'Your security group does not allow changing cases.'}>
             {saving ? 'Saving…' : 'Save Case'}
           </button>
         </div>
