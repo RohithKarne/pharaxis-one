@@ -9,17 +9,20 @@
  * Shown as the E2B badge on Case Form Fields (case form clean-up PR 5), so an
  * admin sees which fields feed a regulatory report before hiding one.
  *
- * Not tagged, on purpose: Dechallenge (stored on the ICSR drug but the
- * generator does not write it), lab results and medical history (the builder
- * does not seed them from the AE tab), Verbatim Reaction (the builder seeds the
- * reaction from MedDRA Term or Event Description).
+ * Not tagged, on purpose: Dechallenge. E2B(R3) has no dechallenge element; it
+ * is read from Action Taken (G.k.8) with the reaction Outcome (E.i.7), both
+ * tagged. The builder copies the reporter's dechallenge answer into the
+ * narrative (Description's element).
+ * Since the case form follow-ups (13 Oct 2026) the reaction text is the
+ * Verbatim Reaction (Event Description as fallback) and the builder seeds lab
+ * results and medical history from the AE tab; MedDRA Term no longer feeds it.
  */
 
 const TAGS = {
   'Case Information::Latest Information Date': 'receiptdate',
   'Case Information::Description': 'narrativeincludeclinical',
+  'AE — Events & Seriousness::Verbatim Reaction': 'reactionprimarysourcereaction',
   'AE — Events & Seriousness::Event Description': 'reactionprimarysourcereaction',
-  'AE — Events & Seriousness::MedDRA Term': 'reactionprimarysourcereaction',
   'AE — Events & Seriousness::Onset Date': 'reactionstartdate',
   'AE — Events & Seriousness::End Date': 'reactionenddate',
   'AE — Events & Seriousness::Outcome': 'reactionoutcome',
@@ -42,6 +45,12 @@ const TAGS = {
   'AE — Patient Information::Patient Initials': 'patientinitial',
   'AE — Patient Information::Date of Birth': 'patientbirthdate',
   'AE — Patient Information::Gender': 'patientsex',
+  'AE — Lab Results::Test Name': 'testname',
+  'AE — Lab Results::Test Date': 'testdate',
+  'AE — Lab Results::Result Value': 'testresult',
+  'AE — Lab Results::Normal Range': 'lowtestrange',
+  'AE — Medical History::Medical History': 'patientepisodename',
+  'AE — Medical History::Relevant History': 'patientepisodename',
 };
 
 function e2bTag(sectionName, fieldName) {

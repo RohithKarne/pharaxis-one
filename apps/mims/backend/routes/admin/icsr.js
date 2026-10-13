@@ -144,9 +144,9 @@ async function replaceChildren(icsrId, body = {}) {
   }
   for (const r of body.reactions || []) {
     await pool.execute(
-      `INSERT INTO icsr_reactions (icsr_id, meddra_pt, meddra_pt_name, meddra_llt, meddra_soc, onset_date, end_date, outcome, intensity, term_highlighted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [icsrId, r.meddra_pt || null, r.meddra_pt_name || null, r.meddra_llt || null, r.meddra_soc || null, r.onset_date || null, r.end_date || null, r.outcome || null, r.intensity || null, r.term_highlighted || 'n']
+      `INSERT INTO icsr_reactions (icsr_id, reaction_verbatim, meddra_pt, meddra_pt_name, meddra_llt, meddra_soc, onset_date, end_date, outcome, intensity, term_highlighted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [icsrId, r.reaction_verbatim || null, r.meddra_pt || null, r.meddra_pt_name || null, r.meddra_llt || null, r.meddra_soc || null, r.onset_date || null, r.end_date || null, r.outcome || null, r.intensity || null, r.term_highlighted || 'n']
     );
   }
   for (const t of body.tests || []) {
@@ -245,8 +245,10 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
         await pool.execute('DELETE FROM icsr_reactions WHERE icsr_id = ?', [result.insertId]);
         for (const e of events) {
           await pool.execute(
-            `INSERT INTO icsr_reactions (icsr_id, meddra_pt_name, onset_date, end_date, outcome, term_highlighted) VALUES (?, ?, ?, ?, ?, ?)`,
-            [result.insertId, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
+            // reaction_verbatim is the reporter's own words (E2B E.i.1.1a): the
+            // event's Verbatim Reaction, else its description (case form follow-ups).
+            `INSERT INTO icsr_reactions (icsr_id, reaction_verbatim, meddra_pt_name, onset_date, end_date, outcome, term_highlighted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [result.insertId, e.verbatim_reaction || e.event_description || null, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
           );
         }
         const any = (k) => events.some(e => !!e[k]);
@@ -270,8 +272,43 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
             [result.insertId, role, p.product_name || null, p.batch_lot_number || null, p.dose || null, p.dose_unit || null, p.route_of_admin || null, p.indication || null, p.start_date || null, p.end_date || null, p.action_taken || null, e2bYesNo(p.dechallenge), e2bYesNo(p.rechallenge)]
           );
         }
+        // E2B(R3) has no dechallenge element: it is read from action taken (G.k.8)
+        // with the reaction outcome (E.i.7). The reporter's dechallenge answer is
+        // kept in the narrative so the receiver reads it as given.
+        const dechallenge = products.filter(p => p.dechallenge && String(p.dechallenge).trim())
+          .map(p => `Dechallenge, ${p.product_name || 'product'}: ${String(p.dechallenge).trim()}.`);
+        if (dechallenge.length) {
+          await pool.execute(
+            `UPDATE icsr_reports SET narrative = CONCAT_WS('\n\n', NULLIF(narrative, ''), ?) WHERE id = ?`,
+            [dechallenge.join('\n'), result.insertId]
+          );
+        }
         seededFrom = 'ae_version';
       }
+
+      // Lab results and medical history from the same version (case form
+      // follow-ups, 13 Oct 2026): the E2B file carried neither from the AE tab.
+      const [labs] = await pool.execute('SELECT * FROM case_ae_lab_results WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]).catch(() => [[]]);
+      for (const l of labs) {
+        const range = /^\s*([\d.]+)\s*[-–]\s*([\d.]+)\s*$/.exec(String(l.normal_range || ''));
+        await pool.execute(
+          `INSERT INTO icsr_test_results (icsr_id, test_name, test_date, result_text, result_unstructured, test_normal_low, test_normal_high)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [result.insertId, l.test_name || l.lab_name || null, l.test_date || null,
+            [l.result, l.unit].filter(v => v != null && String(v).trim() !== '').join(' ') || null,
+            !range && l.normal_range ? `Normal range: ${l.normal_range}` : null,
+            range ? range[1] : null, range ? range[2] : null]
+        );
+      }
+      const [history] = await pool.execute('SELECT * FROM case_ae_medical_history WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]).catch(() => [[]]);
+      for (const h of history) {
+        const comments = [h.condition_name, h.notes].filter(v => v && String(v).trim()).join(' — ') + (h.is_ongoing ? ' (ongoing)' : '');
+        await pool.execute(
+          `INSERT INTO icsr_medical_history (icsr_id, structure, start_date, end_date, comments, meddra_code) VALUES (?, 'disease', ?, ?, ?, NULL)`,
+          [result.insertId, h.start_date || null, h.end_date || null, comments || null]
+        );
+      }
+      if (labs.length || history.length) seededFrom = 'ae_version';
     }
     await audit(req, 'CREATE', 'icsr_report', result.insertId, { case_id: caseId, sender_safety_report_id: senderId, seeded_from: seededFrom });
     res.status(201).json({ id: result.insertId, sender_safety_report_id: senderId, seeded_from: seededFrom });

@@ -36,13 +36,17 @@ const CUT_FIELDS = [
   ...['Linked Reporter Master ID', 'Linked Patient Master ID', 'External System IDs']
     .map(field => ({ section: 'Linked Records', field })),
 
-  // ── Contacts: four classifications of one person become Role + Qualification ──
+  // ── Contacts: four classifications of one person become Role + Reporter Type ──
   // The contact form draws these itself and shows a field that has no setting,
-  // so for a new organisation they are seeded hidden, not left out. Contact Type
-  // also feeds data-retention rules and Reporter Type the PV hand-off: where
-  // they hold values they stay shown until Rohith decides.
-  ...['Contact Type', 'Reporter Type', 'Country of Reporter', 'Source']
-    .map(field => ({ section: 'Contact / Requestor', field, panel: true })),
+  // so for a new organisation they are seeded hidden, not left out.
+  // Rohith, 13 Oct 2026, on Saad's call: Reporter Type stays (the New Case popup
+  // asks it on every case and the PV hand-off sends it); Contact Type and
+  // Qualification are hidden whatever they hold (migration 175). Country of
+  // Reporter and Source are hidden where empty.
+  { section: 'Contact / Requestor', field: 'Contact Type', panel: true, decided: true },
+  { section: 'Contact / Requestor', field: 'Qualification', panel: true, decided: true },
+  { section: 'Contact / Requestor', field: 'Country of Reporter', panel: true },
+  { section: 'Contact / Requestor', field: 'Source', panel: true },
 
   // ── MI ──
   ...['Question Source', 'Question Channel', 'Urgency Level']
