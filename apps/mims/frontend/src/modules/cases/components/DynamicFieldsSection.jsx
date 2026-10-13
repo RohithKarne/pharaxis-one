@@ -73,7 +73,11 @@ export default function DynamicFieldsSection({
           // everything the org added.
           if (f.core_key) return false
           const scope = String(f.case_type_scope || 'shared').toLowerCase()
-          const tab   = f.display_tab || null
+          // A field with no display tab belongs to the Product & Details step
+          // (its case type's panel). It used to pass every tab's filter, so the
+          // same block appeared on Step 2 and again on Step 3 — one field, two
+          // boxes, two values (case form clean-up PR 2, Rohith 2026-10-13).
+          const tab   = f.display_tab || lcType || null
           if (lcType && scope !== 'shared' && scope !== lcType) return false
           if (displayTab && tab && tab !== displayTab)          return false
           return true
