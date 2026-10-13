@@ -25,6 +25,9 @@ router.put('/cases/pc/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('pc', 'case_pc_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+
+const PC_VERSION_TABLES = ['case_pc_general', 'case_pc_patient_info', 'case_pc_product_info', 'case_pc_return_retrieval',
+  'case_pc_replacement', 'case_pc_refund_credit', 'case_pc_flex_fields'];
 const { auditChanges, versionCase } = require('../services/componentAudit');
 
 // MIPM-169: every PC change goes to the case audit trail, field by field.
@@ -149,18 +152,24 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       }
     }
 
-    // "Copy from PC" — copy complaint_description from previous version's general tab only
+    // A follow-up version starts as a copy of the version it follows, as AE
+    // versions do (MIPM-170). It used to copy the description only, so the
+    // product, lot, expiry, patient and status had to be typed again — and a
+    // complaint record needs product and lot (21 CFR 211.198(b)). Every tab
+    // table is keyed by version_id; the copy takes all its columns but the
+    // row's own keys. The version's defect codes and lot link come too.
     if (latest) {
-      const [[prevGeneral]] = await conn.execute(
-        'SELECT complaint_description FROM case_pc_general WHERE version_id = ?',
-        [latest.id]
-      );
-      if (prevGeneral && prevGeneral.complaint_description) {
-        await conn.execute(
-          'INSERT INTO case_pc_general (version_id, complaint_description) VALUES (?, ?)',
-          [result.insertId, prevGeneral.complaint_description]
-        );
+      for (const table of PC_VERSION_TABLES) {
+        const [cols] = await conn.execute(`SHOW COLUMNS FROM ${table}`);
+        const list = cols.map(c => c.Field).filter(f => !['id', 'version_id', 'created_at', 'updated_at'].includes(f))
+          .map(f => `\`${f}\``).join(', ');
+        await conn.execute(`INSERT INTO ${table} (version_id, ${list}) SELECT ?, ${list} FROM ${table} WHERE version_id = ? ORDER BY id`, [result.insertId, latest.id]);
       }
+      await conn.execute(
+        `UPDATE case_pc_versions n JOIN case_pc_versions o ON o.id = ?
+            SET n.manufacturer_defect_code_id = o.manufacturer_defect_code_id, n.component_defect_code_id = o.component_defect_code_id,
+                n.application_use_code_id = o.application_use_code_id, n.lot_master_id = o.lot_master_id
+          WHERE n.id = ?`, [latest.id, result.insertId]);
     }
 
     await conn.commit();
