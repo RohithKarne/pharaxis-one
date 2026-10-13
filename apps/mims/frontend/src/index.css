@@ -6122,3 +6122,15 @@ a.nav-item { text-decoration: none; color: inherit; }
   background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
 }
 .cf-fieldcfg-badge--inherit { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+/* Case form clean-up PR 5: E2B badge, removed-in-clean-up badge, section switch, Add field. */
+.cf-fieldcfg-badge--e2b { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.cf-fieldcfg-badge--cut { background: #f3f4f6; border-color: #d1d5db; color: #4b5563; }
+.cf-fieldcfg-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.cf-fieldcfg-section-head h4 { margin: 0; }
+.cf-fieldcfg-section--off { background: #f9fafb; }
+.cf-fieldcfg-step { font-size: 11.5px; color: var(--text-muted, #6b7280); white-space: nowrap; }
+.cf-fieldcfg-table select { padding: 4px 6px; font-size: 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 2px; }
+.cf-fieldcfg-add { background: #fff; border: 1px solid var(--border, #e5e7eb); border-radius: 2px; padding: 14px 16px; }
+.cf-fieldcfg-add-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; }
+.cf-fieldcfg-add-grid label { display: grid; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--text-muted, #6b7280); }
+.cf-fieldcfg-add-grid input[type="text"], .cf-fieldcfg-add-grid select { padding: 6px 8px; font-size: 13px; border: 1px solid var(--border, #e5e7eb); border-radius: 2px; }
