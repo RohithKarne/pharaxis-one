@@ -321,8 +321,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/caseFields'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
-  r.use(`${prefix}/admin`, require('./routes/admin/customizeForms'));
-  r.use(`${prefix}/admin`, require('./routes/admin/caseFormRules'));
   r.use(`${prefix}/admin`, require('./routes/admin/reportsAccess'));
   r.use(`${prefix}/admin`, require('./routes/admin/picklistsTable'));
   r.use(`${prefix}/admin`, require('./routes/admin/dashboardActivity'));

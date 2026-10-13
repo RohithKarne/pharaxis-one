@@ -26,7 +26,6 @@ const HELP_KEYS_BY_SYSTEM_ITEM = {
   'sys-sec-auth-policy':        'admin.auth_policy',
   'sys-sec-logged-in':          'admin.logged_in_users',
   'sys-sec-log':                'admin.security_log',
-  'sys-setup-customize-forms':  'admin.customize_forms',
   'sys-setup-workflow':         'admin.workflow',
   'sys-setup-email-accounts':   'admin.email_accounts',
   'sys-setup-picklists-admin':  'admin.picklists_admin',
