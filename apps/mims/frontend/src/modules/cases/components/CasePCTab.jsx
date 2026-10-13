@@ -132,7 +132,7 @@ function computePcCompletion(data, fields, formConfig, sectionName) {
 }
 
 export default function CasePCTab({
-  id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
+  id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
 }) {

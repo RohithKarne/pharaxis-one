@@ -184,7 +184,7 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 }
 
 export default function CaseAETab({
-  id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
+  id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
 }) {
