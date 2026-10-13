@@ -6125,6 +6125,7 @@ a.nav-item { text-decoration: none; color: inherit; }
 /* Case form clean-up PR 5: E2B badge, removed-in-clean-up badge, section switch, Add field. */
 .cf-fieldcfg-badge--e2b { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
 .cf-fieldcfg-badge--cut { background: #f3f4f6; border-color: #d1d5db; color: #4b5563; }
+.cf-fieldcfg-when { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text-muted, #6b7280); }
 .cf-fieldcfg-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .cf-fieldcfg-section-head h4 { margin: 0; }
 .cf-fieldcfg-section--off { background: #f9fafb; }
