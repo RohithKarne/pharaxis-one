@@ -144,9 +144,9 @@ async function replaceChildren(icsrId, body = {}) {
   }
   for (const r of body.reactions || []) {
     await pool.execute(
-      `INSERT INTO icsr_reactions (icsr_id, meddra_pt, meddra_pt_name, meddra_llt, meddra_soc, onset_date, end_date, outcome, intensity, term_highlighted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [icsrId, r.meddra_pt || null, r.meddra_pt_name || null, r.meddra_llt || null, r.meddra_soc || null, r.onset_date || null, r.end_date || null, r.outcome || null, r.intensity || null, r.term_highlighted || 'n']
+      `INSERT INTO icsr_reactions (icsr_id, reaction_verbatim, meddra_pt, meddra_pt_name, meddra_llt, meddra_soc, onset_date, end_date, outcome, intensity, term_highlighted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [icsrId, r.reaction_verbatim || null, r.meddra_pt || null, r.meddra_pt_name || null, r.meddra_llt || null, r.meddra_soc || null, r.onset_date || null, r.end_date || null, r.outcome || null, r.intensity || null, r.term_highlighted || 'n']
     );
   }
   for (const t of body.tests || []) {
@@ -245,8 +245,10 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
         await pool.execute('DELETE FROM icsr_reactions WHERE icsr_id = ?', [result.insertId]);
         for (const e of events) {
           await pool.execute(
-            `INSERT INTO icsr_reactions (icsr_id, meddra_pt_name, onset_date, end_date, outcome, term_highlighted) VALUES (?, ?, ?, ?, ?, ?)`,
-            [result.insertId, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
+            // reaction_verbatim is the reporter's own words (E2B E.i.1.1a): the
+            // event's Verbatim Reaction, else its description (case form follow-ups).
+            `INSERT INTO icsr_reactions (icsr_id, reaction_verbatim, meddra_pt_name, onset_date, end_date, outcome, term_highlighted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [result.insertId, e.verbatim_reaction || e.event_description || null, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
           );
         }
         const any = (k) => events.some(e => !!e[k]);

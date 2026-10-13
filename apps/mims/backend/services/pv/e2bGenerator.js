@@ -52,7 +52,9 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
   const sender = dependencies.sender || {};
 
   const reactionXml = reactions.map((reaction, index) => block('reaction', [
-    tag('reactionprimarysourcereaction', reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`),
+    // E.i.1.1a: the reaction as the reporter described it; the coded term is
+    // the fallback for reactions saved before the verbatim was kept.
+    tag('reactionprimarysourcereaction', reaction.reaction_verbatim || reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`),
     tag('reactionmeddraversionpt', reaction.meddra_version || dependencies.meddraVersion || ''),
     tag('reactionmeddrapt', reaction.meddra_pt || reaction.meddra_code || ''),
     tag('reactionmeddrallt', reaction.meddra_llt || ''),
