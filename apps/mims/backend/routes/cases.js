@@ -2149,13 +2149,11 @@ router.post('/cases/:id/validate', authenticate, async (req, res) => {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
     const formData = req.body?.payload || req.body || {};
-    const [rules] = await pool.execute(
-      `SELECT * FROM case_form_rules
-       WHERE org_id = ? AND is_active = 1 AND rule_type IN ('required','validation')
-         AND (case_type = ? OR case_type = 'ALL')
-       ORDER BY priority DESC, id ASC`,
-      [owned.org_id, owned.case_type || 'ALL']
-    );
+    // Case form clean-up PR 4 (Rohith, 13 Oct 2026): required is one thing,
+    // the Required tick on Case Form Fields. "Required" and "validation" rules
+    // written under Customize Forms are retired with that screen and no longer
+    // refuse a save; the table keeps them. Show-when rules still run.
+    const rules = [];
     const errors = [];
     for (const rule of rules) {
       const result = evaluateRule(rule, formData);

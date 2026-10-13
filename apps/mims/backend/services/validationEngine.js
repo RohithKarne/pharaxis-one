@@ -207,16 +207,11 @@ async function validatePayload({
   for (const rule of rules.fields) {
     const v = payload[rule.field_name];
 
-    // 1. required (base + phase-aware)
-    let required = !!rule.is_required;
-    let requiredMsg = `${rule.field_name} is required.`;
-    if (phase) {
-      const pr = rules.phaseMap.get(`${rule.field_name}|${phase}`);
-      if (pr) {
-        required = pr.required;
-        if (pr.message) requiredMsg = pr.message;
-      }
-    }
+    // 1. required — the Required tick on Case Form Fields only. The phase
+    // override (Validation Rules screen, field_phase_required) is retired with
+    // that screen by the case form clean-up PR 4; the table keeps its rows.
+    const required = !!rule.is_required;
+    const requiredMsg = `${rule.field_name} is required.`;
     if (required && _isEmpty(v)) {
       errors[rule.field_name] = requiredMsg;
       continue;
