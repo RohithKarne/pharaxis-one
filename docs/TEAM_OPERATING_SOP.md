@@ -3769,6 +3769,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-03 | Saad | Two stale lines corrected. *Git push*: enabled since 2026-07-27, always through a pull request, never to `main`. *Section 15*: nothing is deployed; MIMS runs on the local copy only. |
 | 2026-10-13 | Saad | Case form clean-up (#769, #770, #771): Case Form Fields is the one admin screen for the case form; Customize Forms and Validation Rules retired; Required is the Required tick only, on every save path; the cut list hides about 95 fields and 11 sections, never deletes; Latest Information Date, verbatim reaction, hospital dates, product Role and Pregnancy Trimester added; the ICSR now takes its reaction text, labs, history and dechallenge from the AE tab; new organisations get the target form only. Migrations 170–175. Sections 7, 8, 9, 9b and 13 updated. |
 | 2026-10-13 | Saad | Case form pending items closed: E2B dates written CCYYMMDD; one-sided lab ranges split; long verbatim kept whole in the narrative; ICSR builder readable; Customize Forms and Validation Rules files and endpoints removed; Case Form Fields shows show-only-when rules. Sections 8 and 9 updated. |
+| 2026-10-13 | Saad | MI and PC field review (Rohith, "go with all 6"): MI answer is the signed letter (MI answer boxes hidden, "Answer sent" shown), AE/PC screening answer required before a response is sent (`miSendCheck.js`); PC strength, reply to complainant, counterfeit (makes the case Urgent), device part, patient initials, Investigation & CAPA cut to what the complaint record needs, check before Route to Quality (`pcHandoffCheck.js`). Migrations 176–177. Section 9b updated. |
 
 ---
 
@@ -4413,6 +4414,8 @@ All 3 run in single MySQL transaction — any failure rolls back all.
 | `mims/backend/services/fieldUsageService.js` | The **Used in cases** count — each field counts its own store only, columns taken from the panel catalog. |
 | `mims/backend/catalogs/panelCoreFields.js` | Core key → stored column for every field a panel draws itself. |
 | `mims/backend/catalogs/e2bFieldTags.js` | Which fields reach the E2B file MIMS writes (the E2B badge). |
+| `mims/backend/services/miSendCheck.js` | What an MI needs before its response is sent: who asked, the question, the AE/PC screening answer and, on Yes, a converted or linked AE/PC case (product a warning). Read by the MI card and the SENT transition. |
+| `mims/backend/services/pcHandoffCheck.js` | What a complaint needs before Route to Quality: product, description, and a linked AE case for an injury (lot a warning); shows the counterfeit flag and the Field Alert Report due date. Read by the PC card and the hand-off route. |
 
 ##### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
 
