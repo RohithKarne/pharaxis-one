@@ -3,6 +3,7 @@
 const pool = require('../database/db');
 const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
 const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
+const { MI_CORE_FIELDS } = require('../database/migrations/108_link_mi_core_fields');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -384,13 +385,19 @@ async function applyPlatformCoreKeys(conn, orgId) {
 // platform row, so applyPlatformCoreKeys left them unkeyed in every new
 // organisation and the configured-fields block drew them a second time
 // (case form clean-up PR 2, Rohith 2026-10-13). Same statement as migration 171.
+// The MI panel's MI Status and Literature Reference (migration 108) have no
+// platform row either, so they are keyed here too (migration 172).
 async function applyPanelCoreKeys(conn, orgId) {
-  for (const f of PANEL_CORE_FIELDS) {
+  const links = [
+    ...PANEL_CORE_FIELDS.map(f => [f.section, f.field, f.coreKey]),
+    ...MI_CORE_FIELDS,
+  ];
+  for (const [section, field, coreKey] of links) {
     await conn.execute(
       `UPDATE field_setup SET core_key = ?
         WHERE org_id = ? AND section_name = ? AND LOWER(TRIM(field_name)) = LOWER(?)
           AND (core_key IS NULL OR core_key = '')`,
-      [f.coreKey, orgId, f.section, f.field]
+      [coreKey, orgId, section, field]
     );
   }
 }

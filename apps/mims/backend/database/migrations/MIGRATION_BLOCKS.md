@@ -23,6 +23,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 169 | **MIMS sign-in Tier 2 (Rohith, 2026-10-12)** | **DONE** | Within the 100+ block. `user_known_devices`: each browser a person signs in from, by a hashed cookie token, so a sign-in from a browser not seen before can be emailed to its owner. |
 | 170 | **Case form clean-up PR 2 (Rohith, 2026-10-13)** | **DONE** | Within the 100+ block. Deletes the 23 Contact / Requestor settings the Reporter & Patient screen never showed (Middle Name … Linked Reporter), only where no case ever stored a value. |
 | 171 | **Case form clean-up PR 2 (Rohith, 2026-10-13)** | **DONE** | Within the 100+ block. Re-links the 17 AE/PC panel fields that have no platform row to their core_key (same statement as 109), so the panel reads the admin's settings and the configured block stops drawing them a second time. |
+| 172 | **Case form clean-up PR 2 (Rohith, 2026-10-13)** | **DONE** | Within the 100+ block. Re-runs migration 108 so the MI panel's MI Status and Literature Reference carry their core_key; they have no platform row, so a database initialised from the schema file never keyed them and the configured block drew them twice. |
 | 167 | **MIMS role walk (2026-10-10)** | **DONE** | Within the 100+ block. An "auditor" role that can only view cases and reports, given by the Read-only Auditor template; template groups still giving "reviewer" move to it with their members. |
 
 ## Rules
