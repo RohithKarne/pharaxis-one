@@ -39,7 +39,7 @@ const {
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
-const { missingRequiredAdditional } = require('../services/requiredFields');
+const { missingRequiredAdditional, missingRequiredCore, CASE_CORE_FIELDS } = require('../services/requiredFields');
 const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
 const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
@@ -820,7 +820,15 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       };
     });
 
-    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core });
+    // The fields the admin has hidden, by section and name. The sections above
+    // leave them out, and a screen that draws its own fields (the contact form)
+    // treats a field with no setting as shown — so hiding a contact field had no
+    // effect. Found in the case form clean-up walk, 2026-10-13.
+    const hidden = [...fieldsByKey.values()]
+      .filter(f => (f.is_hidden || f.is_disabled) && !f.core_key)
+      .map(f => ({ section_name: f.section_name, field_name: f.field_name }));
+
+    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core, hidden });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });
@@ -1773,7 +1781,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
 
     const [[currentCase]] = await pool.execute(
       `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
-              awareness_date, learn_of_validity_date, follow_up_received_date, case_type,
+              awareness_date, latest_information_date, learn_of_validity_date, follow_up_received_date, case_type,
               description, internal_notes, intake_channel, version_stamp
        FROM cases
        WHERE id = ? AND is_deleted = 0
@@ -1951,6 +1959,16 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         nextAwarenessDate = normalized;
       }
     }
+    // Latest Information Date (E2B C.1.5), added by the case form clean-up PR 3.
+    let nextLatestInformationDate = currentCase.latest_information_date;
+    if (hasOwn(body, 'latest_information_date')) {
+      if (body.latest_information_date === '' || body.latest_information_date === null) nextLatestInformationDate = null;
+      else {
+        const normalized = toDateOnlyOrNull(body.latest_information_date);
+        if (!normalized) return res.status(400).json({ error: 'latest_information_date must be a valid date.' });
+        nextLatestInformationDate = normalized;
+      }
+    }
     let nextLearnOfValidityDate = currentCase.learn_of_validity_date;
     if (hasOwn(body, 'learn_of_validity_date')) {
       if (body.learn_of_validity_date === '' || body.learn_of_validity_date === null) nextLearnOfValidityDate = null;
@@ -1973,6 +1991,20 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     const nextPriority = hasOwn(body, 'priority') ? (body.priority ?? null) : currentCase.priority;
     const nextDescription = hasOwn(body, 'description') ? (body.description ?? null) : currentCase.description;
     const nextInternalNotes = hasOwn(body, 'internal_notes') ? (body.internal_notes ?? null) : currentCase.internal_notes;
+
+    // The admin's Required tick on the case's own fields (Workflow step), for
+    // the fields this save sends — a bulk action that sends only the owner is
+    // not refused for an empty Date Received (case form clean-up PR 4).
+    {
+      const sent = Object.fromEntries(Object.entries(CASE_CORE_FIELDS).filter(([, key]) => hasOwn(body, key)));
+      const effective = {
+        status_id: nextStatusId, case_owner_id: nextOwnerId, priority: nextPriority,
+        date_received: nextDateReceived, latest_information_date: nextLatestInformationDate,
+        description: nextDescription, internal_notes: nextInternalNotes,
+      };
+      const missing = await missingRequiredCore(currentCase.org_id, effective, sent);
+      if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
+    }
     const nextIntakeChannel = hasOwn(body, 'intake_channel') ? (body.intake_channel ?? null) : currentCase.intake_channel;
 
     // C-09: the field update AND its status/owner audit rows commit atomically —
@@ -1987,6 +2019,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
           priority       = ?,
           date_received  = ?,
           awareness_date = ?,
+          latest_information_date = ?,
           learn_of_validity_date = ?,
           follow_up_received_date = ?,
           description    = ?,
@@ -1996,7 +2029,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
          WHERE id = ?`,
         [
           nextStatusId, nextOwnerId, nextPriority, nextDateReceived, nextAwarenessDate,
-          nextLearnOfValidityDate, nextFollowUpReceivedDate, nextDescription,
+          nextLatestInformationDate, nextLearnOfValidityDate, nextFollowUpReceivedDate, nextDescription,
           nextInternalNotes, nextIntakeChannel, req.params.id,
         ]
       );
@@ -2044,6 +2077,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         ['priority', currentCase.priority, nextPriority],
         ['date_received', dateOnly(currentCase.date_received), dateOnly(nextDateReceived)],
         ['awareness_date', dateOnly(currentCase.awareness_date), dateOnly(nextAwarenessDate)],
+        ['latest_information_date', dateOnly(currentCase.latest_information_date), dateOnly(nextLatestInformationDate)],
         ['learn_of_validity_date', dateOnly(currentCase.learn_of_validity_date), dateOnly(nextLearnOfValidityDate)],
         ['follow_up_received_date', dateOnly(currentCase.follow_up_received_date), dateOnly(nextFollowUpReceivedDate)],
         ['description', currentCase.description, nextDescription],
@@ -2115,13 +2149,11 @@ router.post('/cases/:id/validate', authenticate, async (req, res) => {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
     const formData = req.body?.payload || req.body || {};
-    const [rules] = await pool.execute(
-      `SELECT * FROM case_form_rules
-       WHERE org_id = ? AND is_active = 1 AND rule_type IN ('required','validation')
-         AND (case_type = ? OR case_type = 'ALL')
-       ORDER BY priority DESC, id ASC`,
-      [owned.org_id, owned.case_type || 'ALL']
-    );
+    // Case form clean-up PR 4 (Rohith, 13 Oct 2026): required is one thing,
+    // the Required tick on Case Form Fields. "Required" and "validation" rules
+    // written under Customize Forms are retired with that screen and no longer
+    // refuse a save; the table keeps them. Show-when rules still run.
+    const rules = [];
     const errors = [];
     for (const rule of rules) {
       const result = evaluateRule(rule, formData);
@@ -3153,6 +3185,16 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
     // Nothing typed is not an error (M-38 — was a raw "fields array required.").
     if (!fields.length) return res.json({ message: 'Nothing to save.' });
 
+    // Every changed value goes into the case history, before and after. These
+    // saves wrote no history at all, so a configured value could change with no
+    // record of who changed it or from what (found in the case form clean-up,
+    // 2026-10-13). The field is named as "Section / Field".
+    const before = new Map(stored.map(r => [Number(r.field_id), r.field_value]));
+    const ids = fields.map(f => Number(f.field_id || f.field_definition_id || 0)).filter(Boolean);
+    const [names] = ids.length
+      ? await pool.execute(`SELECT id, section_name, field_name FROM field_setup WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
+      : [[]];
+    const nameOf = new Map(names.map(n => [Number(n.id), `${n.section_name} / ${n.field_name}`]));
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;
@@ -3162,6 +3204,12 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
          ON DUPLICATE KEY UPDATE field_value = VALUES(field_value)`,
         [req.params.id, fieldId, fieldValue ?? null]
       );
+      const was = before.get(fieldId) ?? '';
+      const now = fieldValue ?? '';
+      if (String(was) !== String(now)) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED',
+          nameOf.get(fieldId) || `field ${fieldId}`, was === '' ? null : String(was), now === '' ? null : String(now));
+      }
     }
     res.json({ message: 'Dynamic fields saved.' });
   } catch (err) { res.status(500).json({ error: err.message }); }

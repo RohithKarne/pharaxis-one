@@ -6,12 +6,10 @@ const AdminQASection = lazy(() => import('../../../admin/components/AdminQASecti
 const AdminUATPanel = lazy(() => import('../../../admin/components/AdminUATPanel'))
 const CopyDivision = lazy(() => import('./CopyDivision'))
 const DivisionParameters = lazy(() => import('./DivisionParameters'))
-const CustomizeForms = lazy(() => import('./CustomizeForms'))
 const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 const ExceptionLog = lazy(() => import('./ExceptionLog'))
 const FeatureFlags = lazy(() => import('./FeatureFlags'))
 const SmartFields = lazy(() => import('./SmartFields'))
-const ValidationRules = lazy(() => import('./ValidationRules'))
 const GridTemplates = lazy(() => import('./GridTemplates'))
 const CaseActionsAdmin = lazy(() => import('./CaseActionsAdmin'))
 const ComplianceAdmin = lazy(() => import('./ComplianceAdmin'))
@@ -60,7 +58,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     selectedItem === 'sys-maint-copy-division'
       ? (hasGlobalAdminScope(user) ? <CopyDivision /> : <div style={{ padding: 24, color: 'var(--text-muted)' }}>Copy Division is for platform admins only.</div>)
     : selectedItem === 'sys-division-params' ? <DivisionParameters H={H} />
-    : selectedItem === 'sys-setup-customize-forms' ? <CustomizeForms />
     // Its menu item lives here (Setup › Forms & Fields); it opened "Under Development" (M-35).
     : selectedItem === 'sys-setup-case-fields' ? <CaseFieldsConfig />
     : selectedItem === 'sys-exception-log' ? <ExceptionLog />
@@ -79,7 +76,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-change-approvals' ? <SetupChangeApprovals />
     : selectedItem === 'sys-setup-feature-flags' ? <FeatureFlags />
     : selectedItem === 'sys-setup-smart-fields' ? <SmartFields />
-    : selectedItem === 'sys-setup-validation' ? <ValidationRules />
     : selectedItem === 'sys-setup-grid-templates' ? <GridTemplates />
     : selectedItem === 'sys-setup-case-actions' ? <CaseActionsAdmin />
     : selectedItem === 'sys-setup-compliance' ? <ComplianceAdmin />

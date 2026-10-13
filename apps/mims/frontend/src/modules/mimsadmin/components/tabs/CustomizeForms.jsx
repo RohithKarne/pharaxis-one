@@ -561,7 +561,7 @@ function AdvancedFieldModal({ field, onClose, onApply }) {
               </label>
               <label>Display Tab
                 <select value={draft.display_tab || ''} onChange={e => setV('display_tab', e.target.value)}>
-                  <option value="">— Auto (any tab) —</option>
+                  <option value="">Product &amp; Details step (default)</option>
                   <option value="info">Case Information</option>
                   <option value="contacts">Contacts</option>
                   <option value="correspondence">Correspondence</option>

@@ -5,6 +5,9 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import useCoreFields from '../hooks/useCoreFields'
 
 const CaseCommunicationsWorkspace = lazy(() => import('./CaseCommunicationsWorkspace'))
+// Case form clean-up PR 1 (13 Oct 2026): the ICSR / Regulatory panel existed but
+// was mounted nowhere, so no screen could create an E2B report from a case.
+const CaseICSRTab = lazy(() => import('./CaseICSRTab'))
 
 // Final wizard step. Holds the fields a user actually edits about how the case
 // is being worked — status, ownership, priority, dates — plus the reassign and
@@ -36,7 +39,9 @@ export default function CaseWorkflowStep({
   onCommentCount, onCorrespondenceCount,
 }) {
   const ctx = useCaseFieldContext()
-  const { hasCapability } = useAuth()
+  const { hasCapability, user } = useAuth()
+  // The ICSR routes are open to organisation and platform administrators only.
+  const canUseIcsr = caseType === 'AE' && (user?.platformAdmin || ['admin', 'platform_admin'].includes(String(user?.role || '').toLowerCase()))
   const priorityOptions = getPicklistOptions?.('Case Information', 'Priority') || []
   const resolvedPriority = normalizePicklistValue(priorityOptions, infoForm.priority)
 
@@ -48,6 +53,7 @@ export default function CaseWorkflowStep({
   const fPriority = coreField('priority', 'Priority')
   const fReceived = coreField('date_received', 'Date Received')
   const fAwareness = coreField('awareness_date', 'Awareness Date')
+  const fLatestInfo = coreField('latest_information_date', 'Latest Information Date')
   const fNotes = coreField('internal_notes', 'Internal Notes')
 
   return (
@@ -94,6 +100,13 @@ export default function CaseWorkflowStep({
           <WiredField label={fAwareness.label} section="case_meta" field="awareness_date" type="date"
             value={infoForm.awareness_date}
             onChange={v => { setInfoForm(p => ({ ...p, awareness_date: v })); scheduleAutoSave() }} />
+        )}
+        {/* The date of the most recent information (E2B C.1.5); Date Received
+            stays Day 0. Added by the case form clean-up, PR 3. */}
+        {!fLatestInfo.hidden && (
+          <WiredField label={fLatestInfo.label} section="case_meta" field="latest_information_date" type="date"
+            value={infoForm.latest_information_date}
+            onChange={v => { setInfoForm(p => ({ ...p, latest_information_date: v })); scheduleAutoSave() }} />
         )}
       </div>
 
@@ -176,6 +189,12 @@ export default function CaseWorkflowStep({
           />
         </Suspense>
       </div>
+
+      {canUseIcsr && (
+        <Suspense fallback={<div className="cf-tab-loading">Loading regulatory reports…</div>}>
+          <CaseICSRTab id={id} headers={headers} setSavedMsg={setSavedMsg} />
+        </Suspense>
+      )}
     </div>
   )
 }

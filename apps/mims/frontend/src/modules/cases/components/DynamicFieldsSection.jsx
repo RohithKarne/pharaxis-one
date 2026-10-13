@@ -73,7 +73,11 @@ export default function DynamicFieldsSection({
           // everything the org added.
           if (f.core_key) return false
           const scope = String(f.case_type_scope || 'shared').toLowerCase()
-          const tab   = f.display_tab || null
+          // A field with no display tab belongs to the Product & Details step
+          // (its case type's panel). It used to pass every tab's filter, so the
+          // same block appeared on Step 2 and again on Step 3 — one field, two
+          // boxes, two values (case form clean-up PR 2, Rohith 2026-10-13).
+          const tab   = f.display_tab || lcType || null
           if (lcType && scope !== 'shared' && scope !== lcType) return false
           if (displayTab && tab && tab !== displayTab)          return false
           return true
@@ -125,9 +129,11 @@ export default function DynamicFieldsSection({
       if (!rule?.field_name || !rule?.rule_type) continue
       const result = evaluateRule(rule, formData)
       if (rule.rule_type === 'visibility' && result === false) state.hidden.add(rule.field_name)
-      if (rule.rule_type === 'required' && result === true) state.required.add(rule.field_name)
+      // "required" and "validation" rules from Customize Forms are retired
+      // (case form clean-up PR 4): required is the Required tick only, and the
+      // server no longer applies them, so the screen does not either.
+      if (rule.rule_type === 'required' || rule.rule_type === 'validation') continue
       if (rule.rule_type === 'default' && result !== undefined && result?.matched !== false) state.defaults.push({ field: rule.field_name, value: result })
-      if (rule.rule_type === 'validation' && result?.matched) state.validation[rule.field_name] = result.action?.message || result.message || 'Invalid value.'
       if (rule.rule_type === 'cascade' && result?.matched) state.cascades.set(rule.field_name, result)
     }
     return state

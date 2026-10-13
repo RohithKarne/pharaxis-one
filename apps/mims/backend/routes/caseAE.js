@@ -26,6 +26,8 @@ router.use('/cases/ae', require('../services/caseHelpers').normalizeDateOnlyBody
 
 // Admin-required panel fields (Customize Forms) are checked before any
 // AE section save reaches its own route below.
+const { missingRequiredRow } = require('../services/requiredFields');
+
 router.put('/cases/ae/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
 // The list tabs add one record per POST (events, product-info, lab-results,
@@ -355,6 +357,7 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     await guardLocked(req.params.versionId, req);
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
+      verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
       is_serious = 0, is_death = 0, is_life_threatening = 0,
       is_hospitalization = 0, is_disability = 0,
       is_congenital_anomaly = 0, is_other_medically_important = 0,
@@ -365,12 +368,14 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     const [result] = await pool.execute(
       `INSERT INTO case_ae_events
         (version_id, event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
+         verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
          is_serious, is_death, is_life_threatening, is_hospitalization,
          is_disability, is_congenital_anomaly, is_other_medically_important,
          is_required_intervention, is_lab_abnormality)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.versionId, event_description || null, meddra_term || null, outcome || null, reported_causality || null, frequency || null, causality_assessment || null, seriousness || null,
        start_date || null, end_date || null,
+       verbatim_reaction || null, hospitalization_start_date || null, hospitalization_end_date || null,
        serious ? 1 : 0, is_death ? 1 : 0, is_life_threatening ? 1 : 0,
        is_hospitalization ? 1 : 0, is_disability ? 1 : 0,
        is_congenital_anomaly ? 1 : 0, is_other_medically_important ? 1 : 0,
@@ -388,8 +393,14 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
   try {
     const owned = await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
     const [[before]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
+    // The admin's Required tick holds on an edit too, on the row as it will be.
+    const merged = { ...before };
+    for (const [k, v] of Object.entries(req.body || {})) if (v !== undefined && v !== null) merged[k] = v;
+    const missingEv = await missingRequiredRow('ae', 'events', await versionOrg(owned.version_id), merged);
+    if (missingEv.length) return res.status(400).json({ error: `Required: ${missingEv.join(', ')}.`, missing: missingEv });
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
+      verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
       is_serious, is_death, is_life_threatening, is_hospitalization,
       is_disability, is_congenital_anomaly, is_other_medically_important,
       is_required_intervention, is_lab_abnormality
@@ -410,6 +421,9 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         seriousness                = COALESCE(?, seriousness),
         start_date                 = COALESCE(?, start_date),
         end_date                   = COALESCE(?, end_date),
+        verbatim_reaction          = COALESCE(?, verbatim_reaction),
+        hospitalization_start_date = COALESCE(?, hospitalization_start_date),
+        hospitalization_end_date   = COALESCE(?, hospitalization_end_date),
         is_death                   = COALESCE(?, is_death),
         is_life_threatening        = COALESCE(?, is_life_threatening),
         is_hospitalization         = COALESCE(?, is_hospitalization),
@@ -429,6 +443,7 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
       [
         event_description ?? null, meddra_term ?? null, outcome ?? null, reported_causality ?? null, frequency ?? null, causality_assessment ?? null, seriousness ?? null,
         start_date ?? null, end_date ?? null,
+        verbatim_reaction ?? null, hospitalization_start_date ?? null, hospitalization_end_date ?? null,
         is_death ?? null, is_life_threatening ?? null,
         is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null,
@@ -478,21 +493,25 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
     const {
       patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm,
       ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
+      pregnancy_trimester,
     } = req.body;
+    // The trimester is asked only when the patient is pregnant; any other answer clears it.
+    const trimester = Number(pregnant) === 1 ? (pregnancy_trimester || null) : null;
     const resolvedAdditionalInfo = patient_info_additional_info ?? additional_info;
     await pool.execute(
       `INSERT INTO case_ae_patient_info
-        (version_id, patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, patient_country, last_menstrual_date, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, pregnancy_trimester)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         patient_initials = VALUES(patient_initials), date_of_birth = VALUES(date_of_birth),
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), height_cm = VALUES(height_cm),
         ethnicity = VALUES(ethnicity), pregnant = VALUES(pregnant),
-        patient_country = VALUES(patient_country), last_menstrual_date = VALUES(last_menstrual_date), additional_info = VALUES(additional_info)`,
+        patient_country = VALUES(patient_country), last_menstrual_date = VALUES(last_menstrual_date), additional_info = VALUES(additional_info),
+        pregnancy_trimester = VALUES(pregnancy_trimester)`,
       [req.params.versionId, patient_initials || null, date_of_birth || null, age || null, age_unit || null, sex || null,
        weight_kg || null, height_cm || null, ethnicity || null,
-       pregnant ?? null, patient_country || null, last_menstrual_date || null, resolvedAdditionalInfo || null]
+       pregnant ?? null, patient_country || null, last_menstrual_date || null, resolvedAdditionalInfo || null, trimester]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]
@@ -664,19 +683,20 @@ router.post('/cases/ae/versions/:versionId/product-info', authenticate, async (r
     const {
       product_id, product_name, product_type, product_category, batch_lot_number, dose, dose_unit, route_of_admin,
       frequency, start_date, end_date, indication,
-      action_taken, dechallenge, rechallenge, is_suspect = 1, is_concomitant = 0
+      action_taken, dechallenge, rechallenge, is_suspect = 1, is_concomitant = 0, product_role
     } = req.body;
+    const role = productRole(product_role, is_suspect, is_concomitant);
     const [ins] = await pool.execute(
       `INSERT INTO case_ae_product_info
         (version_id, product_id, product_name, product_type, product_category, batch_lot_number, dose, dose_unit, route_of_admin,
-         frequency, start_date, end_date, indication, action_taken, dechallenge, rechallenge, is_suspect, is_concomitant)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         frequency, start_date, end_date, indication, action_taken, dechallenge, rechallenge, is_suspect, is_concomitant, product_role)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.versionId, product_id || null, product_name || null,
        product_type || null, product_category || null, batch_lot_number || null,
        dose || null, dose_unit || null, route_of_admin || null,
        frequency || null, start_date || null, end_date || null, indication || null,
        action_taken || null, dechallenge || null, rechallenge || null,
-       is_suspect ? 1 : 0, is_concomitant ? 1 : 0]
+       role.is_suspect, role.is_concomitant, role.product_role]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_product_info WHERE id = ?', [ins.insertId]
@@ -703,14 +723,39 @@ const AE_ROW_EDIT = {
   'lab-results':     { table: 'case_ae_lab_results',     cols: ['lab_name', 'test_name', 'result', 'unit', 'normal_range', 'test_date'] },
   'medical-history': { table: 'case_ae_medical_history', cols: ['condition_name', 'start_date', 'end_date', 'is_ongoing', 'notes'], bools: ['is_ongoing'] },
   'product-info':    { table: 'case_ae_product_info',    cols: ['product_id', 'product_name', 'product_type', 'product_category', 'batch_lot_number', 'dose', 'dose_unit', 'route_of_admin',
-                       'frequency', 'start_date', 'end_date', 'indication', 'action_taken', 'dechallenge', 'rechallenge', 'is_suspect', 'is_concomitant'], bools: ['is_suspect', 'is_concomitant'] },
+                       'frequency', 'start_date', 'end_date', 'indication', 'action_taken', 'dechallenge', 'rechallenge', 'is_suspect', 'is_concomitant', 'product_role'], bools: ['is_suspect', 'is_concomitant'] },
 };
+
+// The organisation a version's case belongs to, for its required settings.
+async function versionOrg(versionId) {
+  const [[row]] = await pool.execute(
+    'SELECT c.org_id FROM case_ae_versions v JOIN cases c ON c.id = v.case_id WHERE v.id = ?', [versionId]);
+  return row ? row.org_id : null;
+}
+
+// Role on the product row (case form clean-up PR 3): suspect, concomitant or
+// interacting. The two ticks stay in step with it, because the hand-off check,
+// the ICSR builder and reports read them. A row saved before Role existed
+// keeps its ticks and is read as suspect or concomitant from them.
+const PRODUCT_ROLES = ['suspect', 'concomitant', 'interacting'];
+function productRole(role, isSuspect, isConcomitant) {
+  const r = PRODUCT_ROLES.includes(String(role || '').toLowerCase())
+    ? String(role).toLowerCase()
+    : (isConcomitant && !isSuspect ? 'concomitant' : 'suspect');
+  return { product_role: r, is_suspect: r === 'concomitant' ? 0 : 1, is_concomitant: r === 'concomitant' ? 1 : 0 };
+}
 for (const [tab, { table, cols, bools = [] }] of Object.entries(AE_ROW_EDIT)) {
   router.put(`/cases/ae/${tab}/:rowId`, authenticate, async (req, res) => {
     try {
       const owned = await ensureAeChildAccess(table, req.params.rowId, req, { requireUnlocked: true });
       const [[before]] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [req.params.rowId]);
-      const values = cols.map(c => (bools.includes(c) ? (req.body[c] ? 1 : 0) : (req.body[c] || null)));
+      const body = tab === 'product-info'
+        ? { ...req.body, ...productRole(req.body.product_role, req.body.is_suspect, req.body.is_concomitant) }
+        : req.body;
+      // The row edit sends every column, so the body is the row as it will be.
+      const missingRow = await missingRequiredRow('ae', tab, await versionOrg(owned.version_id), body);
+      if (missingRow.length) return res.status(400).json({ error: `Required: ${missingRow.join(', ')}.`, missing: missingRow });
+      const values = cols.map(c => (bools.includes(c) ? (body[c] ? 1 : 0) : (body[c] || null)));
       await pool.execute(`UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...values, req.params.rowId]);
       const [[updated]] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [req.params.rowId]);
       await audit(req, owned.version_id, `${tab} #${req.params.rowId}`, before, updated);

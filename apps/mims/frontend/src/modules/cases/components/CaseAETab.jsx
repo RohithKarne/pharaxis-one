@@ -138,8 +138,8 @@ const AE_COMPLETION_DEFS = {
       { label: 'Action Taken', key: 'action_taken' },
       { label: 'Dechallenge', key: 'dechallenge' },
       { label: 'Rechallenge', key: 'rechallenge' },
-      { label: 'Suspect', key: 'is_suspect' },
-      { label: 'Concomitant Medications', key: 'is_concomitant' },
+      // A row saved before Role existed has its role in the two ticks.
+      { label: 'Role', read: row => row?.product_role || (row?.is_suspect != null || row?.is_concomitant != null ? 'from ticks' : '') },
     ],
   },
 }
@@ -201,6 +201,17 @@ export default function CaseAETab({
     }
   }, [formConfig])
   const [aeVersions,   setAeVersions]   = useState([])
+  // Case validity: the four elements the Transmit to PV gate checks (reporter,
+  // patient, suspect product, event). Shown here so the person filling the AE
+  // tab sees what the hand-off will block on, not on the transmission screen
+  // after the fact (case form clean-up PR 2, Rohith 2026-10-13).
+  const [validity, setValidity] = useState(null)
+  const loadValidity = async () => {
+    try {
+      const res = await httpFetch(`${API}/cases/${id}/validity`, { headers })
+      if (res.ok) setValidity(await res.json())
+    } catch { /* informational only; the tab works without it */ }
+  }
   const [activeAeVer,  setActiveAeVer]  = useState(null)
   const [activeAeTab,  setActiveAeTab]  = useState('general')
   const [aeTabData,    setAeTabData]    = useState({})
@@ -215,7 +226,7 @@ export default function CaseAETab({
   const [aeTxSaving,      setAeTxSaving]      = useState(false)
   const [aeClosingVersion, setAeClosingVersion] = useState(false)
 
-  useEffect(() => { loadAEVersions(); loadAeTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAEVersions(); loadAeTransmissions(); loadValidity() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A closed case is read-only whatever its versions say (MIPM-208).
   const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
@@ -395,6 +406,7 @@ export default function CaseAETab({
       setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: saved }))
       sessionStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
+      loadValidity()
       return true
     } catch (err) { toast.error(err.message); return false }
     finally { setAeTabSaving(false) }
@@ -452,8 +464,32 @@ export default function CaseAETab({
     } catch (err) { if (sign) return err.message; toast.error(err.message); return err.message }
   }
 
+  const VALIDITY_LABEL = { reporter: 'Identifiable reporter', patient: 'Identifiable patient', product: 'Suspect product', event: 'Adverse event' }
+
   return (
     <div id="tab-ae" className="cf-tab-pane">
+      {validity && Array.isArray(validity.elements) && (
+        <section className="cf-handoff-card" data-testid="ae-validity">
+          <div className="cf-handoff-card-head">
+            <h3>Case validity</h3>
+            <span className={`cf-handoff-score ${validity.blocking_for_submission ? 'is-blocked' : 'is-ok'}`}>
+              {validity.score}/{validity.elements.length}
+            </span>
+          </div>
+          <ul className="cf-handoff-checks">
+            {validity.elements.map(el => (
+              <li key={el.key} className={el.satisfied ? 'is-ok' : 'is-missing'}>
+                <span className="cf-handoff-check-icon">{el.satisfied ? '✓' : '✕'}</span>
+                <span className="cf-handoff-check-label">{VALIDITY_LABEL[el.key] || el.key}</span>
+                <span className="cf-handoff-check-reason">{el.reason}</span>
+              </li>
+            ))}
+          </ul>
+          {validity.blocking_for_submission && (
+            <div className="cf-handoff-muted">Transmit to PV stays blocked until all four are present. Save the version to refresh.</div>
+          )}
+        </section>
+      )}
       <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={createAEVersion} disabled={!canCreateAeVersion}>
           + New Version

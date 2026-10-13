@@ -3,6 +3,12 @@
 /**
  * requiredFields.js — enforce the admin's "required" setting on the server.
  *
+ * Since the case form clean-up (PR 4, 13 Oct 2026) this is the ONE required
+ * engine: the Required tick on Case Form Fields, checked on every save path
+ * (contacts, MI, AE and PC panels and rows, the configured block, the case's
+ * own fields). Required rules from Customize Forms and the Validation Rules
+ * "phase required" list are retired and no longer refuse a save.
+ *
  * Customize Forms writes field_setup.is_required per (section_name, field_name).
  * The case form shows a * from it, but until now no save checked it. Each case
  * route passes the fields its screen actually shows — { 'Field Name': 'bodyKey' }
@@ -168,4 +174,25 @@ async function missingRequiredAdditional(orgId, caseType, valueOf) {
   return missing;
 }
 
-module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, missingRequiredFields, missingRequiredCore, enforcePanelRequired, missingRequiredAdditional };
+// Row edits on the AE and PC list tabs (an event, a product, a lab result)
+// save in place through their own routes, outside enforcePanelRequired. Same
+// check, on the row as it will be after the edit (case form clean-up PR 4).
+async function missingRequiredRow(scope, tab, orgId, row) {
+  const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
+  const fields = PANEL_CORE_FIELDS.filter(f => f.scope === scope && f.tab === tab && f.type !== 'bool');
+  if (!fields.length) return [];
+  return missingRequiredCore(orgId, row || {}, Object.fromEntries(fields.map(f => [f.coreKey, f.key])));
+}
+
+// The case's own fields on the Workflow step, by core key → update body key.
+const CASE_CORE_FIELDS = {
+  status_id: 'status_id',
+  case_owner_id: 'case_owner_id',
+  priority: 'priority',
+  date_received: 'date_received',
+  latest_information_date: 'latest_information_date',
+  description: 'description',
+  internal_notes: 'internal_notes',
+};
+
+module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, CASE_CORE_FIELDS, missingRequiredFields, missingRequiredCore, missingRequiredRow, enforcePanelRequired, missingRequiredAdditional };

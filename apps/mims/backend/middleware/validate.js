@@ -115,6 +115,9 @@ const schemas = {
     intake_channel:    str(50).optional().allow('', null),
     date_received:     isoDate().optional().allow('', null),
     awareness_date:     isoDate().optional().allow('', null),
+    // Case form clean-up PR 3. Unlisted fields are stripped, so without this
+    // line the date was dropped before the route saw it.
+    latest_information_date: isoDate().optional().allow('', null),
     learn_of_validity_date: isoDate().optional().allow('', null),
     follow_up_received_date: isoDate().optional().allow('', null),
     internal_notes:    str(5000).optional().allow('', null),
