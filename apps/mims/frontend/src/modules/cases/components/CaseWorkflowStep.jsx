@@ -53,6 +53,7 @@ export default function CaseWorkflowStep({
   const fPriority = coreField('priority', 'Priority')
   const fReceived = coreField('date_received', 'Date Received')
   const fAwareness = coreField('awareness_date', 'Awareness Date')
+  const fLatestInfo = coreField('latest_information_date', 'Latest Information Date')
   const fNotes = coreField('internal_notes', 'Internal Notes')
 
   return (
@@ -99,6 +100,13 @@ export default function CaseWorkflowStep({
           <WiredField label={fAwareness.label} section="case_meta" field="awareness_date" type="date"
             value={infoForm.awareness_date}
             onChange={v => { setInfoForm(p => ({ ...p, awareness_date: v })); scheduleAutoSave() }} />
+        )}
+        {/* The date of the most recent information (E2B C.1.5); Date Received
+            stays Day 0. Added by the case form clean-up, PR 3. */}
+        {!fLatestInfo.hidden && (
+          <WiredField label={fLatestInfo.label} section="case_meta" field="latest_information_date" type="date"
+            value={infoForm.latest_information_date}
+            onChange={v => { setInfoForm(p => ({ ...p, latest_information_date: v })); scheduleAutoSave() }} />
         )}
       </div>
 

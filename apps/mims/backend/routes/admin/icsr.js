@@ -186,7 +186,10 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
     const [result] = await pool.execute(
       `INSERT INTO icsr_reports (org_id, case_id, receiver_id, receive_date, primary_source_country, report_type, seriousness_classification, narrative, status, created_by, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
-      [orgId, caseId, req.body.receiver_id || 'FDA', caseRow.created_at || null, req.body.primary_source_country || 'US', req.body.report_type || 'spontaneous', JSON.stringify({ hospitalization: false, death: false }), caseRow.description || caseRow.subject || '', req.user.userId, req.user.userId]
+      // receive_date is E2B receiptdate, the date of the most recent information
+      // (C.1.5): the case's Latest Information Date, else Date Received, else
+      // when the case was created (case form clean-up PR 3).
+      [orgId, caseId, req.body.receiver_id || 'FDA', caseRow.latest_information_date || caseRow.date_received || caseRow.created_at || null, req.body.primary_source_country || 'US', req.body.report_type || 'spontaneous', JSON.stringify({ hospitalization: false, death: false }), caseRow.description || caseRow.subject || '', req.user.userId, req.user.userId]
     );
     const year = new Date().getFullYear();
     const senderId = `ORG${orgId}-${year}-${String(result.insertId).padStart(6, '0')}`;

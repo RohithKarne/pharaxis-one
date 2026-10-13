@@ -1773,7 +1773,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
 
     const [[currentCase]] = await pool.execute(
       `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
-              awareness_date, learn_of_validity_date, follow_up_received_date, case_type,
+              awareness_date, latest_information_date, learn_of_validity_date, follow_up_received_date, case_type,
               description, internal_notes, intake_channel, version_stamp
        FROM cases
        WHERE id = ? AND is_deleted = 0
@@ -1951,6 +1951,16 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         nextAwarenessDate = normalized;
       }
     }
+    // Latest Information Date (E2B C.1.5), added by the case form clean-up PR 3.
+    let nextLatestInformationDate = currentCase.latest_information_date;
+    if (hasOwn(body, 'latest_information_date')) {
+      if (body.latest_information_date === '' || body.latest_information_date === null) nextLatestInformationDate = null;
+      else {
+        const normalized = toDateOnlyOrNull(body.latest_information_date);
+        if (!normalized) return res.status(400).json({ error: 'latest_information_date must be a valid date.' });
+        nextLatestInformationDate = normalized;
+      }
+    }
     let nextLearnOfValidityDate = currentCase.learn_of_validity_date;
     if (hasOwn(body, 'learn_of_validity_date')) {
       if (body.learn_of_validity_date === '' || body.learn_of_validity_date === null) nextLearnOfValidityDate = null;
@@ -1987,6 +1997,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
           priority       = ?,
           date_received  = ?,
           awareness_date = ?,
+          latest_information_date = ?,
           learn_of_validity_date = ?,
           follow_up_received_date = ?,
           description    = ?,
@@ -1996,7 +2007,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
          WHERE id = ?`,
         [
           nextStatusId, nextOwnerId, nextPriority, nextDateReceived, nextAwarenessDate,
-          nextLearnOfValidityDate, nextFollowUpReceivedDate, nextDescription,
+          nextLatestInformationDate, nextLearnOfValidityDate, nextFollowUpReceivedDate, nextDescription,
           nextInternalNotes, nextIntakeChannel, req.params.id,
         ]
       );
@@ -2044,6 +2055,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         ['priority', currentCase.priority, nextPriority],
         ['date_received', dateOnly(currentCase.date_received), dateOnly(nextDateReceived)],
         ['awareness_date', dateOnly(currentCase.awareness_date), dateOnly(nextAwarenessDate)],
+        ['latest_information_date', dateOnly(currentCase.latest_information_date), dateOnly(nextLatestInformationDate)],
         ['learn_of_validity_date', dateOnly(currentCase.learn_of_validity_date), dateOnly(nextLearnOfValidityDate)],
         ['follow_up_received_date', dateOnly(currentCase.follow_up_received_date), dateOnly(nextFollowUpReceivedDate)],
         ['description', currentCase.description, nextDescription],
