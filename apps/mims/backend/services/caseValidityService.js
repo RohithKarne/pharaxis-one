@@ -57,6 +57,18 @@ async function assess({ orgId, caseId }) {
   // Same reasoning as the patient lookup: the suspect drug can arrive on the
   // flat AE intake row rather than case_drugs or the AE version's product info.
   let productRow = product || null;
+  // The AE tab's product rows were read only when case_drugs did not exist, so
+  // a suspect product entered on the AE tab scored "missing" and Transmit to PV
+  // refused a valid case (found in the case form clean-up, 2026-10-13).
+  if (!productRow) {
+    const [[aeProduct]] = await pool.execute(
+      `SELECT p.id, p.product_name FROM case_ae_versions v JOIN case_ae_product_info p ON p.version_id = v.id
+        WHERE v.case_id = ? AND p.is_suspect = 1 AND p.product_name IS NOT NULL AND p.product_name <> ''
+        ORDER BY v.version_number DESC, p.id ASC LIMIT 1`,
+      [caseId]
+    ).catch(() => [[null]]);
+    productRow = aeProduct || null;
+  }
   if (!productRow) {
     const [[intakeDrug]] = await pool.execute(
       `SELECT id, suspect_drug_name AS product_name FROM case_ae_intake
