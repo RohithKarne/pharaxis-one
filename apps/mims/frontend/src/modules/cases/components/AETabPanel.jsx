@@ -152,8 +152,8 @@ export default function AETabPanel({
           {fieldRow('Last Menstrual Date', 'last_menstrual_date', 'date')}
           {!pf('Pregnant').hidden && <PicklistRow
             label={labelText(pf('Pregnant'))}
-            value={d.pregnant ?? ''}
-            onChange={v => set('pregnant', v === '' ? null : parseInt(v))}
+            value={pregnantOption(getPicklistOptions('AE — Patient Information', 'Pregnant'), d.pregnant)}
+            onChange={v => set('pregnant', v === '' ? null : (isYes(v) ? 1 : 0))}
             options={getPicklistOptions('AE — Patient Information', 'Pregnant')}
             locked={locked}
           />}
@@ -205,6 +205,17 @@ export default function AETabPanel({
       )}
     </div>
   )
+}
+
+// Pregnant is stored as 1 / 0 but its picklist offers "Yes" / "No". The panel
+// used parseInt on the choice, so "Yes" became NaN, was sent as nothing, and
+// the answer was never saved (found in the case form clean-up, 2026-10-13).
+function isYes(v) { return /^(y|1|true)/i.test(String(v ?? '').trim()) }
+function pregnantOption(options, stored) {
+  if (stored === null || stored === undefined || stored === '') return ''
+  const want = Number(stored) === 1
+  const match = (Array.isArray(options) ? options : []).find(o => isYes(o.value) === want)
+  return match ? match.value : (want ? 'Yes' : 'No')
 }
 
 /**
