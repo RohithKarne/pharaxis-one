@@ -2,6 +2,7 @@
 
 const pool = require('../database/db');
 const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
+const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -378,6 +379,22 @@ async function applyPlatformCoreKeys(conn, orgId) {
   );
 }
 
+// The AE and PC panels draw their own fields and find the admin's settings by
+// core_key (catalogs/panelCoreFields.js). Seventeen of those fields have no
+// platform row, so applyPlatformCoreKeys left them unkeyed in every new
+// organisation and the configured-fields block drew them a second time
+// (case form clean-up PR 2, Rohith 2026-10-13). Same statement as migration 171.
+async function applyPanelCoreKeys(conn, orgId) {
+  for (const f of PANEL_CORE_FIELDS) {
+    await conn.execute(
+      `UPDATE field_setup SET core_key = ?
+        WHERE org_id = ? AND section_name = ? AND LOWER(TRIM(field_name)) = LOWER(?)
+          AND (core_key IS NULL OR core_key = '')`,
+      [f.coreKey, orgId, f.section, f.field]
+    );
+  }
+}
+
 // Content documents are classified from mi_categories, which nothing seeded, so
 // New Document's MI Category list was empty in every new org. Start it with the
 // same names as the case form's MI Category picklist (MIPM-201).
@@ -396,6 +413,7 @@ async function seedMiCategories(conn, orgId, userId) {
 async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
   await applyPlatformCoreKeys(conn, orgId);
+  await applyPanelCoreKeys(conn, orgId);
   await seedPicklists(conn, orgId, userId);
   await seedMiCategories(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
