@@ -4,6 +4,7 @@ const pool = require('../database/db');
 const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
 const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
 const { MI_CORE_FIELDS } = require('../database/migrations/108_link_mi_core_fields');
+const { CUT_FIELDS, CUT_SECTION_NAMES, NEW_FIELDS, FOLLOW_UP_RULE, cutKey } = require('../catalogs/caseFormCutList');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -246,19 +247,49 @@ function caseTypeScope(sectionName) {
   return m ? m[1].toLowerCase() : 'shared';
 }
 
+// Case form clean-up PR 6 (Rohith, 13 Oct 2026): a new organisation starts
+// with the target list, the form an existing organisation has after the cut.
+// A cut field the case form draws for itself (a panel or contact field) is
+// seeded hidden, because a panel field with no setting is shown; any other cut
+// field, and every field of a cut section, is not seeded at all. An admin adds
+// a field back on Case Form Fields.
+const CUT_BY_KEY = new Map(CUT_FIELDS.map(f => [cutKey(f.section, f.field), f]));
+
 async function seedFieldSetup(conn, orgId, _userId) {
   const allRows = [...FIELD_SETUP_ROWS, ...EXTRA_FIELDS];
   for (const row of allRows) {
+    if (CUT_SECTION_NAMES.has(row[0])) continue;
+    const cut = CUT_BY_KEY.get(cutKey(row[0], row[1]));
+    if (cut && !cut.panel) continue;
     await conn.execute(
       // MIPM-194: Contact / Requestor fields belong to the Contacts step (the
       // contact card on step 1). Untagged, they were drawn on every other step as
       // an empty duplicate form whose required stars nothing enforced.
       `INSERT IGNORE INTO field_setup
         (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id, display_tab, case_type_scope)
-       VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)`,
-      [row[0], row[1], row[2], row[3], row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null, caseTypeScope(row[0])]
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+      [row[0], row[1], row[2], cut ? 0 : row[3], cut ? 1 : 0, row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null, caseTypeScope(row[0])]
     );
   }
+  // The fields the clean-up added (Latest Information Date, product Role).
+  for (const f of NEW_FIELDS) {
+    await conn.execute(
+      `INSERT IGNORE INTO field_setup
+        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, sort_order, org_id, case_type_scope, core_key)
+       VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, ?)`,
+      [f.section, f.field, f.type, f.sortOrder, orgId, f.scope, f.coreKey]
+    );
+  }
+}
+
+// MI Follow-up Due Date shows only when Follow-up Required is ticked (as migration 173).
+async function seedFormRules(conn, orgId) {
+  const r = FOLLOW_UP_RULE;
+  await conn.execute(
+    `INSERT INTO case_form_rules (org_id, case_type, section_name, field_name, rule_type, condition_json, action_json, is_active, priority)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+    [orgId, r.case_type, r.section_name, r.field_name, r.rule_type, JSON.stringify(r.condition_json), JSON.stringify(r.action_json)]
+  );
 }
 
 async function getOrCreateCategoryId(conn, orgId, categoryName, userId) {
@@ -327,34 +358,12 @@ async function seedCaseFormDefinition(conn, orgId, _userId) {
 
   for (const [caseType, sections] of Object.entries(merged)) {
     for (const sectionName of sections) {
+      if (CUT_SECTION_NAMES.has(sectionName)) continue;  // clean-up PR 6: target list only
       await conn.execute(
         `INSERT IGNORE INTO case_form_definition
           (org_id, case_type, section_name, is_visible, field_overrides)
          VALUES (?, ?, ?, 1, NULL)`,
         [orgId, caseType, sectionName]
-      );
-    }
-  }
-}
-
-async function seedCustomizeFormsPlaceholders(conn, orgId) {
-  // Seed placeholder items from the Customize Forms catalog so all tenants
-  // (existing + new) have the placeholder records available to toggle in the
-  // MIMS Admin > System > Setup > Customize Forms screen.
-  let catalogModule;
-  try {
-    catalogModule = require('../catalogs/customizeFormsCatalog');
-  } catch (_) { return; }
-
-  const { CATALOG, PLACEHOLDER_SECTION } = catalogModule;
-  for (const category of Object.values(CATALOG)) {
-    const placeholders = [...category.sections, ...category.fields].filter(it => it.is_placeholder);
-    for (const ph of placeholders) {
-      await conn.execute(
-        `INSERT IGNORE INTO field_setup
-          (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id)
-         VALUES (?, ?, 'placeholder', 0, 0, 0, NULL, NULL, 0, ?)`,
-        [PLACEHOLDER_SECTION, ph.key, orgId]
       );
     }
   }
@@ -424,7 +433,8 @@ async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedPicklists(conn, orgId, userId);
   await seedMiCategories(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
-  await seedCustomizeFormsPlaceholders(conn, orgId);
+  await seedFormRules(conn, orgId);
+  // Customize Forms placeholder rows stopped with that screen (clean-up PR 6).
 }
 
 async function seedNewOrg(orgId, userId) {
