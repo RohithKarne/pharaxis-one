@@ -824,9 +824,16 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     // leave them out, and a screen that draws its own fields (the contact form)
     // treats a field with no setting as shown — so hiding a contact field had no
     // effect. Found in the case form clean-up walk, 2026-10-13.
+    // A hidden field's choices still go with it: a panel can draw its own
+    // control from them (the AE product row's Dechallenge, Rechallenge, Product
+    // Type and Product Category read the options of settings the cut hid, and
+    // came up empty — found in the case form follow-ups walk, 2026-10-13).
     const hidden = [...fieldsByKey.values()]
       .filter(f => (f.is_hidden || f.is_disabled) && !f.core_key)
-      .map(f => ({ section_name: f.section_name, field_name: f.field_name }));
+      .map(f => ({
+        section_name: f.section_name, field_name: f.field_name,
+        ...((f.field_type === 'dropdown' || f.field_type === 'multiselect') ? { options: picklistMap[f.picklist_type] || [] } : {}),
+      }));
 
     return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core, hidden });
   } catch (err) {
