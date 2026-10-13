@@ -257,7 +257,10 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
       if (products.length) {
         await pool.execute('DELETE FROM icsr_drugs WHERE icsr_id = ?', [result.insertId]);
         for (const p of products) {
-          const role = p.is_concomitant && !p.is_suspect ? 'concomitant' : 'suspect';
+          // Role on the product row (clean-up PR 3) wins; older rows are read from their ticks.
+          const role = ['suspect', 'concomitant', 'interacting'].includes(p.product_role)
+            ? p.product_role
+            : (p.is_concomitant && !p.is_suspect ? 'concomitant' : 'suspect');
           await pool.execute(
             `INSERT INTO icsr_drugs (icsr_id, drug_role, medicinal_product_name, batch_no, dose_amount, dose_unit, route_of_admin, indication, start_date, end_date, action_taken, dechallenge, rechallenge)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

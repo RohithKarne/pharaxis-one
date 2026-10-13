@@ -153,10 +153,16 @@ export default function AETabPanel({
           {!pf('Pregnant').hidden && <PicklistRow
             label={labelText(pf('Pregnant'))}
             value={pregnantOption(getPicklistOptions('AE — Patient Information', 'Pregnant'), d.pregnant)}
-            onChange={v => set('pregnant', v === '' ? null : (isYes(v) ? 1 : 0))}
+            onChange={v => {
+              const pregnant = v === '' ? null : (isYes(v) ? 1 : 0)
+              // The trimester belongs to a pregnancy; any other answer clears it.
+              onChange({ ...d, pregnant, pregnancy_trimester: pregnant === 1 ? d.pregnancy_trimester : null })
+            }}
             options={getPicklistOptions('AE — Patient Information', 'Pregnant')}
             locked={locked}
           />}
+          {/* Asked only when Pregnant is Yes (case form clean-up PR 3). */}
+          {Number(d.pregnant) === 1 && selectRow('Pregnancy Trimester', 'pregnancy_trimester', 'AE — Patient Information')}
           {!pf('Patient Country').hidden && <PicklistRow
             label={labelText(pf('Patient Country'))}
             value={d.patient_country ?? ''}

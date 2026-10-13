@@ -138,8 +138,8 @@ const AE_COMPLETION_DEFS = {
       { label: 'Action Taken', key: 'action_taken' },
       { label: 'Dechallenge', key: 'dechallenge' },
       { label: 'Rechallenge', key: 'rechallenge' },
-      { label: 'Suspect', key: 'is_suspect' },
-      { label: 'Concomitant Medications', key: 'is_concomitant' },
+      // A row saved before Role existed has its role in the two ticks.
+      { label: 'Role', read: row => row?.product_role || (row?.is_suspect != null || row?.is_concomitant != null ? 'from ticks' : '') },
     ],
   },
 }

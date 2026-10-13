@@ -45,14 +45,30 @@ const LIST_TAB_FIELDS = {
     // and Causality Assessment are switched off by migration 121 (M-103).
     meddra_term: 'MedDRA Term', reported_causality: 'Reported Causality', frequency: 'Frequency',
     causality_assessment: 'Causality Assessment', end_date: 'End Date',
+    // Moved onto the event row by the case form clean-up (PR 3, migration 173).
+    verbatim_reaction: 'Verbatim Reaction',
+    hospitalization_start_date: 'Hospitalization Start Date', hospitalization_end_date: 'Hospitalization End Date',
   },
   'product-info': {
     product_name: 'Product Name', batch_lot_number: 'Batch / Lot Number', dose: 'Dose', dose_unit: 'Dose Unit',
     route_of_admin: 'Route of Administration', start_date: 'Start Date', end_date: 'Stop Date',
     indication: 'Indication', action_taken: 'Action Taken', is_concomitant: 'Concomitant Medications',
+    product_role: 'Role',
   },
   'lab-results': { lab_name: 'Lab Name', test_date: 'Test Date', test_name: 'Test Name', result: 'Result Value', normal_range: 'Normal Range' },
   'medical-history': { condition_name: 'Medical History', notes: 'Relevant History' },
+}
+
+// Role on the product row (clean-up PR 3) replaces the Suspect and Concomitant
+// ticks. A row saved before Role existed is read from its ticks.
+const PRODUCT_ROLES = [
+  { value: 'suspect', label: 'Suspect' },
+  { value: 'concomitant', label: 'Concomitant' },
+  { value: 'interacting', label: 'Interacting' },
+]
+function rowRole(row) {
+  if (PRODUCT_ROLES.some(r => r.value === row?.product_role)) return row.product_role
+  return row?.is_concomitant && !row?.is_suspect ? 'concomitant' : 'suspect'
 }
 
 export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, getPicklistOptions, onRowsChange, caseId, panelField = null }) {
@@ -95,8 +111,8 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   const blankForm = () => {
     if (tabKey === 'lab-results')     return { lab_name: '', test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
-    if (tabKey === 'product-info')    return { product_id: '', product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', is_suspect: true, is_concomitant: false }
-    if (tabKey === 'events')          return { event_description: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
+    if (tabKey === 'product-info')    return { product_id: '', product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', product_role: 'suspect', is_suspect: true, is_concomitant: false }
+    if (tabKey === 'events')          return { event_description: '', verbatim_reaction: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', hospitalization_start_date: '', hospitalization_end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
   const [form, setForm] = useState(() => readDraft() || blankForm())
@@ -124,6 +140,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
       else if (k.endsWith('_date') && v) next[k] = String(v).slice(0, 10)
       else next[k] = v ?? ''
     }
+    if (tabKey === 'product-info') next.product_role = rowRole(row)
     setEditingId(row.id)
     setForm(next)
     setShowForm(true)
@@ -204,8 +221,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     { key: 'route_of_admin', label: 'Route' },
     { key: 'frequency',      label: 'Frequency' },
     { key: 'indication',     label: 'Indication' },
-    { key: 'is_suspect',     label: 'Suspect',     render: v => v ? '✓' : '—' },
-    { key: 'is_concomitant', label: 'Concomitant', render: v => v ? '✓' : '—' },
+    { key: 'product_role',   label: 'Role', renderRow: row => PRODUCT_ROLES.find(r => r.value === rowRole(row))?.label },
   ]
   const eventCols = [
     { key: 'event_description', label: 'Event Description' },
@@ -241,7 +257,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 <tr key={row.id} style={{ opacity: deleting === row.id ? 0.4 : 1 }}>
                   {cols.map(c => (
                     <td key={c.key}>
-                      {c.render ? c.render(row[c.key]) : formatCell(row[c.key])}
+                      {c.renderRow ? c.renderRow(row) : c.render ? c.render(row[c.key]) : formatCell(row[c.key])}
                     </td>
                   ))}
                   {!locked && (
@@ -286,6 +302,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
                 {tabKey === 'events' && <>
                   {field('event_description', 'Event Description', <textarea rows={2} value={form.event_description} onChange={e => set('event_description', e.target.value)} />, { full: true })}
+                  {field('verbatim_reaction', 'Verbatim Reaction', <textarea rows={2} value={form.verbatim_reaction || ''} placeholder="The reporter's own words" onChange={e => set('verbatim_reaction', e.target.value)} />, { full: true })}
                   {field('meddra_term', 'MedDRA Term', <select value={form.meddra_term} onChange={e => set('meddra_term', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'MedDRA Term').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('outcome', 'Outcome', <select value={form.outcome} onChange={e => set('outcome', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Outcome').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('reported_causality', 'Reported Causality', <select value={form.reported_causality} onChange={e => set('reported_causality', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Reported Causality').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
@@ -296,6 +313,11 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   <div className="cf-form-field cf-form-field--full">
                     <SeriousnessChecklist value={form} onChange={editForm} />
                   </div>
+                  {/* Hospital dates belong to the event that caused the stay; asked only when it did. */}
+                  {form.is_hospitalization && <>
+                    {field('hospitalization_start_date', 'Hospitalization Start Date', <input type="date" value={form.hospitalization_start_date || ''} onChange={e => set('hospitalization_start_date', e.target.value)} />)}
+                    {field('hospitalization_end_date', 'Hospitalization End Date', <input type="date" value={form.hospitalization_end_date || ''} onChange={e => set('hospitalization_end_date', e.target.value)} />)}
+                  </>}
                 </>}
                 {tabKey === 'product-info' && <>
                   {products.length > 0 && (
@@ -324,20 +346,16 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   {field('action_taken', 'Action Taken', <select value={form.action_taken} onChange={e => set('action_taken', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Action Taken').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   <div className="cf-form-field"><label>Dechallenge</label><select aria-label="Dechallenge" value={form.dechallenge} onChange={e => set('dechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field"><label>Rechallenge</label><select aria-label="Rechallenge" value={form.rechallenge} onChange={e => set('rechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Rechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  {/* Role is always asked: the hand-off check needs to know which product is suspect. */}
                   <div className="cf-form-field">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={form.is_suspect} onChange={e => set('is_suspect', e.target.checked)} />
-                      Suspect Drug
-                    </label>
+                    <label>{cfg('product_role', 'Role').label}</label>
+                    <select aria-label="Role" value={form.product_role || 'suspect'} onChange={e => editForm({
+                      ...form, product_role: e.target.value,
+                      is_suspect: e.target.value !== 'concomitant', is_concomitant: e.target.value === 'concomitant',
+                    })}>
+                      {PRODUCT_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
                   </div>
-                  {!cfg('is_concomitant', 'Concomitant Med').hidden && (
-                    <div className="cf-form-field">
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={form.is_concomitant} onChange={e => set('is_concomitant', e.target.checked)} />
-                        {cfg('is_concomitant', 'Concomitant Med').label}
-                      </label>
-                    </div>
-                  )}
                 </>}
               </div>
               <div className="cf-form-actions" style={{ paddingLeft: 0, marginTop: 10 }}>
