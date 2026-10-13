@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
-import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
+import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV, RETIRED_SYSTEM_ITEMS } from './configItems'
 import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
@@ -317,7 +317,7 @@ function MIMSAdminShellInner() {
   const initialServiceItem = initialParams.get('service') || ''
   const initialActivityItem = initialParams.get('activity') || ''
   const initialTablesItem = initialParams.get('tables') || ''
-  const initialSystemItem = initialParams.get('system') || ''
+  const initialSystemItem = RETIRED_SYSTEM_ITEMS[initialParams.get('system')] || initialParams.get('system') || ''
   const initialAuditItem = initialParams.get('audit') || 'admin'
   const [activeTab,      setActiveTab]      = useState(
     initialParams.get('tab')
@@ -372,6 +372,13 @@ function MIMSAdminShellInner() {
     const nextEscalationItem = params.get('escalation') || ''
     const nextDocumentsItem = params.get('documents') || ''
     const nextHelpItem = params.get('help') || ''
+    // A retired screen's address is replaced by the screen that took its place.
+    const retiredTo = RETIRED_SYSTEM_ITEMS[params.get('system')]
+    if (retiredTo) {
+      params.set('system', retiredTo)
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true })
+      return
+    }
     const nextSystemItem = params.get('system') || ''
     const nextTablesItem = params.get('tables') || ''
     const nextAuditItem = params.get('audit') || 'admin'

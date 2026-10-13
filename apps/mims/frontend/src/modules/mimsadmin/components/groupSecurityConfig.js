@@ -57,7 +57,6 @@ export const SYSTEM_OPTION_SECTIONS = [
           'sys-setup-change-approvals',
           'sys-setup-feature-flags',
           'sys-setup-smart-fields',
-          'sys-setup-validation',
           'sys-setup-grid-templates',
           'sys-setup-case-actions',
           'sys-setup-compliance',

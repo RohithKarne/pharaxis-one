@@ -11,7 +11,6 @@ const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 const ExceptionLog = lazy(() => import('./ExceptionLog'))
 const FeatureFlags = lazy(() => import('./FeatureFlags'))
 const SmartFields = lazy(() => import('./SmartFields'))
-const ValidationRules = lazy(() => import('./ValidationRules'))
 const GridTemplates = lazy(() => import('./GridTemplates'))
 const CaseActionsAdmin = lazy(() => import('./CaseActionsAdmin'))
 const ComplianceAdmin = lazy(() => import('./ComplianceAdmin'))
@@ -79,7 +78,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-change-approvals' ? <SetupChangeApprovals />
     : selectedItem === 'sys-setup-feature-flags' ? <FeatureFlags />
     : selectedItem === 'sys-setup-smart-fields' ? <SmartFields />
-    : selectedItem === 'sys-setup-validation' ? <ValidationRules />
     : selectedItem === 'sys-setup-grid-templates' ? <GridTemplates />
     : selectedItem === 'sys-setup-case-actions' ? <CaseActionsAdmin />
     : selectedItem === 'sys-setup-compliance' ? <ComplianceAdmin />

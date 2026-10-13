@@ -56,7 +56,6 @@ export const SYSTEM_NAV = [
           { label: 'Case Numbering',                   value: 'sys-setup-case-numbering'  },
           { label: 'Customize Forms',                  value: 'sys-setup-customize-forms' },
           { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields'    },
-          { label: 'Validation Rules',                 value: 'sys-setup-validation'      },
           { label: 'Grid Section Templates',           value: 'sys-setup-grid-templates'  },
           { label: 'Case Actions (Templates/Macros)',  value: 'sys-setup-case-actions'    },
         ],
@@ -138,6 +137,13 @@ function findInNav(nav, value) {
     }
   }
   return null
+}
+
+// Screens retired by the case form clean-up (Rohith, 13 Oct 2026). Required is
+// one thing, the Required tick on Case Form Fields, so the screens that kept
+// their own required rules are gone; an old link opens Case Form Fields.
+export const RETIRED_SYSTEM_ITEMS = {
+  'sys-setup-validation': 'sys-setup-case-fields',
 }
 
 export function findSystemLabel(value) {
