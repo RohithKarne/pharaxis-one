@@ -64,7 +64,7 @@ export default function CaseFieldsConfig() {
       const res = await httpFetch(`${API}/usage?case_type=${caseType}`)
       const data = await res.json()
       if (res.ok) { setUsage(data.usage || {}); setCasesTotal(data.cases_total ?? null) }
-    } catch (_) { /* the count is informational; the screen works without it */ }
+    } catch { /* the count is informational; the screen works without it */ }
   }, [caseType])
 
   useEffect(() => { load() }, [load])

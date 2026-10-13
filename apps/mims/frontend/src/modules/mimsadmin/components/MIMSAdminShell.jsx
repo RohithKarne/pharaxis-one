@@ -393,7 +393,7 @@ function MIMSAdminShellInner() {
     setSystemItem(nextSystemItem)
     setTablesItem(nextTablesItem)
     setAuditItem(nextAuditItem)
-  }, [location.search])
+  }, [location.search, location.pathname, navigate])
 
   // "Advanced form tools" switch on Case Form Fields (case form clean-up PR 5).
   const readAdvancedForms = () => { try { return localStorage.getItem(ADVANCED_FORMS_KEY) === '1' } catch { return false } }
