@@ -3185,6 +3185,16 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
     // Nothing typed is not an error (M-38 — was a raw "fields array required.").
     if (!fields.length) return res.json({ message: 'Nothing to save.' });
 
+    // Every changed value goes into the case history, before and after. These
+    // saves wrote no history at all, so a configured value could change with no
+    // record of who changed it or from what (found in the case form clean-up,
+    // 2026-10-13). The field is named as "Section / Field".
+    const before = new Map(stored.map(r => [Number(r.field_id), r.field_value]));
+    const ids = fields.map(f => Number(f.field_id || f.field_definition_id || 0)).filter(Boolean);
+    const [names] = ids.length
+      ? await pool.execute(`SELECT id, section_name, field_name FROM field_setup WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
+      : [[]];
+    const nameOf = new Map(names.map(n => [Number(n.id), `${n.section_name} / ${n.field_name}`]));
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;
@@ -3194,6 +3204,12 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
          ON DUPLICATE KEY UPDATE field_value = VALUES(field_value)`,
         [req.params.id, fieldId, fieldValue ?? null]
       );
+      const was = before.get(fieldId) ?? '';
+      const now = fieldValue ?? '';
+      if (String(was) !== String(now)) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED',
+          nameOf.get(fieldId) || `field ${fieldId}`, was === '' ? null : String(was), now === '' ? null : String(now));
+      }
     }
     res.json({ message: 'Dynamic fields saved.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
