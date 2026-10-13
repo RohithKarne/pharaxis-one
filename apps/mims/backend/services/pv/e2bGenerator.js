@@ -1,5 +1,8 @@
 'use strict';
 
+// E2B(R3) E.i.1.1a, reaction as reported by the primary source: 250 characters.
+const VERBATIM_MAX = 250;
+
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -54,7 +57,8 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
   const reactionXml = reactions.map((reaction, index) => block('reaction', [
     // E.i.1.1a: the reaction as the reporter described it; the coded term is
     // the fallback for reactions saved before the verbatim was kept.
-    tag('reactionprimarysourcereaction', reaction.reaction_verbatim || reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`),
+    // The element holds 250 characters; the ICSR keeps longer words whole in the narrative.
+    tag('reactionprimarysourcereaction', String(reaction.reaction_verbatim || reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`).slice(0, VERBATIM_MAX)),
     tag('reactionmeddraversionpt', reaction.meddra_version || dependencies.meddraVersion || ''),
     tag('reactionmeddrapt', reaction.meddra_pt || reaction.meddra_code || ''),
     tag('reactionmeddrallt', reaction.meddra_llt || ''),
@@ -155,4 +159,4 @@ function safeJson(value, fallback) {
   try { return JSON.parse(value); } catch (_) { return fallback; }
 }
 
-module.exports = { generateE2BXml, esc, tag };
+module.exports = { generateE2BXml, esc, tag, VERBATIM_MAX };

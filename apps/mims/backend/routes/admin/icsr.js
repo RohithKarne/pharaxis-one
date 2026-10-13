@@ -9,7 +9,7 @@ try {
 }
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { generateE2BXml } = require('../../services/pv/e2bGenerator');
+const { generateE2BXml, VERBATIM_MAX } = require('../../services/pv/e2bGenerator');
 const { validateE2BXml } = require('../../services/pv/e2bValidator');
 const { transition } = require('../../services/pv/icsrLifecycle');
 const { searchMedDra } = require('../../services/pv/meddraService');
@@ -265,12 +265,22 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
             [result.insertId, e.verbatim_reaction || e.event_description || null, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
           );
         }
+        // E.i.1.1a holds 250 characters. Longer words from the reporter are
+        // kept whole in the narrative, so the file's cut copy loses nothing.
+        const longWords = events.map(e => e.verbatim_reaction || e.event_description || '')
+          .filter(w => w.length > VERBATIM_MAX).map(w => `Reporter's words in full: ${w}`);
         const any = (k) => events.some(e => !!e[k]);
         await pool.execute(
           `UPDATE icsr_reports SET seriousness_classification = ?, narrative = COALESCE(NULLIF(narrative, ''), ?) WHERE id = ?`,
           [JSON.stringify({ death: any('is_death'), lifeThreatening: any('is_life_threatening'), hospitalization: any('is_hospitalization'), disability: any('is_disability'), congenitalAnomaly: any('is_congenital_anomaly'), otherMI: any('is_other_medically_important') }),
             events.map(e => e.event_description).filter(Boolean).join('\n') || null, result.insertId]
         );
+        if (longWords.length) {
+          await pool.execute(
+            `UPDATE icsr_reports SET narrative = CONCAT_WS('\n\n', NULLIF(narrative, ''), ?) WHERE id = ?`,
+            [longWords.join('\n'), result.insertId]
+          );
+        }
         seededFrom = 'ae_version';
       }
       if (products.length) {
