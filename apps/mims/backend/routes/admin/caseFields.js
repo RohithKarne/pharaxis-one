@@ -4,6 +4,7 @@
  * caseFields.js — Case form field configuration (Phase 3).
  *
  *   GET /api/admin/case-fields?case_type=AE   — the org's resolved field list
+ *   GET /api/admin/case-fields/usage?case_type=AE — per field, how many cases hold a value (read-only)
  *   PUT /api/admin/case-fields/:id            — update one field's presentation
  *
  * This is the admin surface for the layer wired up in Phase 3: `field_setup`
@@ -29,6 +30,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { usageForFields } = require('../../services/fieldUsageService');
 
 const ADMIN = ['admin', 'platform_admin'];
 const CASE_TYPES = ['MI', 'AE', 'PC'];
@@ -101,6 +103,39 @@ router.get('/case-fields', authenticate, requireRole(...ADMIN), async (req, res)
     }));
 
     res.json({ case_type: caseType, org_id: orgId, sections, total: fields.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Day 0 of the case form clean-up (Rohith, 2026-10-13): the count behind every
+// "hide" decision, shown on the screen so nobody has to run a script. Read-only.
+router.get('/case-fields/usage', authenticate, requireRole(...ADMIN), async (req, res) => {
+  try {
+    const orgId = resolveOrgId(req);
+    if (!orgId) return res.status(400).json({ error: 'org_id required.' });
+    const caseType = String(req.query.case_type || 'MI').toUpperCase();
+    if (!CASE_TYPES.includes(caseType)) {
+      return res.status(400).json({ error: 'case_type must be MI, AE or PC.' });
+    }
+    const [rows] = await pool.execute(
+      `SELECT id, org_id, section_name, field_name, core_key
+         FROM field_setup
+        WHERE (org_id = ? OR org_id IS NULL)
+          AND section_name != '__customize_placeholder__'
+          AND (case_type_scope = 'shared' OR case_type_scope = ?)`,
+      [orgId, caseType.toLowerCase()]
+    );
+    const byKey = new Map();
+    for (const row of rows) {
+      const key = `${row.section_name}::${String(row.field_name).trim().toLowerCase()}`;
+      const existing = byKey.get(key);
+      if (!existing || (existing.org_id === null && row.org_id !== null)) byKey.set(key, row);
+    }
+    const [[c]] = await pool.execute(
+      'SELECT COUNT(*) AS n FROM cases WHERE is_deleted = 0 AND org_id = ?', [orgId]);
+    const usage = await usageForFields(orgId, [...byKey.values()]);
+    res.json({ case_type: caseType, org_id: orgId, cases_total: c.n, usage });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

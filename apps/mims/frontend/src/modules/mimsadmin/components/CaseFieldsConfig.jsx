@@ -20,6 +20,10 @@ export default function CaseFieldsConfig() {
   const [flash, setFlash] = useState('')
   const [savingId, setSavingId] = useState(null)
   const [showHidden, setShowHidden] = useState(true)
+  // Day 0 of the case form clean-up: per field, how many cases hold a value.
+  // Loaded after the field list so a slow count never delays the screen.
+  const [usage, setUsage] = useState(null)
+  const [casesTotal, setCasesTotal] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -35,6 +39,13 @@ export default function CaseFieldsConfig() {
     } finally {
       setLoading(false)
     }
+    setUsage(null)
+    setCasesTotal(null)
+    try {
+      const res = await httpFetch(`${API}/usage?case_type=${caseType}`)
+      const data = await res.json()
+      if (res.ok) { setUsage(data.usage || {}); setCasesTotal(data.cases_total ?? null) }
+    } catch (_) { /* the count is informational; the screen works without it */ }
   }, [caseType])
 
   useEffect(() => { load() }, [load])
@@ -109,7 +120,10 @@ export default function CaseFieldsConfig() {
         organisations untouched.
       </div>
 
-      <div className="cf-fieldcfg-count">{total} fields configured for {caseType}</div>
+      <div className="cf-fieldcfg-count">
+        {total} fields configured for {caseType}
+        {casesTotal !== null && <> · "Used in cases" counts this organisation's {casesTotal} cases; "—" means the form never had a place to store the value</>}
+      </div>
 
       {sections.map(section => {
         const visible = showHidden ? section.fields : section.fields.filter(f => !f.is_hidden)
@@ -120,7 +134,7 @@ export default function CaseFieldsConfig() {
             <table className="cf-fieldcfg-table">
               <thead>
                 <tr>
-                  <th>Field</th><th>Label shown to users</th><th>Required</th><th>Visible</th><th>Order</th>
+                  <th>Field</th><th>Label shown to users</th><th>Required</th><th>Visible</th><th>Order</th><th>Used in cases</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +191,9 @@ export default function CaseFieldsConfig() {
                           if (!Number.isNaN(v) && v !== (f.sort_order ?? 0)) patchField(f, { sort_order: v })
                         }}
                       />
+                    </td>
+                    <td className="cf-fieldcfg-centre" title={usage?.[f.id]?.source ? `Where the value lives: ${usage[f.id].source}` : ''}>
+                      {usage === null ? '…' : (usage[f.id]?.cases ?? '—')}
                     </td>
                   </tr>
                 ))}
