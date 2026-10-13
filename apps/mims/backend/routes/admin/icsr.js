@@ -99,6 +99,15 @@ async function loadIcsr(id, req) {
   const [contacts] = await pool.execute('SELECT * FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC', [report.case_id]).catch(() => [[]]);
   const reporter = contacts.find(c => String(c.contact_role || '').toLowerCase() === 'reporter') || null;
   const patientContact = contacts.find(c => String(c.contact_role || '').toLowerCase() === 'patient') || null;
+  // The patient comes from the AE tab's latest version first (that is where a
+  // handler types initials, birth date and sex), then from the New Case popup,
+  // then from a contact with the patient role. Before 13 Oct 2026 only the
+  // contact was read, and it has no sex or birth date columns, so the E2B file
+  // never carried a patient (case form clean-up PR 1).
+  const [[versionPatient]] = await pool.execute(
+    `SELECT p.* FROM case_ae_patient_info p JOIN case_ae_versions v ON v.id = p.version_id
+      WHERE v.case_id = ? ORDER BY v.version_number DESC, p.id DESC LIMIT 1`, [report.case_id]).catch(() => [[null]]);
+  const [[intakePatient]] = await pool.execute('SELECT * FROM case_patient WHERE case_id = ? ORDER BY id DESC LIMIT 1', [report.case_id]).catch(() => [[null]]);
   report.seriousness_classification = safeJson(report.seriousness_classification, {});
   report.causality_per_drug = safeJson(report.causality_per_drug, {});
   const normalizedDrugs = caseDrugs.length ? caseDrugs.map(d => ({ ...d, drug_role: d.role, medicinal_product_name: d.drug_name_verbatim, route_of_admin: d.route_of_administration, batch_no: d.lot_number })) : drugs;
@@ -114,7 +123,11 @@ async function loadIcsr(id, req) {
     history,
     causality,
     reporter: reporter ? { given_name: reporter.first_name, family_name: reporter.last_name, email: reporter.email, phone: reporter.phone, address: reporter.address, country: reporter.country } : {},
-    patient: patientContact ? { name: [patientContact.first_name, patientContact.last_name].filter(Boolean).join(' '), sex: patientContact.sex, dob: patientContact.date_of_birth } : {},
+    patient: versionPatient
+      ? { initials: versionPatient.patient_initials, dob: versionPatient.date_of_birth, sex: versionPatient.sex, age: versionPatient.age, age_unit: versionPatient.age_unit, weight_kg: versionPatient.weight_kg, height_cm: versionPatient.height_cm, source: 'ae_version' }
+      : intakePatient
+        ? { initials: intakePatient.initials, sex: intakePatient.gender, age: intakePatient.age, age_unit: intakePatient.age_unit, weight_kg: intakePatient.weight_kg, source: 'intake' }
+        : patientContact ? { name: [patientContact.first_name, patientContact.last_name].filter(Boolean).join(' '), source: 'contact' } : {},
   };
 }
 
@@ -210,8 +223,52 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
         );
       }
     }
-    await audit(req, 'CREATE', 'icsr_report', result.insertId, { case_id: caseId, sender_safety_report_id: senderId });
-    res.status(201).json({ id: result.insertId, sender_safety_report_id: senderId });
+    // The AE tab is where a handler records every event and every product, on a
+    // version. Until 13 Oct 2026 the ICSR was seeded from the New Case popup's
+    // single reaction and drug only, so the AE tab's work never reached the E2B
+    // file. The latest version now wins; the popup record stays the fallback
+    // for a case that has no version yet (case form clean-up PR 1).
+    const [[latestVersion]] = await pool.execute(
+      'SELECT id FROM case_ae_versions WHERE case_id = ? ORDER BY version_number DESC LIMIT 1', [caseId]).catch(() => [[null]]);
+    let seededFrom = ae ? 'intake' : 'none';
+    // The AE tab keeps dechallenge and rechallenge as picklist text ("Yes — Event
+    // Abated", "No — Event Did Not Recur", "Unknown", "Not Applicable"); the ICSR
+    // holds the E2B code: y, n, u, na.
+    const e2bYesNo = (v) => { const t = String(v || '').trim().toLowerCase(); if (!t) return null; if (t.startsWith('y')) return 'y'; if (t.startsWith('no') || t === 'n') return 'n'; if (t.startsWith('u')) return 'u'; return 'na'; };
+    if (latestVersion) {
+      const [events] = await pool.execute('SELECT * FROM case_ae_events WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]);
+      const [products] = await pool.execute('SELECT * FROM case_ae_product_info WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]);
+      if (events.length) {
+        await pool.execute('DELETE FROM icsr_reactions WHERE icsr_id = ?', [result.insertId]);
+        for (const e of events) {
+          await pool.execute(
+            `INSERT INTO icsr_reactions (icsr_id, meddra_pt_name, onset_date, end_date, outcome, term_highlighted) VALUES (?, ?, ?, ?, ?, ?)`,
+            [result.insertId, e.meddra_term || e.event_description || 'Reaction', e.start_date || null, e.end_date || null, e.outcome || null, e.is_serious ? 'y' : 'n']
+          );
+        }
+        const any = (k) => events.some(e => !!e[k]);
+        await pool.execute(
+          `UPDATE icsr_reports SET seriousness_classification = ?, narrative = COALESCE(NULLIF(narrative, ''), ?) WHERE id = ?`,
+          [JSON.stringify({ death: any('is_death'), lifeThreatening: any('is_life_threatening'), hospitalization: any('is_hospitalization'), disability: any('is_disability'), congenitalAnomaly: any('is_congenital_anomaly'), otherMI: any('is_other_medically_important') }),
+            events.map(e => e.event_description).filter(Boolean).join('\n') || null, result.insertId]
+        );
+        seededFrom = 'ae_version';
+      }
+      if (products.length) {
+        await pool.execute('DELETE FROM icsr_drugs WHERE icsr_id = ?', [result.insertId]);
+        for (const p of products) {
+          const role = p.is_concomitant && !p.is_suspect ? 'concomitant' : 'suspect';
+          await pool.execute(
+            `INSERT INTO icsr_drugs (icsr_id, drug_role, medicinal_product_name, batch_no, dose_amount, dose_unit, route_of_admin, indication, start_date, end_date, action_taken, dechallenge, rechallenge)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [result.insertId, role, p.product_name || null, p.batch_lot_number || null, p.dose || null, p.dose_unit || null, p.route_of_admin || null, p.indication || null, p.start_date || null, p.end_date || null, p.action_taken || null, e2bYesNo(p.dechallenge), e2bYesNo(p.rechallenge)]
+          );
+        }
+        seededFrom = 'ae_version';
+      }
+    }
+    await audit(req, 'CREATE', 'icsr_report', result.insertId, { case_id: caseId, sender_safety_report_id: senderId, seeded_from: seededFrom });
+    res.status(201).json({ id: result.insertId, sender_safety_report_id: senderId, seeded_from: seededFrom });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
