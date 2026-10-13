@@ -820,7 +820,15 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       };
     });
 
-    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core });
+    // The fields the admin has hidden, by section and name. The sections above
+    // leave them out, and a screen that draws its own fields (the contact form)
+    // treats a field with no setting as shown — so hiding a contact field had no
+    // effect. Found in the case form clean-up walk, 2026-10-13.
+    const hidden = [...fieldsByKey.values()]
+      .filter(f => (f.is_hidden || f.is_disabled) && !f.core_key)
+      .map(f => ({ section_name: f.section_name, field_name: f.field_name }));
+
+    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core, hidden });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });

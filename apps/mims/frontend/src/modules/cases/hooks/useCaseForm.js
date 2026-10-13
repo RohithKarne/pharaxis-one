@@ -365,6 +365,10 @@ export default function useCaseForm(id, token) {
 
   function getFieldConfig(sectionName, fieldName) {
     if (!formConfig || !Array.isArray(formConfig.sections)) return null
+    // A hidden field is not in the sections; say it is hidden rather than
+    // "no setting", which the contact form reads as shown.
+    const hidden = (formConfig.hidden || []).find(h => h.section_name === sectionName && h.field_name === fieldName)
+    if (hidden) return { ...hidden, is_hidden: 1 }
     const section = formConfig.sections.find(s => s.section_name === sectionName)
     if (!section || !Array.isArray(section.fields)) return null
     return section.fields.find(f => f.field_name === fieldName) || null
