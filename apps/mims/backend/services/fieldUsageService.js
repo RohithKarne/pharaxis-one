@@ -13,11 +13,21 @@
  *   - a configured field (no core key): case_dynamic_field_values
  *   - a platform field: the real column behind it, by its core key
  *   - a contact field: the matching column on case_contacts
- *   - an AE or PC panel field with its own column: that column, any version
  *   - anything else: "not stored" — the screen never had a place to keep it
+ *
+ * A configured field (no core key) is counted in its own store only. A flat
+ * copy such as AE "Is Suspect" writes there, not to the product row's column,
+ * so the column's count says nothing about whether hiding the copy loses data.
  */
 
 const pool = require('../database/db');
+const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
+
+// The column behind a panel field, from the catalog the panels and save routes
+// use. Namespaced notes keys ("lab-notes__notes", "notes_refund") live in "notes".
+const CATALOG_COLUMN = Object.fromEntries(PANEL_CORE_FIELDS.map(f => [
+  f.coreKey, /__notes$|^notes_/.test(f.key) ? 'notes' : f.key,
+]));
 
 const snake = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -30,20 +40,6 @@ const CORE_TABLES = [
   ['pc_return_retrieval_', 'case_pc_return_retrieval', 'pc'], ['pc_replacement_', 'case_pc_replacement', 'pc'], ['pc_refund_credit_', 'case_pc_refund_credit', 'pc'],
   ['mi_', 'case_mi', null],
 ];
-// Panel fields without a core key that still have a real column.
-const SECTION_TABLES = {
-  'AE — General': ['case_ae_general', 'ae'], 'AE — Events & Seriousness': ['case_ae_events', 'ae'], 'AE — Patient Information': ['case_ae_patient_info', 'ae'],
-  'AE — Product Information': ['case_ae_product_info', 'ae'], 'PC — General': ['case_pc_general', 'pc'], 'PC — Product Information': ['case_pc_product_info', 'pc'], 'MI — Response': ['case_mi', null],
-};
-const EXTRA_COLUMNS = {
-  'AE — General': { 'Date of Report': 'date_of_report', 'Reporter Awareness Date': 'reporter_awareness_date' },
-  'AE — Events & Seriousness': { 'MedDRA Term': 'meddra_term', 'Reported Causality': 'reported_causality', 'Frequency': 'frequency', 'Causality Assessment': 'causality_assessment', 'Seriousness': 'seriousness', 'End Date': 'end_date' },
-  'AE — Patient Information': { 'Race / Ethnicity': 'ethnicity', 'Last Menstrual Period': 'last_menstrual_date' },
-  'AE — Product Information': { 'Product Type': 'product_type', 'Product Category': 'product_category', 'Administration Route': 'route_of_admin', 'Is Suspect': 'is_suspect', 'Is Concomitant': 'is_concomitant', 'Dechallenge': 'dechallenge', 'Rechallenge': 'rechallenge' },
-  'PC — General': { 'PC Classification': 'pc_classification', 'Severity': 'severity', 'Root Cause': 'root_cause', 'Date Received': 'date_received' },
-  'PC — Product Information': { 'Product Type': 'product_type', 'Product Category': 'product_category', 'Storage Conditions': 'storage_conditions', 'Quantity Available for Investigation': 'quantity_available' },
-  'MI — Response': { 'MI Status': 'status', 'Literature Reference': 'literature_reference' },
-};
 // Core keys whose column has a different name.
 const CORE_OVERRIDES = {
   ae_events_onset_date: 'start_date', ae_events_serious_death: 'is_death', ae_events_serious_life_threatening: 'is_life_threatening',
@@ -113,17 +109,13 @@ async function usageForFields(orgId, fields) {
     else if (f.core_key) {
       for (const [prefix, table, vt] of CORE_TABLES) {
         if (!f.core_key.startsWith(prefix)) continue;
-        const col = CORE_OVERRIDES[f.core_key] || f.core_key.slice(prefix.length); const c = await countColumn(table, col, orgId, vt, cache);
+        const col = CORE_OVERRIDES[f.core_key] || CATALOG_COLUMN[f.core_key] || f.core_key.slice(prefix.length); const c = await countColumn(table, col, orgId, vt, cache);
         if (c !== null) { source = `${table}.${col}`; n = c; }
         break;
       }
     } else if (f.section_name === 'Contact / Requestor') {
       const col = snake(f.field_name); const c = await countColumn('case_contacts', col, orgId, null, cache);
       if (c !== null) { source = `case_contacts.${col}`; n = c; }
-    } else if (EXTRA_COLUMNS[f.section_name]?.[f.field_name]) {
-      const [table, vt] = SECTION_TABLES[f.section_name]; const col = EXTRA_COLUMNS[f.section_name][f.field_name];
-      const c = await countColumn(table, col, orgId, vt, cache);
-      if (c !== null) { source = `${table}.${col}`; n = c; }
     }
     out[f.id] = { source, cases: n };
   }
