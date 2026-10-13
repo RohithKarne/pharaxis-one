@@ -20,7 +20,9 @@
  * so the column's count says nothing about whether hiding the copy loses data.
  */
 
-const pool = require('../database/db');
+// Required lazily: migration 174 counts on its own connection while the pool is
+// still being set up, so the module must load without touching it.
+const defaultDb = () => require('../database/db');
 const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
 
 // The column behind a panel field, from the catalog the panels and save routes
@@ -49,25 +51,25 @@ const CORE_OVERRIDES = {
   mi_category: 'mi_category', mi_subcategory: 'subcategory', mi_product: 'product_id', mi_question_summary: 'question_summary', mi_detailed_question: 'detailed_question',
   ae_lab_notes_lab_notes: 'notes', ae_medical_notes_medical_notes: 'notes', ae_medical_history_medical_history: 'condition_name', ae_medical_history_relevant_history: 'notes', ae_lab_results_result_value: 'result',
 };
-const CASE_COLUMNS = { case_number: 'case_number', date_received: 'date_received', date_of_intake: 'date_of_intake', case_type: 'case_type', status_id: 'status_id', case_owner_id: 'case_owner_id', org_id: 'org_id', intake_channel: 'intake_channel', priority: 'priority', description: 'description', internal_notes: 'internal_notes' };
+const CASE_COLUMNS = { case_number: 'case_number', date_received: 'date_received', latest_information_date: 'latest_information_date', date_of_intake: 'date_of_intake', case_type: 'case_type', status_id: 'status_id', case_owner_id: 'case_owner_id', org_id: 'org_id', intake_channel: 'intake_channel', priority: 'priority', description: 'description', internal_notes: 'internal_notes' };
 
-async function columnExists(table, column, cache) {
+async function columnExists(db, table, column, cache) {
   const key = `${table}.${column}`;
   if (cache.has(key)) return cache.get(key);
-  const [[r]] = await pool.execute('SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]);
+  const [[r]] = await db.execute('SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]);
   cache.set(key, r.n > 0);
   return r.n > 0;
 }
 
 // Cases of this organisation with a non-empty value in table.column. null when the column does not exist.
-async function countColumn(table, column, orgId, versionType, cache) {
-  if (!(await columnExists(table, column, cache))) return null;
+async function countColumn(db, table, column, orgId, versionType, cache) {
+  if (!(await columnExists(db, table, column, cache))) return null;
   const notEmpty = `t.\`${column}\` IS NOT NULL AND t.\`${column}\` <> '' AND t.\`${column}\` <> '0'`;
   let sql;
   if (table === 'cases') sql = `SELECT COUNT(*) AS n FROM cases t WHERE t.is_deleted = 0 AND t.org_id = ? AND ${notEmpty}`;
   else if (versionType) sql = `SELECT COUNT(DISTINCT v.case_id) AS n FROM ${table} t JOIN ${versionType === 'ae' ? 'case_ae_versions' : 'case_pc_versions'} v ON v.id = t.version_id JOIN cases c ON c.id = v.case_id WHERE c.is_deleted = 0 AND c.org_id = ? AND ${notEmpty}`;
   else sql = `SELECT COUNT(DISTINCT t.case_id) AS n FROM ${table} t JOIN cases c ON c.id = t.case_id WHERE c.is_deleted = 0 AND c.org_id = ? AND ${notEmpty}`;
-  const [[r]] = await pool.execute(sql, [orgId]);
+  const [[r]] = await db.execute(sql, [orgId]);
   return r.n;
 }
 
@@ -75,8 +77,8 @@ async function countColumn(table, column, orgId, versionType, cache) {
  * The organisation's resolved field list: its own row wins over the platform
  * default, the same way the case form and the Case Form Fields screen resolve it.
  */
-async function resolvedFields(orgId) {
-  const [rows] = await pool.execute(
+async function resolvedFields(orgId, db = defaultDb()) {
+  const [rows] = await db.execute(
     `SELECT id, org_id, section_name, field_name, core_key, is_hidden, sort_order
        FROM field_setup
       WHERE (org_id = ? OR org_id IS NULL) AND section_name <> '__customize_placeholder__'
@@ -95,26 +97,26 @@ async function resolvedFields(orgId) {
  * { source, cases } — where the value lives and how many of the organisation's
  * cases hold one. cases is null when the screen never had a place to keep it.
  */
-async function usageForFields(orgId, fields) {
+async function usageForFields(orgId, fields, db = defaultDb()) {
   const cache = new Map();
   const out = {};
   for (const f of fields) {
     let source = 'not stored', n = null;
     if (!f.core_key) {
-      const [[dyn]] = await pool.execute(
+      const [[dyn]] = await db.execute(
         `SELECT COUNT(DISTINCT v.case_id) AS n FROM case_dynamic_field_values v JOIN cases c ON c.id = v.case_id WHERE v.field_id = ? AND c.is_deleted = 0 AND c.org_id = ? AND v.field_value IS NOT NULL AND v.field_value <> ''`, [f.id, orgId]);
       source = 'configured values'; n = dyn.n;
     }
-    if (f.core_key && CASE_COLUMNS[f.core_key]) { source = `cases.${CASE_COLUMNS[f.core_key]}`; n = await countColumn('cases', CASE_COLUMNS[f.core_key], orgId, null, cache); }
+    if (f.core_key && CASE_COLUMNS[f.core_key]) { source = `cases.${CASE_COLUMNS[f.core_key]}`; n = await countColumn(db, 'cases', CASE_COLUMNS[f.core_key], orgId, null, cache); }
     else if (f.core_key) {
       for (const [prefix, table, vt] of CORE_TABLES) {
         if (!f.core_key.startsWith(prefix)) continue;
-        const col = CORE_OVERRIDES[f.core_key] || CATALOG_COLUMN[f.core_key] || f.core_key.slice(prefix.length); const c = await countColumn(table, col, orgId, vt, cache);
+        const col = CORE_OVERRIDES[f.core_key] || CATALOG_COLUMN[f.core_key] || f.core_key.slice(prefix.length); const c = await countColumn(db, table, col, orgId, vt, cache);
         if (c !== null) { source = `${table}.${col}`; n = c; }
         break;
       }
     } else if (f.section_name === 'Contact / Requestor') {
-      const col = snake(f.field_name); const c = await countColumn('case_contacts', col, orgId, null, cache);
+      const col = snake(f.field_name); const c = await countColumn(db, 'case_contacts', col, orgId, null, cache);
       if (c !== null) { source = `case_contacts.${col}`; n = c; }
     }
     out[f.id] = { source, cases: n };

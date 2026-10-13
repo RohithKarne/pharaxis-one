@@ -35,6 +35,8 @@ const ROWS = [
   ['ae', 'patient-info',     'AE — Patient Information',   'Last Menstrual Period',    'last_menstrual_date'],
   ['ae', 'patient-info',     'AE — Patient Information',   'Pregnant',                 'pregnant'],
   ['ae', 'patient-info',     'AE — Patient Information',   'Patient Country',          'patient_country'],
+  // Shown only when Pregnant is Yes (clean-up PR 3, migration 173).
+  ['ae', 'patient-info',     'AE — Patient Information',   'Pregnancy Trimester',      'pregnancy_trimester'],
   // AE list tabs (each row is one record) and the notes tabs. Linked by
   // migration 118; the row forms and the notes box read the admin's label /
   // required / hidden, and a new row missing a required field is refused.
@@ -57,6 +59,11 @@ const ROWS = [
   ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Disability',     'is_disability', 'bool'],
   ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Congenital Anomaly', 'is_congenital_anomaly', 'bool'],
   ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Other Medically Important', 'is_other_medically_important', 'bool'],
+  // Case form clean-up PR 3 (13 Oct 2026): facts that belong to each event,
+  // moved from the once-per-case block onto the event row (migration 173).
+  ['ae', 'events',           'AE — Events & Seriousness',  'Verbatim Reaction',        'verbatim_reaction'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Hospitalization Start Date', 'hospitalization_start_date'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Hospitalization End Date', 'hospitalization_end_date'],
   ['ae', 'product-info',     'AE — Product Information',   'Product Name',             'product_name'],
   ['ae', 'product-info',     'AE — Product Information',   'Batch / Lot Number',       'batch_lot_number'],
   ['ae', 'product-info',     'AE — Product Information',   'Dose',                     'dose'],
@@ -67,6 +74,8 @@ const ROWS = [
   ['ae', 'product-info',     'AE — Product Information',   'Indication',               'indication'],
   ['ae', 'product-info',     'AE — Product Information',   'Action Taken',             'action_taken'],
   ['ae', 'product-info',     'AE — Product Information',   'Concomitant Medications',  'is_concomitant', 'bool'],
+  // Role (suspect, concomitant, interacting) replaces the two ticks (PR 3).
+  ['ae', 'product-info',     'AE — Product Information',   'Role',                     'product_role'],
   ['ae', 'lab-results',      'AE — Lab Results',           'Lab Name',                 'lab_name'],
   ['ae', 'lab-results',      'AE — Lab Results',           'Test Date',                'test_date'],
   ['ae', 'lab-results',      'AE — Lab Results',           'Test Name',                'test_name'],
