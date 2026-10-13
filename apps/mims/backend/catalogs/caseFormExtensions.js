@@ -15,30 +15,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const EXTRA_FIELDS = [
-  // ── Contact / Requestor (+18 fields) ──
-  ['Contact / Requestor', 'Middle Name',                'text',     0, null, null, 30],
-  ['Contact / Requestor', 'Suffix',                     'text',     0, null, null, 31],
-  ['Contact / Requestor', 'Address Line 1',             'text',     0, null, null, 32],
-  ['Contact / Requestor', 'Address Line 2',             'text',     0, null, null, 33],
-  ['Contact / Requestor', 'City',                       'text',     0, null, null, 34],
-  ['Contact / Requestor', 'State / Province',           'text',     0, null, null, 35],
-  ['Contact / Requestor', 'Postal Code',                'text',     0, null, null, 36],
-  ['Contact / Requestor', 'Mobile Phone',               'text',     0, null, null, 37],
-  ['Contact / Requestor', 'Fax Number',                 'text',     0, null, null, 38],
-  ['Contact / Requestor', 'Alternate Email',            'text',     0, null, null, 39],
-  ['Contact / Requestor', 'NPI Number',                 'text',     0, null, null, 40],
-  ['Contact / Requestor', 'DEA Number',                 'text',     0, null, null, 41],
-  ['Contact / Requestor', 'State Medical License',      'text',     0, null, null, 42],
-  ['Contact / Requestor', 'License State',              'text',     0, null, null, 43],
-  ['Contact / Requestor', 'HCP Master Record ID',       'text',     0, null, null, 44],
-  ['Contact / Requestor', 'Department within Institution', 'text',  0, null, null, 45],
-  ['Contact / Requestor', 'Job Title',                  'text',     0, null, null, 46],
-  ['Contact / Requestor', 'Time Zone',                  'text',     0, null, null, 47],
-  ['Contact / Requestor', 'Best Time to Contact',       'text',     0, null, null, 48],
-  ['Contact / Requestor', 'Reporter Anonymous',         'checkbox', 0, null, null, 49],
-  ['Contact / Requestor', 'Reporter Relationship to Patient', 'dropdown', 0, 'relationship_to_patient', null, 50],
-  ['Contact / Requestor', 'Date of First Contact',      'date',     0, null, null, 51],
-  ['Contact / Requestor', 'Linked Reporter',            'lookup',   0, null, 'contact', 52],
+  // Contact / Requestor extras (Middle Name … Linked Reporter, 23 fields) were
+  // removed on 2026-10-13: the Reporter & Patient screen never showed them and
+  // no case held a value (migration 170 deletes the seeded rows).
 
   // ── Reporter Documentation (sub-section under Contact) ──
   ['Reporter Documentation', 'Original Source Document Reference', 'text',     0, null, null, 1],
