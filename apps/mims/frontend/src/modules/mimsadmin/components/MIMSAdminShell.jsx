@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
-import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV, RETIRED_SYSTEM_ITEMS } from './configItems'
+import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV, RETIRED_SYSTEM_ITEMS, withoutAdvanced } from './configItems'
+import { ADVANCED_FORMS_KEY } from './CaseFieldsConfig'
 import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
@@ -394,11 +395,21 @@ function MIMSAdminShellInner() {
     setAuditItem(nextAuditItem)
   }, [location.search])
 
+  // "Advanced form tools" switch on Case Form Fields (case form clean-up PR 5).
+  const readAdvancedForms = () => { try { return localStorage.getItem(ADVANCED_FORMS_KEY) === '1' } catch { return false } }
+  const [advancedForms, setAdvancedForms] = useState(readAdvancedForms)
+  useEffect(() => {
+    const onChange = () => setAdvancedForms(readAdvancedForms())
+    window.addEventListener('mims-advanced-forms', onChange)
+    return () => window.removeEventListener('mims-advanced-forms', onChange)
+  }, [])
+
   // Capability-based filtering
   const capabilityNav = (effectiveAccess?.unrestricted)
     ? SYSTEM_NAV
     : filterSystemNav(SYSTEM_NAV, effectiveAccess)
-  const systemNav = hasGlobalAdminScope(user) ? capabilityNav : withoutPlatformOnly(capabilityNav)
+  const scopedNav = hasGlobalAdminScope(user) ? capabilityNav : withoutPlatformOnly(capabilityNav)
+  const systemNav = advancedForms ? scopedNav : withoutAdvanced(scopedNav)
   const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
   const defaultEscalationItem = findFirstLeafValue(ESCALATION_NAV)
   const defaultDocumentsItem = findFirstLeafValue(DOCUMENTS_NAV)

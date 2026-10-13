@@ -51,7 +51,6 @@ export const SYSTEM_OPTION_SECTIONS = [
         key: 'customized_forms',
         label: 'Customized Forms',
         navValues: [
-          'sys-setup-customize-forms',
           'sys-setup-workflow',
           'sys-setup-workflow-engine',
           'sys-setup-change-approvals',

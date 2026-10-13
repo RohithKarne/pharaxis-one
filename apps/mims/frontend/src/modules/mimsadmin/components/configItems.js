@@ -54,10 +54,10 @@ export const SYSTEM_NAV = [
           // form's labels, required flags, visibility and order from field_setup.
           { label: 'Case Form Fields',                 value: 'sys-setup-case-fields'     },
           { label: 'Case Numbering',                   value: 'sys-setup-case-numbering'  },
-          { label: 'Customize Forms',                  value: 'sys-setup-customize-forms' },
-          { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields'    },
-          { label: 'Grid Section Templates',           value: 'sys-setup-grid-templates'  },
-          { label: 'Case Actions (Templates/Macros)',  value: 'sys-setup-case-actions'    },
+          // Behind the "Advanced form tools" switch on Case Form Fields (clean-up PR 5).
+          { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields',   advanced: true },
+          { label: 'Grid Section Templates',           value: 'sys-setup-grid-templates', advanced: true },
+          { label: 'Case Actions (Templates/Macros)',  value: 'sys-setup-case-actions',   advanced: true },
         ],
       },
       {
@@ -144,6 +144,19 @@ function findInNav(nav, value) {
 // their own required rules are gone; an old link opens Case Form Fields.
 export const RETIRED_SYSTEM_ITEMS = {
   'sys-setup-validation': 'sys-setup-case-fields',
+  // One admin screen for the case form (PR 5): Case Form Fields does what
+  // Customize Forms did — label, required, visible, order, section on/off, add.
+  'sys-setup-customize-forms': 'sys-setup-case-fields',
+}
+
+// Drop the advanced form tools from the menu unless the switch is on.
+export function withoutAdvanced(nav) {
+  return nav.reduce((acc, item) => {
+    if (item.advanced) return acc
+    if (item.children) acc.push({ ...item, children: withoutAdvanced(item.children) })
+    else acc.push(item)
+    return acc
+  }, [])
 }
 
 export function findSystemLabel(value) {

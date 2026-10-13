@@ -6,7 +6,6 @@ const AdminQASection = lazy(() => import('../../../admin/components/AdminQASecti
 const AdminUATPanel = lazy(() => import('../../../admin/components/AdminUATPanel'))
 const CopyDivision = lazy(() => import('./CopyDivision'))
 const DivisionParameters = lazy(() => import('./DivisionParameters'))
-const CustomizeForms = lazy(() => import('./CustomizeForms'))
 const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 const ExceptionLog = lazy(() => import('./ExceptionLog'))
 const FeatureFlags = lazy(() => import('./FeatureFlags'))
@@ -59,7 +58,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     selectedItem === 'sys-maint-copy-division'
       ? (hasGlobalAdminScope(user) ? <CopyDivision /> : <div style={{ padding: 24, color: 'var(--text-muted)' }}>Copy Division is for platform admins only.</div>)
     : selectedItem === 'sys-division-params' ? <DivisionParameters H={H} />
-    : selectedItem === 'sys-setup-customize-forms' ? <CustomizeForms />
     // Its menu item lives here (Setup › Forms & Fields); it opened "Under Development" (M-35).
     : selectedItem === 'sys-setup-case-fields' ? <CaseFieldsConfig />
     : selectedItem === 'sys-exception-log' ? <ExceptionLog />
