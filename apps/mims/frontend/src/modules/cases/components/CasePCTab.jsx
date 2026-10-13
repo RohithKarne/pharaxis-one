@@ -32,11 +32,15 @@ const PC_COMPLETION_DEFS = {
       { label: 'Severity', key: 'severity' },
       { label: 'Root Cause', key: 'root_cause' },
       { label: 'Additional Info', key: 'additional_info_general' },
+      { label: 'Reply Date', key: 'reply_date' },
+      { label: 'Reply to Complainant', key: 'reply_summary' },
+      { label: 'Device Malfunction', key: 'device_malfunction' },
     ],
   },
   'patient-info': {
     sectionName: 'PC — Patient Information',
     fields: [
+      { label: 'Patient Initials', key: 'patient_initials' },
       { label: 'Patient Name', key: 'patient_name' },
       { label: 'Date of Birth', key: 'date_of_birth' },
       { label: 'Age', key: 'age' },
@@ -54,6 +58,7 @@ const PC_COMPLETION_DEFS = {
     sectionName: 'PC — Product Information',
     fields: [
       { label: 'Product Name', key: 'product_name' },
+      { label: 'Strength', key: 'strength' },
       { label: 'Product Type', key: 'product_type' },
       { label: 'Product Category', key: 'product_category' },
       { label: 'Lot Number', key: 'lot_number' },
@@ -283,6 +288,17 @@ export default function CasePCTab({
     try { sessionStorage.setItem(`mims_case_${id}_pc_${activePcVer?.id}_${activePcTab}`, JSON.stringify(d)) } catch { /* no-op */ }
   }
 
+  // What the complaint needs before Quality takes it (PC field review): the
+  // same check the server applies when Route to Quality is used.
+  const [handoffCheck, setHandoffCheck] = useState(null)
+  async function loadHandoffCheck() {
+    try {
+      const res = await httpFetch(`${API}/cases/${id}/pc-handoff-check`, { headers })
+      setHandoffCheck(res.ok ? await res.json() : null)
+    } catch { setHandoffCheck(null) }
+  }
+  useEffect(() => { loadHandoffCheck() }, [id, pcVersions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [pcTabSaving, setPcTabSaving] = useState(false)
   async function savePCTab() {
     if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return false
@@ -297,6 +313,7 @@ export default function CasePCTab({
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: saved }))
       sessionStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
+      loadHandoffCheck()
       return true
     } catch (err) { toast.error(err.message); return false }
     finally { setPcTabSaving(false) }
@@ -373,6 +390,26 @@ export default function CasePCTab({
       </div>
       {!canCreatePcVersion && !caseClosed && (
         <div className="cf-inline-note">Close the current PC version before creating a new version.</div>
+      )}
+      {handoffCheck && Array.isArray(handoffCheck.items) && (
+        <section className="cf-handoff-card" data-testid="pc-handoff-check">
+          <div className="cf-handoff-card-head">
+            <h3>Before the complaint goes to Quality</h3>
+            <span className={`cf-handoff-score ${handoffCheck.ready ? 'is-ok' : 'is-blocked'}`}>
+              {handoffCheck.ready ? 'Ready' : 'Not ready'}
+            </span>
+          </div>
+          <ul className="cf-handoff-checks">
+            {handoffCheck.items.map(item => (
+              <li key={item.key} className={item.ok ? 'is-ok' : item.level === 'block' ? 'is-missing' : 'is-warn'}>
+                <span className="cf-handoff-check-icon">{item.ok ? '✓' : item.level === 'block' ? '✕' : '!'}</span>
+                <span className="cf-handoff-check-label">{item.label}</span>
+                <span className="cf-handoff-check-reason">{item.detail || ''}</span>
+              </li>
+            ))}
+          </ul>
+          {!handoffCheck.ready && <div className="cf-handoff-muted">Route to Quality stays blocked until the lines marked ✕ are done. Save the tab to refresh.</div>}
+        </section>
       )}
 
       {pcVersions.length === 0 ? (

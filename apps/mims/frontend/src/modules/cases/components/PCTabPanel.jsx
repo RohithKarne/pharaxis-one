@@ -109,11 +109,33 @@ export default function PCTabPanel({
           {selectRow('Severity',             'severity',           'PC — General', 'Severity')}
           {fieldRow('Root Cause',            'root_cause',        'textarea', { fullWidth: true, sectionName: 'PC — General' })}
           {fieldRow('Additional Info',       'additional_info_general', 'textarea', { fullWidth: true })}
+          {/* MI and PC review (migration 177): the reply to the complainant
+              (21 CFR 211.198(b)(1)), counterfeit or tampering, device part. */}
+          {fieldRow('Reply Date',            'reply_date', 'date', { sectionName: 'PC — General' })}
+          {fieldRow('Reply to Complainant',  'reply_summary', 'textarea', { fullWidth: true, sectionName: 'PC — General' })}
+          {boolField('Suspected Counterfeit or Tampering', 'suspected_counterfeit')}
+          {boolField('Device Part Involved', 'device_involved')}
+          {!!d.device_involved && (() => {
+            const f = pf('Device Malfunction')
+            if (f.hidden) return null
+            return (
+              <div key="device_malfunction" className="cf-form-field">
+                <label>{labelText(f)}</label>
+                <select aria-label="Device Malfunction" value={d.device_malfunction || ''} disabled={locked} onChange={e => set('device_malfunction', e.target.value)}>
+                  <option value="">— Select —</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                  <option value="Unknown">Unknown</option>
+                </select>
+              </div>
+            )
+          })()}
         </div>
       )}
 
       {tabKey === 'patient-info' && (
         <div className="cf-form-grid">
+          {fieldRow('Patient Initials',    'patient_initials',     'text', { sectionName: 'PC — Patient Information' })}
           {fieldRow('Patient Name',        'patient_name',         'text', { sectionName: 'PC — Patient Information' })}
           {fieldRow('Date of Birth',       'date_of_birth',        'date', { sectionName: 'PC — Patient Information' })}
           {fieldRow('Age',                'age',                 'number')}
@@ -131,6 +153,7 @@ export default function PCTabPanel({
       {tabKey === 'product-info' && (
         <div className="cf-form-grid">
           {fieldRow('Product Name',    'product_name')}
+          {fieldRow('Strength',        'strength', 'text', { sectionName: 'PC — Product Information' })}
           {selectRow('Product Type',   'product_type',          'PC — Product Information', 'Product Type')}
           {selectRow('Product Category', 'product_category',    'PC — Product Information', 'Product Category')}
           {fieldRow('Lot Number',      'lot_number')}

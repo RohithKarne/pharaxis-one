@@ -12,6 +12,7 @@
 const express = require('express');
 const router  = express.Router();
 const { miSendCheck } = require('../services/miSendCheck');
+const { pcHandoffCheck } = require('../services/pcHandoffCheck');
 let bcrypt;
 try {
   bcrypt = require('bcryptjs');
@@ -3011,6 +3012,14 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
 // ─── CF-E9/E10: PC TRANSMISSIONS ─────────────────────────────────────────────
 
 // GET /api/cases/:id/pc-transmissions
+// What the complaint still needs before it can be handed to Quality (PC field review).
+router.get('/cases/:id/pc-handoff-check', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    res.json(await pcHandoffCheck(req.params.id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
@@ -3029,6 +3038,13 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
+    // What the complaint needs before Quality takes it (PC field review, 13 Oct
+    // 2026): the product, the description, and the AE case when the patient
+    // was injured. The lot is a warning on the card, not a block.
+    const handoff = await pcHandoffCheck(req.params.id);
+    if (!handoff.ready) {
+      return res.status(400).json({ error: `Before this complaint goes to Quality: ${handoff.missing.length ? handoff.missing.join('; ') : 'a PC version'}.`, missing: handoff.missing });
+    }
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const priority = normalizePcTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;

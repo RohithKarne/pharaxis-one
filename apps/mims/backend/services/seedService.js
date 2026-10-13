@@ -4,7 +4,7 @@ const pool = require('../database/db');
 const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
 const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
 const { MI_CORE_FIELDS } = require('../database/migrations/108_link_mi_core_fields');
-const { CUT_FIELDS, CUT_SECTION_NAMES, NEW_FIELDS, FOLLOW_UP_RULE, cutKey } = require('../catalogs/caseFormCutList');
+const { CUT_FIELDS, CUT_SECTION_NAMES, NEW_FIELDS, FORM_RULES, cutKey } = require('../catalogs/caseFormCutList');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -271,25 +271,27 @@ async function seedFieldSetup(conn, orgId, _userId) {
       [row[0], row[1], row[2], cut ? 0 : row[3], cut ? 1 : 0, row[4], row[5], row[6], orgId, row[0] === 'Contact / Requestor' ? 'contacts' : null, caseTypeScope(row[0])]
     );
   }
-  // The fields the clean-up added (Latest Information Date, product Role).
+  // The fields the clean-up and the MI and PC review added.
   for (const f of NEW_FIELDS) {
     await conn.execute(
       `INSERT IGNORE INTO field_setup
-        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, sort_order, org_id, case_type_scope, core_key)
-       VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, ?)`,
-      [f.section, f.field, f.type, f.sortOrder, orgId, f.scope, f.coreKey]
+        (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, sort_order, org_id, case_type_scope, core_key)
+       VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)`,
+      [f.section, f.field, f.type, f.picklist || null, f.sortOrder, orgId, f.scope, f.coreKey]
     );
   }
 }
 
-// MI Follow-up Due Date shows only when Follow-up Required is ticked (as migration 173).
+// Show-only-when rules: MI Follow-up Due Date (migration 173) and the PC
+// investigation answers (migration 177).
 async function seedFormRules(conn, orgId) {
-  const r = FOLLOW_UP_RULE;
-  await conn.execute(
-    `INSERT INTO case_form_rules (org_id, case_type, section_name, field_name, rule_type, condition_json, action_json, is_active, priority)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)`,
-    [orgId, r.case_type, r.section_name, r.field_name, r.rule_type, JSON.stringify(r.condition_json), JSON.stringify(r.action_json)]
-  );
+  for (const r of FORM_RULES) {
+    await conn.execute(
+      `INSERT INTO case_form_rules (org_id, case_type, section_name, field_name, rule_type, condition_json, action_json, is_active, priority)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+      [orgId, r.case_type, r.section_name, r.field_name, r.rule_type, JSON.stringify(r.condition_json), JSON.stringify(r.action_json)]
+    );
+  }
 }
 
 async function getOrCreateCategoryId(conn, orgId, categoryName, userId) {
