@@ -27,6 +27,20 @@ const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 
 const router = express.Router();
+
+// A lab row's normal range as the E2B low and high (F.r.4, F.r.5). "3.5-5.0",
+// "<5" (high only) and ">10" (low only) split, with or without a trailing unit;
+// anything else returns null and is sent as written beside the result.
+function splitNormalRange(text) {
+  const t = String(text || '').trim().replace(/\s*%$/, '').replace(/\s+[A-Za-z/%µ^0-9.]*[A-Za-z/%µ][A-Za-z/%µ^0-9.]*$/, '');
+  let m = /^([\d.]+)\s*(?:-|–|to)\s*([\d.]+)$/i.exec(t);
+  if (m) return { low: m[1], high: m[2] };
+  m = /^(?:<=?|≤|up to)\s*([\d.]+)$/i.exec(t);
+  if (m) return { low: null, high: m[1] };
+  m = /^(?:>=?|≥)\s*([\d.]+)$/.exec(t);
+  if (m) return { low: m[1], high: null };
+  return null;
+}
 const adminOnly = [authenticate, requireRole('admin', 'platform_admin')];
 
 function orgScope(req, alias = 'r') {
@@ -290,14 +304,14 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
       // follow-ups, 13 Oct 2026): the E2B file carried neither from the AE tab.
       const [labs] = await pool.execute('SELECT * FROM case_ae_lab_results WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]).catch(() => [[]]);
       for (const l of labs) {
-        const range = /^\s*([\d.]+)\s*[-–]\s*([\d.]+)\s*$/.exec(String(l.normal_range || ''));
+        const range = splitNormalRange(l.normal_range);
         await pool.execute(
           `INSERT INTO icsr_test_results (icsr_id, test_name, test_date, result_text, result_unstructured, test_normal_low, test_normal_high)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [result.insertId, l.test_name || l.lab_name || null, l.test_date || null,
             [l.result, l.unit].filter(v => v != null && String(v).trim() !== '').join(' ') || null,
             !range && l.normal_range ? `Normal range: ${l.normal_range}` : null,
-            range ? range[1] : null, range ? range[2] : null]
+            range ? range.low : null, range ? range.high : null]
         );
       }
       const [history] = await pool.execute('SELECT * FROM case_ae_medical_history WHERE version_id = ? ORDER BY id ASC', [latestVersion.id]).catch(() => [[]]);

@@ -92,7 +92,9 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
   const testXml = tests.map((test) => block('test', [
     tag('testname', test.test_name || ''),
     tag('testdate', test.test_date || ''),
-    tag('testresult', test.result_text || test.result_unstructured || ''),
+    // A normal range MIMS cannot split into low and high travels beside the
+    // result, so it is not lost when both are present.
+    tag('testresult', [test.result_text, test.result_unstructured].filter(v => v && String(v).trim()).join(' — ')),
     tag('lowtestrange', test.test_normal_low || ''),
     tag('hightestrange', test.test_normal_high || ''),
   ].join(''))).join('');
