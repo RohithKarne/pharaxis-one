@@ -2704,6 +2704,16 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       // Bridge row 8: an answer going out is a change to the case, so a connected
       // portal's change list picks it up and shows the person their answer.
       if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
+      // The MI it answers moves to Answered when the response goes out. MI Status
+      // was set by hand only, so an answered question still read "Open" (case
+      // form MI review, 13 Oct 2026). A Closed MI is left closed.
+      if (responseStatus === 'SENT' && existing.mi_tab_id) {
+        const [[tab]] = await conn.execute('SELECT status FROM case_mi WHERE id = ? AND case_id = ?', [existing.mi_tab_id, req.params.id]);
+        if (tab && !['Answered', 'Closed'].includes(tab.status)) {
+          await conn.execute("UPDATE case_mi SET status = 'Answered' WHERE id = ?", [existing.mi_tab_id]);
+          await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'MI Status (response sent)', tab.status, 'Answered', conn);
+        }
+      }
       // MIPM-188: what went out is recorded against each enclosed document and
       // module, so its Usage view shows where it was used. Nothing wrote usage before.
       if (responseStatus === 'SENT') {
