@@ -11,6 +11,7 @@
 
 const express = require('express');
 const router  = express.Router();
+const { miSendCheck } = require('../services/miSendCheck');
 let bcrypt;
 try {
   bcrypt = require('bcryptjs');
@@ -2583,6 +2584,15 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     }
     if (responseStatus === 'SENT' && existing.response_status !== 'APPROVED') {
       return res.status(400).json({ error: 'Response must be APPROVED before it can be SENT.' });
+    }
+    // What the MI needs before its answer goes out (MI field review, 13 Oct
+    // 2026): who asked, the product, the question, and the adverse event /
+    // product complaint screening — with the AE or PC case when it found one.
+    if (responseStatus === 'SENT') {
+      const check = await miSendCheck(req.params.id, existing.mi_tab_id || null);
+      if (!check.ready) {
+        return res.status(400).json({ error: `Before this response can be sent: ${check.missing.join('; ')}.`, missing: check.missing });
+      }
     }
     // Sign-off rules (M-86). Only the password was checked, so anyone who could
     // open the case could approve and send, including the person who wrote it.

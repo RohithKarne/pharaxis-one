@@ -4361,6 +4361,8 @@
 .cf-handoff-check-icon { font-weight: 800; }
 .cf-handoff-checks li.is-ok      .cf-handoff-check-icon { color: #16a34a; }
 .cf-handoff-checks li.is-missing .cf-handoff-check-icon { color: #dc2626; }
+.cf-handoff-checks li.is-warn    .cf-handoff-check-icon { color: #b45309; }
+.cf-mi-screening { margin: 0 0 12px; max-width: 520px; }
 .cf-handoff-check-label  { font-weight: 700; }
 .cf-handoff-check-reason { color: var(--text-muted, #6b7280); }
 

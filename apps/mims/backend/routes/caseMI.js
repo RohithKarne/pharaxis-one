@@ -23,7 +23,7 @@ const { writeCaseAudit } = require('../services/caseHelpers');
 // closed. None of this happened: changes left no trace, PUT and DELETE checked
 // organisation membership only, and a closed case's MI could still be edited.
 const MI_AUDIT_FIELDS = ['mi_category', 'subcategory', 'product_id', 'question_summary', 'detailed_question',
-  'response_required_by', 'response_provided', 'response_date', 'response_channel', 'status', 'literature_reference'];
+  'response_required_by', 'response_provided', 'response_date', 'response_channel', 'status', 'literature_reference', 'ae_pc_screening'];
 const auditValue = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v === null || v === undefined ? '' : String(v)));
 
 async function caseClosed(caseId) {
@@ -32,6 +32,7 @@ async function caseClosed(caseId) {
   return Number(row?.is_closed) === 1;
 }
 const { MI_CORE_FIELDS, missingRequiredCore } = require('../services/requiredFields');
+const { miSendCheck } = require('../services/miSendCheck');
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -57,6 +58,16 @@ async function verifyMiOrg(miId, req) {
 }
 
 // GET /api/cases/:id/mi — list all MI tabs for a case
+// What this MI still needs before its response can be sent (MI field review).
+router.get('/cases/:id/mi/:miId/send-check', authenticate, async (req, res) => {
+  try {
+    if (!await verifyCaseOrg(req.params.id, req)) return res.status(403).json({ error: 'Access denied' });
+    res.json(await miSendCheck(req.params.id, req.params.miId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/cases/:id/mi', authenticate, async (req, res) => {
   try {
     if (!await verifyCaseOrg(req.params.id, req)) {
@@ -167,6 +178,9 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
       response_required_by, response_provided, response_date,
       response_channel, status, literature_reference
     } = req.body;
+    // Screening answer (MI review, migration 176): yes or no; anything else is left as stored.
+    const aePcScreening = ['yes', 'no'].includes(String(req.body.ae_pc_screening || '').toLowerCase())
+      ? String(req.body.ae_pc_screening).toLowerCase() : null;
 
     await pool.execute(
       `UPDATE case_mi SET
@@ -180,7 +194,8 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
         response_date        = COALESCE(?, response_date),
         response_channel     = COALESCE(?, response_channel),
         status               = COALESCE(?, status),
-        literature_reference = COALESCE(?, literature_reference)
+        literature_reference = COALESCE(?, literature_reference),
+        ae_pc_screening      = COALESCE(?, ae_pc_screening)
        WHERE id = ?`,
       [
         mi_category          || null,
@@ -194,6 +209,7 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
         response_channel     || null,
         status               || null,
         literature_reference || null,
+        aePcScreening,
         req.params.miId
       ]
     );

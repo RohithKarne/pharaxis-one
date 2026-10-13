@@ -51,7 +51,7 @@ const CUT_FIELDS = [
   // ── MI ──
   ...['Question Source', 'Question Channel', 'Urgency Level']
     .map(field => ({ section: 'MI — Category & Product', field })),
-  { section: 'MI — Response', field: 'Response Date', panel: true },
+  { section: 'MI — Response', field: 'Response Date', panel: true, decided: true },
   ...['Country-specific PI Reference', 'PI Version Used', 'Reference Documents Used', 'Response Template Used',
     'Approval Status', 'Reviewer Name', 'Reviewer Date', 'Approver Name', 'Approver Date',
     'HCP Wants Written Response', 'Translation Required', 'Target Language']
@@ -59,6 +59,14 @@ const CUT_FIELDS = [
   ...['Follow-up Channel', 'Follow-up Completed', 'Follow-up Completed Date', 'HCP Satisfaction Score',
     'HCP Feedback Notes', 'Closed-Loop Confirmation']
     .map(field => ({ section: 'MI — Follow-up & Outcome', field })),
+
+  // MI and PC review (Rohith, 13 Oct 2026, "go with all 6"): the answer lives in
+  // the signed letter, so the MI's own answer box goes; the classification
+  // block's off-label tick is the one that starts two signers; Patient-specific
+  // had no rule behind it. Hidden whatever they hold (migration 176).
+  { section: 'MI — Response', field: 'Response Provided', panel: true, decided: true },
+  { section: 'MI — Category & Product', field: 'Off-Label Discussion', decided: true },
+  { section: 'MI — Category & Product', field: 'Patient-specific', decided: true },
 
   // ── AE General: Date Received is Day 0, Latest Information Date is added ──
   { section: 'AE — General', field: 'AE Version' },

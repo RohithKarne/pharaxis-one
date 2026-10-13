@@ -106,6 +106,19 @@ export default function CaseMITab({
 
   useEffect(() => { loadMI(); loadMiResponses() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // What this MI still needs before its answer can be sent (MI field review):
+  // the same check the server applies when a response is marked SENT.
+  const [sendCheck, setSendCheck] = useState(null)
+  const sendCheckTabId = miTabs[activeMiTab]?.id
+  async function loadSendCheck(tabId = sendCheckTabId) {
+    if (!tabId) { setSendCheck(null); return }
+    try {
+      const res = await httpFetch(`${API}/cases/${id}/mi/${tabId}/send-check`, { headers })
+      setSendCheck(res.ok ? await res.json() : null)
+    } catch { setSendCheck(null) }
+  }
+  useEffect(() => { loadSendCheck() }, [sendCheckTabId, miTabs]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // B8 — draft key now includes the active MI tab id so drafts don't bleed
   // across MI inquiries on the same case.
   const activeMiTabId = miTabs[activeMiTab]?.id || 'new'
@@ -143,6 +156,7 @@ export default function CaseMITab({
       response_channel:     tab.response_channel      || '',
       status:               tab.status               || 'Open',
       literature_reference: tab.literature_reference || '',
+      ae_pc_screening:      tab.ae_pc_screening      || '',
     }
   }
 
@@ -537,6 +551,27 @@ export default function CaseMITab({
   const showCapture = view !== 'response'
   const showResponse = view !== 'capture'
 
+  const sendCheckCard = sendCheck && Array.isArray(sendCheck.items) && (
+    <section className="cf-handoff-card" data-testid="mi-send-check">
+      <div className="cf-handoff-card-head">
+        <h3>Before the answer can be sent</h3>
+        <span className={`cf-handoff-score ${sendCheck.ready ? 'is-ok' : 'is-blocked'}`}>
+          {sendCheck.items.filter(i => i.ok).length}/{sendCheck.items.length}
+        </span>
+      </div>
+      <ul className="cf-handoff-checks">
+        {sendCheck.items.map(item => (
+          <li key={item.label} className={item.ok ? 'is-ok' : item.level === 'block' ? 'is-missing' : 'is-warn'}>
+            <span className="cf-handoff-check-icon">{item.ok ? '✓' : item.level === 'block' ? '✕' : '!'}</span>
+            <span className="cf-handoff-check-label">{item.label}</span>
+            <span className="cf-handoff-check-reason">{item.detail || ''}</span>
+          </li>
+        ))}
+      </ul>
+      {!sendCheck.ready && <div className="cf-handoff-muted">Send Response stays blocked until the lines marked ✕ are done. Save the MI to refresh.</div>}
+    </section>
+  )
+
   return (
     <div id="tab-mi" className="cf-tab-pane">
       <div className="cf-section-header-row">
@@ -571,6 +606,15 @@ export default function CaseMITab({
                 Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} Case #{miTabs[activeMiTab].converted_to_case_id}
               </div>
             )}
+            <div className="cf-form-field cf-mi-screening">
+              <label>Mentions an adverse event or product complaint? *</label>
+              <select aria-label="Mentions an adverse event or product complaint?" value={miForm.ae_pc_screening || ''} onChange={e => editMiForm(p => ({ ...p, ae_pc_screening: e.target.value }))}>
+                <option value="">— Not screened yet —</option>
+                <option value="no">No</option>
+                <option value="yes">Yes — convert the MI or link the AE / PC case</option>
+              </select>
+            </div>
+            {sendCheckCard}
             <div className="cf-form-grid">
               <div className="cf-form-field" style={miHide('mi_category')}>
                 <label>{miLabel('mi_category', 'MI Category')}</label>
@@ -628,6 +672,22 @@ export default function CaseMITab({
               <label>{miLabel('mi_literature_reference', 'Literature Reference')}</label>
               <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => editMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
             </div>
+            {(() => {
+              // The answer is the signed letter; the MI shows what went out
+              // instead of its own answer box (MI field review).
+              const tabId = miTabs[activeMiTab]?.id
+              const sent = miResponses.filter(r => r.response_status === 'SENT' && (!r.mi_tab_id || Number(r.mi_tab_id) === Number(tabId)))[0]
+              return (
+                <div className="cf-form-field cf-form-field--full" data-testid="mi-answer-sent">
+                  <label>Answer sent</label>
+                  <div className="cf-inline-note">
+                    {sent
+                      ? `Sent ${String(sent.sent_at || sent.responded_at || '').slice(0, 10)}${sent.channel ? ` by ${sent.channel}` : ''}${sent.recipient_name || sent.recipient_email ? ` to ${sent.recipient_name || sent.recipient_email}` : ''}.`
+                      : 'No answer sent yet. Write it with Build MI Response below.'}
+                  </div>
+                </div>
+              )
+            })()}
             <div className="cf-form-field cf-form-field--full">
               <label>Linked Documents</label>
               <CaseAssociatedDocs miTab={miTabs[activeMiTab]} token={token} />
@@ -642,6 +702,7 @@ export default function CaseMITab({
         </>
       )}
 
+      {showResponse && !showCapture && sendCheckCard}
       {showResponse && (
       <div className="cf-response-history">
         <div className="cf-response-history-title">Response History</div>
@@ -823,11 +884,9 @@ export default function CaseMITab({
                       </div>
                       <div className="cf-builder-card">
                         <div className="cf-builder-card-title">Response Controls</div>
-                        <label className="cf-builder-check">
-                          <input type="checkbox" checked={miRespForm.follow_up_required} onChange={e => setMiRespForm(p => ({ ...p, follow_up_required: e.target.checked }))} />
-                          <span>Follow-up required</span>
-                        </label>
-                        <div className="cf-form-field" style={{ marginTop: 10 }}>
+                        {/* Follow-up is ticked once, on the MI (Follow-up Required and its
+                            due date); the letter's own tick went in the MI field review. */}
+                        <div className="cf-form-field">
                           <label>Response Date</label>
                           <input aria-label="Response Date" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
                         </div>
