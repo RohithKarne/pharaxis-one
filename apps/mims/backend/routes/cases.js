@@ -39,7 +39,7 @@ const {
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
-const { missingRequiredAdditional } = require('../services/requiredFields');
+const { missingRequiredAdditional, missingRequiredCore, CASE_CORE_FIELDS } = require('../services/requiredFields');
 const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
 const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
@@ -1991,6 +1991,20 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     const nextPriority = hasOwn(body, 'priority') ? (body.priority ?? null) : currentCase.priority;
     const nextDescription = hasOwn(body, 'description') ? (body.description ?? null) : currentCase.description;
     const nextInternalNotes = hasOwn(body, 'internal_notes') ? (body.internal_notes ?? null) : currentCase.internal_notes;
+
+    // The admin's Required tick on the case's own fields (Workflow step), for
+    // the fields this save sends — a bulk action that sends only the owner is
+    // not refused for an empty Date Received (case form clean-up PR 4).
+    {
+      const sent = Object.fromEntries(Object.entries(CASE_CORE_FIELDS).filter(([, key]) => hasOwn(body, key)));
+      const effective = {
+        status_id: nextStatusId, case_owner_id: nextOwnerId, priority: nextPriority,
+        date_received: nextDateReceived, latest_information_date: nextLatestInformationDate,
+        description: nextDescription, internal_notes: nextInternalNotes,
+      };
+      const missing = await missingRequiredCore(currentCase.org_id, effective, sent);
+      if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
+    }
     const nextIntakeChannel = hasOwn(body, 'intake_channel') ? (body.intake_channel ?? null) : currentCase.intake_channel;
 
     // C-09: the field update AND its status/owner audit rows commit atomically —

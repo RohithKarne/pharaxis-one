@@ -26,6 +26,8 @@ router.use('/cases/ae', require('../services/caseHelpers').normalizeDateOnlyBody
 
 // Admin-required panel fields (Customize Forms) are checked before any
 // AE section save reaches its own route below.
+const { missingRequiredRow } = require('../services/requiredFields');
+
 router.put('/cases/ae/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
 // The list tabs add one record per POST (events, product-info, lab-results,
@@ -391,6 +393,11 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
   try {
     const owned = await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
     const [[before]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
+    // The admin's Required tick holds on an edit too, on the row as it will be.
+    const merged = { ...before };
+    for (const [k, v] of Object.entries(req.body || {})) if (v !== undefined && v !== null) merged[k] = v;
+    const missingEv = await missingRequiredRow('ae', 'events', await versionOrg(owned.version_id), merged);
+    if (missingEv.length) return res.status(400).json({ error: `Required: ${missingEv.join(', ')}.`, missing: missingEv });
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
@@ -719,6 +726,13 @@ const AE_ROW_EDIT = {
                        'frequency', 'start_date', 'end_date', 'indication', 'action_taken', 'dechallenge', 'rechallenge', 'is_suspect', 'is_concomitant', 'product_role'], bools: ['is_suspect', 'is_concomitant'] },
 };
 
+// The organisation a version's case belongs to, for its required settings.
+async function versionOrg(versionId) {
+  const [[row]] = await pool.execute(
+    'SELECT c.org_id FROM case_ae_versions v JOIN cases c ON c.id = v.case_id WHERE v.id = ?', [versionId]);
+  return row ? row.org_id : null;
+}
+
 // Role on the product row (case form clean-up PR 3): suspect, concomitant or
 // interacting. The two ticks stay in step with it, because the hand-off check,
 // the ICSR builder and reports read them. A row saved before Role existed
@@ -738,6 +752,9 @@ for (const [tab, { table, cols, bools = [] }] of Object.entries(AE_ROW_EDIT)) {
       const body = tab === 'product-info'
         ? { ...req.body, ...productRole(req.body.product_role, req.body.is_suspect, req.body.is_concomitant) }
         : req.body;
+      // The row edit sends every column, so the body is the row as it will be.
+      const missingRow = await missingRequiredRow('ae', tab, await versionOrg(owned.version_id), body);
+      if (missingRow.length) return res.status(400).json({ error: `Required: ${missingRow.join(', ')}.`, missing: missingRow });
       const values = cols.map(c => (bools.includes(c) ? (body[c] ? 1 : 0) : (body[c] || null)));
       await pool.execute(`UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...values, req.params.rowId]);
       const [[updated]] = await pool.execute(`SELECT * FROM ${table} WHERE id = ?`, [req.params.rowId]);

@@ -172,6 +172,11 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
     if (body.first_name !== undefined && !String(body.first_name || '').trim()) {
       return res.status(400).json({ error: 'First name is required.' });
     }
+    // The admin's Required tick holds on Edit as on Add (case form clean-up PR 4):
+    // checked on the contact as it will be after this save.
+    const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [before?.case_id]);
+    const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', { ...before, ...body }, CONTACT_FIELDS);
+    if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
     await pool.execute(`UPDATE case_contacts SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.ccId]);
     const { first_name, specialty, institution, phone, email } = body;
 
