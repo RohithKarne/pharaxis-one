@@ -3775,6 +3775,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-14 | Saad | Content management review follow-up: Revise for modules (documents built from a module move to its new version) and FAQs (migration 181); Make letter files a PDF; templates carry a language (migration 182); new documents default to a yearly review. Section 7 updated. |
 | 2026-10-14 | Saad | Content management in-depth review: emailed letters enclose on-screen and module-built documents as PDFs; folder permissions enforced (and Configure folders checked); review outcome when nobody accepts, reviewer decisions shown to the approver, Reviews I Started, daily overdue reminders; version history across revisions and for modules and FAQs; compare versions by text; Relations, alert settings, publishing checks, Browse filters and bookmarks, dashboard review queues and the module form fixed; unreachable screens, the activity log and the duplicate Browse tab removed. No migration. Section 7 updated. |
 | 2026-10-14 | Saad | Reports review: formula fields, certify/publish/versions and the open scheduled-export routes removed; report audience enforced; server-side audited export; Schedule reports privilege; Reports Access grids removed; library rebuilt (20 reports on case, MI, hand-off, inbox, content and user data) with a filter bar; dashboards rebuilt; schedules by period, monthly, time-zone list, recipients inside the organisation who can see the report; Governance tab, Overview and legacy `/api/reports/*` removed; hand-off "sent" ignores MI letters (migration 183). Section 7 updated. |
+| 2026-10-14 | Saad | Menu (Rohith, "go with your menu recommendation"): New Case at the top; Work · Knowledge · Reporting · Administration; items a user cannot open are hidden, not greyed; Cases opens the list, with Correspondence added; Deleted Cases for administrators only; menu, quick search and Overview follow each page's access rule. Section 6 updated. |
 
 ---
 
@@ -4009,20 +4010,14 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `*` | Redirect | → `/dashboard` |
 
 ##### Navbar Structure (MIMSNavbar.jsx)
-Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾** · Transmissions · Browse Content · Reports
+Left menu (`shared/components/MIMSNavbar.jsx`, Rohith 2026-10-14):
 
-**Utilities dropdown** (all in one menu):
-- Exception Log (`/exceptions`) — all users
-- Session Management (`/session-management`) — all users
-- 📋 Response Log (`/response-log`) — all users (Sprint 19)
-- Process Explorer (`/process-explorer`) — admin/platform-admin, org-config gated (shows "Off" if disabled)
-- 🧪 Regression Testing (`/regression`) — admin/platform-admin only
-- ─── divider ───
-- CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
+**New Case** (top; shown to people who may create cases) · **Work:** Overview · Inbox · Cases ▾ · Transmissions · **Knowledge:** Browse Content · Content Management · **Reporting:** Reports · **Administration:** MIMS Admin
 
-**Removed from main bar:** Analytics (deferred by Rohith 2026-04-22)
-
-Utilities tab highlights active (orange) when on any sub-page.
+- An item shows only to someone who can open its page — the same module rule as its route in `App.jsx`; a heading with nothing under it is not shown. Quick search (Ctrl-K, `CommandPalette.jsx`) and the Overview's Modules list use the same rules.
+- **Cases** opens the case list; its arrow lists My Cases, Unassigned Cases, Correspondence (`/cases?view=correspondence`, the former Case Query) and the Response Log.
+- **Deleted Cases** is a tab in the case list for administrators only; the server refuses `GET /api/cases?deleted=true` to anyone else.
+- Session Management is in the user menu; the logs and audit trails are in MIMS Admin.
 
 ---
 
