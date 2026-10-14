@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { SectionHeader } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch'
 import { useAuth } from '../../../shared/context/AuthContext'
@@ -15,10 +15,9 @@ export default function AdminChangeApprovalsPanel({ H, flash }) {
   const [loading, setLoading] = useState(true)
   const [rejectReason, setRejectReason] = useState({})
 
-  useEffect(() => {
-    fetchRequests()
-    fetchPolicies()
-  }, [])
+  // Loaded once when the panel opens.
+  const loadAll = useEffectEvent(() => { fetchRequests(); fetchPolicies() })
+  useEffect(() => { loadAll() }, [])
 
   async function fetchRequests() {
     try {

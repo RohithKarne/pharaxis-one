@@ -133,7 +133,7 @@ export default function DashboardPage() {
   const [preferences, setPreferences] = useState(() => {
     const saved = localStorage.getItem(`mims_dashboard_pref_${user?.id}`)
     if (saved) {
-      try { return JSON.parse(saved) } catch (e) {}
+      try { return JSON.parse(saved) } catch { /* a damaged saved layout falls back to the default */ }
     }
     return {
       visibleWidgets: defaultWidgets,

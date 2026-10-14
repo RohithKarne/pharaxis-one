@@ -13,21 +13,24 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
   // WP7: load existing sender/routing rules on mount — they were init'd to [] with no
   // loader, so saved inbound-email security rules always rendered as "No rules defined"
   // and admins created duplicates / couldn't manage the real ones.
+  // The headers object is new on every render; only the sign-in it carries matters.
+  const auth = H?.Authorization
   useEffect(() => {
     if (status === false) return
+    const headers = { 'Content-Type': 'application/json', Authorization: auth }
     let cancelled = false
     ;(async () => {
       try {
         const [sRes, rRes] = await Promise.all([
-          httpFetch('/api/admin/emir/sender-rules', { headers: H }),
-          httpFetch('/api/admin/emir/routing-rules', { headers: H }),
+          httpFetch('/api/admin/emir/sender-rules', { headers }),
+          httpFetch('/api/admin/emir/routing-rules', { headers }),
         ])
         if (!cancelled && sRes.ok) { const d = await sRes.json(); setEmirSenderRules(Array.isArray(d) ? d : (d.rules || [])) }
         if (!cancelled && rRes.ok) { const d = await rRes.json(); setEmirRoutingRules(Array.isArray(d) ? d : (d.rules || [])) }
       } catch { /* leave empty on load failure */ }
     })()
     return () => { cancelled = true }
-  }, [status])
+  }, [status, auth])
 
   if (status === false) return <LockedIntegration label="EMIR Integration" />
 

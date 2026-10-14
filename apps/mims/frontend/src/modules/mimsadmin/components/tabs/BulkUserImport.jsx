@@ -25,7 +25,7 @@ const REQUIRED = ['user_id', 'name', 'email']
 const MAX_ROWS = 500
 
 /** Minimal CSV parse — the importer accepts the same shape the template exports. */
-export function parseCsv(text) {
+function parseCsv(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim() !== '')
   if (!lines.length) return { headers: [], rows: [] }
 
@@ -44,7 +44,7 @@ export function parseCsv(text) {
  * sees the problem before submitting, NOT as the enforcement point — the server
  * validates independently and is the one that decides.
  */
-export function validateRows(rows) {
+function validateRows(rows) {
   const errors = []
   const seenIds = new Set()
   const seenEmails = new Set()

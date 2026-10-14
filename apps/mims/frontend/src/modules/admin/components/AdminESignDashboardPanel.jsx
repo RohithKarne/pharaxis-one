@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { apiClient } from '../../../shared/api/apiClient';
 
@@ -22,9 +22,9 @@ const AdminESignDashboardPanel = () => {
     }
   };
 
-  useEffect(() => {
-    fetchIntegrity();
-  }, []);
+  // Checked once when the panel opens; Retry checks again.
+  const checkOnOpen = useEffectEvent(() => { fetchIntegrity(); });
+  useEffect(() => { checkOnOpen(); }, []);
 
   if (loading) {
     return <div className="card"><div className="card-body" style={{ color: 'var(--text-muted)' }}>Loading hash chain integrity…</div></div>;

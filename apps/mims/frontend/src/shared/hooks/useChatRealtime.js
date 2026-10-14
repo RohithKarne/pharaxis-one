@@ -13,6 +13,8 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
   const onEventRef = useRef(onEvent)
   const previousSubscriptionRef = useRef(null)
   const socketUrl = useMemo(() => buildSocketUrl(), [])
+  // Signed out, there is no connection whatever was last seen.
+  const state = token ? connectionState : 'closed'
 
   useEffect(() => {
     onEventRef.current = onEvent
@@ -27,10 +29,7 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
 
   useEffect(() => {
     closedByClientRef.current = false
-    if (!token) {
-      setConnectionState('closed')
-      return
-    }
+    if (!token) return
 
     function connect() {
       setConnectionState((prev) => (prev === 'open' ? 'open' : 'connecting'))
@@ -81,7 +80,7 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
   }, [socketUrl, token])
 
   useEffect(() => {
-    if (connectionState !== 'open') return
+    if (state !== 'open') return
     const previous = previousSubscriptionRef.current
     if (previous?.conversationId && previous.conversationId !== subscription?.conversationId) {
       sendJson({ type: 'unsubscribe', conversationId: previous.conversationId })
@@ -94,7 +93,7 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
       })
     }
     previousSubscriptionRef.current = subscription || null
-  }, [connectionState, sendJson, subscription])
+  }, [state, sendJson, subscription])
 
-  return { connectionState, sendJson }
+  return { connectionState: state, sendJson }
 }

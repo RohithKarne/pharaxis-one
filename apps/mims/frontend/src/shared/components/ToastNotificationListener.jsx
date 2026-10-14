@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import toast from '../utils/toast';
 
 /**
@@ -7,11 +7,6 @@ import toast from '../utils/toast';
  */
 export default function ToastNotificationListener() {
   const seenIdsRef = useRef(new Set());
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const playChime = () => {
     try {
@@ -37,9 +32,8 @@ export default function ToastNotificationListener() {
     }
   };
 
+  // Polling starts once the listener is on screen (an effect only runs then).
   useEffect(() => {
-    if (!mounted) return;
-
     let pollInterval;
 
     // A toast means "this just happened", not "you have unread items".
@@ -123,7 +117,7 @@ export default function ToastNotificationListener() {
       stopPolling();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [mounted]);
+  }, []);
 
   return null; // Headless component
 }
