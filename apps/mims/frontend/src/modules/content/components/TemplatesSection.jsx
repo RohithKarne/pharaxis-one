@@ -5,6 +5,10 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
+
+// The kinds of template the letter builder uses ("Transmission" was never read).
+const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email']
 
 function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const authHeaders = useMemo(
@@ -42,6 +46,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   }, [authHeaders, caseSearch])
 
   async function handleSave() {
+    if (!form.folder_id) return toast.warn('Folder is required.')
     if (!form.name.trim()) return toast.warn('Template name is required.')
     if (!form.body_html || form.body_html === '<p></p>') return toast.warn('Body is required.')
     setSaving(true)
@@ -90,18 +95,14 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
         <div className="cm-drawer-body">
           <div className="cm-form-group">
             <label className="cm-form-label">Template Type <span className="required">*</span></label>
-            <select className="cm-form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
-              <option>Response</option>
-              <option>Transmission</option>
-              <option>Correspondence</option>
-              <option>Email</option>
-              <option>Acknowledgment</option>
+            <select aria-label="Template Type" className="cm-form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
+              {TEMPLATE_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="cm-form-group">
-            <label className="cm-form-label">Folder</label>
+            <label className="cm-form-label">Folder <span className="required">*</span></label>
             <select aria-label="Folder" className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
-              <option value="">— No folder —</option>
+              <option value="">— Select Folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
@@ -213,6 +214,11 @@ export default function TemplatesSection({ token }) {
   const [editTemplate, setEditTemplate] = useState(null)
   const [historyTemplate, setHistoryTemplate] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const { hasCapability } = useAuth()
+  // Approve and publish are electronic signatures: password and reason.
+  const [esign, setEsign] = useState(null)
+  const [esignPw, setEsignPw] = useState('')
+  const [esignReason, setEsignReason] = useState('')
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
@@ -238,13 +244,20 @@ export default function TemplatesSection({ token }) {
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
 
-  async function transition(t, action) {
+  async function transition(t, action, signature = {}) {
     try {
-      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders, body: JSON.stringify(signature) })
       const d = await res.json().catch(() => ({}))
-      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1) }
-      else toast.error(d.error || 'Action failed.')
+      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1); return true }
+      toast.error(d.error || 'Action failed.')
     } catch { toast.error('Network error.') }
+    return false
+  }
+
+  function openEsign(t, action) { setEsign({ t, action }); setEsignPw(''); setEsignReason('') }
+  async function submitEsign() {
+    if (!esignPw || !esignReason.trim()) return toast.warn('Your password and a reason are required.')
+    if (await transition(esign.t, esign.action, { password: esignPw, reason: esignReason.trim() })) setEsign(null)
   }
 
   return (
@@ -256,11 +269,7 @@ export default function TemplatesSection({ token }) {
       <div className="cm-filters">
         <select className="cm-form-select" style={{ width: 180 }} value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value }))}>
           <option value="">All Types</option>
-          <option>Response</option>
-          <option>Transmission</option>
-          <option>Correspondence</option>
-          <option>Email</option>
-          <option>Acknowledgment</option>
+          {TEMPLATE_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
         <select className="cm-form-select" style={{ width: 160 }} value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
           <option value="">All Statuses</option>
@@ -292,6 +301,7 @@ export default function TemplatesSection({ token }) {
               <th>Type</th>
               <th>Folder</th>
               <th>Subject</th>
+              <th>Version</th>
               <th>Status</th>
               <th>Expiry</th>
               <th>Last Updated</th>
@@ -305,6 +315,7 @@ export default function TemplatesSection({ token }) {
                 <td>{t.type}</td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{folders.find(f => f.id === t.folder_id)?.name || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{t.version}</td>
                 <td><StatusBadge status={t.status || 'Draft'} /></td>
                 <td style={{ fontSize: 12 }}>
                   {t.expiry_date
@@ -318,8 +329,8 @@ export default function TemplatesSection({ token }) {
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
-                    {t.status === 'Draft' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'approve')}>Approve</button>}
-                    {t.status === 'Approved' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'publish')}>Publish</button>}
+                    {t.status === 'Draft' && hasCapability('content.approve') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'approve')}>Approve</button>}
+                    {t.status === 'Approved' && hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'publish')}>Publish</button>}
                     {t.status === 'Published' && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
                     {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
                   </div>
@@ -331,6 +342,24 @@ export default function TemplatesSection({ token }) {
       )}
       {showDrawer && (
         <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
+      )}
+      {esign && (
+        <div className="cm-modal-overlay" onClick={() => setEsign(null)}>
+          <div className="cm-modal" style={{ width: 460, maxWidth: '94vw', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px' }}>{esign.action === 'approve' ? 'Approve template' : 'Publish template'}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+              {esign.t.name} · version {esign.t.version}. {esign.action === 'publish' ? 'Once published it can be used in letters.' : 'You are signing that the wording is correct.'}
+            </p>
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
+            <input aria-label="Your Password" type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={esignPw} onChange={e => setEsignPw(e.target.value)} autoComplete="current-password" />
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>
+            <input aria-label="Reason" className="cm-form-input" style={{ marginBottom: 16 }} value={esignReason} onChange={e => setEsignReason(e.target.value)} placeholder="Reason for this action" />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="cm-btn cm-btn-secondary" onClick={() => setEsign(null)}>Cancel</button>
+              <button className="cm-btn cm-btn-primary" onClick={submitEsign}>{esign.action === 'approve' ? 'Sign and approve' : 'Sign and publish'}</button>
+            </div>
+          </div>
+        </div>
       )}
       {historyTemplate && (
         <VersionHistoryModal entityType="template" entityId={historyTemplate.id} entityName={historyTemplate.name} token={token} onClose={() => setHistoryTemplate(null)} />

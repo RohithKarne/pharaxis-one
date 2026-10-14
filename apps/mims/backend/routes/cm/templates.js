@@ -14,6 +14,17 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { logAudit } = require('../../utils/auditLog');
+const bcrypt = require('bcrypt');
+
+// The kinds of template the letter builder uses. "Transmission" was offered on
+// the screen but nothing ever read a template of that type.
+const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email'];
+
+async function passwordMatches(userId, password) {
+  if (!password) return false;
+  const [[u]] = await pool.execute('SELECT password FROM users WHERE id = ?', [userId]);
+  return !!u?.password && bcrypt.compare(String(password), u.password);
+}
 
 async function audit(userId, userName, action, entity, entityId, details) {
   await logAudit(userId, userName, action, entity, entityId, details);
@@ -127,20 +138,41 @@ async function transitionTemplate(req, res, action) {
       }
     }
 
+    // Approving and publishing a template is an electronic signature — password
+    // and reason — as it is for documents, modules and FAQs. Templates moved on a
+    // single click, and the author could approve their own wording.
+    const signing = action === 'approve' || action === 'publish';
+    const reason = String(req.body?.reason || '').trim();
+    if (signing) {
+      if (action === 'approve' && Number(tmpl.created_by) === Number(req.user.userId)) {
+        return res.status(403).json({ error: 'The author of a template cannot approve it. An independent reviewer is required.' });
+      }
+      if (!req.body?.password || !reason) {
+        return res.status(400).json({ error: `Your password and a reason are required to ${action} a template.` });
+      }
+      if (!(await passwordMatches(req.user.userId, req.body.password))) {
+        return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+      }
+    }
+
     const sets = ['status = ?', 'updated_by = ?', 'updated_at = NOW()'];
     const params = [cfg.to, req.user.userId];
     if (action === 'approve') { sets.push('approved_by = ?', 'approved_at = NOW()'); params.push(req.user.userId); }
-    if (action === 'publish') { sets.push('published_by = ?', 'published_at = NOW()'); params.push(req.user.userId); }
+    // Publishing moves to the next major version, as for documents (the version a
+    // letter records); edits add to the minor number.
+    if (action === 'publish') { sets.push('published_by = ?', 'published_at = NOW()', 'version_major = version_major + 1', 'version_minor = 0'); params.push(req.user.userId); }
     if (action === 'revert')  { sets.push('approved_by = NULL', 'approved_at = NULL', 'published_by = NULL', 'published_at = NULL'); }
     params.push(req.params.id);
 
     await pool.execute(`UPDATE cm_templates SET ${sets.join(', ')} WHERE id = ?`, params);
-    await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to });
+    const [[after]] = await pool.execute('SELECT version_major, version_minor FROM cm_templates WHERE id = ?', [req.params.id]);
+    const version = `${after.version_major || 1}.${after.version_minor || 0}`;
+    await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to, version, reason: reason || null, esigned: signing });
     try {
       await pool.execute(
         `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id)
          VALUES ('template', ?, ?, ?, ?, ?)`,
-        [req.params.id, `${tmpl.version_major || 1}.${tmpl.version_minor || 0}`, cfg.to, `${action} → ${cfg.to}`, req.user.userId]
+        [req.params.id, version, cfg.to, reason || `${action} → ${cfg.to}`, req.user.userId]
       );
     } catch (_) {}
 
@@ -216,13 +248,21 @@ router.post('/templates', authenticate, async (req, res) => {
   try {
     const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
+    if (type && !TEMPLATE_TYPES.includes(type)) return res.status(400).json({ error: `Template type must be one of: ${TEMPLATE_TYPES.join(', ')}.` });
+    // A template belongs to its organisation through its folder; one with no
+    // folder fell back to its creator's organisations and could cross over.
+    if (!folder_id) return res.status(400).json({ error: 'Choose a folder for the template.' });
+    const [[folder]] = await pool.execute(
+      hasPlatformAdminScope(req) ? 'SELECT id FROM cm_folders WHERE id = ?' : 'SELECT id FROM cm_folders WHERE id = ? AND org_id = ?',
+      hasPlatformAdminScope(req) ? [folder_id] : [folder_id, req.user.orgId]);
+    if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : null);
 
     // New templates always start as Draft — they must pass through approve →
     // publish before they can be used in a response. Status is never client-set.
     const [result] = await pool.execute(
       'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, 'Draft', folder_id || null, expiry_date || null, req.user.userId]
+      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, 'Draft', folder_id, expiry_date || null, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
     const created = await getScopedTemplate(req, result.insertId);
@@ -284,19 +324,35 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
     const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
+    if (type && !TEMPLATE_TYPES.includes(type)) return res.status(400).json({ error: `Template type must be one of: ${TEMPLATE_TYPES.join(', ')}.` });
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : existing.body_html);
     const resolvedFolderId = folder_id !== undefined ? (folder_id || null) : existing.folder_id;
+    if (!resolvedFolderId) return res.status(400).json({ error: 'Choose a folder for the template.' });
+    if (Number(resolvedFolderId) !== Number(existing.folder_id)) {
+      const [[folder]] = await pool.execute(
+        hasPlatformAdminScope(req) ? 'SELECT id FROM cm_folders WHERE id = ?' : 'SELECT id FROM cm_folders WHERE id = ? AND org_id = ?',
+        hasPlatformAdminScope(req) ? [resolvedFolderId] : [resolvedFolderId, req.user.orgId]);
+      if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
+    }
     const resolvedExpiry = expiry_date !== undefined ? (expiry_date || null) : existing.expiry_date;
+    const resolvedName = String(name ?? existing.name ?? '').trim();
+    if (!resolvedName) return res.status(400).json({ error: 'name is required.' });
+    const resolvedSubject = subject !== undefined ? (subject || null) : existing.subject;
 
     // Editing reviewed content invalidates its approval: an Approved/Published
     // template is sent back to Draft so the new wording must be re-approved
     // before it can reach a doctor again.
     const wasGoverned = existing.status === 'Approved' || existing.status === 'Published';
     const newStatus = wasGoverned ? 'Draft' : existing.status;
+    // A change of wording adds to the minor version, so a letter records which
+    // wording it used (the version never moved, so every letter read 1.0).
+    const wordingChanged = String(resolvedBodyHtml || '') !== String(existing.body_html || '')
+      || String(resolvedSubject || '') !== String(existing.subject || '') || resolvedName !== existing.name;
 
     await pool.execute(
       `UPDATE cm_templates
           SET type = ?, name = ?, subject = ?, body_html = ?, folder_id = ?, expiry_date = ?,
+              version_minor = version_minor + ?,
               status = ?,
               approved_by  = CASE WHEN ? = 'Draft' THEN NULL ELSE approved_by  END,
               approved_at  = CASE WHEN ? = 'Draft' THEN NULL ELSE approved_at  END,
@@ -304,10 +360,11 @@ router.put('/templates/:id', authenticate, async (req, res) => {
               published_at = CASE WHEN ? = 'Draft' THEN NULL ELSE published_at END,
               updated_by = ?, updated_at = NOW()
         WHERE id = ?`,
-      [type || 'Response', name, subject || null, resolvedBodyHtml || null, resolvedFolderId, resolvedExpiry,
+      [type || existing.type || 'Response', resolvedName, resolvedSubject, resolvedBodyHtml || null, resolvedFolderId, resolvedExpiry,
+       wordingChanged ? 1 : 0,
        newStatus, newStatus, newStatus, newStatus, newStatus, req.user.userId, id]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name, type, reverted_to_draft: wasGoverned });
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name: resolvedName, type, reverted_to_draft: wasGoverned, wording_changed: wordingChanged });
     res.json({ message: 'Template updated.', reverted_to_draft: wasGoverned, status: newStatus });
   } catch (err) {
     console.error('PUT /cm/templates/:id error:', err);
@@ -322,33 +379,6 @@ router.post('/templates/:id/approve', authenticate, (req, res) => transitionTemp
 router.post('/templates/:id/publish', authenticate, (req, res) => transitionTemplate(req, res, 'publish'));
 router.post('/templates/:id/archive', authenticate, (req, res) => transitionTemplate(req, res, 'archive'));
 router.post('/templates/:id/revert',  authenticate, (req, res) => transitionTemplate(req, res, 'revert'));
-
-// POST /api/cm/templates/:id/checkin — snapshot current body as a new version
-router.post('/templates/:id/checkin', authenticate, async (req, res) => {
-  try {
-    const { notes } = req.body;
-    const tmpl = await getScopedTemplate(req, req.params.id);
-    if (!tmpl) return res.status(404).json({ error: 'Template not found.' });
-
-    const newMinor = (tmpl.version_minor || 0) + 1;
-    const versionStr = `${tmpl.version_major || 1}.${newMinor}`;
-
-    await pool.execute(
-      'UPDATE cm_templates SET version_minor = ?, version_notes = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [newMinor, notes || null, req.user.userId, req.params.id]
-    );
-    await pool.execute(
-      `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id)
-       VALUES ('template', ?, ?, 'Active', ?, ?)`,
-      [req.params.id, versionStr, notes || 'Version saved', req.user.userId]
-    );
-    await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_template', Number(req.params.id), { version: versionStr });
-    res.json({ message: `Template saved as version ${versionStr}.`, version: versionStr });
-  } catch (err) {
-    console.error('POST /cm/templates/:id/checkin error:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
 
 // GET /api/cm/templates/:id/versions — version history for a template
 router.get('/templates/:id/versions', authenticate, async (req, res) => {
