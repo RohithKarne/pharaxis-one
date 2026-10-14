@@ -42,9 +42,14 @@ module.exports = [
         privilege_keys: ['admin.access.manage', 'reports.view'],
         reason: 'Regression privilege update',
       }, token) : { status: 0, body: {} };
-      const pass = seed.status === 201 && groupId && getPriv.status === 200 && putPriv.status === 200 &&
+      // Give the group back the permissions it had; they were left changed.
+      const had = Array.isArray(getPriv.body?.privilege_keys) ? getPriv.body.privilege_keys : null;
+      const restore = groupId && had
+        ? await makeRequest('PUT', `/api/admin/access-config/groups/${groupId}/privileges`, { org_id: org.id, privilege_keys: had, reason: 'Regression privilege restored' }, token)
+        : { status: 0 };
+      const pass = seed.status === 201 && groupId && getPriv.status === 200 && putPriv.status === 200 && restore.status === 200 &&
         Array.isArray(putPriv.body?.privilege_keys) && putPriv.body.privilege_keys.includes('reports.view');
-      return { pass, details: `seed=${seed.status}, group=${groupId || 'none'}, get=${getPriv.status}, put=${putPriv.status}` };
+      return { pass, details: `seed=${seed.status}, group=${groupId || 'none'}, get=${getPriv.status}, put=${putPriv.status}, restore=${restore.status}` };
     },
   },
   {
