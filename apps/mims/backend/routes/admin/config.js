@@ -353,25 +353,10 @@ router.post('/esig-verify', authenticate, requireRole('admin', 'platform_admin')
 });
 
 // ─── ROLE PERMISSIONS ─────────────────────────────────────────
-router.get('/permissions', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
-  try {
-    const [permissions] = await pool.execute('SELECT * FROM role_permissions ORDER BY role, module');
-    res.json({ permissions });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
-
-router.put('/permissions', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  try {
-    const { role, module, can_access } = req.body;
-    if (!role || !module) return res.status(400).json({ error: 'role and module required.' });
-    await pool.execute(
-      'UPDATE role_permissions SET can_access = ? WHERE role = ? AND module = ?',
-      [can_access ? 1 : 0, role, module]
-    );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'role_permission', null, { role, module, can_access });
-    res.json({ message: 'Permission updated.' });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
+// Removed (access review, 2026-10-14). The screens each role opens by default
+// (role_permissions) are shared by every organisation, yet any organisation's
+// administrator could change them here; nothing in the app called it. A
+// person's screens are set on Add / Edit Users.
 
 // ─── LOGIN AUDIT TRAIL ────────────────────────────────────────
 router.get('/login-audit', authenticate, requireAdminConsoleAccess, async (req, res) => {
