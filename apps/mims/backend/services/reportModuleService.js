@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-const { getDatasetByReportKey, BUILT_DATASETS } = require('./reportDatasetService');
+const { getDatasetByReportKey, BUILT_DATASETS, PERIODS, ROW_CAP } = require('./reportDatasetService');
 const { columnLabels } = require('./reportCsv');
 
 const DEFAULT_MODULE_CONFIG = Object.freeze({
@@ -16,254 +16,222 @@ const DEFAULT_MODULE_CONFIG = Object.freeze({
 });
 
 const REPORT_GROUP_LABELS = Object.freeze({
-  command_center: 'Command Center',
-  inbox_operations: 'Inbox Operations',
-  case_operational: 'Case Operational',
-  case_detail: 'Case Detail',
-  case_compliance: 'Case Compliance',
-  platform_analytics: 'Platform Analytics',
-  platform_deep_analytics: 'Platform Deep Analytics',
+  command_center: 'Operations',
+  case_detail: 'Cases',
+  medical_information: 'Medical Information',
+  safety_quality: 'Safety and Quality',
+  inbox_operations: 'Inbox',
+  content: 'Content',
+  administration: 'Administration',
 });
 
+// Choices for "Group by", per dataset. Datasets not listed have none.
+const GROUP_BY_OPTIONS = Object.freeze({
+  'daily-case-summary': [['day', 'Day'], ['week', 'Week'], ['month', 'Month']],
+  'mi-response-performance': [['none', 'All enquiries'], ['product', 'Product'], ['category', 'Category'], ['owner', 'Owner'], ['month', 'Month']],
+  'mi-enquiry-mix': [['product', 'Product'], ['category', 'Category'], ['channel', 'Channel'], ['month', 'Month']],
+});
+
+const CASE_FILTERS = ['period', 'case_type', 'product', 'owner_id'];
+
+// The library (reports review, 2026-10-14). Sixteen of the 24 reports it held
+// said "NOT BUILT YET"; every report here runs on the organisation's own case,
+// letter, hand-off, inbox, content and user data. Keys of reports that kept
+// their meaning are unchanged, so saved schedules and favourites still point
+// at them.
 const BUILTIN_REPORT_DEFINITIONS = Object.freeze([
   {
     report_key: 'daily-operations-pack',
-    dataset_key: 'daily-operations-pack',
-    name: 'Daily Operations Pack',
-    description: 'Leadership pack for openings, closures, backlog, and inbox operational risk.',
+    name: 'Operations Summary',
+    description: 'Received, closed and open cases, MI answers overdue or late, hand-offs overdue and inbox breaches, for the period.',
     group_key: 'command_center',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    default_filters: { period: 'today' },
+    allowed_filters: ['period'],
   },
   {
     report_key: 'daily-case-summary',
-    dataset_key: 'daily-case-summary',
-    name: 'Daily Case Summary',
-    description: 'Aggregated case openings, closures, and backlog for the selected period.',
-    group_key: 'case_operational',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    name: 'Case Volume',
+    description: 'Cases received (by type) and closed per day, week or month.',
+    group_key: 'command_center',
+    default_filters: { period: 'last_30_days', group_by: 'day' },
+    allowed_filters: [...CASE_FILTERS, 'group_by'],
+  },
+  {
+    report_key: 'open-backlog',
+    name: 'Open Cases by Age',
+    description: 'Every open case today, oldest first, with its age in days since it was received.',
+    group_key: 'command_center',
+    default_filters: {},
+    allowed_filters: ['case_type', 'product', 'owner_id'],
+  },
+  {
+    report_key: 'team-workload',
+    name: 'Team Workload',
+    description: 'Open cases per owner by type, MI answers overdue, and cases received and closed in the period.',
+    group_key: 'command_center',
+    default_filters: { period: 'last_30_days' },
+    allowed_filters: ['period'],
   },
   {
     report_key: 'daily-case-openings',
-    dataset_key: 'daily-case-openings',
-    name: 'Daily Case Openings',
-    description: 'Detailed case list for newly opened cases.',
+    name: 'Cases Received',
+    description: 'Cases by Date Received, with product, channel, status and owner.',
     group_key: 'case_detail',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    default_filters: { period: 'last_7_days' },
+    allowed_filters: CASE_FILTERS,
   },
   {
     report_key: 'daily-case-closures',
-    dataset_key: 'daily-case-closures',
-    name: 'Daily Case Closures',
-    description: 'Detailed case list for cases closed in the selected period.',
+    name: 'Cases Closed',
+    description: 'Cases moved to a closed status in the period, who closed them and how many days they were open.',
     group_key: 'case_detail',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'inbox-performance',
-    dataset_key: 'inbox-performance',
-    name: 'Inbox Performance',
-    description: 'Operational view of queue throughput, ownership, and breach counts.',
-    group_key: 'inbox_operations',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'inbox-sla',
-    dataset_key: 'inbox-sla',
-    name: 'Inbox SLA',
-    description: 'Item-level SLA status for first touch and first response.',
-    group_key: 'inbox_operations',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'transmission-sla',
-    dataset_key: 'transmission-sla',
-    name: 'Transmission SLA',
-    description: 'Open AE and PC transmissions with current SLA state and escalation level.',
-    group_key: 'case_compliance',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'case-source',
-    dataset_key: 'case-source',
-    name: 'Cases by Source',
-    description: 'Case origin sources for the selected period.',
-    group_key: 'case_detail',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    default_filters: { period: 'last_7_days' },
+    allowed_filters: CASE_FILTERS,
   },
   {
     report_key: 'case-duplicates',
-    dataset_key: 'case-duplicates',
-    name: 'Duplicate Cases',
-    description: 'Potential duplicate case pairs within the selected period.',
+    name: 'Possible Duplicates',
+    description: 'Cases received in the period that were flagged as a possible duplicate of an earlier case.',
     group_key: 'case_detail',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    default_filters: { period: 'last_30_days' },
+    allowed_filters: CASE_FILTERS,
   },
   {
-    report_key: 'regulatory-readiness',
-    dataset_key: 'regulatory-readiness',
-    name: 'Regulatory Readiness',
-    description: 'Cases reviewed for regulatory submission readiness.',
-    group_key: 'case_compliance',
+    report_key: 'mi-response-timeliness',
+    name: 'MI Response Times',
+    description: 'Each MI question received in the period: answer-by date, first letter sent, working days taken, and on time, late or overdue.',
+    group_key: 'medical_information',
+    default_filters: { period: 'last_30_days' },
+    allowed_filters: ['period', 'product', 'owner_id'],
+  },
+  {
+    report_key: 'mi-response-performance',
+    name: 'MI Response Performance',
+    description: 'Enquiries, answered, on time, late and overdue, on-time rate and median working days, overall or by product, category, owner or month.',
+    group_key: 'medical_information',
+    default_filters: { period: 'last_30_days', group_by: 'none' },
+    allowed_filters: ['period', 'product', 'owner_id', 'group_by'],
+  },
+  {
+    report_key: 'mi-enquiry-mix',
+    name: 'MI Enquiries by Product, Category or Channel',
+    description: 'How many MI questions came in, their share, off-label and answered, grouped as chosen.',
+    group_key: 'medical_information',
+    default_filters: { period: 'last_30_days', group_by: 'product' },
+    allowed_filters: ['period', 'product', 'group_by'],
+  },
+  {
+    report_key: 'mi-off-label',
+    name: 'Off-label Enquiries',
+    description: 'MI questions marked off-label: the indication asked about, solicited or not, letter sent and promotional review.',
+    group_key: 'medical_information',
+    default_filters: { period: 'last_90_days' },
+    allowed_filters: ['period', 'product', 'owner_id'],
+  },
+  {
+    report_key: 'mi-safety-check',
+    name: 'MI Safety Screening Check',
+    description: 'MI questions that mention an adverse event or complaint with no AE or PC case, and letters sent with the screening unanswered.',
+    group_key: 'medical_information',
+    default_filters: { period: 'last_90_days' },
+    allowed_filters: ['period', 'product', 'owner_id'],
+  },
+  {
+    report_key: 'handoff-timeliness',
+    name: 'AE / PC Hand-off Timeliness',
+    description: 'AE and PC cases received in the period: day 0, due date from Transmission Setup, first send to the safety or quality system, on time or late.',
+    group_key: 'safety_quality',
+    default_filters: { period: 'last_30_days' },
+    allowed_filters: CASE_FILTERS,
+  },
+  {
+    report_key: 'transmission-sla',
+    name: 'Open Transmissions',
+    description: 'AE and PC transmissions still open, with their due date, SLA state and escalation level.',
+    group_key: 'safety_quality',
     default_filters: {},
-    allowed_filters: [],
+    allowed_filters: ['case_type'],
   },
   {
-    report_key: 'case-monthly-trend',
-    dataset_key: 'case-monthly-trend',
-    name: 'Monthly Case Trend',
-    description: 'Month-on-month case volume for compliance trending.',
-    group_key: 'case_compliance',
-    default_filters: { months: 6 },
-    allowed_filters: ['months'],
+    report_key: 'icsr-submissions',
+    name: 'ICSR Submissions',
+    description: 'ICSRs by receive date: report type, seriousness, status, submissions, last submitted and acknowledged, acknowledgement errors.',
+    group_key: 'safety_quality',
+    default_filters: { period: 'last_90_days' },
+    allowed_filters: ['period'],
   },
   {
-    report_key: 'case-closure-rate',
-    dataset_key: 'case-closure-rate',
-    name: 'Case Closure Rate',
-    description: 'Percentage of cases closed within the selected date range.',
-    group_key: 'case_compliance',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
+    report_key: 'inbox-performance',
+    name: 'Inbox Performance',
+    description: 'Inbox items per queue and person: unread, open, converted or linked, closed, and first-touch and response breaches.',
+    group_key: 'inbox_operations',
+    default_filters: { period: 'last_7_days' },
+    allowed_filters: ['period'],
   },
   {
-    report_key: 'case-by-org',
-    dataset_key: 'case-by-org',
-    name: 'Cases by Organisation',
-    description: 'Platform-admin view of case volume per organisation.',
-    group_key: 'case_compliance',
-    default_filters: {},
-    allowed_filters: [],
-  },
-  {
-    report_key: 'user-activity',
-    dataset_key: 'user-activity',
-    name: 'User Activity',
-    description: 'Login frequency and active users over the selected period.',
-    group_key: 'platform_analytics',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'module-usage',
-    dataset_key: 'module-usage',
-    name: 'Module Usage',
-    description: 'Most accessed platform modules over the last 30 days.',
-    group_key: 'platform_analytics',
-    default_filters: {},
-    allowed_filters: [],
-  },
-  {
-    report_key: 'org-activity',
-    dataset_key: 'org-activity',
-    name: 'Organisation Activity',
-    description: 'Case and login activity per organisation.',
-    group_key: 'platform_analytics',
-    default_filters: {},
-    allowed_filters: [],
-  },
-  {
-    report_key: 'user-roles',
-    dataset_key: 'user-roles',
-    name: 'User Roles',
-    description: 'Distribution of users across roles for the active organisation.',
-    group_key: 'platform_analytics',
-    default_filters: {},
-    allowed_filters: [],
+    report_key: 'inbox-sla',
+    name: 'Inbox SLA',
+    description: 'Each inbox item with its first-touch and response targets, worst first.',
+    group_key: 'inbox_operations',
+    default_filters: { period: 'last_7_days' },
+    allowed_filters: ['period'],
   },
   {
     report_key: 'content-usage',
-    dataset_key: 'content-usage',
-    name: 'Content Usage',
-    description: 'Document access and FAQ usage frequency.',
-    group_key: 'platform_analytics',
+    name: 'Content Used in Letters',
+    description: 'Documents and modules enclosed in or used for letters: times used, letters, cases and last used.',
+    group_key: 'content',
+    default_filters: { period: 'last_90_days' },
+    allowed_filters: ['period'],
+  },
+  {
+    report_key: 'content-review-due',
+    name: 'Content Due for Review or Expiring',
+    description: 'Published documents whose periodic review or expiry date falls within the window, or has passed.',
+    group_key: 'content',
+    default_filters: { window_days: 60 },
+    allowed_filters: ['window_days'],
+  },
+  {
+    report_key: 'user-access-review',
+    name: 'User Access Review',
+    description: 'Everyone with access to the organisation: role, account status, modules, last sign-in and failed attempts — for the periodic access review.',
+    group_key: 'administration',
+    audience: 'admin_only',
     default_filters: {},
     allowed_filters: [],
   },
-  {
-    report_key: 'security-events',
-    dataset_key: 'security-events',
-    name: 'Security Events',
-    description: 'Failed logins, IP blocks, and two-factor lockout events.',
-    group_key: 'platform_deep_analytics',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'integration-sync',
-    dataset_key: 'integration-sync',
-    name: 'Integration Sync',
-    description: 'MIR and CRM sync state visibility.',
-    group_key: 'platform_deep_analytics',
-    default_filters: {},
-    allowed_filters: [],
-  },
-  {
-    report_key: 'audit-summary',
-    dataset_key: 'audit-summary',
-    name: 'Audit Summary',
-    description: 'Summary of audit trail events over time.',
-    group_key: 'platform_deep_analytics',
-    default_filters: { date_from: '', date_to: '' },
-    allowed_filters: ['date_from', 'date_to'],
-  },
-  {
-    report_key: 'system-health',
-    dataset_key: 'system-health',
-    name: 'System Health',
-    description: 'Background jobs, scheduler runs, and error-rate indicators.',
-    group_key: 'platform_deep_analytics',
-    default_filters: {},
-    allowed_filters: [],
-  },
-  {
-    report_key: 'field-usage',
-    dataset_key: 'field-usage',
-    name: 'Field Usage',
-    description: 'Case form field population and adoption.',
-    group_key: 'platform_deep_analytics',
-    default_filters: {},
-    allowed_filters: [],
-  },
-]);
+].map((item) => ({ dataset_key: item.report_key, audience: 'shared', ...item })));
 
 const BUILTIN_DASHBOARDS = Object.freeze([
   {
     dashboard_key: 'operations-command-center',
-    name: 'Operations Command Center',
-    description: 'Single-screen operational view for openings, queues, and transmission risk.',
+    name: 'Operations',
+    description: 'Today at a glance: the operations summary, open cases by age and each person\'s workload.',
     widgets: [
-      { id: 'ops-pack', title: 'Daily Operations Pack', report_key: 'daily-operations-pack', display_mode: 'kpi-grid', limit: 7 },
-      { id: 'ops-inbox', title: 'Inbox Performance', report_key: 'inbox-performance', display_mode: 'table', limit: 6 },
-      { id: 'ops-transmission', title: 'Transmission SLA', report_key: 'transmission-sla', display_mode: 'table', limit: 6 },
+      { id: 'ops-pack', title: 'Operations Summary', report_key: 'daily-operations-pack', display_mode: 'table', limit: 8 },
+      { id: 'ops-workload', title: 'Team Workload', report_key: 'team-workload', display_mode: 'table', limit: 8 },
+      { id: 'ops-backlog', title: 'Oldest Open Cases', report_key: 'open-backlog', display_mode: 'table', limit: 8 },
     ],
   },
   {
     dashboard_key: 'case-compliance-watch',
-    name: 'Case Compliance Watch',
-    description: 'Monitors closure discipline, regulatory readiness, and trends.',
+    name: 'Compliance Watch',
+    description: 'MI answers and AE/PC hand-offs against their deadlines, safety signals not handed on, and open transmissions.',
     widgets: [
-      { id: 'closure-rate', title: 'Case Closure Rate', report_key: 'case-closure-rate', display_mode: 'kpi-grid', limit: 4 },
-      { id: 'trend', title: 'Monthly Case Trend', report_key: 'case-monthly-trend', display_mode: 'list', limit: 6 },
-      { id: 'readiness', title: 'Regulatory Readiness', report_key: 'regulatory-readiness', display_mode: 'table', limit: 6 },
+      { id: 'mi-performance', title: 'MI Response Performance (30 days)', report_key: 'mi-response-performance', display_mode: 'kpi-grid', limit: 1 },
+      { id: 'mi-safety', title: 'MI Safety Screening Check', report_key: 'mi-safety-check', display_mode: 'table', limit: 6 },
+      { id: 'handoffs', title: 'AE / PC Hand-off Timeliness', report_key: 'handoff-timeliness', display_mode: 'table', limit: 6 },
+      { id: 'transmissions', title: 'Open Transmissions', report_key: 'transmission-sla', display_mode: 'table', limit: 6 },
     ],
   },
   {
-    dashboard_key: 'platform-observability',
-    name: 'Platform Observability',
-    description: 'Visibility into system health, security events, and module usage.',
+    dashboard_key: 'content-watch',
+    name: 'Content Watch',
+    description: 'Content falling due for review or expiring, and what is used in letters.',
     widgets: [
-      { id: 'system-health', title: 'System Health', report_key: 'system-health', display_mode: 'table', limit: 5 },
-      { id: 'security-events', title: 'Security Events', report_key: 'security-events', display_mode: 'list', limit: 8 },
-      { id: 'module-usage', title: 'Module Usage', report_key: 'module-usage', display_mode: 'table', limit: 6 },
+      { id: 'content-due', title: 'Due for Review or Expiring', report_key: 'content-review-due', display_mode: 'table', limit: 8 },
+      { id: 'content-used', title: 'Most Used in Letters (90 days)', report_key: 'content-usage', display_mode: 'table', limit: 8 },
     ],
   },
 ]);
@@ -344,6 +312,7 @@ function normalizeDefinition(row) {
     group_label: REPORT_GROUP_LABELS[row.group_key] || row.group_key,
     allowed_filters: parseJson(row.allowed_filters, []),
     default_filters: parseJson(row.default_filters, {}),
+    group_by_options: (GROUP_BY_OPTIONS[row.dataset_key] || []).map(([value, label]) => ({ value, label })),
     selected_columns: parseJson(row.selected_columns, []),
     visibility_scope: normalizeAudience(row.visibility_scope),
     audience_label: AUDIENCES[normalizeAudience(row.visibility_scope)],
@@ -462,7 +431,7 @@ async function ensureReportModuleSeed() {
         `INSERT INTO report_definitions
            (org_id, report_key, dataset_key, name, description, group_key, allowed_filters, default_filters,
             selected_columns, visibility_scope, is_system, is_active, created_by, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'shared', 1, 1, NULL, NULL)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NULL, NULL)
          ON DUPLICATE KEY UPDATE
            dataset_key = VALUES(dataset_key),
            name = VALUES(name),
@@ -484,9 +453,15 @@ async function ensureReportModuleSeed() {
           JSON.stringify(item.allowed_filters || []),
           JSON.stringify(item.default_filters || {}),
           JSON.stringify(item.selected_columns || []),
+          item.audience,
         ]
       );
     }
+    // Library reports that were removed (the unbuilt ones) stop showing.
+    await pool.query(
+      'UPDATE report_definitions SET is_active = 0 WHERE org_id IS NULL AND is_system = 1 AND report_key NOT IN (?)',
+      [BUILTIN_REPORT_DEFINITIONS.map((item) => item.report_key)]
+    );
 
     for (const item of BUILTIN_DASHBOARDS) {
       await pool.execute(
@@ -509,6 +484,10 @@ async function ensureReportModuleSeed() {
         ]
       );
     }
+    await pool.query(
+      'UPDATE report_dashboards SET is_active = 0 WHERE org_id IS NULL AND is_system = 1 AND dashboard_key NOT IN (?)',
+      [BUILTIN_DASHBOARDS.map((item) => item.dashboard_key)]
+    );
 
     reportModuleSeedDone = true;
   })();
@@ -530,6 +509,7 @@ function getDatasetCatalog() {
     group_key: item.group_key,
     group_label: REPORT_GROUP_LABELS[item.group_key] || item.group_key,
     allowed_filters: item.allowed_filters || [],
+    default_filters: item.default_filters || {},
   }));
 }
 
@@ -551,15 +531,18 @@ async function listReportDefinitions(orgId, options = {}) {
     `SELECT *
      FROM report_definitions
      WHERE (org_id IS NULL OR org_id = ?)
-       ${includeInactive ? '' : 'AND is_active = 1'}
+       ${includeInactive ? 'AND (is_active = 1 OR org_id IS NOT NULL)' : 'AND is_active = 1'}
        ${productGroupFilter}
      ORDER BY
        CASE WHEN org_id IS NULL THEN 0 ELSE 1 END,
-       group_key ASC,
        name ASC`,
     params
   );
-  return rows.map(normalizeDefinition);
+  // Retired library reports never show, even to managers; the library keeps
+  // the order of its headings.
+  const order = BUILTIN_REPORT_DEFINITIONS.map((item) => item.report_key);
+  const rank = (row) => (row.org_id == null ? order.indexOf(row.report_key) : order.length);
+  return rows.map(normalizeDefinition).sort((a, b) => rank(a) - rank(b));
 }
 
 async function getReportDefinitionById(orgId, id) {
@@ -569,6 +552,7 @@ async function getReportDefinitionById(orgId, id) {
      FROM report_definitions
      WHERE id = ?
        AND (org_id IS NULL OR org_id = ?)
+       AND (is_active = 1 OR org_id IS NOT NULL)
      LIMIT 1`,
     [id, orgId]
   );
@@ -582,6 +566,7 @@ async function getReportDefinitionByKey(orgId, reportKey) {
      FROM report_definitions
      WHERE report_key = ?
        AND (org_id IS NULL OR org_id = ?)
+       AND (is_active = 1 OR org_id IS NOT NULL)
      ORDER BY CASE WHEN org_id IS NULL THEN 0 ELSE 1 END DESC
      LIMIT 1`,
     [reportKey, orgId]
@@ -718,12 +703,14 @@ async function deleteReportDefinition(orgId, id) {
   return existing;
 }
 
-async function runReportDefinition(definition, orgId, filters = {}) {
-  const mergedFilters = {
-    ...(definition.default_filters || {}),
-    ...(filters || {}),
-  };
-  const rows = await getDatasetByReportKey(definition.dataset_key, orgId, mergedFilters);
+// Filters chosen at run time win over the report's saved ones; typed dates
+// replace a saved named period. ctx.user limits content to readable folders.
+async function runReportDefinition(definition, orgId, filters = {}, ctx = {}) {
+  const runtime = Object.fromEntries(Object.entries(filters || {}).filter(([, value]) => value !== '' && value != null));
+  const saved = { ...(definition.default_filters || {}) };
+  if (runtime.date_from || runtime.date_to || runtime.period) { delete saved.period; delete saved.date_from; delete saved.date_to; }
+  const mergedFilters = { ...saved, ...runtime };
+  const rows = await getDatasetByReportKey(definition.dataset_key, orgId, mergedFilters, ctx);
   const visible = pickVisibleColumns(rows, definition.selected_columns);
   return {
     definition,
@@ -732,17 +719,17 @@ async function runReportDefinition(definition, orgId, filters = {}) {
     column_labels: columnLabels(visible.columns),
     rows: visible.rows,
     row_count: visible.rows.length,
+    truncated: rows.length >= ROW_CAP,
   };
 }
 
-async function previewDataset(datasetKey, orgId, filters = {}) {
+async function previewDataset(datasetKey, orgId, filters = {}, ctx = {}) {
   const catalogItem = getDatasetCatalog().find((item) => item.dataset_key === datasetKey);
   if (!catalogItem) throw new Error('Unsupported dataset_key.');
   return runReportDefinition({
     ...catalogItem,
     selected_columns: [],
-    default_filters: {},
-  }, orgId, filters);
+  }, orgId, filters, ctx);
 }
 
 async function listDashboards(orgId, options = {}) {
@@ -752,7 +739,7 @@ async function listDashboards(orgId, options = {}) {
     `SELECT *
      FROM report_dashboards
      WHERE (org_id IS NULL OR org_id = ?)
-       ${includeInactive ? '' : 'AND is_active = 1'}
+       ${includeInactive ? 'AND (is_active = 1 OR org_id IS NOT NULL)' : 'AND is_active = 1'}
      ORDER BY CASE WHEN org_id IS NULL THEN 0 ELSE 1 END, name ASC`,
     [orgId]
   );
@@ -766,6 +753,7 @@ async function getDashboardById(orgId, id) {
      FROM report_dashboards
      WHERE id = ?
        AND (org_id IS NULL OR org_id = ?)
+       AND (is_active = 1 OR org_id IS NOT NULL)
      LIMIT 1`,
     [id, orgId]
   );
@@ -859,7 +847,7 @@ async function deleteDashboard(orgId, id) {
   return existing;
 }
 
-async function runDashboard(dashboard, orgId, filters = {}, viewer = null) {
+async function runDashboard(dashboard, orgId, filters = {}, viewer = null, ctx = {}) {
   const widgets = [];
   for (const widget of dashboard.widgets || []) {
     const definition = widget.report_definition_id
@@ -898,7 +886,7 @@ async function runDashboard(dashboard, orgId, filters = {}, viewer = null) {
       });
       continue;
     }
-    const result = await runReportDefinition(definition, orgId, filters);
+    const result = await runReportDefinition(definition, orgId, filters, ctx);
     widgets.push({
       id: widget.id || `${definition.report_key}-${widgets.length + 1}`,
       title: widget.title || definition.name,
@@ -1207,6 +1195,23 @@ async function saveModuleConfig(orgId, userId, payload = {}) {
   return getModuleConfig(orgId);
 }
 
+// Choices for the filter bar: named periods, products and case owners of the
+// organisation.
+async function getFilterOptions(orgId) {
+  const [products] = await pool.execute(
+    'SELECT DISTINCT trade_name FROM products WHERE org_id = ? AND trade_name IS NOT NULL ORDER BY trade_name', [orgId]);
+  const [owners] = await pool.execute(
+    `SELECT u.id, u.name FROM user_org_access uoa JOIN users u ON u.id = uoa.user_id
+      WHERE uoa.org_id = ? AND uoa.is_active = 1 AND u.is_active = 1 ORDER BY u.name`, [orgId]);
+  return {
+    periods: Object.entries(PERIODS).map(([value, label]) => ({ value, label })),
+    case_types: [{ value: 'MI', label: 'Medical Information' }, { value: 'AE', label: 'Adverse Event' }, { value: 'PC', label: 'Product Complaint' }],
+    products: products.map((row) => row.trade_name),
+    owners: [{ id: 'unassigned', name: 'Unassigned' }, ...owners],
+    window_days: [30, 60, 90],
+  };
+}
+
 async function getModuleSummary(orgId) {
   await ensureReportModuleSeed();
   const [[reportCount]] = await pool.execute(
@@ -1280,4 +1285,5 @@ module.exports = {
   getModuleConfig,
   saveModuleConfig,
   getModuleSummary,
+  getFilterOptions,
 };

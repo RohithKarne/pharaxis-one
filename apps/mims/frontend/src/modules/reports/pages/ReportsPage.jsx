@@ -24,9 +24,8 @@ const BLANK_REPORT_FORM = {
   dataset_key: '',
   name: '',
   description: '',
-  group_key: 'command_center',
   visibility_scope: 'shared',
-  default_filters: { date_from: '', date_to: '' },
+  default_filters: {},
   selected_columns: [],
   is_active: true,
 }
@@ -164,6 +163,8 @@ export default function ReportsPage() {
   const [reportForm, setReportForm] = useState(BLANK_REPORT_FORM)
   const [reportPreview, setReportPreview] = useState(null)
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false)
+  const [reportFilters, setReportFilters] = useState({})
+  const [filterOptions, setFilterOptions] = useState({})
   const [reportBuilderPreview, setReportBuilderPreview] = useState(null)
   const [reportBuilderPreviewLoading, setReportBuilderPreviewLoading] = useState(false)
 
@@ -342,6 +343,11 @@ export default function ReportsPage() {
   }, [loadModuleData])
 
   useEffect(() => {
+    if (!token) return
+    apiJson('/api/reports/module/filter-options').then(setFilterOptions).catch(() => setFilterOptions({}))
+  }, [apiJson, token])
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search || '')
     const sectionParam = params.get('section')
     if (sectionParam && SECTION_LABELS[sectionParam]) {
@@ -372,6 +378,8 @@ export default function ReportsPage() {
       if (match) {
         setSection('reports')
         setSelectedReportId(match.id)
+        setReportPreview(null)
+        setReportFilters({ ...(match.default_filters || {}), ...(location.state.appliedFilters || {}) })
       }
     }
   }, [location.state, location.search, definitions])
@@ -396,7 +404,6 @@ export default function ReportsPage() {
         dataset_key: definition.dataset_key,
         name: definition.name,
         description: definition.description || '',
-        group_key: definition.group_key || 'command_center',
         visibility_scope: definition.visibility_scope || 'shared',
         default_filters: { ...(definition.default_filters || {}) },
         selected_columns: Array.isArray(definition.selected_columns) ? definition.selected_columns : [],
@@ -436,6 +443,18 @@ export default function ReportsPage() {
     return text.includes(String(deferredDashboardSearch || '').toLowerCase())
   })
 
+  // The library under its headings, favourites first.
+  const libraryGroups = (() => {
+    const groups = new Map()
+    const favourites = filteredDefinitions.filter((item) => isFavorite('report', item.id))
+    if (favourites.length) groups.set('Favourites', favourites)
+    filteredDefinitions.forEach((item) => {
+      const label = item.is_system ? (item.group_label || 'Other') : 'Your organisation\'s reports'
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label).push(item)
+    })
+    return [...groups.entries()].map(([label, items]) => ({ label, items }))
+  })()
   const selectedReport = definitions.find((item) => Number(item.id) === Number(selectedReportId)) || null
   const selectedDashboard = dashboards.find((item) => Number(item.id) === Number(selectedDashboardId)) || null
   const sectionGroups = [
@@ -571,7 +590,7 @@ export default function ReportsPage() {
     try {
       const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/run`, {
         method: 'POST',
-        body: JSON.stringify({ filters: selectedReport?.default_filters || {} }),
+        body: JSON.stringify({ filters: reportFilters }),
       })
       setReportPreview(payload)
     } catch (err) {
@@ -884,8 +903,8 @@ export default function ReportsPage() {
         <div style={cardStyle()}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>Report Library</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Trusted reports with approved datasets and controlled definitions.</div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>Reports</div>
+              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Choose a report, set the filters and run it.</div>
             </div>
             <Button variant="primary" size="sm" disabled={!canManageReports}
               title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
@@ -898,12 +917,16 @@ export default function ReportsPage() {
             style={{ width: '100%', marginTop: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}
           />
           <div style={{ marginTop: 14, display: 'grid', gap: 10, maxHeight: 640, overflowY: 'auto' }}>
-            {filteredDefinitions.map((definition) => (
+            {libraryGroups.map((group) => (
+              <div key={group.label} style={{ display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: 4 }}>{group.label}</div>
+                {group.items.map((definition) => (
               <button
                 key={definition.id}
                 onClick={() => {
                   setSelectedReportId(definition.id)
                   setReportPreview(null)
+                  setReportFilters({ ...(definition.default_filters || {}) })
                   pushSection('reports', { reportKey: definition.report_key })
                 }}
                 style={{
@@ -911,19 +934,18 @@ export default function ReportsPage() {
                   border: Number(selectedReportId) === Number(definition.id) ? '1px solid var(--primary)' : '1px solid var(--border)',
                   background: Number(selectedReportId) === Number(definition.id) ? 'rgba(var(--primary-rgb, 79,70,229),0.08)' : '#fff',
                   borderRadius: 12,
-                  padding: 14,
+                  padding: 12,
                   cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{definition.name}</div>
-                  <span style={{ fontSize: 11, color: definition.is_built === false ? 'var(--text-muted)' : definition.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
-                    {definition.is_built === false ? 'NOT BUILT YET' : definition.is_system ? 'SYSTEM' : 'CUSTOM'}
-                  </span>
+                  <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{isFavorite('report', definition.id) ? '★ ' : ''}{definition.name}</div>
+                  {!definition.is_system && <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 800 }}>CUSTOM</span>}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{definition.group_label}</div>
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{definition.description}</div>
               </button>
+                ))}
+              </div>
             ))}
             {!filteredDefinitions.length && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No reports matched the current search.</div>}
           </div>
@@ -936,37 +958,19 @@ export default function ReportsPage() {
                 <div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{selectedReport.name}</h2>
-                    <span style={{ ...badgeStyle(selectedReport.is_active ? 'success' : 'failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
-                      {selectedReport.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    {!selectedReport.is_active && <span style={{ ...badgeStyle('failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>SWITCHED OFF</span>}
                   </div>
                   <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>{selectedReport.description}</div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
-                    <span>Dataset: {selectedReport.dataset_key}</span>
-                    <span>Group: {selectedReport.group_label}</span>
+                    <span>{selectedReport.is_system ? selectedReport.group_label : 'Your organisation\'s report'}</span>
                     <span>Audience: {selectedReport.audience_label}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {selectedReport.is_built !== false && <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>}
                   <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
                   {canManageReports && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
-                </div>
-              </div>
-              <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Allowed Filters</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{selectedReport.allowed_filters?.join(', ') || 'None'}</div>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Selected Columns</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{selectedReport.selected_columns?.length || 0}</div>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Last Updated</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{formatDateTime(selectedReport.updated_at)}</div>
                 </div>
               </div>
             </div>
@@ -999,10 +1003,6 @@ export default function ReportsPage() {
                   <input value={reportForm.name} onChange={(event) => setReportForm((current) => ({ ...current, name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Group Key</span>
-                  <input value={reportForm.group_key} onChange={(event) => setReportForm((current) => ({ ...current, group_key: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Who can see it</span>
                   <select aria-label="Who can see it" value={reportForm.visibility_scope} onChange={(event) => setReportForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
                     {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -1016,13 +1016,13 @@ export default function ReportsPage() {
               </label>
 
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                {/* A saved period moves with the calendar; saved dates went stale. */}
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Date From</span>
-                  <input type="date" value={reportForm.default_filters.date_from || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { ...(current.default_filters || {}), date_from: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Date To</span>
-                  <input type="date" value={reportForm.default_filters.date_to || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { ...(current.default_filters || {}), date_to: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default period</span>
+                  <select aria-label="Default period" value={reportForm.default_filters.period || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <option value="">The report's own default</option>
+                    {(filterOptions.periods || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 25 }}>
                   <input type="checkbox" checked={!!reportForm.is_active} onChange={(event) => setReportForm((current) => ({ ...current, is_active: event.target.checked }))} />
@@ -1069,37 +1069,35 @@ export default function ReportsPage() {
 
           {selectedReport && (
             <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Report Preview</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Manual preview before sharing or scheduling.</div>
-                </div>
-                {selectedReport.is_built !== false && (
-                  <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(false)}>
-                    {reportPreviewLoading ? 'Running…' : 'Refresh Preview'}
-                  </button>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>Results</div>
+              <div style={{ marginTop: 14 }}>
+                <ReportFilterBar
+                  report={selectedReport}
+                  filters={reportFilters}
+                  options={filterOptions}
+                  onChange={setReportFilters}
+                  onRun={() => runSelectedReport(selectedReport.id)}
+                  running={reportPreviewLoading}
+                  onExport={canExportReports ? () => exportReport(selectedReport.id, reportFilters, selectedReport.report_key) : null}
+                  disableExport={!reportPreview?.rows?.length}
+                  onSchedule={canScheduleReports ? scheduleSelectedReport : null}
+                />
+                {reportPreview ? (
+                  <>
+                    {reportPreview.truncated && (
+                      <div style={{ marginBottom: 10, fontSize: 13, color: '#b45309' }}>Showing the first {reportPreview.row_count.toLocaleString()} rows. Narrow the period or filters to see the rest.</div>
+                    )}
+                    <ReportTableViewer
+                      columns={reportPreview.columns}
+                      labels={reportPreview.column_labels}
+                      rows={reportPreview.rows}
+                      onRowClick={(row) => row.__drill_route && navigate(row.__drill_route, { state: row.__drill_state })}
+                    />
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Choose the filters and press Run.</div>
                 )}
               </div>
-              {selectedReport.is_built === false ? (
-                <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
-                  This report is not built yet. It cannot be run or scheduled.
-                </div>
-              ) : reportPreview ? (
-                <div style={{ marginTop: 14 }}>
-                  {/* The made-up figures (turnaround 2.5h, conversion 94%), the filters
-                      wired to nothing and the placeholder chart are gone (M-90). */}
-                  <ReportFilterBar
-                    onExport={canExportReports ? () => exportReport(selectedReport.id, reportPreview.filters, selectedReport.report_key) : null}
-                    disableExport={!reportPreview.rows.length}
-                    onSchedule={canScheduleReports ? scheduleSelectedReport : null}
-                  />
-                  <ReportTableViewer columns={reportPreview.columns} labels={reportPreview.column_labels} rows={reportPreview.rows} />
-                </div>
-              ) : (
-                <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
-                  Run the selected report to inspect live output.
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1202,9 +1200,7 @@ export default function ReportsPage() {
                 <div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{selectedDashboard.name}</h2>
-                    <span style={{ ...badgeStyle(selectedDashboard.is_active ? 'success' : 'failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
-                      {selectedDashboard.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    {!selectedDashboard.is_active && <span style={{ ...badgeStyle('failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>SWITCHED OFF</span>}
                   </div>
                   <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>{selectedDashboard.description}</div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>

@@ -16,7 +16,8 @@ function formatCell(value) {
   return value
 }
 
-export default function ReportTableViewer({ columns, rows, labels }) {
+// onRowClick opens what a row is about (its case, the inbox, another report).
+export default function ReportTableViewer({ columns, rows, labels, onRowClick }) {
   const [sortCol, setSortCol] = useState(null)
   const [sortAsc, setSortAsc] = useState(true)
   const [page, setPage] = useState(1)
@@ -69,7 +70,12 @@ export default function ReportTableViewer({ columns, rows, labels }) {
         </thead>
         <tbody>
           {displayRows.map((row, index) => (
-            <tr key={index} style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? '#fff' : '#fcfcfd' }}>
+            <tr
+              key={index}
+              onClick={onRowClick && row.__drill_route ? () => onRowClick(row) : undefined}
+              title={onRowClick && row.__drill_route ? 'Open' : undefined}
+              style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? '#fff' : '#fcfcfd', cursor: onRowClick && row.__drill_route ? 'pointer' : 'default' }}
+            >
               {columns.map((column) => (
                 <td key={column} style={{ padding: '10px 12px', verticalAlign: 'top' }}>{formatCell(row[column])}</td>
               ))}

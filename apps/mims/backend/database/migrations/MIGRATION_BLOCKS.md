@@ -34,6 +34,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 180 | **Content management review (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `cm_documents.product_id`: the product a document is about (NULL = any product), so the letter builder offers the question's product's documents and the send check notices another product's enclosure. |
 | 181 | **Content management review follow-up (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `revision_of` on `cm_modules` and `cm_faqs`: a draft revision of a published module or FAQ, which stays in use until the revision is published. |
 | 182 | **Content management review follow-up (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `cm_templates.language` (default `en`): the language a letter template is written in, so the letter builder offers templates in the letter's language. |
+| 183 | **Reports review (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `idx_cases_org_received` on `cases (org_id, date_received)`: reports count cases from Date Received (day 0), which had no index. |
 | 167 | **MIMS role walk (2026-10-10)** | **DONE** | Within the 100+ block. An "auditor" role that can only view cases and reports, given by the Read-only Auditor template; template groups still giving "reviewer" move to it with their members. |
 
 ## Rules

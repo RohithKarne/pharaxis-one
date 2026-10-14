@@ -38,6 +38,7 @@ const {
   getModuleConfig,
   saveModuleConfig,
   getModuleSummary,
+  getFilterOptions,
   canSeeAudience,
 } = require('../services/reportModuleService');
 const { buildReportCsv } = require('../services/reportCsv');
@@ -151,13 +152,21 @@ router.get('/reports/module/summary', authenticate, async (req, res) => {
   }
 });
 
+router.get('/reports/module/filter-options', authenticate, async (req, res) => {
+  try {
+    return res.json(await getFilterOptions(req.user.orgId));
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to load filter options.' });
+  }
+});
+
 router.get('/reports/module/datasets', authenticate, (_req, res) => {
   return res.json({ datasets: getDatasetCatalog() });
 });
 
 router.post('/reports/module/datasets/:datasetKey/preview', authenticate, requireReportManager, async (req, res) => {
   try {
-    const result = await previewDataset(req.params.datasetKey, req.user.orgId, req.body?.filters || {});
+    const result = await previewDataset(req.params.datasetKey, req.user.orgId, req.body?.filters || {}, { user: req.user });
     return res.json(result);
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Failed to preview dataset.' });
@@ -215,7 +224,7 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
   try {
     const definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
-    const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {});
+    const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {}, { user: req.user });
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'report', definition.id, { report_key: definition.report_key }).catch(() => {});
     const runId = await recordReportRun({
       orgId: req.user.orgId,
@@ -246,7 +255,7 @@ router.post('/reports/module/definitions/:id/export', authenticate, async (req, 
     if (!(await viewerOf(req)).export) return res.status(403).json({ error: 'You do not have permission to export reports.' });
     const definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
-    const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {});
+    const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {}, { user: req.user });
     const csv = buildReportCsv(result.columns, result.rows);
     await logAudit(req.user.userId, req.user.email, 'EXPORT', 'report_definition', definition.id, { name: definition.name, filters: result.filters, row_count: result.row_count });
     await recordReportRun({
@@ -335,7 +344,7 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
   try {
     const dashboard = await visibleDashboard(req, req.params.id);
     if (!dashboard) return res.status(404).json({ error: 'Dashboard not found.' });
-    const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {}, await viewerOf(req));
+    const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {}, await viewerOf(req), { user: req.user });
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'dashboard', dashboard.id, { dashboard_key: dashboard.dashboard_key }).catch(() => {});
     const runId = await recordReportRun({
       orgId: req.user.orgId,
@@ -499,7 +508,7 @@ router.post('/reports/module/history/:id/retry', authenticate, requireReportMana
     if (run.target_type === 'dashboard') {
       const dashboard = await visibleDashboard(req, run.target_id);
       if (!dashboard) throw new Error('Dashboard target no longer exists.');
-      result = await runDashboard(dashboard, req.user.orgId, filters, await viewerOf(req));
+      result = await runDashboard(dashboard, req.user.orgId, filters, await viewerOf(req), { user: req.user });
       await recordReportRun({
         orgId: req.user.orgId,
         reportKey: dashboard.dashboard_key,
@@ -518,7 +527,7 @@ router.post('/reports/module/history/:id/retry', authenticate, requireReportMana
     }
     const definition = await visibleDefinition(req, run.target_id);
     if (!definition) throw new Error('Report target no longer exists.');
-    result = await runReportDefinition(definition, req.user.orgId, filters);
+    result = await runReportDefinition(definition, req.user.orgId, filters, { user: req.user });
     await recordReportRun({
       orgId: req.user.orgId,
       reportKey: definition.report_key,

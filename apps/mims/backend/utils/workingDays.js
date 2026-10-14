@@ -14,4 +14,18 @@ function addWorkingDays(date, days) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { addWorkingDays };
+// Working days (Monday to Friday, UTC) after `from` up to and including `to`:
+// a letter sent the next working day took 1. Same calendar as addWorkingDays.
+function workingDaysBetween(from, to) {
+  const day = (v) => new Date(`${String(v instanceof Date ? v.toISOString() : v).slice(0, 10)}T00:00:00Z`);
+  const d = day(from), end = day(to);
+  let count = 0;
+  while (d < end) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const wd = d.getUTCDay();
+    if (wd !== 0 && wd !== 6) count += 1;
+  }
+  return count;
+}
+
+module.exports = { addWorkingDays, workingDaysBetween };

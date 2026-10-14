@@ -7,9 +7,8 @@ const pool = require('../database/db');
 // case (360 walk M-79). In order: MI product; AE product on the latest version
 // (suspect first); AE intake suspect drug; PC product on the latest version;
 // PC intake product. A catalogue product's trade name wins over typed text.
-async function getCaseProductName(caseId) {
-  const [[row]] = await pool.execute(
-    `SELECT COALESCE(
+// Kept as SQL over a case aliased `c` so lists (reports) use the same rule.
+const CASE_PRODUCT_SQL = `COALESCE(
        (SELECT p.trade_name FROM case_mi mi JOIN products p ON p.id = mi.product_id
          WHERE mi.case_id = c.id ORDER BY mi.id LIMIT 1),
        (SELECT NULLIF(COALESCE(p.trade_name, ae.product_name), '') FROM case_ae_product_info ae
@@ -24,11 +23,15 @@ async function getCaseProductName(caseId) {
                                  ORDER BY v.version_number DESC, v.id DESC LIMIT 1)
          ORDER BY pc.id LIMIT 1),
        (SELECT NULLIF(pi.product_name, '') FROM case_pc_intake pi WHERE pi.case_id = c.id LIMIT 1)
-     ) AS product
+     )`;
+
+async function getCaseProductName(caseId) {
+  const [[row]] = await pool.execute(
+    `SELECT ${CASE_PRODUCT_SQL} AS product
        FROM cases c WHERE c.id = ? LIMIT 1`,
     [caseId]
   );
   return row?.product || '';
 }
 
-module.exports = { getCaseProductName };
+module.exports = { getCaseProductName, CASE_PRODUCT_SQL };
