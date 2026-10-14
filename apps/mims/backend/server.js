@@ -405,7 +405,6 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/integrations/mirIntegration'));
   r.use(prefix || '/', require('./routes/integrations/crmIntegration'));
   r.use(prefix || '/', require('./routes/integrations/caseImport'));
-  r.use(prefix || '/', require('./routes/integrations/scheduledExports'));
   r.use(prefix || '/', require('./routes/integrations/vaultAdmin'));
   r.use(prefix || '/', require('./routes/integrations/emirAdmin'));
   r.use(prefix || '/', require('./routes/integrations/vaultQuery'));

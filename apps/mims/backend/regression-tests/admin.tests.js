@@ -589,55 +589,6 @@ module.exports = [
     }
   },
   {
-    name: 'Admin scheduled exports routes cover lifecycle',
-    module: 'Admin — Scheduled Exports',
-    covers: [
-      'GET /api/admin/exports/scheduled',
-      'POST /api/admin/exports/scheduled',
-      'PUT /api/admin/exports/scheduled/:id',
-      'DELETE /api/admin/exports/scheduled/:id',
-    ],
-    run: async ({ makeRequest, token }) => {
-      let configId = null
-      try {
-        const listBefore = await makeRequest('GET', '/api/admin/exports/scheduled', null, token)
-        const create = await makeRequest('POST', '/api/admin/exports/scheduled', {
-          export_name: uniqueName('Regression Export'),
-          report_key: 'daily-case-summary',
-          schedule_frequency: 'daily',
-          schedule_time_local: '08:00',
-          timezone_name: 'Asia/Kolkata',
-          delivery_method: 'email',
-          delivery_target: 'regression@example.com',
-          email_subject: 'Regression Scheduled Export',
-        }, token)
-        configId = Number(create.body?.id || 0)
-        if (listBefore.status !== 200 || create.status !== 200 || !configId) {
-          return { pass: false, details: `listBefore=${listBefore.status}, create=${create.status}, configId=${configId}` }
-        }
-
-        const update = await makeRequest('PUT', `/api/admin/exports/scheduled/${configId}`, {
-          export_name: uniqueName('Regression Export Updated'),
-          schedule_frequency: 'weekly',
-          schedule_weekday: 2,
-          schedule_time_local: '09:15',
-          timezone_name: 'UTC',
-          delivery_target: 'regression-updated@example.com',
-          email_subject: 'Regression Scheduled Export Updated',
-          is_active: true,
-        }, token)
-        const del = await makeRequest('DELETE', `/api/admin/exports/scheduled/${configId}`, null, token)
-
-        return {
-          pass: update.status === 200 && del.status === 200,
-          details: `listBefore=${listBefore.status}, create=${create.status}, update=${update.status}, delete=${del.status}`,
-        }
-      } finally {
-        if (configId) await pool.execute('DELETE FROM scheduled_export_configs WHERE id = ?', [configId]).catch(() => {})
-      }
-    }
-  },
-  {
     name: 'Admin esig verify and impact preview routes cover validation flow',
     module: 'Admin — eSig and Impact Preview',
     covers: [
