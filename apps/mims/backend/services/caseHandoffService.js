@@ -403,14 +403,20 @@ async function listTargets({ orgId, caseType = null }) {
  * (PC) plus the working days set on Transmission Setup, and whether it was, or
  * is now, late.
  */
+function isHandoffSend(h) {
+  return String(h.status).toUpperCase() === 'SENT' && String(h.target_system || '') !== 'MI Email';
+}
+
 async function handoffDeadline({ orgId, caseId, caseType, awarenessDate, history }) {
   if (!['AE', 'PC'].includes(caseType) || !awarenessDate) return null;
   const days = await handoffDays(orgId, caseType);
   const due = addWorkingDays(awarenessDate, days);
-  const sent = (history || []).filter(h => String(h.status).toUpperCase() === 'SENT')
+  // An MI letter emailed on the case is written to the same trail ('MI Email',
+  // 'Sent'); it is not the hand-off and must not stop the clock.
+  const sent = (history || []).filter(h => isHandoffSend(h))
     .map(h => String(h.timestamp instanceof Date ? h.timestamp.toISOString() : h.timestamp).slice(0, 10)).sort()[0] || null;
   const today = new Date().toISOString().slice(0, 10);
   return { from: String(awarenessDate instanceof Date ? awarenessDate.toISOString() : awarenessDate).slice(0, 10), days, due, sent_on: sent, late: sent ? sent > due : today > due };
 }
 
-module.exports = { buildPayload, assessReadiness, transmit, listTransmissions, listTargets, handoffDeadline, PAYLOAD_VERSION };
+module.exports = { buildPayload, assessReadiness, transmit, listTransmissions, listTargets, handoffDeadline, isHandoffSend, PAYLOAD_VERSION };
