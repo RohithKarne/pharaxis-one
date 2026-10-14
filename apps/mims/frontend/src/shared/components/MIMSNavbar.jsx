@@ -67,10 +67,14 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   }
 
   function canAccess(k)         { return hasModuleAccess(k) }
-  function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
   function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
   const isAdmin = isAdminUser(userRole)
-  const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
+  // Each item follows the access rule of the page it opens (its route's module
+  // guard): Overview, cases and the Response Log need MIMS core and Browse
+  // Content needs its own grant. The menu used looser rules, so a content author
+  // clicked Overview straight into "Access Denied".
+  const canUseCases = canAccess('mims_core')
+  const canCreateCase = canUseCases && canUseCase('case_entry_options', 'add_new_case')
 
   return (
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
@@ -85,7 +89,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
       {/* Home */}
       <NavSection collapsed={collapsed} title="Work" />
-      <NavItem collapsed={collapsed} to="/dashboard" icon={<Icon name="overview" />} label="Overview" active={isActive('/dashboard')} />
+      <NavItem collapsed={collapsed} to="/dashboard" icon={<Icon name="overview" />} label="Overview" active={isActive('/dashboard')}
+        disabled={!canUseCases} />
 
       {/* Inbox */}
       <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox"
@@ -94,12 +99,12 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
 
       {/* Case Management — accordion */}
-      <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canAccessAny('mims_core', 'case_mgmt') ? ' disabled' : ''}`}
+      <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canUseCases ? ' disabled' : ''}`}
         title={collapsed ? 'Case Management' : undefined}
-        onMouseEnter={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
-        onFocus={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
+        onMouseEnter={() => canUseCases && prefetchRoutePath('/cases')}
+        onFocus={() => canUseCases && prefetchRoutePath('/cases')}
         onClick={() => {
-          if (!canAccessAny('mims_core', 'case_mgmt')) return
+          if (!canUseCases) return
           if (collapsed) {
             navigate('/cases?tab=my')
             return
@@ -108,7 +113,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         }}>
         <span className="mims-sidenav-icon"><Icon name="folder" /></span>
         {!collapsed && <span className="mims-sidenav-label">Case Management</span>}
-        {!collapsed && canAccessAny('mims_core', 'case_mgmt') && (
+        {!collapsed && canUseCases && (
           <span className="mims-sidenav-arrow"><Icon name={caseMgmtOpen ? 'chevron-up' : 'chevron-down'} size={14} /></span>
         )}
       </div>
@@ -136,7 +141,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Browse Content */}
       <NavItem collapsed={collapsed} to="/browse-content" icon={<Icon name="browse" />} label="Browse Content"
         active={isActive('/browse-content')}
-        disabled={!canAccessAny('browse_content', 'content_mgmt')} />
+        disabled={!canAccess('browse_content')} />
 
       {/* Content Management */}
       {canAccess('content_mgmt') && (
