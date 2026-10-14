@@ -823,7 +823,8 @@ const BUILT_DATASETS = new Set(Object.keys(DATASETS));
 async function getDatasetByReportKey(reportKey, orgId, filters = {}, ctx = {}) {
   const dataset = DATASETS[reportKey];
   if (!dataset) {
-    const err = new Error('This report is not built yet.');
+    // Only a custom report saved on a data source the rebuild retired gets here.
+    const err = new Error('This report uses a data source that no longer exists. Make it again from a report in the library.');
     err.code = 'REPORT_NOT_BUILT';
     throw err;
   }

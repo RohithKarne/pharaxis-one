@@ -219,10 +219,30 @@ router.delete('/reports/module/definitions/:id', authenticate, requireReportMana
   }
 });
 
+// A failed run is recorded too: it was only answered with a 400, so Run
+// History and its failed filter never showed it (reports review RL7).
+function recordFailedRun(req, target, targetType, startedAt, err) {
+  return recordReportRun({
+    orgId: req.user.orgId,
+    reportKey: target.report_key || target.dashboard_key,
+    reportName: target.name,
+    targetType,
+    targetId: target.id,
+    runMode: 'manual',
+    triggeredBy: req.user.userId || null,
+    filters: req.body?.filters || {},
+    rowCount: 0,
+    durationMs: Date.now() - startedAt,
+    status: 'failed',
+    errorMessage: err.message,
+  }).catch(() => {});
+}
+
 router.post('/reports/module/definitions/:id/run', authenticate, async (req, res) => {
   const startedAt = Date.now();
+  let definition = null;
   try {
-    const definition = await visibleDefinition(req, req.params.id);
+    definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
     const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {}, { user: req.user });
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'report', definition.id, { report_key: definition.report_key }).catch(() => {});
@@ -243,6 +263,7 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
     await flagAnomaliesForRun({ orgId: req.user.orgId, runId, targetType: 'report', targetId: definition.id, rowCount: result.row_count, status: 'success' });
     return res.json(result);
   } catch (err) {
+    if (definition) await recordFailedRun(req, definition, 'report', startedAt, err);
     return res.status(400).json({ error: err.message || 'Failed to run report definition.' });
   }
 });
@@ -341,8 +362,9 @@ router.delete('/reports/module/dashboards/:id', authenticate, requireReportManag
 
 router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res) => {
   const startedAt = Date.now();
+  let dashboard = null;
   try {
-    const dashboard = await visibleDashboard(req, req.params.id);
+    dashboard = await visibleDashboard(req, req.params.id);
     if (!dashboard) return res.status(404).json({ error: 'Dashboard not found.' });
     const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {}, await viewerOf(req), { user: req.user });
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'dashboard', dashboard.id, { dashboard_key: dashboard.dashboard_key }).catch(() => {});
@@ -363,6 +385,7 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
     await flagAnomaliesForRun({ orgId: req.user.orgId, runId, targetType: 'dashboard', targetId: dashboard.id, rowCount: payload.csv_rows.length, status: 'success' });
     return res.json(payload);
   } catch (err) {
+    if (dashboard) await recordFailedRun(req, dashboard, 'dashboard', startedAt, err);
     return res.status(400).json({ error: err.message || 'Failed to run dashboard.' });
   }
 });
