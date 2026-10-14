@@ -1744,7 +1744,6 @@ module.exports = [
       'GET /api/admin/case-audit-trail/cases-summary',
       'GET /api/admin/case-audit-trail',
       'GET /api/admin/case-audit-trail/:caseId',
-      'POST /api/admin/case-audit-trail',
     ],
     run: async ({ makeRequest, token }) => {
       let caseId = null
@@ -1764,21 +1763,19 @@ module.exports = [
           return { pass: false, details: `createCase=${createCase.status}` }
         }
 
-        const createAudit = await makeRequest('POST', '/api/admin/case-audit-trail', {
-          case_id: caseId,
-          action_type: 'REGRESSION_UPDATE',
-          field_name: 'priority',
-          old_value: 'normal',
-          new_value: 'high',
-        }, token)
-        auditId = Number(createAudit.body?.id || 0)
+        // The write route was removed (access review); the row is seeded directly.
+        const [createAudit] = await pool.execute(
+          `INSERT INTO case_audit_trail (case_id, user_id, user_name, action_type, field_name, old_value, new_value)
+           VALUES (?, NULL, 'regression', 'REGRESSION_UPDATE', 'priority', 'normal', 'high')`,
+          [caseId]
+        )
+        auditId = Number(createAudit.insertId || 0)
         const summaryRes = await makeRequest('GET', `/api/admin/case-audit-trail/cases-summary?search=${caseId}`, null, token)
         const listRes = await makeRequest('GET', `/api/admin/case-audit-trail?case_id=${caseId}`, null, token)
         const detailRes = await makeRequest('GET', `/api/admin/case-audit-trail/${caseId}`, null, token)
 
         return {
-          pass: createAudit.status === 201 &&
-            auditId > 0 &&
+          pass: auditId > 0 &&
             summaryRes.status === 200 &&
             Array.isArray(summaryRes.body?.cases) &&
             listRes.status === 200 &&
@@ -1787,7 +1784,7 @@ module.exports = [
             detailRes.status === 200 &&
             Array.isArray(detailRes.body?.entries) &&
             detailRes.body.entries.some((entry) => Number(entry?.id || 0) === auditId),
-          details: `createAudit=${createAudit.status}, summary=${summaryRes.status}, list=${listRes.status}, detail=${detailRes.status}`,
+          details: `auditId=${auditId}, summary=${summaryRes.status}, list=${listRes.status}, detail=${detailRes.status}`,
         }
       } finally {
         if (caseId) await pool.execute('DELETE FROM case_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})

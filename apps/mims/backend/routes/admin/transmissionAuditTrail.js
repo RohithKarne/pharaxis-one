@@ -173,7 +173,7 @@ router.get('/transmission-audit-trail', authenticate, requireModule('transmissio
 });
 
 // GET /api/admin/transmission-audit-trail/:caseId — list transmissions for a specific case
-router.get('/transmission-audit-trail/:caseId', authenticate, async (req, res) => {
+router.get('/transmission-audit-trail/:caseId', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { caseId } = req.params;
     if (!await hasCaseAccess(req, caseId)) return res.status(404).json({ error: 'Case not found.' });
@@ -188,31 +188,9 @@ router.get('/transmission-audit-trail/:caseId', authenticate, async (req, res) =
   }
 });
 
-// POST /api/admin/transmission-audit-trail — record a transmission (called by integration layer)
-router.post('/transmission-audit-trail', authenticate, async (req, res) => {
-  try {
-    const { case_id, target_system, payload_summary, status, response_code } = req.body;
-    if (!case_id || !target_system) {
-      return res.status(400).json({ error: 'case_id and target_system are required.' });
-    }
-    if (!await hasCaseAccess(req, case_id)) return res.status(404).json({ error: 'Case not found.' });
-
-    const [result] = await pool.execute(
-      `INSERT INTO transmission_audit_trail (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [case_id, req.user.userId, req.user.email,
-       target_system, payload_summary || null, status || 'Sent', response_code || null]
-    );
-    res.status(201).json({ message: 'Transmission recorded.', id: result.insertId });
-  } catch (err) {
-    console.error('POST /transmission-audit-trail error:', err);
-    await logTransmissionError(
-      req.user?.orgId, req.body?.case_id, req.body?.target_system,
-      'API_ERROR', err.message, { route: 'POST transmission-audit-trail', user: req.user?.email }
-    );
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
+// The transmission audit trail is written by the server when a hand-off or
+// ICSR is sent. A route let anyone in the organisation write their own
+// entries into it, and nothing called it (access review): removed.
 
 // GET /api/admin/transmission-error-logs
 router.get('/transmission-error-logs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -243,7 +221,7 @@ router.get('/transmission-error-logs', authenticate, requireRole('admin', 'platf
 });
 
 // POST /api/admin/transmission-screen-audit — log a user interaction event
-router.post('/transmission-screen-audit', authenticate, async (req, res) => {
+router.post('/transmission-screen-audit', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { action, context } = req.body;
     if (!action) return res.status(400).json({ error: 'action is required.' });
