@@ -218,6 +218,14 @@ export default function FAQsSection({ token }) {
     } catch { toast.error('Network error.') }
   }
 
+  async function handleRevise(faq) {
+    try {
+      const res = await httpFetch(`/api/cm/faqs/${faq.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
+
   function getFaqActions(faq) {
     const s = faq.status
     const btns = []
@@ -239,6 +247,9 @@ export default function FAQsSection({ token }) {
       if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handlePublish(faq)}>Publish</button>)
     } else {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
+      // A published FAQ changes through Revise and stays in use meanwhile.
+      if (s === 'Published' && faq.open_revision_id) btns.push(<span key="rev" style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>)
+      else if (s === 'Published' && hasCapability('content.faq.manage')) btns.push(<button key="rev" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(faq)}>Revise</button>)
     }
     if (s !== 'Archived') {
       btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(faq)}>Clone</button>)
@@ -316,6 +327,7 @@ export default function FAQsSection({ token }) {
                 <td><input type="checkbox" checked={selectedFaqIds.includes(f.id)} onChange={e => setSelectedFaqIds(prev => e.target.checked ? [...new Set([...prev, f.id])] : prev.filter(id => id !== f.id))} /></td>
                 <td style={{ maxWidth: 300 }} onClick={() => httpFetch(`/api/cm/faqs/${f.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})}>
                   {f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}
+                  {f.revises_version && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision of published v{f.revises_version}</div>}
                 </td>
                 <td>{f.category || '—'}</td>
                 <td style={{ maxWidth: 180, fontSize: 12, color: 'var(--text-muted)' }}>{f.search_tags || '—'}</td>
