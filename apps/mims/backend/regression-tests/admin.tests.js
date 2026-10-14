@@ -202,40 +202,6 @@ module.exports = [
     }
   },
   {
-    name: 'GET /api/admin/reports/access returns report access rows',
-    module: 'Admin — Report Access',
-    covers: ['GET /api/admin/reports/access'],
-    run: async ({ makeRequest, token }) => {
-      const res = await makeRequest('GET', '/api/admin/reports/access', null, token)
-      return { pass: res.status === 200 && Array.isArray(res.body?.access), details: `Status: ${res.status}` }
-    }
-  },
-  {
-    name: 'GET /api/admin/reports/access/requests returns request rows',
-    module: 'Admin — Report Access Requests',
-    covers: ['GET /api/admin/reports/access/requests'],
-    run: async ({ makeRequest, token }) => {
-      const res = await makeRequest('GET', '/api/admin/reports/access/requests', null, token)
-      return { pass: res.status === 200 && Array.isArray(res.body?.requests), details: `Status: ${res.status}` }
-    }
-  },
-  {
-    name: 'POST /api/admin/reports/access/request creates request row',
-    module: 'Admin — Report Access Requests',
-    covers: ['POST /api/admin/reports/access/request'],
-    run: async ({ makeRequest, token }) => {
-      const user = await getFirstUser(makeRequest, token)
-      if (!user?.id) {
-        return { pass: false, details: 'No user available for request creation.' }
-      }
-      const res = await makeRequest('POST', '/api/admin/reports/access/request', {
-        user_id: user.id,
-        report_key: 'system-health',
-      }, token)
-      return { pass: res.status === 200 && res.body?.success === true, details: `Status: ${res.status}, id: ${res.body?.id || 'n/a'}` }
-    }
-  },
-  {
     name: 'PUT /api/admin/field-setup saves existing field payload',
     module: 'Admin — Field Setup',
     covers: ['PUT /api/admin/field-setup'],

@@ -323,7 +323,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/transmissionSetup'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
-  r.use(`${prefix}/admin`, require('./routes/admin/reportsAccess'));
   r.use(`${prefix}/admin`, require('./routes/admin/picklistsTable'));
   r.use(`${prefix}/admin`, require('./routes/admin/dashboardActivity'));
   r.use(`${prefix}/admin`, require('./routes/admin/userPreferences'));
@@ -333,7 +332,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/observability'));
   r.use(`${prefix}/admin`, require('./routes/admin/config'));
   r.use(`${prefix}/admin/orgs`, require('./routes/admin/orgs'));
-  r.use(`${prefix}/admin`, require('./routes/admin/reportAccessRequests'));
   r.use(`${prefix}/admin`, changeApprovals);
   r.use(`${prefix}/admin`, dependencyCheck);
   r.use(`${prefix}/admin`, require('./routes/admin/impactPreview'));
@@ -385,7 +383,6 @@ function mountRoutes(r, prefix = '') {
 
   // Canonical platform-admin endpoints
   r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin'));
-  r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin/reportsAccess'));
 
   // Cases & core
   r.use(prefix || '/', require('./routes/cases'));

@@ -103,7 +103,6 @@ const SYSTEM_VALUE_CAP = {
   'sys-division-params': 'admin.division_parameters',
   'sys-view-data':       'admin.view_data',
   'sys-system-params':   'admin.system_parameters',
-  'sys-reports-access':  'admin.system_parameters',
   'sys-license-admin':   'admin.system_parameters',
   'sys-sec-users':       'admin.users',
   'sys-sec-group':       'admin.security_groups',
@@ -147,7 +146,7 @@ function AdminAccessDenied({ label = 'this admin screen', platformOnly = false }
 // Division reaches every organisation). The server refuses them too.
 // The server keeps these to platform admins: each holds every organisation's data
 // (MIPM-149). A tenant admin saw the menu items and a screen whose data was refused.
-const PLATFORM_ONLY_LABELS = { 'sys-maint-copy-division': 'Copy Division', 'sys-reports-access': 'Reports Access', 'sys-exception-log': 'The Exception Log' }
+const PLATFORM_ONLY_LABELS = { 'sys-maint-copy-division': 'Copy Division', 'sys-exception-log': 'The Exception Log' }
 const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(Object.keys(PLATFORM_ONLY_LABELS))
 
 function withoutPlatformOnly(nav) {

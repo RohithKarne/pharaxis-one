@@ -35,7 +35,6 @@ const HELP_KEYS_BY_SYSTEM_ITEM = {
   'sys-setup-2fa-config':       'admin.two_factor_config',
   'sys-setup-alerts':           'admin.alerts',
   'sys-system-params':          'admin.system_parameters',
-  'sys-reports-access':         'admin.reports_access',
   'sys-maint-copy-division':    'admin.copy_division',
   'sys-exception-log':          'admin.exception_log',
   'sys-view-data':              'admin.view_data',

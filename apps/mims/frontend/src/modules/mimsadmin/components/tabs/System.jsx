@@ -23,7 +23,6 @@ const PiiRedactionRules = lazy(() => import('./PiiRedactionRules'))
 // import GroupSecurity from './GroupSecurity' // legacy nav-key version — kept on disk for rollback
 const CapabilityGroupSecurity = lazy(() => import('./CapabilityGroupSecurity'))
 const LoggedInUsers = lazy(() => import('./LoggedInUsers'))
-const ReportsAccess = lazy(() => import('./ReportsAccess'))
 const SetupAlerts = lazy(() => import('./SetupAlerts'))
 const SetupAuthPolicy = lazy(() => import('./SetupAuthPolicy'))
 const SetupChangeApprovals = lazy(() => import('./SetupChangeApprovals'))
@@ -92,7 +91,6 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-int-transmission' ? <TransmissionSetup />
     : selectedItem?.startsWith('sys-setup-int-') ? <SetupIntegrations selectedItem={selectedItem} />
     : selectedItem === 'sys-system-params' ? <SystemParameters />
-    : selectedItem === 'sys-reports-access' ? <ReportsAccess />
     : selectedItem === 'sys-view-data' ? <ViewData selectedItem={auditItem} onSelect={onAuditSelect} />
     : selectedItem === 'sys-uat-bugs' ? <AdminUATPanel initialTab="bugs" />
     : selectedItem === 'sys-uat-features' ? <AdminUATPanel initialTab="features" />

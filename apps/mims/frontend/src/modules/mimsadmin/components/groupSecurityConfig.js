@@ -5,7 +5,7 @@ export const SYSTEM_OPTION_SECTIONS = [
     options: [
       { key: 'division_parameters', label: 'Division Parameters', navValues: ['sys-division-params'] },
       { key: 'view_data', label: 'View Data', navValues: ['sys-view-data'] },
-      { key: 'system_parameters', label: 'System Parameters', navValues: ['sys-system-params', 'sys-reports-access', 'sys-license-admin'] },
+      { key: 'system_parameters', label: 'System Parameters', navValues: ['sys-system-params', 'sys-license-admin'] },
       { key: 'service_configurations', label: 'Service Configurations', navValues: ['sys-exception-log'] },
       { key: 'mobile_configurations', label: 'Mobile Configurations', navValues: [] },
       {
