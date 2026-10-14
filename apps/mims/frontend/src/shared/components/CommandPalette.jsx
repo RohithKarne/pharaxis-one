@@ -20,7 +20,7 @@ const DESTINATIONS = [
   { label: 'Inbox', to: '/inbox', icon: 'inbox', module: 'inbox' },
   { label: 'My Cases', to: '/cases?tab=my', icon: 'folder', module: 'mims_core' },
   { label: 'Unassigned Cases', to: '/cases?tab=unassigned', icon: 'folder', module: 'mims_core' },
-  { label: 'Case correspondence', to: '/cases?view=correspondence', icon: 'search', module: 'mims_core' },
+  { label: 'Correspondence', to: '/cases?view=correspondence', icon: 'search', module: 'mims_core' },
   { label: 'Transmissions', to: '/transmissions', icon: 'transmissions', module: 'transmissions' },
   { label: 'Browse Content', to: '/browse-content', icon: 'browse', module: 'browse_content' },
   { label: 'Content Management', to: '/content', icon: 'content', module: 'content_mgmt' },
