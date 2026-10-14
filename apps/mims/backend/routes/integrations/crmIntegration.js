@@ -2,10 +2,10 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { syncCaseToCrm, testCrmConnection, getCrmSyncLog } = require('../../services/crmService');
 
-router.post('/admin/integrations/crm/test-connection', authenticate, async (req, res) => {
+router.post('/admin/integrations/crm/test-connection', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const result = await testCrmConnection(req.user.orgId);
     return res.json(result);
@@ -14,7 +14,7 @@ router.post('/admin/integrations/crm/test-connection', authenticate, async (req,
   }
 });
 
-router.post('/admin/integrations/crm/sync-case/:caseId', authenticate, async (req, res) => {
+router.post('/admin/integrations/crm/sync-case/:caseId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const result = await syncCaseToCrm(req.user.orgId, req.params.caseId);
     return res.json(result);
@@ -23,7 +23,7 @@ router.post('/admin/integrations/crm/sync-case/:caseId', authenticate, async (re
   }
 });
 
-router.get('/admin/integrations/crm/sync-log', authenticate, async (req, res) => {
+router.get('/admin/integrations/crm/sync-log', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const logs = await getCrmSyncLog(req.user.orgId);
     return res.json({ logs });

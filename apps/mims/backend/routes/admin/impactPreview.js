@@ -31,7 +31,7 @@ function riskLevel(affectedCases) {
 }
 
 // ── POST /api/admin/impact-preview ───────────────────────────────────────────
-router.post('/impact-preview', authenticate, async (req, res) => {
+router.post('/impact-preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { change_type, entity_id } = req.body;
   if (!change_type || !entity_id) {
     return res.status(400).json({ error: 'change_type and entity_id are required.' });
