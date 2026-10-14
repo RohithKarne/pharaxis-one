@@ -266,48 +266,51 @@ export default function DashboardPage() {
   const roleName = roleLabel(user?.role)
   const focusCards = buildFocusCards({ user, summary, sessions, canSeeObservability })
   const canAccessModule = (moduleKey) => (hasModuleAccess ? hasModuleAccess(moduleKey) : false)
+  // Each entry follows the module its page is guarded by (App.jsx), as the menu
+  // does: Inbox was offered on MIMS core (an auditor got Access Denied), and
+  // Content Management, Reports and MIMS Admin were left to platform watchers.
   const moduleLaunchers = [
     {
       key: 'cases',
-      title: 'Case Management',
+      title: 'Cases',
       body: 'Triage, assign, and progress operational case work from one queue.',
       to: '/cases',
-      enabled: canAccessModule('mims_core') || canAccessModule('case_mgmt'),
+      enabled: canAccessModule('mims_core'),
     },
     {
       key: 'inbox',
       title: 'Inbox',
       body: 'Stay close to inbound requests, assignments, and coordination updates.',
       to: '/inbox',
-      enabled: canAccessModule('mims_core'),
+      enabled: canAccessModule('inbox'),
     },
     {
       key: 'browse',
       title: 'Browse Content',
       body: 'Find approved knowledge assets without leaving the main operating flow.',
       to: '/browse-content',
-      enabled: canAccessModule('browse_content') || canAccessModule('content_mgmt'),
+      enabled: canAccessModule('browse_content'),
     },
     {
       key: 'content',
       title: 'Content Management',
       body: 'Author, govern, and publish controlled content in the same product shell.',
       to: '/content',
-      enabled: canSeeObservability && canAccessModule('content_mgmt'),
+      enabled: canAccessModule('content_mgmt'),
     },
     {
       key: 'reports',
-      title: 'Reports Workspace',
-      body: 'Move from dashboards to governed exports and scheduled delivery cleanly.',
+      title: 'Reports',
+      body: 'Cases, MI answers, hand-offs, content and access — run, export or schedule.',
       to: '/reports',
-      enabled: canSeeObservability && canAccessModule('reports'),
+      enabled: canAccessModule('reports'),
     },
     {
       key: 'admin',
       title: 'MIMS Admin',
       body: 'Manage access, configuration, service oversight, and audit-ready controls.',
       to: '/mims-admin',
-      enabled: canSeeObservability && canAccessModule('admin_console'),
+      enabled: isAdminUser(user) && canAccessModule('admin_console'),
     },
   ].filter((item) => item.enabled)
 
@@ -359,7 +362,7 @@ export default function DashboardPage() {
           <div className="mims-page-titlebar-actions">
             <button className="btn" onClick={() => setShowPersonalise(true)}>Personalise</button>
             <button className="btn" onClick={loadDashboard} disabled={loading}>Refresh</button>
-            <button className="btn btn-primary" onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')} onClick={() => navigate('/cases')}>Open Case Management</button>
+            <button className="btn btn-primary" onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')} onClick={() => navigate('/cases')}>Open Cases</button>
           </div>
         </div>
 

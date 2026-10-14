@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
-import { CheckInModal } from './ContentModals'
+import { CheckInModal, VersionHistoryModal, PublishChecks } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
 
@@ -142,6 +142,7 @@ export default function FAQsSection({ token }) {
   const [faqEsignErr, setFaqEsignErr] = useState('')
   const [faqEsignLoading, setFaqEsignLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [historyFaq, setHistoryFaq] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -173,10 +174,10 @@ export default function FAQsSection({ token }) {
     } catch { toast.error('Network error.') }
   }
 
-  async function handleCheckIn() {
+  async function handleCheckIn(notes) {
     setCheckInLoading(true)
     try {
-      const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ notes: notes || undefined }) })
       if (res.ok) { setCheckInFaq(null); setRefreshKey(key => key + 1) }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
@@ -218,6 +219,14 @@ export default function FAQsSection({ token }) {
     } catch { toast.error('Network error.') }
   }
 
+  async function handleRevise(faq) {
+    try {
+      const res = await httpFetch(`/api/cm/faqs/${faq.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
+
   function getFaqActions(faq) {
     const s = faq.status
     const btns = []
@@ -239,10 +248,14 @@ export default function FAQsSection({ token }) {
       if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handlePublish(faq)}>Publish</button>)
     } else {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
+      // A published FAQ changes through Revise and stays in use meanwhile.
+      if (s === 'Published' && faq.open_revision_id) btns.push(<span key="rev" style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>)
+      else if (s === 'Published' && hasCapability('content.faq.manage')) btns.push(<button key="rev" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(faq)}>Revise</button>)
     }
     if (s !== 'Archived') {
       btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(faq)}>Clone</button>)
     }
+    btns.push(<button key="hist" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryFaq(faq)}>History</button>)
     return <div className="cm-action-btns">{btns}</div>
   }
 
@@ -316,6 +329,7 @@ export default function FAQsSection({ token }) {
                 <td><input type="checkbox" checked={selectedFaqIds.includes(f.id)} onChange={e => setSelectedFaqIds(prev => e.target.checked ? [...new Set([...prev, f.id])] : prev.filter(id => id !== f.id))} /></td>
                 <td style={{ maxWidth: 300 }} onClick={() => httpFetch(`/api/cm/faqs/${f.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})}>
                   {f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}
+                  {f.revises_version && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision of published v{f.revises_version}</div>}
                 </td>
                 <td>{f.category || '—'}</td>
                 <td style={{ maxWidth: 180, fontSize: 12, color: 'var(--text-muted)' }}>{f.search_tags || '—'}</td>
@@ -332,6 +346,9 @@ export default function FAQsSection({ token }) {
       {showDrawer && (
         <FAQDrawer faq={editFaq} folders={folders} token={token} onClose={() => { setShowDrawer(false); setEditFaq(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
       )}
+      {historyFaq && (
+        <VersionHistoryModal entityType="faq" entityId={historyFaq.id} entityName={historyFaq.question} token={token} onClose={() => setHistoryFaq(null)} />
+      )}
       {checkInFaq && (
         <CheckInModal item={checkInFaq} onClose={() => setCheckInFaq(null)} onConfirm={handleCheckIn} loading={checkInLoading} />
       )}
@@ -340,6 +357,7 @@ export default function FAQsSection({ token }) {
           <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 4px' }}>{faqEsign.action === 'approve' ? 'Approve FAQ' : 'Publish FAQ'}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-muted)' }}>Electronic signature required</p>
+            {faqEsign.action === 'publish' && <PublishChecks url={`/api/cm/faqs/${faqEsign.faq.id}/publish-checks`} token={token} />}
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
             <input aria-label="Your Password" type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={faqEsignPw} onChange={e => setFaqEsignPw(e.target.value)} placeholder="Enter your password" />
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>

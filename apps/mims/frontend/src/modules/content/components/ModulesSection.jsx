@@ -3,8 +3,14 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
-import { ModuleUsageModal } from './ContentModals'
+import { ModuleUsageModal, VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { DEFAULT_LANGUAGES } from './ContentUtils'
+
+// What a module is. The list offered document types (SRD, Enclosure…), not the
+// module types content is seeded with, so opening a Guidance module and saving
+// it silently made it an SRD. A module's own type is always kept as a choice.
+const MODULE_TYPES = ['Standard Text', 'Guidance', 'Checklist', 'Disclaimer', 'Reference']
 
 function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const isEdit = !!moduleDoc?.id
@@ -14,9 +20,20 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   // MIPM-220: approving or publishing is an electronic signature, as for documents.
   const [esign, setEsign] = useState({ password: '', reason: '' })
+  // The letter builder picks modules by the letter's language, but the form had
+  // no language field, so every module was English.
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
+  useEffect(() => {
+    let cancelled = false
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { picklists: [] })
+      .then(d => { if (!cancelled && (d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [token])
   const [form, setForm] = useState({
     folder_id: moduleDoc?.folder_id || '',
-    module_type: moduleDoc?.module_type || 'SRD',
+    module_type: moduleDoc?.module_type || 'Standard Text',
     name: moduleDoc?.name || '',
     status: moduleDoc?.status || 'Draft',
     content_html: moduleDoc?.content_html || '',
@@ -83,10 +100,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
             <div className="cm-form-group">
               <label className="cm-form-label">Module Type</label>
               <select aria-label="Module Type" className="cm-form-select" value={form.module_type} onChange={e => setForm(p => ({ ...p, module_type: e.target.value }))}>
-                <option>SRD</option>
-                <option>Enclosure</option>
-                <option>Information Document</option>
-                <option>Internal Document</option>
+                {[...new Set([...MODULE_TYPES, form.module_type].filter(Boolean))].map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div className="cm-form-group">
@@ -96,7 +110,6 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
                 <option>Pending</option>
                 {/* A new module starts as Draft or Pending (MIPM-220). */}
                 {isEdit && <>
-                  <option>Under Review</option>
                   <option>Approved</option>
                   <option>Published</option>
                   <option>Archived</option>
@@ -153,22 +166,19 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
           </div>
 
           <div className="cm-form-group">
+            <label className="cm-form-label">Language</label>
+            <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+              {[...languages, ...(languages.some(l => l.value === form.language) ? [] : [{ value: form.language, label: form.language }])].map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
+          </div>
+
+          <div className="cm-form-group">
             <label className="cm-form-label">Search Tags</label>
             <input aria-label="Search Tags" className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Usage Instructions</label>
             <textarea aria-label="Usage Instructions" className="cm-form-textarea" rows={2} value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} />
-          </div>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
-              Publish as PDF
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
-              Send as PDF
-            </label>
           </div>
         </div>
         <div className="cm-drawer-footer">
@@ -192,6 +202,7 @@ export default function ModulesSection({ token }) {
   const [showDrawer, setShowDrawer] = useState(false)
   const [editModule, setEditModule] = useState(null)
   const [usageModule, setUsageModule] = useState(null)
+  const [historyModule, setHistoryModule] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -223,6 +234,14 @@ export default function ModulesSection({ token }) {
     })()
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
+
+  async function handleRevise(moduleDoc) {
+    try {
+      const res = await httpFetch(`/api/cm/modules/${moduleDoc.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
 
   async function handleArchive(moduleDoc) {
     if (!await confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
@@ -291,8 +310,11 @@ export default function ModulesSection({ token }) {
             {modules.map(m => (
               <tr key={m.id}>
                 <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{m.module_id || `MOD-${m.id}`}</td>
-                <td style={{ fontWeight: 500 }}>{m.name}</td>
-                <td>{m.module_type || 'SRD'}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {m.name}
+                  {m.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{m.revises_version}</div>}
+                </td>
+                <td>{m.module_type || '—'}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.language || 'en'}</div></td>
                 <td>{m.folder_name || '—'}</td>
                 <td style={{ textAlign: 'center' }}>{m.version_major || 1}.{m.version_minor || 0}</td>
                 <td><StatusBadge status={m.status} /></td>
@@ -300,8 +322,12 @@ export default function ModulesSection({ token }) {
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.updated_at ? new Date(m.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>{m.status === 'Archived' ? 'View' : 'Edit'}</button>
+                    {m.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>{m.status === 'Archived' ? 'View' : 'Edit'}</button>}
+                    {/* A published module stays in use while its next version is drafted. */}
+                    {m.status === 'Published' && !m.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(m)}>Revise</button>}
+                    {m.status === 'Published' && m.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageModule(m)}>Usage</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryModule(m)}>History</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>
                     )}
@@ -324,6 +350,9 @@ export default function ModulesSection({ token }) {
       )}
       {usageModule && (
         <ModuleUsageModal module={usageModule} token={token} onClose={() => setUsageModule(null)} />
+      )}
+      {historyModule && (
+        <VersionHistoryModal entityType="module" entityId={historyModule.id} entityName={historyModule.name} token={token} onClose={() => setHistoryModule(null)} />
       )}
     </div>
   )

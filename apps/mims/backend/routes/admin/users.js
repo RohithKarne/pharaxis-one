@@ -20,6 +20,7 @@ const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 const { logAudit } = require('../../utils/auditLog');
+const { getUserModules, getRoleModules, setUserModules, SCREEN_MODULES } = require('../../utils/userModules');
 
 const SALT_ROUNDS = 12;
 
@@ -80,7 +81,6 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
       { key: 'security_group_name', label: 'Security Group' },
       { key: 'department', label: 'Department' },
       { label: 'Status', value: u => u.is_disabled ? 'Disabled' : (u.is_active ? 'Active' : 'Inactive') },
-      { key: 'access_admin_site', label: 'Admin Site Access' },
       { key: 'case_admin', label: 'Case Admin' },
       { key: 'password_expires_at', label: 'Password Expires At' },
       { key: 'created_at', label: 'Created At' },
@@ -205,10 +205,45 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       [user.id]
     );
     user.tenant_ids = tenants.map(t => t.org_id);
+    // The screens the person opens, and which of them come with their role.
+    user.modules = await getUserModules(user.id);
+    user.role_modules = await getRoleModules(user.role);
     res.json({ user });
   } catch (err) {
     console.error('GET /users/:id error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:id/modules — the screens a person opens (access
+// review, 2026-10-14). Only a platform administrator could change them, from
+// no screen at all, so the role decided everything: a reviewer could not be
+// given Transmissions, an auditor could not lose Reports. MIMS Admin follows
+// the administrator role and is not set here.
+const PERSON_SCREENS = SCREEN_MODULES.filter((m) => m !== 'admin_console');
+router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const modules = req.body?.modules;
+  if (!Array.isArray(modules) || modules.some((m) => !PERSON_SCREENS.includes(m))) {
+    return res.status(400).json({ error: `modules must list screens from: ${PERSON_SCREENS.join(', ')}.` });
+  }
+  const conn = await pool.getConnection();
+  try {
+    const scope = orgScopeForUsers(req);
+    const [[user]] = await conn.execute(`SELECT u.id FROM users u WHERE u.id = ? AND ${scope.sql}`, [req.params.id, ...scope.params]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const before = await getUserModules(user.id);
+    await conn.beginTransaction();
+    await setUserModules(conn, user.id, modules, PERSON_SCREENS);
+    await conn.commit();
+    const after = await getUserModules(user.id);
+    await audit(req.user.userId, 'UPDATE_USER_MODULES', user.id, { before, after });
+    res.json({ ok: true, modules: after });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    console.error('PUT /users/:id/modules error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    conn.release();
   }
 });
 

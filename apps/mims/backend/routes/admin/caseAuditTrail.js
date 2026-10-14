@@ -217,29 +217,8 @@ router.get('/audit-trail/export', authenticate, requireRole('admin', 'platform_a
   }
 });
 
-// POST /api/admin/case-audit-trail — write an audit entry (called internally by Case Form)
-router.post('/case-audit-trail', authenticate, async (req, res) => {
-  try {
-    const { case_id, action_type, field_name, old_value, new_value } = req.body;
-    if (!case_id || !action_type) {
-      return res.status(400).json({ error: 'case_id and action_type are required.' });
-    }
-    if (!await hasCaseAccess(req, case_id)) {
-      return res.status(404).json({ error: 'Case not found.' });
-    }
-
-    const [result] = await pool.execute(
-      `INSERT INTO case_audit_trail (case_id, user_id, user_name, action_type, field_name, old_value, new_value)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [case_id, req.user.userId, req.user.email,
-       action_type, field_name || null, old_value !== undefined ? String(old_value) : null,
-       new_value !== undefined ? String(new_value) : null]
-    );
-    res.status(201).json({ message: 'Audit entry recorded.', id: result.insertId });
-  } catch (err) {
-    console.error('POST /case-audit-trail error:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
+// The case audit trail is written by the server as each change is saved
+// (caseHelpers.writeCaseAudit). A route let anyone in the organisation write
+// their own entries into it, and nothing called it (access review): removed.
 
 module.exports = router;

@@ -45,7 +45,6 @@ function deriveKey(pathname, search) {
         documents:    'cm.documents',
         modules:      'cm.modules',
         templates:    'cm.templates',
-        'merge-reports': 'cm.merge_reports',
         faqs:         'cm.faqs',
         reviews:      'cm.reviews',
         folders:      'cm.folders',

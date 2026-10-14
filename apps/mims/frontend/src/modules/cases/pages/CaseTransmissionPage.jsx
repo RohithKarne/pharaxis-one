@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import toast from '../../../shared/utils/toast'
 import '../cases.css'
@@ -32,6 +33,7 @@ function formatWhen(value) {
 export default function CaseTransmissionPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { hasCapability } = useAuth()
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -128,17 +130,47 @@ export default function CaseTransmissionPage() {
               {(readiness.elements || []).map(el => (
                 <li key={el.key} className={el.satisfied ? 'is-ok' : 'is-missing'}>
                   <span className="cf-handoff-check-icon">{el.satisfied ? '✓' : '✕'}</span>
-                  <span className="cf-handoff-check-label">{ELEMENT_LABEL[el.key] || el.key}</span>
+                  <span className="cf-handoff-check-label">{(data.case_type === 'PC' && el.label) || ELEMENT_LABEL[el.key] || el.label || el.key}</span>
                   <span className="cf-handoff-check-reason">{el.reason}</span>
                 </li>
               ))}
             </ul>
+            {/* PC notes: the lot (a warning), a suspected counterfeit and the Field
+                Alert Report date — the same lines as Route to Quality's card. */}
+            {(readiness.notes || []).length > 0 && (
+              <ul className="cf-handoff-checks" style={{ marginTop: 8 }}>
+                {readiness.notes.map(n => (
+                  <li key={n.key} className={n.ok ? 'is-ok' : 'is-warn'}>
+                    <span className="cf-handoff-check-icon">{n.ok ? '✓' : '!'}</span>
+                    <span className="cf-handoff-check-label">{n.label}</span>
+                    <span className="cf-handoff-check-reason">{n.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {readiness.blocking_for_submission && (
               <div className="cf-handoff-note cf-handoff-note--warn">
                 Transmission is blocked until every element above is satisfied. Complete them on the case, then return here.
               </div>
             )}
           </section>
+
+          {/* When the case is due at its target (Transmission Setup, 14 Oct 2026). */}
+          {data.deadline && (
+            <section className="cf-handoff-card" data-testid="handoff-deadline">
+              <div className="cf-handoff-card-head">
+                <h3>Hand-off due</h3>
+                <span className={`cf-handoff-score ${data.deadline.late ? 'is-blocked' : 'is-ok'}`}>
+                  {data.deadline.sent_on ? (data.deadline.late ? 'Sent late' : 'Sent on time') : (data.deadline.late ? 'Overdue' : 'On time')}
+                </span>
+              </div>
+              <div className="cf-handoff-summary">
+                <span><strong>{data.case_type === 'AE' ? 'Aware' : 'Received'}</strong> {data.deadline.from}</span>
+                <span><strong>Due</strong> {data.deadline.due} ({data.deadline.days} working day{data.deadline.days === 1 ? '' : 's'})</span>
+                <span><strong>Sent</strong> {data.deadline.sent_on || '—'}</span>
+              </div>
+            </section>
+          )}
 
           <section className="cf-handoff-card">
             <div className="cf-handoff-card-head">
@@ -147,15 +179,15 @@ export default function CaseTransmissionPage() {
             </div>
             {noTargets ? (
               <div className="cf-handoff-note cf-handoff-note--warn">
-                No enabled integration is configured for this organisation. A target must be set up in Admin →
-                Integrations before a case can be handed off.
+                No {data.case_type === 'PC' ? 'quality' : 'safety'} system is set up for this organisation. An admin sets it on
+                MIMS Admin › System › Setup › Medical Information › Transmission Setup.
               </div>
             ) : (
               <div className="cf-handoff-target-row">
                 <label htmlFor="handoff-target">Target system</label>
                 <select id="handoff-target" value={target} onChange={e => setTarget(e.target.value)}>
                   {data.targets.map(t => (
-                    <option key={t.id} value={t.type}>{t.type} — {t.endpoint || 'no endpoint'}</option>
+                    <option key={t.id} value={t.type}>{({ safety_system: 'Safety system', quality_system: 'Quality system' })[t.type] || t.type} — {t.endpoint || 'no address'}</option>
                   ))}
                 </select>
               </div>
@@ -186,7 +218,7 @@ export default function CaseTransmissionPage() {
             )}
           </section>
 
-          <div className="cf-handoff-actions">
+          {hasCapability('transmission.create') && <div className="cf-handoff-actions">
             <button
               type="button"
               className="cf-save-btn"
@@ -196,7 +228,7 @@ export default function CaseTransmissionPage() {
             >
               {sending ? 'Transmitting…' : 'Transmit to safety system'}
             </button>
-          </div>
+          </div>}
 
           <section className="cf-handoff-card">
             <div className="cf-handoff-card-head"><h3>Transmission history</h3></div>
@@ -213,7 +245,7 @@ export default function CaseTransmissionPage() {
                     return (
                       <tr key={h.id}>
                         <td>{formatWhen(h.timestamp)}</td>
-                        <td>{h.target_system}</td>
+                        <td>{({ safety_system: 'Safety system', quality_system: 'Quality system' })[h.target_system] || h.target_system}</td>
                         <td>
                           <span
                             className="cf-handoff-status"

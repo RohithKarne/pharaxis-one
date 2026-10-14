@@ -14,6 +14,7 @@ import '../browse.css'
 // at all (MIPM-216); the Content Management browser is reused for FAQs only.
 const BrowseSection = lazy(() => import('../../content/components/BrowseSection'))
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { DOC_TYPES as CM_DOC_TYPES, DEFAULT_LANGUAGES } from '../../content/components/ContentUtils'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -26,7 +27,9 @@ const STATUS_STYLE = {
   Expired:        { bg: '#fee2e2', color: '#dc2626' },
 }
 
-const DOC_TYPES = ['All Types', 'MI Letter', 'SPC', 'IB', 'PubMed Summary', 'FAQ', 'Other']
+// The document types content is written with. This list offered MI Letter,
+// SPC, IB and others that no document has, so filtering found nothing.
+const DOC_TYPES = ['All Types', ...CM_DOC_TYPES]
 const STATUSES  = ['All Statuses', 'Draft', 'Under Review', 'Approved', 'Published', 'Archived']
 
 function StatusBadge({ status }) {
@@ -46,7 +49,7 @@ function StatusBadge({ status }) {
   )
 }
 
-function DetailSidebar({ doc, token, onClose }) {
+function DetailSidebar({ doc, token, onClose, bookmarkId, onToggleBookmark }) {
   const [activeTab, setActiveTab] = useState('details')
   const [fileBlobUrl, setFileBlobUrl] = useState('')
   const [fileLoading, setFileLoading] = useState(false)
@@ -106,6 +109,8 @@ function DetailSidebar({ doc, token, onClose }) {
       >
         <div className="bc-sidebar-header">
           <div className="bc-sidebar-title">{doc.name}</div>
+          <button className="bc-sidebar-close" aria-label={bookmarkId ? 'Remove bookmark' : 'Bookmark'} title={bookmarkId ? 'Remove bookmark' : 'Bookmark'}
+            onClick={() => onToggleBookmark(doc)} style={{ color: bookmarkId ? 'var(--warning, #f59e0b)' : undefined }}>{bookmarkId ? '★' : '☆'}</button>
           <button className="bc-sidebar-close" onClick={onClose}>✕</button>
         </div>
 
@@ -150,6 +155,14 @@ function DetailSidebar({ doc, token, onClose }) {
             <div className="bc-detail-row">
               <span className="bc-detail-label">Version</span>
               <span className="bc-detail-val">{doc.version_major != null ? `v${doc.version_major}.${doc.version_minor ?? 0}` : '—'}</span>
+            </div>
+            <div className="bc-detail-row">
+              <span className="bc-detail-label">Product</span>
+              <span className="bc-detail-val">{doc.product_name || 'Any product'}</span>
+            </div>
+            <div className="bc-detail-row">
+              <span className="bc-detail-label">Language</span>
+              <span className="bc-detail-val">{doc.language || '—'}</span>
             </div>
             <div className="bc-detail-row">
               <span className="bc-detail-label">Folder</span>
@@ -382,7 +395,13 @@ export default function BrowseContentPage() {
   const [search,      setSearch]      = useState('')
   const [folderId,    setFolderId]    = useState('')
   const [docType,     setDocType]     = useState('All Types')
-  const [status,      setStatus]      = useState('All Statuses')
+  // The library opens on what is approved for use; content managers can widen it.
+  const [status,      setStatus]      = useState('Published')
+  const [productId,   setProductId]   = useState('')
+  const [language,    setLanguage]    = useState('')
+  const [products,    setProducts]    = useState([])
+  const [languages,   setLanguages]   = useState(DEFAULT_LANGUAGES)
+  const [bookmarks,   setBookmarks]   = useState([])
   const [page,        setPage]        = useState(1)
   const limit = 50
 
@@ -392,20 +411,42 @@ export default function BrowseContentPage() {
   const [modLoading,    setModLoading]    = useState(false)
   const [modError,      setModError]      = useState(null)
   const [modSearch,     setModSearch]     = useState('')
-  const [modStatus,     setModStatus]     = useState('All Statuses')
+  const [modStatus,     setModStatus]     = useState('Published')
   const [modFolderId,   setModFolderId]   = useState('')
 
   // ── Load folders once ────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
-        const res  = await httpFetch(`${API}/cm/folders`, { headers })
+        const [res, pRes, lRes] = await Promise.all([
+          httpFetch(`${API}/cm/folders`, { headers }),
+          httpFetch(`${API}/cm/products`, { headers }),
+          httpFetch(`${API}/cm/picklists?field_type=language&active_only=1`, { headers }),
+        ])
         const data = await res.json()
         if (res.ok) setFolders(data.folders || [])
+        if (pRes.ok) setProducts((await pRes.json()).products || [])
+        if (lRes.ok) { const l = (await lRes.json()).picklists || []; if (l.length) setLanguages(l.map(p => ({ value: p.value, label: p.label || p.value }))) }
       } catch { /* silent */ }
     }
     load()
   }, [headers])
+
+  // ── Bookmarks (documents) ────────────────────────────────────────
+  const loadBookmarks = useCallback(async () => {
+    try {
+      const res = await httpFetch(`${API}/cm/folders/bookmarks`, { headers })
+      if (res.ok) setBookmarks((await res.json()).bookmarks || [])
+    } catch { /* silent */ }
+  }, [headers])
+  useEffect(() => { loadBookmarks() }, [loadBookmarks])
+  const bookmarkOf = (doc) => bookmarks.find(b => b.entity_type === 'document' && Number(b.entity_id) === Number(doc?.id))
+  async function toggleBookmark(doc) {
+    const b = bookmarkOf(doc)
+    if (b) await httpFetch(`${API}/cm/folders/bookmarks/${b.id}`, { method: 'DELETE', headers }).catch(() => {})
+    else await httpFetch(`${API}/cm/folders/bookmarks`, { method: 'POST', headers, body: JSON.stringify({ entity_type: 'document', entity_id: doc.id }) }).catch(() => {})
+    loadBookmarks()
+  }
 
   // ── Fetch documents ──────────────────────────────────────────────
   const fetchDocs = useCallback(async () => {
@@ -415,6 +456,8 @@ export default function BrowseContentPage() {
       if (folderId)                  params.set('folder_id', folderId)
       if (status !== 'All Statuses') params.set('status', status)
       if (docType !== 'All Types')   params.set('doc_type', docType)
+      if (productId)                 { params.set('product_id', productId); params.set('include_general', 'true') }
+      if (language)                  params.set('language', language)
       if (search.trim())             params.set('search', search.trim())
       const res  = await httpFetch(`${API}/cm/documents?${params}`, { headers })
       const data = await res.json()
@@ -423,7 +466,7 @@ export default function BrowseContentPage() {
       setTotal(data.total || 0)
     } catch { setError('Network error.') }
     finally { setLoading(false) }
-  }, [docType, folderId, headers, page, search, status])
+  }, [docType, folderId, headers, page, search, status, productId, language])
 
   useEffect(() => { if (contentTab === 'documents') fetchDocs() }, [fetchDocs, contentTab])
 
@@ -434,6 +477,7 @@ export default function BrowseContentPage() {
       const params = new URLSearchParams()
       if (modStatus !== 'All Statuses') params.set('status', modStatus)
       if (modFolderId)                  params.set('folder_id', modFolderId)
+      if (language)                     params.set('language', language)
       if (modSearch.trim())             params.set('search', modSearch.trim())
       const res  = await httpFetch(`${API}/cm/modules?${params}`, { headers })
       const data = await res.json()
@@ -442,20 +486,20 @@ export default function BrowseContentPage() {
       setModTotal((data.modules || []).length)
     } catch { setModError('Network error.') }
     finally { setModLoading(false) }
-  }, [headers, modFolderId, modSearch, modStatus])
+  }, [headers, modFolderId, modSearch, modStatus, language])
 
   useEffect(() => { if (contentTab === 'modules') fetchModules() }, [fetchModules, contentTab])
 
   // ── Computed ─────────────────────────────────────────────────────
   const totalPages   = Math.max(1, Math.ceil(total / limit))
-  const hasDocFilter = search || folderId || docType !== 'All Types' || status !== 'All Statuses'
-  const hasModFilter = modSearch || modFolderId || modStatus !== 'All Statuses'
+  const hasDocFilter = search || folderId || productId || language || docType !== 'All Types' || status !== 'Published'
+  const hasModFilter = modSearch || modFolderId || language || modStatus !== 'Published'
 
   function clearDocFilters() {
-    setSearch(''); setFolderId(''); setDocType('All Types'); setStatus('All Statuses'); setPage(1)
+    setSearch(''); setFolderId(''); setDocType('All Types'); setStatus('Published'); setProductId(''); setLanguage(''); setPage(1)
   }
   function clearModFilters() {
-    setModSearch(''); setModFolderId(''); setModStatus('All Statuses')
+    setModSearch(''); setModFolderId(''); setModStatus('Published'); setLanguage('')
   }
   function switchTab(tab) {
     setContentTab(tab)
@@ -541,6 +585,14 @@ export default function BrowseContentPage() {
             >
               {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
+            <select className="bc-filter-select" aria-label="Product" value={productId} onChange={e => { setProductId(e.target.value); setPage(1) }}>
+              <option value="">All Products</option>
+              {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
+            </select>
+            <select className="bc-filter-select" aria-label="Language" value={language} onChange={e => { setLanguage(e.target.value); setPage(1) }}>
+              <option value="">All Languages</option>
+              {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
             {hasDocFilter && (
               <button className="bc-clear-btn" onClick={clearDocFilters}>✕ Clear</button>
             )}
@@ -572,6 +624,10 @@ export default function BrowseContentPage() {
             >
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>}
+            <select className="bc-filter-select" aria-label="Language" value={language} onChange={e => setLanguage(e.target.value)}>
+              <option value="">All Languages</option>
+              {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
             {hasModFilter && (
               <button className="bc-clear-btn" onClick={clearModFilters}>✕ Clear</button>
             )}
@@ -600,8 +656,22 @@ export default function BrowseContentPage() {
                 >
                   <span className="bc-folder-name">{f.name}</span>
                   {f.product_name && <span className="bc-folder-product">{f.product_name}</span>}
+                  <span className="bc-folder-count">{f.published_doc_count ?? 0}</span>
                 </button>
               ))}
+              {bookmarks.some(b => b.entity_type === 'document') && <>
+                <div className="bc-folder-heading" style={{ marginTop: 12 }}>★ Bookmarks</div>
+                {bookmarks.filter(b => b.entity_type === 'document').map(b => (
+                  <button key={b.id} className="bc-folder-item" onClick={async () => {
+                    // A bookmark opens the document, as published now.
+                    const r = await httpFetch(`${API}/cm/documents/${b.entity_id}`, { headers }).catch(() => null)
+                    const d = r && r.ok ? await r.json() : null
+                    if (d) setSelected(d.document || d)
+                  }}>
+                    <span className="bc-folder-name">{b.entity_name}</span>
+                  </button>
+                ))}
+              </>}
             </>}
 
             {contentTab === 'modules' && <>
@@ -620,6 +690,7 @@ export default function BrowseContentPage() {
                 >
                   <span className="bc-folder-name">{f.name}</span>
                   {f.product_name && <span className="bc-folder-product">{f.product_name}</span>}
+                  <span className="bc-folder-count">{f.published_module_count ?? 0}</span>
                 </button>
               ))}
             </>}
@@ -653,7 +724,10 @@ export default function BrowseContentPage() {
                         <span className="bc-doc-type-icon">{doc.response_doc_type}</span>
                         <StatusBadge status={doc.status} />
                       </div>
-                      <div className="bc-doc-name">{doc.name}</div>
+                      <div className="bc-doc-name">{bookmarkOf(doc) ? '★ ' : ''}{doc.name}</div>
+                      <div className="bc-doc-meta">
+                        <span>{doc.product_name || 'Any product'} · {doc.language || '—'}</span>
+                      </div>
                       <div className="bc-doc-meta">
                         <span>{doc.doc_id || `#${doc.id}`}</span>
                         {doc.version_major != null && (
@@ -757,7 +831,7 @@ export default function BrowseContentPage() {
       </div>
 
       {/* Detail sidebars */}
-      <DetailSidebar doc={selected} token={token} onClose={() => setSelected(null)} />
+      <DetailSidebar doc={selected} token={token} onClose={() => setSelected(null)} bookmarkId={bookmarkOf(selected)?.id} onToggleBookmark={toggleBookmark} />
       <ModuleSidebar mod={selectedMod} onClose={() => setSelectedMod(null)} />
     </MIMSLayout>
   )

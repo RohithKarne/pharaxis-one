@@ -3,13 +3,62 @@ import { useState, useEffect, useMemo } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+// The lists a content screen reads. Content Type, Audience and Therapeutic Area
+// were offered here but no screen used them; their values are kept.
 const CM_FIELD_TYPES = [
   { key: 'document_category', label: 'Document Category' },
-  { key: 'content_type', label: 'Content Type' },
   { key: 'language', label: 'Language' },
-  { key: 'audience', label: 'Audience' },
-  { key: 'therapeutic_area', label: 'Therapeutic Area' },
 ]
+
+// What each check looks at, in words.
+function describeCheck(c) {
+  const cfg = c.config || {}
+  switch (c.check_type) {
+    case 'status_in': return `Must be ${(cfg.values || []).join(' or ')}`
+    case 'not_expired': return 'Must not be past its expiry date'
+    case 'min_content_length': return `At least ${cfg.min} characters of text`
+    case 'min_attachment_count': return `At least ${cfg.min} attached file`
+    case 'min_reference_count': return `At least ${cfg.min} linked document`
+    case 'max_open_contradictions': return 'No open contradictions with other content'
+    default: return c.check_type
+  }
+}
+
+// The checks run before content is published, read-only. They were built-in
+// defaults that no screen showed.
+function PublishingChecksList({ token }) {
+  const [checks, setChecks] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    httpFetch('/api/cm/publishing-checks', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { checks: [] })
+      .then(d => { if (!cancelled) setChecks(d.checks || []) })
+      .catch(() => { if (!cancelled) setChecks([]) })
+    return () => { cancelled = true }
+  }, [token])
+  if (checks === null) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
+  const label = { document: 'Documents', faq: 'FAQs', template: 'Templates (when used in a letter)' }
+  return (
+    <div style={{ maxWidth: 820 }} data-testid="publishing-checks">
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+        Run when content is published. A check that stops publishing must pass; a warning is shown to the publisher, who can go ahead.
+      </p>
+      <table className="cm-table">
+        <thead><tr><th>Content</th><th>Check</th><th>What it looks at</th><th>If it fails</th></tr></thead>
+        <tbody>
+          {checks.map((c, i) => (
+            <tr key={i}>
+              <td>{label[c.content] || c.content}</td>
+              <td>{c.name}</td>
+              <td style={{ fontSize: 12 }}>{describeCheck(c)}</td>
+              <td style={{ fontSize: 12, color: c.severity === 'warning' ? '#92400e' : 'var(--danger)' }}>{c.severity === 'warning' ? 'Warning' : 'Stops publishing'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 function CMOrgAlertsSettings({ token }) {
   const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
@@ -27,16 +76,16 @@ function CMOrgAlertsSettings({ token }) {
       try {
         const [sRes, eRes] = await Promise.all([
           httpFetch('/api/cm/settings', { headers: H }),
-          httpFetch('/api/admin/email-accounts', { headers: H }),
+          httpFetch('/api/cm/mailboxes', { headers: H }),
         ])
         if (sRes.ok) {
           const d = await sRes.json()
           const s = d.settings || {}
           setAlertDays(Array.isArray(s.default_alert_days) ? s.default_alert_days : [])
-          setDefaultEmail(s.default_alert_email_account_id || '')
+          setDefaultEmail(s.default_alert_email_account_id ? String(s.default_alert_email_account_id) : '')
           setDefaultRoles(Array.isArray(s.default_alert_roles) ? s.default_alert_roles : [])
         }
-        if (eRes.ok) setEmailAccounts((await eRes.json()).accounts || [])
+        if (eRes.ok) setEmailAccounts((await eRes.json()).mailboxes || [])
       } catch { /* silent */ }
       setLoading(false)
     }
@@ -46,7 +95,10 @@ function CMOrgAlertsSettings({ token }) {
   async function saveSetting(key, value) {
     setSaving(p => ({ ...p, [key]: true }))
     try {
-      await httpFetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+      const res = await httpFetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) toast.success('Saved.')
+      else toast.error(d.error || 'Could not save.')
     } catch { toast.error('Network error.') }
     setSaving(p => ({ ...p, [key]: false }))
   }
@@ -66,7 +118,7 @@ function CMOrgAlertsSettings({ token }) {
     saveSetting('default_alert_days', updated)
   }
 
-  const ALL_ROLES = ['admin', 'manager', 'agent', 'reviewer']
+  const ALL_ROLES = ['admin', 'manager', 'content_manager', 'agent', 'reviewer']
 
   if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
 
@@ -107,7 +159,7 @@ function CMOrgAlertsSettings({ token }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <select className="cm-form-select" style={{ margin: 0, flex: 1 }} value={defaultEmail} onChange={e => setDefaultEmail(e.target.value)}>
             <option value="">— None —</option>
-            {emailAccounts.map(ea => <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>)}
+            {emailAccounts.map(ea => <option key={ea.id} value={ea.id}>{ea.name}{ea.address ? ` — ${ea.address}` : ''}</option>)}
           </select>
           <button onClick={() => saveSetting('default_alert_email_account_id', defaultEmail || null)} disabled={saving.default_alert_email_account_id}
             style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -128,7 +180,7 @@ function CMOrgAlertsSettings({ token }) {
                   setDefaultRoles(updated)
                 }}
               />
-              {role.charAt(0).toUpperCase() + role.slice(1)}
+              {role === 'content_manager' ? 'Content manager' : role.charAt(0).toUpperCase() + role.slice(1)}
             </label>
           ))}
         </div>
@@ -244,7 +296,7 @@ export default function CMSettingsSection({ token }) {
       </div>
 
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 24 }}>
-        {[{ key: 'picklists', label: 'Picklists' }, { key: 'alerts', label: 'Alert Defaults' }].map(st => (
+        {[{ key: 'picklists', label: 'Picklists' }, { key: 'alerts', label: 'Alert Defaults' }, { key: 'checks', label: 'Publishing Checks' }].map(st => (
           <button key={st.key} onClick={() => setSettingsTab(st.key)}
             style={{ padding: '8px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${settingsTab === st.key ? 'var(--primary)' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', fontSize: 13, fontWeight: settingsTab === st.key ? 700 : 500, color: settingsTab === st.key ? 'var(--primary)' : 'var(--text-secondary)' }}>
             {st.label}
@@ -274,7 +326,7 @@ export default function CMSettingsSection({ token }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{currentFieldLabel} Values</h4>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These values appear in the "{currentFieldLabel}" dropdown in document creation.</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These values appear in the "{currentFieldLabel}" dropdown on a document.{activeField === 'language' ? ' Store the two-letter code (en, fr, de) as the value.' : ''}</p>
         </div>
         <button
           onClick={openAdd}
@@ -382,6 +434,7 @@ export default function CMSettingsSection({ token }) {
       {settingsTab === 'alerts' && (
         <CMOrgAlertsSettings token={token} />
       )}
+      {settingsTab === 'checks' && <PublishingChecksList token={token} />}
     </div>
   )
 }

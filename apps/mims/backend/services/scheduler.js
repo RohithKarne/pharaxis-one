@@ -89,9 +89,17 @@ const HANDLERS = {
     const { runCmContentAutoArchive } = require('./cmContentLifecycleService')
     await runCmContentAutoArchive()
   },
+  'cm-release-stale-checkouts': async () => {
+    const { releaseStaleCheckouts } = require('./cmContentLifecycleService')
+    await releaseStaleCheckouts()
+  },
   'cm-review-reminders': async () => {
     const { runCmReviewReminders } = require('./cmReviewReminderService')
     await runCmReviewReminders()
+  },
+  'cm-review-overdue': async () => {
+    const { runCmReviewOverdue } = require('./cmReviewReminderService')
+    await runCmReviewOverdue()
   },
   'emir-poller': async () => {
     logger.info({ job: 'emir-poller' }, 'EMIR email poll tick')

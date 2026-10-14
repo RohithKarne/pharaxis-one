@@ -202,40 +202,6 @@ module.exports = [
     }
   },
   {
-    name: 'GET /api/admin/reports/access returns report access rows',
-    module: 'Admin — Report Access',
-    covers: ['GET /api/admin/reports/access'],
-    run: async ({ makeRequest, token }) => {
-      const res = await makeRequest('GET', '/api/admin/reports/access', null, token)
-      return { pass: res.status === 200 && Array.isArray(res.body?.access), details: `Status: ${res.status}` }
-    }
-  },
-  {
-    name: 'GET /api/admin/reports/access/requests returns request rows',
-    module: 'Admin — Report Access Requests',
-    covers: ['GET /api/admin/reports/access/requests'],
-    run: async ({ makeRequest, token }) => {
-      const res = await makeRequest('GET', '/api/admin/reports/access/requests', null, token)
-      return { pass: res.status === 200 && Array.isArray(res.body?.requests), details: `Status: ${res.status}` }
-    }
-  },
-  {
-    name: 'POST /api/admin/reports/access/request creates request row',
-    module: 'Admin — Report Access Requests',
-    covers: ['POST /api/admin/reports/access/request'],
-    run: async ({ makeRequest, token }) => {
-      const user = await getFirstUser(makeRequest, token)
-      if (!user?.id) {
-        return { pass: false, details: 'No user available for request creation.' }
-      }
-      const res = await makeRequest('POST', '/api/admin/reports/access/request', {
-        user_id: user.id,
-        report_key: 'system-health',
-      }, token)
-      return { pass: res.status === 200 && res.body?.success === true, details: `Status: ${res.status}, id: ${res.body?.id || 'n/a'}` }
-    }
-  },
-  {
     name: 'PUT /api/admin/field-setup saves existing field payload',
     module: 'Admin — Field Setup',
     covers: ['PUT /api/admin/field-setup'],
@@ -619,55 +585,6 @@ module.exports = [
         if (importedRepId) {
           await pool.execute('UPDATE company_reps SET is_active = 0 WHERE id = ?', [importedRepId]).catch(() => {})
         }
-      }
-    }
-  },
-  {
-    name: 'Admin scheduled exports routes cover lifecycle',
-    module: 'Admin — Scheduled Exports',
-    covers: [
-      'GET /api/admin/exports/scheduled',
-      'POST /api/admin/exports/scheduled',
-      'PUT /api/admin/exports/scheduled/:id',
-      'DELETE /api/admin/exports/scheduled/:id',
-    ],
-    run: async ({ makeRequest, token }) => {
-      let configId = null
-      try {
-        const listBefore = await makeRequest('GET', '/api/admin/exports/scheduled', null, token)
-        const create = await makeRequest('POST', '/api/admin/exports/scheduled', {
-          export_name: uniqueName('Regression Export'),
-          report_key: 'daily-case-summary',
-          schedule_frequency: 'daily',
-          schedule_time_local: '08:00',
-          timezone_name: 'Asia/Kolkata',
-          delivery_method: 'email',
-          delivery_target: 'regression@example.com',
-          email_subject: 'Regression Scheduled Export',
-        }, token)
-        configId = Number(create.body?.id || 0)
-        if (listBefore.status !== 200 || create.status !== 200 || !configId) {
-          return { pass: false, details: `listBefore=${listBefore.status}, create=${create.status}, configId=${configId}` }
-        }
-
-        const update = await makeRequest('PUT', `/api/admin/exports/scheduled/${configId}`, {
-          export_name: uniqueName('Regression Export Updated'),
-          schedule_frequency: 'weekly',
-          schedule_weekday: 2,
-          schedule_time_local: '09:15',
-          timezone_name: 'UTC',
-          delivery_target: 'regression-updated@example.com',
-          email_subject: 'Regression Scheduled Export Updated',
-          is_active: true,
-        }, token)
-        const del = await makeRequest('DELETE', `/api/admin/exports/scheduled/${configId}`, null, token)
-
-        return {
-          pass: update.status === 200 && del.status === 200,
-          details: `listBefore=${listBefore.status}, create=${create.status}, update=${update.status}, delete=${del.status}`,
-        }
-      } finally {
-        if (configId) await pool.execute('DELETE FROM scheduled_export_configs WHERE id = ?', [configId]).catch(() => {})
       }
     }
   },
@@ -1827,7 +1744,6 @@ module.exports = [
       'GET /api/admin/case-audit-trail/cases-summary',
       'GET /api/admin/case-audit-trail',
       'GET /api/admin/case-audit-trail/:caseId',
-      'POST /api/admin/case-audit-trail',
     ],
     run: async ({ makeRequest, token }) => {
       let caseId = null
@@ -1847,21 +1763,19 @@ module.exports = [
           return { pass: false, details: `createCase=${createCase.status}` }
         }
 
-        const createAudit = await makeRequest('POST', '/api/admin/case-audit-trail', {
-          case_id: caseId,
-          action_type: 'REGRESSION_UPDATE',
-          field_name: 'priority',
-          old_value: 'normal',
-          new_value: 'high',
-        }, token)
-        auditId = Number(createAudit.body?.id || 0)
+        // The write route was removed (access review); the row is seeded directly.
+        const [createAudit] = await pool.execute(
+          `INSERT INTO case_audit_trail (case_id, user_id, user_name, action_type, field_name, old_value, new_value)
+           VALUES (?, NULL, 'regression', 'REGRESSION_UPDATE', 'priority', 'normal', 'high')`,
+          [caseId]
+        )
+        auditId = Number(createAudit.insertId || 0)
         const summaryRes = await makeRequest('GET', `/api/admin/case-audit-trail/cases-summary?search=${caseId}`, null, token)
         const listRes = await makeRequest('GET', `/api/admin/case-audit-trail?case_id=${caseId}`, null, token)
         const detailRes = await makeRequest('GET', `/api/admin/case-audit-trail/${caseId}`, null, token)
 
         return {
-          pass: createAudit.status === 201 &&
-            auditId > 0 &&
+          pass: auditId > 0 &&
             summaryRes.status === 200 &&
             Array.isArray(summaryRes.body?.cases) &&
             listRes.status === 200 &&
@@ -1870,7 +1784,7 @@ module.exports = [
             detailRes.status === 200 &&
             Array.isArray(detailRes.body?.entries) &&
             detailRes.body.entries.some((entry) => Number(entry?.id || 0) === auditId),
-          details: `createAudit=${createAudit.status}, summary=${summaryRes.status}, list=${listRes.status}, detail=${detailRes.status}`,
+          details: `auditId=${auditId}, summary=${summaryRes.status}, list=${listRes.status}, detail=${detailRes.status}`,
         }
       } finally {
         if (caseId) await pool.execute('DELETE FROM case_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})

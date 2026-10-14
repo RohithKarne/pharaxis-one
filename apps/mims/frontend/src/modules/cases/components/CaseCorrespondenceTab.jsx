@@ -35,7 +35,7 @@ function getThreadRootId(item) {
   return item?.original_inquiry_id || item?.id
 }
 
-export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCountChange, showCaseAttachments = true }) {
+export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCountChange, showCaseAttachments = true, readOnly = false }) {
   const [correspondence, setCorrespondence] = useState([])
   const [corrLoading,    setCorrLoading]    = useState(false)
   const [corrError,      setCorrError]      = useState('')
@@ -237,7 +237,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
                     {item.body && <div className="cf-corr-body">{item.body.length > 500 ? `${item.body.slice(0, 500)}…` : item.body}</div>}
                     <div className="cf-corr-actions">
                       <button className="cf-open-btn" onClick={() => setActiveCorrItem(item)}>View Full Message</button>
-                      {dir === 'inbound' && (
+                      {dir === 'inbound' && !readOnly && (
                         <>
                           <button className="cf-open-btn" onClick={() => openCorrCompose('reply', item)}>Reply</button>
                           <button className="cf-open-btn" onClick={() => openCorrCompose('forward', item)}>Forward</button>

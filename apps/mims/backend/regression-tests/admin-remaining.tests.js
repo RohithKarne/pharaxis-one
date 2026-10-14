@@ -397,7 +397,6 @@ module.exports = [
       'GET /api/admin/transmission-audit-trail',
       'GET /api/admin/transmission-audit-trail/:caseId',
       'GET /api/admin/transmission-error-logs',
-      'POST /api/admin/transmission-audit-trail',
       'POST /api/admin/transmission-screen-audit',
       'GET /api/admin/transmission-screen-audit',
       'GET /api/admin/scheduler/jobs',
@@ -430,14 +429,13 @@ module.exports = [
         const serviceLogs = await makeRequest('GET', '/api/admin/service-logs?page_size=10', null, token);
         const serviceAgg = await makeRequest('GET', '/api/admin/service-logs/aggregation?trend_days=7', null, token);
         const systemActivity = await makeRequest('GET', '/api/admin/system-activity?page_size=10', null, token);
-        const createTransmission = await makeRequest('POST', '/api/admin/transmission-audit-trail', {
-          case_id: caseId,
-          target_system: 'RegressionSystem',
-          payload_summary: 'Regression transmission payload',
-          status: 'Sent',
-          response_code: '200',
-        }, token);
-        transmissionId = Number(createTransmission.body?.id || 0);
+        // The write route was removed (access review); the row is seeded directly.
+        const [createTransmission] = await pool.execute(
+          `INSERT INTO transmission_audit_trail (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
+           VALUES (?, ?, 'regression', 'RegressionSystem', 'Regression transmission payload', 'Sent', '200')`,
+          [caseId, userId]
+        );
+        transmissionId = Number(createTransmission.insertId || 0);
         const transmissionTrail = await makeRequest('GET', `/api/admin/transmission-audit-trail?case_id=${caseId}&limit=10`, null, token);
         const caseTrail = await makeRequest('GET', `/api/admin/transmission-audit-trail/${caseId}`, null, token);
         const transmissionErrors = await makeRequest('GET', '/api/admin/transmission-error-logs?limit=10', null, token);
@@ -454,14 +452,14 @@ module.exports = [
             serviceLogs.status === 200 &&
             serviceAgg.status === 200 &&
             systemActivity.status === 200 &&
-            createTransmission.status === 201 &&
+            transmissionId > 0 &&
             transmissionTrail.status === 200 &&
             caseTrail.status === 200 &&
             transmissionErrors.status === 200 &&
             screenAuditPost.status === 201 &&
             screenAuditGet.status === 200 &&
             schedulerJobs.status === 200,
-          details: `responseErrors=${responseErrors.status}, serviceLogs=${serviceLogs.status}, serviceAgg=${serviceAgg.status}, systemActivity=${systemActivity.status}, transmission=${createTransmission.status}/${transmissionTrail.status}/${caseTrail.status}/${transmissionErrors.status}, screenAudit=${screenAuditPost.status}/${screenAuditGet.status}, scheduler=${schedulerJobs.status}`,
+          details: `responseErrors=${responseErrors.status}, serviceLogs=${serviceLogs.status}, serviceAgg=${serviceAgg.status}, systemActivity=${systemActivity.status}, transmission=${transmissionId}/${transmissionTrail.status}/${caseTrail.status}/${transmissionErrors.status}, screenAudit=${screenAuditPost.status}/${screenAuditGet.status}, scheduler=${schedulerJobs.status}`,
         };
       } finally {
         if (transmissionId) await pool.execute('DELETE FROM transmission_audit_trail WHERE id = ?', [transmissionId]).catch(() => {});

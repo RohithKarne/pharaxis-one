@@ -20,16 +20,16 @@ const LotMasterAdmin = lazy(() => import('./LotMasterAdmin'))
 const FieldActionsAdmin = lazy(() => import('./FieldActionsAdmin'))
 const CapaAdmin = lazy(() => import('./CapaAdmin'))
 const PiiRedactionRules = lazy(() => import('./PiiRedactionRules'))
-// import GroupSecurity from './GroupSecurity' // legacy nav-key version — kept on disk for rollback
 const CapabilityGroupSecurity = lazy(() => import('./CapabilityGroupSecurity'))
 const LoggedInUsers = lazy(() => import('./LoggedInUsers'))
-const ReportsAccess = lazy(() => import('./ReportsAccess'))
 const SetupAlerts = lazy(() => import('./SetupAlerts'))
 const SetupAuthPolicy = lazy(() => import('./SetupAuthPolicy'))
 const SetupChangeApprovals = lazy(() => import('./SetupChangeApprovals'))
 const SetupEmailAccounts = lazy(() => import('./SetupEmailAccounts'))
 const SetupCaseNumbering = lazy(() => import('./SetupCaseNumbering'))
 const SetupIntegrations = lazy(() => import('./SetupIntegrations'))
+const MiResponseSettings = lazy(() => import('./MiResponseSettings'))
+const TransmissionSetup = lazy(() => import('./TransmissionSetup'))
 const SetupWorkflowEngine = lazy(() => import('./SetupWorkflowEngine'))
 const SetupTwoFactor = lazy(() => import('./SetupTwoFactor'))
 const SetupWorkflow = lazy(() => import('./SetupWorkflow'))
@@ -86,9 +86,10 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-capa' ? <CapaAdmin />
     : selectedItem === 'sys-setup-pii-redaction' ? <PiiRedactionRules />
     : selectedItem === 'sys-setup-data-protect' ? <DPPRPage embedded />
+    : selectedItem === 'sys-setup-mi-response' ? <MiResponseSettings />
+    : selectedItem === 'sys-setup-int-transmission' ? <TransmissionSetup />
     : selectedItem?.startsWith('sys-setup-int-') ? <SetupIntegrations selectedItem={selectedItem} />
     : selectedItem === 'sys-system-params' ? <SystemParameters />
-    : selectedItem === 'sys-reports-access' ? <ReportsAccess />
     : selectedItem === 'sys-view-data' ? <ViewData selectedItem={auditItem} onSelect={onAuditSelect} />
     : selectedItem === 'sys-uat-bugs' ? <AdminUATPanel initialTab="bugs" />
     : selectedItem === 'sys-uat-features' ? <AdminUATPanel initialTab="features" />

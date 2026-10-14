@@ -35,6 +35,7 @@ const jobs    = require('../../services/jobQueueService');
 const { logger } = require('../../services/logger');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { validateUpload } = require('../../middleware/uploadValidation');
+const { verifyCaseOrg } = require('../../services/caseHelpers');
 
 const MAX_FILE_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024); // 50 MB default
 const upload = multer({
@@ -105,6 +106,11 @@ router.post('/attachments', authenticate, upload.single('file'), validateUpload(
     const { entity_type, entity_id, field_name } = req.body || {};
     if (!entity_type || !entity_id) {
       return res.status(400).json({ error: 'entity_type and entity_id required' });
+    }
+    // Filing a file on a case needs Update case for it (access review); the
+    // other attachment routes are checked by caseAccess before they run.
+    if (entity_type === 'case' && !hasGlobalAdminScope(req.user) && !(await verifyCaseOrg(entity_id, req, 'case.update'))) {
+      return res.status(403).json({ error: 'You do not have permission to change this case.' });
     }
     const orgId = req.user.orgId ?? null;
     const buf   = req.file.buffer;

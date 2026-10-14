@@ -3767,6 +3767,16 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-05-20 | Varun | Local MIMS UAT environment retired and removed from repo/machine. No PM2 `mims-uat`, port `4001`, or `pharaxis_mims_uat` database should be assumed active. |
 | 2026-07-15 | Bala | CP Portal↔MIMS integration LIVE (approved by Rohith, browser-verified). API platform: `POST /oauth/token` (client credentials, 1h tokens — CP auto-refreshes), `POST/GET /api/v1/cases`, `POST /api/v1/cases/:id/attachments`; case writes now populate the UI-read structures (`case_contacts`, versioned `case_ae_*`/`case_pc_*`, `case_mi`); idempotent on CP reference (= `case_number`). Fixes shipped: tokenIssuer scope double-parse (mysql2 JSON column, sibling of the apiKeyAuth bug); infinite `/api/auth/me`+security-groups fetch loop in AuthContext (root cause of "Too many authentication requests" lockouts); ProtectedRoute now waits for cookie-session restore instead of bouncing to /login on refresh; auth rate limiter no longer counts successful requests; dev `JWT_SECRET` fixed in `.env` (sessions survive nodemon restarts); `FeatureFlagsProvider` mounted in Max app — it never was, so ALL `cf.*` tenant flags rendered OFF app-wide. `cf.theme6_documents` enabled for Novartis (org 1): Case Attachments workspace now visible (Communications → Attachments). |
 | 2026-10-03 | Saad | Two stale lines corrected. *Git push*: enabled since 2026-07-27, always through a pull request, never to `main`. *Section 15*: nothing is deployed; MIMS runs on the local copy only. |
+| 2026-10-13 | Saad | Case form clean-up (#769, #770, #771): Case Form Fields is the one admin screen for the case form; Customize Forms and Validation Rules retired; Required is the Required tick only, on every save path; the cut list hides about 95 fields and 11 sections, never deletes; Latest Information Date, verbatim reaction, hospital dates, product Role and Pregnancy Trimester added; the ICSR now takes its reaction text, labs, history and dechallenge from the AE tab; new organisations get the target form only. Migrations 170–175. Sections 7, 8, 9, 9b and 13 updated. |
+| 2026-10-13 | Saad | Case form pending items closed: E2B dates written CCYYMMDD; one-sided lab ranges split; long verbatim kept whole in the narrative; ICSR builder readable; Customize Forms and Validation Rules files and endpoints removed; Case Form Fields shows show-only-when rules. Sections 8 and 9 updated. |
+| 2026-10-13 | Saad | MI and PC field review (Rohith, "go with all 6"): MI answer is the signed letter (MI answer boxes hidden, "Answer sent" shown), AE/PC screening answer required before a response is sent (`miSendCheck.js`); PC strength, reply to complainant, counterfeit (makes the case Urgent), device part, patient initials, Investigation & CAPA cut to what the complaint record needs, check before Route to Quality (`pcHandoffCheck.js`). Migrations 176–177. Section 9b updated. |
+| 2026-10-14 | Saad | MI response and hand-off review: MI Response Settings (off-label and closing statements, prescribing information required on off-label letters, routine/urgent working days, second-signer rules; migration 178); Transmission Setup screen (safety and quality targets, encrypted key, hand-off days, test); hand-off due date and reconciliation list. Sections 8 and 9b updated. |
+| 2026-10-14 | Saad | Content management review: letters use only published, in-date modules, templates and documents; templates signed on approve and publish with an independent approver and moving versions; document fields that were dropped now saved (review cycle, regulatory reference, extra expiry recipients); expired check-outs released; Revise for published documents and templates (migration 179); product and language on documents, followed by the letter builder (migration 180); one merge-field list with case fields and Insert field; Make letter files a letter on the case; Merge Reports retired; MI shows documents sent; linked documents suggested. Sections 1 and 7 updated. |
+| 2026-10-14 | Saad | Content management review follow-up: Revise for modules (documents built from a module move to its new version) and FAQs (migration 181); Make letter files a PDF; templates carry a language (migration 182); new documents default to a yearly review. Section 7 updated. |
+| 2026-10-14 | Saad | Content management in-depth review: emailed letters enclose on-screen and module-built documents as PDFs; folder permissions enforced (and Configure folders checked); review outcome when nobody accepts, reviewer decisions shown to the approver, Reviews I Started, daily overdue reminders; version history across revisions and for modules and FAQs; compare versions by text; Relations, alert settings, publishing checks, Browse filters and bookmarks, dashboard review queues and the module form fixed; unreachable screens, the activity log and the duplicate Browse tab removed. No migration. Section 7 updated. |
+| 2026-10-14 | Saad | Reports review: formula fields, certify/publish/versions and the open scheduled-export routes removed; report audience enforced; server-side audited export; Schedule reports privilege; Reports Access grids removed; library rebuilt (20 reports on case, MI, hand-off, inbox, content and user data) with a filter bar; dashboards rebuilt; schedules by period, monthly, time-zone list, recipients inside the organisation who can see the report; Governance tab, Overview and legacy `/api/reports/*` removed; hand-off "sent" ignores MI letters (migration 183). Section 7 updated. |
+| 2026-10-14 | Saad | Menu (Rohith, "go with your menu recommendation"): New Case at the top; Work · Knowledge · Reporting · Administration; items a user cannot open are hidden, not greyed; Cases opens the list, with Correspondence added; Deleted Cases for administrators only; menu, quick search and Overview follow each page's access rule. Section 6 updated. |
+| 2026-10-14 | Saad | Access review: one case-access check in front of every case route (`middleware/caseAccess.js`), read-only cases for people without Update case; Inbox, content reads, admin endpoints and attachments follow their screen; audit-trail write routes, the attachment search and the shared role-screens route removed; Create transmission enforced; 46 unchecked permissions, the manager role and template, the old Group Security screen and six screen-less modules removed (migrations 184, 185); Screens per person on Edit User; MIMS Admin address for administrators only. Sections 4, 7 and 8 updated. |
 
 ---
 
@@ -3779,7 +3789,7 @@ MIMS handles:
 - Incoming medical inquiries via email (inbox), triaged by agents
 - Case creation + management across 3 case types: MI (Medical Information), AE (Adverse Events), PC (Product Complaints)
 - Admin config per org — picklists, field setup, security groups, sites, workflows, case numbering, audit trails
-- Content management — documents, FAQs, templates, merge reports with approval lifecycles
+- Content management — documents, modules, FAQs and letter templates with approval lifecycles; letters merged with case data
 - Multi-org support — single MIMS instance serves multiple pharma client orgs with full data isolation
 
 **Relationship to CP Portal:**
@@ -3910,11 +3920,19 @@ if (req.user.role !== 'platform_admin') {
 // Platform Admin has orgId = null in JWT → bypasses all org filters
 ```
 
-##### Module Access
-- Modules: `mims_core`, `admin_console`, `content_mgmt`, `data_visualization`
-- Stored in `user_module_permissions` table per user
-- Frontend enforces via `ModuleAccessGuard` component wrapping each route
+##### Module Access (screens)
+- Screens: `mims_core` (Cases), `inbox`, `transmissions`, `browse_content`, `content_mgmt`, `reports`, `admin_console` (MIMS Admin). Nothing else (access review, 2026-10-14; migration 185 removed six keys with no screen).
+- A person's screens are their role's defaults (`role_permissions`, shared by all organisations, changed only by a migration) plus their own differences (`user_module_permissions`, `can_access` 1 or 0), read by `utils/userModules.js` `getUserModules`.
+- An administrator sets a person's screens on Add / Edit Users › Screens (`PUT /api/admin/users/:id/modules`); only differences from the role are stored (`setUserModules`). MIMS Admin is not set there: it needs the administrator role as well as the module, in the menu and at the address (`ModuleAccessGuard adminOnly`).
+- The server enforces each screen: cases (`middleware/caseAccess.js`), Inbox (`routes/inbox.js`), content (`middleware/cmAccess.js` `cmReadAccess`), Reports and Transmissions (`requireModule`). The frontend hides what a person cannot open (`ModuleAccessGuard`, `MIMSNavbar`).
 - Platform Admin bypasses all module checks
+
+##### Case access (access review, 2026-10-14)
+- Every request about a case — the case, its AE / PC versions and rows, MI tabs, letters, comments, contacts, attachments, field history, rich text, emails filed on it — needs Cases and View cases for that case (own or all); a change needs Update case. Pinning, following and presence need only View. Route checks (close, assign, escalate, letters, transmissions) apply after it.
+- Without Update case the case page opens read only: a Read only label instead of Save Case, no version, transmit, add or delete buttons, fields locked.
+
+##### Permissions (Group Security)
+- 32 permissions, each checked by the server (`access_activity_privileges`, migration 184 removed 46 that nothing checked). A group adds rights to its members' role and never removes them (MIPM-192): the role's rights show ticked and locked.
 - Platform Admin hidden from User Management + Module Access screens — `WHERE role != 'platform_admin'` on both `/api/admin/platform/users` and `/api/admin/platform/all-users`
 
 ##### Session Timeout
@@ -4001,20 +4019,14 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `*` | Redirect | → `/dashboard` |
 
 ##### Navbar Structure (MIMSNavbar.jsx)
-Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾** · Transmissions · Browse Content · Reports
+Left menu (`shared/components/MIMSNavbar.jsx`, Rohith 2026-10-14):
 
-**Utilities dropdown** (all in one menu):
-- Exception Log (`/exceptions`) — all users
-- Session Management (`/session-management`) — all users
-- 📋 Response Log (`/response-log`) — all users (Sprint 19)
-- Process Explorer (`/process-explorer`) — admin/platform-admin, org-config gated (shows "Off" if disabled)
-- 🧪 Regression Testing (`/regression`) — admin/platform-admin only
-- ─── divider ───
-- CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
+**New Case** (top; shown to people who may create cases) · **Work:** Overview · Inbox · Cases ▾ · Transmissions · **Knowledge:** Browse Content · Content Management · **Reporting:** Reports · **Administration:** MIMS Admin
 
-**Removed from main bar:** Analytics (deferred by Rohith 2026-04-22)
-
-Utilities tab highlights active (orange) when on any sub-page.
+- An item shows only to someone who can open its page — the same module rule as its route in `App.jsx`; a heading with nothing under it is not shown. Quick search (Ctrl-K, `CommandPalette.jsx`) and the Overview's Modules list use the same rules.
+- **Cases** opens the case list; its arrow lists My Cases, Unassigned Cases, Correspondence (`/cases?view=correspondence`, the former Case Query) and the Response Log.
+- **Deleted Cases** is a tab in the case list for administrators only; the server refuses `GET /api/cases?deleted=true` to anyone else.
+- Session Management is in the user menu; the logs and audit trails are in MIMS Admin.
 
 ---
 
@@ -4047,7 +4059,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/cases/my` | Cases owned by logged-in user |
 | GET | `/api/cases/unassigned` | Unassigned cases |
 | POST | `/api/cases` | Create case (org_id from JWT only) |
-| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for given case_type + org. Auth only (no requireOrg). Platform Admin passes `?org_id=`, regular users from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
+| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for given case_type + org. Auth only (no requireOrg). Platform Admin passes `?org_id=`, regular users from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. Since 2026-10-13 it also returns `hidden` (hidden fields, with their options, so a panel can leave them out and still fill a product-row list). |
 | GET | `/api/cases/:id` | Single case detail |
 | PUT | `/api/cases/:id` | Update case (COALESCE pattern — partial update) |
 | DELETE | `/api/cases/:id` | Soft delete |
@@ -4081,6 +4093,12 @@ Backend on port 3000. All routes under `/api/`.
 | GET/POST/PUT/DELETE | `/api/admin/field-setup` | Case form field config — standard fields |
 | POST | `/api/admin/field-setup/flex` | Add flex field to section. Body: `{ section_name, field_name, field_type, picklist_type, is_required, sort_order }` |
 | DELETE | `/api/admin/field-setup/flex/:id` | Delete flex field by id |
+| GET | `/api/admin/case-fields` | Case Form Fields screen — every field with its step, E2B tag, "removed in the clean-up" mark, and each section's on/off |
+| GET | `/api/admin/case-fields/usage` | **Used in cases** — how many cases hold a value in each field's own store |
+| GET | `/api/admin/case-fields/picklist-types` | List types an added dropdown field can use |
+| PUT | `/api/admin/case-fields/sections` | Switch a section on or off for one case type |
+| POST | `/api/admin/case-fields` | Add a field to a section |
+| PUT | `/api/admin/case-fields/:id` | Label, required, hidden, order; step (`display_tab`) for added fields |
 | GET/POST/PUT/DELETE | `/api/admin/security-groups` | RBAC groups + privilege matrix |
 | GET/POST/PUT/DELETE | `/api/admin/contacts` | Case contacts repository |
 | GET/POST/PUT/DELETE | `/api/admin/orgs` | Organisations |
@@ -4105,7 +4123,7 @@ Backend on port 3000. All routes under `/api/`.
 | POST | `/api/admin/platform/users/:id/reset-2fa` | Reset user 2FA enrollment, lock state, backup codes, trusted devices |
 | GET/POST/PUT/DELETE | `/api/admin/platform/users/:id/org-access` | CRUD org assignments |
 | GET | `/api/admin/platform/orgs-for-assignment` | Active orgs + sites for dropdown |
-| PUT | `/api/admin/platform/users/:id/modules` | Override user module access |
+| PUT | `/api/admin/platform/users/:id/modules` | Set a person's screens (any of the seven); stores only differences from the role, leaves the platform-console row alone |
 | GET | `/api/admin/platform/orgs` | List all orgs with sites + session_timeout_minutes |
 | POST | `/api/admin/platform/orgs` | Create org |
 | PUT | `/api/admin/platform/orgs/:id` | Update org name / is_active / session_timeout_minutes / 2FA settings |
@@ -4128,20 +4146,44 @@ Backend on port 3000. All routes under `/api/`.
 ##### Content Management
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/cm/folders` | Active content folders |
+| GET | `/api/cm/folders` | Active content folders the user may open (`?include_inactive=true` for Folder Manager), with published counts for Browse |
+| POST/PUT/DELETE | `/api/cm/folders[/:id]` | Folder setup — needs Configure folders (`content.folder.configure`); a folder holding live documents, FAQs, modules or templates cannot be closed |
+| GET/POST/DELETE | `/api/cm/folders/:id/permissions[/:groupId]` | Groups on a folder (`security_group_id`, level read / write / manage). Enforced by `services/cmFolderAccess.js` and `middleware/cmAccess.js`: no groups = open; with groups, only members see the folder's content (lists, items, downloads, Browse, letter builder); Write to change content, Manage to change the folder; administrators always pass |
+| GET | `/api/cm/sites`, `/api/cm/mailboxes` | The organisation's sites (Folder Manager) and sending mailboxes (expiry alerts), for content managers |
+| GET | `/api/cm/documents/:id/reviews` | The document's reviews and each reviewer's decision (Approve dialog) |
+| GET | `/api/cm/documents/:id/publish-checks`, `/api/cm/faqs/:id/publish-checks` | The publishing checks run without publishing (publish dialogs) |
+| GET | `/api/cm/publishing-checks` | The checks run at publish, read-only (Content Settings) |
+| GET | `/api/cm/documents/:id/compare` | The versions in a document's line; with `?a=&b=` the text of two to compare (replaces `version-diff`, removed 2026-10-14) |
+| GET | `/api/cm/{documents,modules,faqs,templates}/:id/versions` | Version history of the whole line of versions (`services/cmLineage.js`) |
 | CRUD | `/api/cm/documents` | Documents — Draft → Published lifecycle |
-| POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor). Auto-sets owner_user_id on first checkin. |
-| POST | `/api/cm/documents/:id/publish` | Publish — enforces owner lock (only owner can publish). Sets publisher as owner_user_id. |
-| POST | `/api/cm/documents/:id/release` | Release owner lock — resets document to Draft, clears owner_user_id |
+| POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor) and notes into the version history. Auto-sets owner_user_id on first checkin. |
+| POST | `/api/cm/documents/:id/publish` | Publish — password and reason; next major version. Publishing a revision archives the version it replaces ("Superseded by version N"). |
+| POST | `/api/cm/documents/:id/revise` | Draft the next version of a published document; the published one stays in use until the revision is published (`revision_of`, migration 179). Checking out a published document is refused. |
+| POST | `/api/cm/documents/:id/release` | Return a Pending or checked-out document to Draft (not a published or approved one) |
+| GET | `/api/cm/products` | The organisation's products, for tagging a document (`cm_documents.product_id`, migration 180) |
+| POST | `/api/cm/documents/release-stale-checkouts` | Return expired two-hour check-outs to Draft now; the `cm-release-stale-checkouts` job does it every 15 minutes |
 | GET/POST/DELETE | `/api/cm/documents/:id/relations` | Associated documents — link/unlink, relation types |
 | GET/PUT | `/api/cm/documents/:id/alert-config` | Per-document version alert config (alert_days JSON, alert_email_account_id) |
 | POST/DELETE | `/api/cm/documents/:id/alert-subs` | Per-document alert subscribers (users to notify) |
 | GET/PUT | `/api/cm/settings` | Org-level CM default settings (upsert via ON DUPLICATE KEY) |
-| CRUD | `/api/cm/faqs` | FAQs with lifecycle |
-| CRUD | `/api/cm/templates` | Email/response templates |
-| CRUD | `/api/cm/merge-reports` | Merge report templates |
-| GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers |
+| CRUD | `/api/cm/faqs` | FAQs with lifecycle; `POST /api/cm/faqs/:id/revise` drafts the next version of a published FAQ, which is archived as superseded when the revision is published |
+| POST | `/api/cm/modules/:id/revise` | Draft the next version of a published module; publishing it moves Module-type documents to the new module and archives the old one as superseded (no archive cascade). A published module cannot be set back to Draft. |
+| CRUD | `/api/cm/templates` | Letter templates (Response, Acknowledgment, Correspondence, Email); a folder is required. Approve and publish need password and reason, and the author cannot approve. Publish = next major version; a wording change adds to the minor. A published template changes through `POST /:id/revise`. |
+| GET | `/api/cm/merge-fields` | The merge-field catalogue (`services/mergeFields.js`), one list for the letter builder, the preview and generated letters; values escaped in a letter body |
+| POST | `/api/cm/templates/:id/generate` | Make a letter for a case number from a published, in-date template; filed on the case as a PDF attachment (field `Letters`, `makeLetterPdf` in `services/pdfExportService.js`) and audited. Replaces Merge Reports (retired 2026-10-14; `cm_merge_reports` kept). |
+| GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers. A decision is Accepted, Accepted with Changes, Declined or Rejected (a reason for all but Accepted). A review nobody accepted returns the document to Pending; a rejection to Draft. `GET /reviews/all?mine=true` is Reviews I Started (progress, End, Transfer to someone who can author content). Reviews past their end date remind reviewers and owner daily (`cm-review-overdue`). |
 | CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
+
+##### Reports
+All under `/api/reports/module/`, behind the Reports module grant. Who may see a report or dashboard is its audience (`visibility_scope`: `shared` Everyone with Reports, `managers` Report managers, `admin_only` Administrators); outside it a report reads as not found. Data rules: `services/reportDatasetService.js` (day 0 = Date Received; closed = a state marked closed; MI answered = first sent letter; MI due from MI Response Settings; hand-off due and sent as on the Transmission screen).
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/definitions`, `/dashboards`, `/history`, `/favorites`, `/datasets`, `/filter-options` | What the user may see; filter choices (periods, case types, products, owners) |
+| POST | `/definitions/:id/run`, `/dashboards/:id/run` | Run with the filter bar's filters (`period` or `date_from`/`date_to`, `case_type`, `product`, `owner_id`, `group_by`, `window_days`); a failed run is recorded |
+| POST | `/definitions/:id/export` | CSV made on the server — needs Export Reports (`reports.export`); audited (`EXPORT`, `report_definition`); readable headers, no `__` columns, formula-safe cells (`services/reportCsv.js`) |
+| POST/PUT/DELETE | `/definitions[/:id]`, `/dashboards[/:id]`, `…/duplicate`, `/config`, `/datasets/:key/preview` | Custom reports, dashboards and Settings — need Manage Reports (`reports.manage`); changes audited (`report_definition`, `report_dashboard`) |
+| GET/POST/PUT/DELETE | `/schedules[/:id]`, `…/pause`, `…/resume`, `/recipients` | Schedules — need Schedule reports (`reports.schedule`). Daily, weekly or monthly (the 1st); a period each send covers on the schedule's own calendar; recipients must be people in the organisation who can see the target (`services/reportRecipients.js`), checked on save and on every send; the run is made as the person who set it up |
+Removed 2026-10-14: `/summary`, certify/publish/versions, templates, shares, role defaults, anomalies, recommendations, usage analytics, delivery rules, config validation; `/api/reports/*` (legacy) and `/api/presets`; `/api/admin/exports/scheduled`; the Reports Access routes (`/api/admin/reports-access`, `/api/admin/platform/reports`, `/api/admin/reports/access`).
 
 ##### Regression Testing Suite
 | Method | Path | Purpose |
@@ -4179,6 +4221,7 @@ All under `/admin-console/*` (requires `admin_console` module).
 |-------------|----------|----------------|
 | picklists | picklists | Dropdown values for case form fields |
 | field-setup | field-setup | Case form field types, required, hidden flags |
+| Case Form Fields | sys-setup-case-fields | **The one screen for the case form (2026-10-13)** — label, required, shown, order, step, section on/off, add field, Used in cases, E2B badge |
 | user-security-groups | user-security-groups | RBAC security groups + privilege matrix |
 | case-contacts | case-contacts | Case contacts / HCP / patient directory |
 | company-reps | company-reps | Company representative directory |
@@ -4199,6 +4242,8 @@ All under `/admin-console/*` (requires `admin_console` module).
 - `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for app operations
 - `Platform Admin -> 2FA Configuration` = platform SMTP for user 2FA email delivery + org-level 2FA controls
 
+**Case form screens (2026-10-13).** Customize Forms (`sys-setup-customize-forms`) and Validation Rules (`sys-setup-validation`) are retired and their files and server endpoints removed; Setup › Medical Information holds **MI Response Settings** (`sys-setup-mi-response`) and **Transmission Setup** (`sys-setup-int-transmission`, the safety and quality hand-off targets — it was an empty page); an old link opens Case Form Fields (`RETIRED_SYSTEM_ITEMS` in `configItems.js`). A show-only-when rule appears under its field on Case Form Fields, read-only. Smart Field Rules, Grid Section Templates and Case Actions are hidden from the menu unless the **Advanced form tools** switch on Case Form Fields is on (a per-browser preference, not a permission).
+
 ##### Platform Admin Console Pages
 
 Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias compatibility. Sidebar-based nav — no URL routing between pages.
@@ -4209,7 +4254,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `organizations` | Organizations | Org cards with site lists, active/inactive toggles, session timeout editor, add site form |
 | `2fa-config` | 2FA Configuration | Platform SMTP config + test/send buttons; per-org 2FA enable/methods/remember-days table |
 | `users` | Users | User list with 2FA status, org assignments, Reset 2FA button; create user form; org assignment panel (Org / Site / Role tabs) |
-| `module-access` | Module Access | Per-user module checkboxes (mims_core, admin_console, content_mgmt, data_visualization) |
+| `module-access` | Module Access | No screen any more; a person's screens are set on MIMS Admin › Add / Edit Users › Screens (2026-10-14) |
 | `alerts` | Alerts | Alert rule setup, enable/disable, thresholds, recipients, recent alert event history |
 | `notifications` | Notifications | In-app notification inbox for platform-admin alerts with read/unread state |
 | `audit` | Audit Trail | Paginated general audit log — entity changes across platform |
@@ -4294,6 +4339,8 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `contacts` | Case contacts directory — HCP, Patient, Other |
 | `company_reps` | Company representative directory |
 
+**Case form clean-up (2026-10-13, migrations 170–175).** A cut field is a `field_setup` row with `is_hidden = 1` — its values and history kept (the one deletion is migration 170: 23 contact settings the screen never showed, removed only where no case stored a value); a cut section is `case_form_definition.is_visible = 0`. Each organisation's outcome is an `audit_logs` row, action `case_form_cleanup`. `case_form_rules` required and validation rules and the Validation Rules phase list (`field_phase_required`) no longer refuse a save, and their admin endpoints are gone; the tables are kept. `case_form_rules` visibility rules are still seeded and applied. New columns: `cases.latest_information_date`; `case_ae_events.verbatim_reaction`, `hospitalization_start_date`, `hospitalization_end_date`; `case_ae_product_info.product_role`; `case_ae_patient_info.pregnancy_trimester`; `icsr_reactions.reaction_verbatim`.
+
 ##### Email & Inbox
 | Table | Purpose |
 |-------|---------|
@@ -4314,7 +4361,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `cm_org_settings` | Org-level CM default settings — key/value JSON store. Keys: `default_alert_days`, `default_alert_email_account_id`, `default_alert_roles` |
 | `cm_faqs` | FAQs with lifecycle |
 | `cm_templates` | Email/response/acknowledgment templates |
-| `cm_merge_reports` | Merge report templates with lifecycle |
+| `cm_merge_reports` | Retired 2026-10-14 — kept, no screen or route reads it |
 | `cm_reviews` | Review sessions |
 | `cm_reviewers` | Individual reviewer assignments per review session |
 | `cm_version_history` | Version tracking per document/FAQ/merge-report |
@@ -4387,7 +4434,24 @@ Seeds 3 things in order:
 
 All 3 run in single MySQL transaction — any failure rolls back all.
 
+**Since 2026-10-13** the seed builds the target form only: fields and sections on the cut list are left out, except panel fields, which are seeded hidden (a panel field with no row would show); Latest Information Date and Role are seeded; no Customize Forms placeholders.
+
 **Wired into:** `mims/backend/routes/admin/orgs.js` POST `/` handler — called after INSERT INTO organisations, before SELECT created_at.
+
+##### Case form clean-up files (NEW — 2026-10-13)
+
+| File | What it does |
+|------|--------------|
+| `mims/backend/catalogs/caseFormCutList.js` | The cut list — fields hidden, sections off, fields added, the MI follow-up rule. One list read by migration 174, the seed and the Case Form Fields screen. A `decided` row is hidden whatever it holds; any other row only where its store is empty. |
+| `mims/backend/services/requiredFields.js` | The one required engine. The Required tick on Case Form Fields, checked by the server on every save path — case fields, contacts, AE events and rows. |
+| `mims/backend/services/fieldUsageService.js` | The **Used in cases** count — each field counts its own store only, columns taken from the panel catalog. |
+| `mims/backend/catalogs/panelCoreFields.js` | Core key → stored column for every field a panel draws itself. |
+| `mims/backend/catalogs/e2bFieldTags.js` | Which fields reach the E2B file MIMS writes (the E2B badge). |
+| `mims/backend/services/miSendCheck.js` | What an MI needs before its response is sent: who asked, the question, the AE/PC screening answer and, on Yes, a converted or linked AE/PC case (product a warning). Read by the MI card and the SENT transition. |
+| `mims/backend/services/miResponseSettings.js` | An organisation's MI response settings (migration 178) with defaults; `defaultResponseDue` fills Response Required By on a new MI. The off-label and closing statements are added by `miResponseService.buildResponsePackage`. |
+| `mims/backend/services/transmissionTargets.js` | The safety (AE) and quality (PC) hand-off targets as `org_integrations` rows; the outbound key encrypted in `config.outbound_key_enc`, never in `api_key`; working days to hand off. |
+| `mims/backend/utils/workingDays.js` | Working days (Mon–Fri, no holidays) for due dates: MI answer-by, Field Alert Report, hand-off. |
+| `mims/backend/services/pcHandoffCheck.js` | What a complaint needs before Route to Quality: product, description, and a linked AE case for an injury (lot a warning); shows the counterfeit flag and the Field Alert Report due date. Read by the PC card and the hand-off route. |
 
 ##### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
 
@@ -4563,6 +4627,8 @@ Non-negotiable. Ignoring causes bugs.
 | Field setup seeding | Use `INSERT IGNORE`. Unique key is `uq_field_section_org (section_name, field_name, org_id)` — always includes org_id. Old `uq_field_section_name` (no org_id) dropped in Sprint 10. Without org_id, INSERT IGNORE silently blocks per-org seeds when global rows exist. |
 | Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Wired into `POST /api/admin/orgs`. For orgs created before Sprint 10, run `backfill-existing-orgs.js` once. |
 | form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Platform Admin has orgId=null; org resolved inline: `platform_admin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
+| Required = the Required tick | Since 2026-10-13 a field is required only by its Required tick on Case Form Fields, enforced by `requiredFields.js` on every save path. Do not add required checks in Customize Forms rules, Validation Rules or a panel. |
+| Case form cut = hide | A field or section is removed by hiding it, never by deleting a row that holds values. Change the cut in `caseFormCutList.js`, not in a migration's own list. |
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
 | Git push | Enabled again since 2026-07-27. Push a branch and open a pull request; never push to `main`. Confirm with Rohith before pushing anything of substance (§31, §38). |
 | New case org_id | Always from JWT (`req.user.orgId`) — never from request body. |

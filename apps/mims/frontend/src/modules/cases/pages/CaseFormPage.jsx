@@ -28,6 +28,10 @@ export default function CaseFormPage() {
   const { token, user, hasCapability } = useAuth()
   // A read-only role (the auditor) can open a case but the server refuses its save.
   const canSave = hasCapability('case.update')
+  // Without it the case opens read only: no save, no edit buttons, fields locked.
+  const readOnly = !canSave
+  // Starting a PV or Quality hand-off needs Create transmission.
+  const canTransmit = hasCapability('transmission.create')
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
@@ -92,6 +96,8 @@ export default function CaseFormPage() {
       communications: { step: 3, tab: 'workflow' },
       comments: { step: 3, tab: 'workflow', communicationsPane: 'threads' },
       correspondence: { step: 3, tab: 'workflow', communicationsPane: 'correspondence' },
+      // Where a letter made from a template is filed (Templates > Make letter).
+      attachments: { step: 3, tab: 'workflow', communicationsPane: 'attachments' },
       icsr: { step: 3, tab: 'workflow' },
       dppr: { step: 3, tab: 'workflow' },
     }
@@ -198,10 +204,13 @@ export default function CaseFormPage() {
               Response
             </button>
           )}
-          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving || !canSave}
-            title={canSave ? 'Save Case (Ctrl+S)' : 'Your security group does not allow changing cases.'}>
-            {saving ? 'Saving…' : 'Save Case'}
-          </button>
+          {readOnly
+            ? <span className="cf-readonly-chip" title="Your access lets you read this case, not change it.">Read only</span>
+            : (
+              <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving} title="Save Case (Ctrl+S)">
+                {saving ? 'Saving…' : 'Save Case'}
+              </button>
+            )}
         </div>
       </div>
 
@@ -224,7 +233,7 @@ export default function CaseFormPage() {
         headers={headers}
         currentUserId={currentUserId}
         onEditField={editFieldInStep3}
-        onAssignToMe={assignToMe}
+        onAssignToMe={readOnly ? undefined : assignToMe}
       />
       <CaseBridgePanel caseId={id} headers={headers} />
 
@@ -260,7 +269,7 @@ export default function CaseFormPage() {
         >
           {activeStep === 1 && (
             <CaseContactsTab
-              id={id} headers={headers}
+              id={id} headers={headers} readOnly={readOnly}
               formConfig={formConfig}
               getFieldConfig={getFieldConfig}
               getPicklistOptions={getPicklistOptions}
@@ -276,14 +285,14 @@ export default function CaseFormPage() {
               {!coreField('description', 'Description').hidden && (
                 <WiredTextarea
                   label={coreField('description', 'Description').label}
-                  section="case_meta" field="description" rows={4}
+                  section="case_meta" field="description" rows={4} disabled={readOnly}
                   value={infoForm.description}
                   placeholder="Case description…"
                   onChange={v => { setInfoForm(p => ({ ...p, description: v })); scheduleAutoSave() }} />
               )}
               {caseData?.case_type === 'MI' && (
                 <CaseMITab
-                  view="capture"
+                  view="capture" readOnly={readOnly}
                   coreField={coreField}
                   id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
                   onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
@@ -299,7 +308,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'AE' && (
                 <CaseAETab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
-                  caseClosed={caseClosed}
+                  caseClosed={caseClosed} readOnly={readOnly} canTransmit={canTransmit}
                   handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
@@ -314,7 +323,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'PC' && (
                 <CasePCTab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
-                  caseClosed={caseClosed}
+                  caseClosed={caseClosed} readOnly={readOnly} canTransmit={canTransmit}
                   handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
@@ -332,7 +341,7 @@ export default function CaseFormPage() {
           {activeStep === 3 && (
             <CaseWorkflowStep
               key={routeTarget?.communicationsPane || 'workflow'}
-              id={id}
+              id={id} readOnly={readOnly}
               headers={headers}
               token={token}
               currentUserId={currentUserId}

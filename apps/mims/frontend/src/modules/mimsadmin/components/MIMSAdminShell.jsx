@@ -1,7 +1,13 @@
+/* The address-to-screen syncing below sets state in effects and memoises
+   activateTab by hand. The React Compiler lint could not analyse this file
+   while it also fetched the security-group permissions; with that fetch gone
+   (access review, 2026-10-14) it reports these older patterns. The compiler is
+   not part of the build, so behaviour is unchanged; rewriting the syncing is
+   its own piece of work. */
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/preserve-manual-memoization */
 import { lazy, Suspense, useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
-import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV, RETIRED_SYSTEM_ITEMS, withoutAdvanced } from './configItems'
 import { ADVANCED_FORMS_KEY } from './CaseFieldsConfig'
@@ -27,14 +33,6 @@ function AdminTabLoader() {
       Loading admin workspace...
     </div>
   )
-}
-
-function createResolvedAdminAccess(data = {}) {
-  return { resolved: true, unrestricted: false, system_options: null, ...data }
-}
-
-function createUnresolvedAdminAccess() {
-  return { resolved: false, unrestricted: false, system_options: {}, privileges: [] }
 }
 
 function findFirstLeafValue(nav, predicate = () => true) {
@@ -97,46 +95,17 @@ const SYSTEM_ACTIVITY_NAV = [
   { label: 'System Activity Overview', value: 'system-activity-overview' },
 ]
 
-// ── Capability-based admin gating ──
-// Coarse map: admin nav value → capability key.
-const SYSTEM_VALUE_CAP = {
-  'sys-division-params': 'admin.division_parameters',
-  'sys-view-data':       'admin.view_data',
-  'sys-system-params':   'admin.system_parameters',
-  'sys-reports-access':  'admin.system_parameters',
-  'sys-license-admin':   'admin.system_parameters',
-  'sys-sec-users':       'admin.users',
-  'sys-sec-group':       'admin.security_groups',
-  'sys-sec-auth-policy': 'admin.auth_policy',
-  'sys-exception-log':   'admin.exception_log',
-}
-function capForSystemValue(value) {
-  if (!value) return null
-  if (value.startsWith('sys-setup-')) return 'admin.setup'
-  return SYSTEM_VALUE_CAP[value] || null
-}
-function effHasCap(effectiveAccess, cap) {
-  if (!cap) return true
-  if (!effectiveAccess) return false
-  if (effectiveAccess.unrestricted) return true
-  if (!Array.isArray(effectiveAccess.privileges)) return false
-  return effectiveAccess.privileges.includes(cap)
-}
-
-function isSystemItemAllowed(effectiveAccess, value) {
-  if (!value) return true
-  return effHasCap(effectiveAccess, capForSystemValue(value))
-}
-
-function AdminAccessDenied({ label = 'this admin screen', platformOnly = false }) {
+// MIMS Admin is for administrators, who may use every screen in it; only the
+// platform tools below are kept from an organisation's administrator. A
+// per-screen tick on Group Security used to hide items here, but the server
+// let administrators use them all the same (access review, 2026-10-14).
+function AdminAccessDenied({ label = 'this admin screen' }) {
   return (
     <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 32 }}>
       <div style={{ maxWidth: 480, textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28 }}>
         <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--text-primary)' }}>Access not available</h2>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>
-          {platformOnly
-            ? `${label} is kept to platform administrators, because it reaches every organisation.`
-            : `Your security group does not allow access to ${label}. Ask an administrator to update Group Security.`}
+          {`${label} is kept to platform administrators, because it reaches every organisation.`}
         </p>
       </div>
     </div>
@@ -147,7 +116,7 @@ function AdminAccessDenied({ label = 'this admin screen', platformOnly = false }
 // Division reaches every organisation). The server refuses them too.
 // The server keeps these to platform admins: each holds every organisation's data
 // (MIPM-149). A tenant admin saw the menu items and a screen whose data was refused.
-const PLATFORM_ONLY_LABELS = { 'sys-maint-copy-division': 'Copy Division', 'sys-reports-access': 'Reports Access', 'sys-exception-log': 'The Exception Log' }
+const PLATFORM_ONLY_LABELS = { 'sys-maint-copy-division': 'Copy Division', 'sys-exception-log': 'The Exception Log' }
 const PLATFORM_ONLY_SYSTEM_ITEMS = new Set(Object.keys(PLATFORM_ONLY_LABELS))
 
 function withoutPlatformOnly(nav) {
@@ -158,18 +127,6 @@ function withoutPlatformOnly(nav) {
       return acc
     }
     if (!PLATFORM_ONLY_SYSTEM_ITEMS.has(item.value)) acc.push(item)
-    return acc
-  }, [])
-}
-
-function filterSystemNav(nav, effectiveAccess) {
-  return nav.reduce((acc, item) => {
-    if (item.children) {
-      const children = filterSystemNav(item.children, effectiveAccess)
-      if (children.length) acc.push({ ...item, children })
-      return acc
-    }
-    if (isSystemItemAllowed(effectiveAccess, item.value)) acc.push(item)
     return acc
   }, [])
 }
@@ -311,7 +268,7 @@ export default function MIMSAdminShell() {
 }
 
 function MIMSAdminShellInner() {
-  const { token, user } = useAuth()
+  const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const initialParams = new URLSearchParams(location.search)
@@ -333,35 +290,7 @@ function MIMSAdminShellInner() {
   const [systemItem,     setSystemItem]     = useState(initialSystemItem)
   const [auditItem,      setAuditItem]      = useState(initialAuditItem)
   const [helpItem,       setHelpItem]       = useState(initialParams.get('help') || '')
-  const [effectiveAccess, setEffectiveAccess] = useState(() => createUnresolvedAdminAccess())
   const [narrowNavOpen,  setNarrowNavOpen]  = useState(false)
-
-  const loadEffectiveAccess = useCallback(async () => {
-    if (!token || !user) return
-    if (hasGlobalAdminScope(user)) {
-      setEffectiveAccess(createResolvedAdminAccess({ unrestricted: true, system_options: null }))
-      return
-    }
-    try {
-      const res = await httpFetch('/api/admin/security-groups/effective', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('security access unavailable')
-      const data = await res.json()
-      setEffectiveAccess(createResolvedAdminAccess(data))
-    } catch {
-      setEffectiveAccess(createUnresolvedAdminAccess())
-    }
-  }, [token, user])
-
-  useEffect(() => {
-    loadEffectiveAccess()
-  }, [loadEffectiveAccess])
-
-  useEffect(() => {
-    window.addEventListener('mims-security-groups-updated', loadEffectiveAccess)
-    return () => window.removeEventListener('mims-security-groups-updated', loadEffectiveAccess)
-  }, [loadEffectiveAccess])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -404,11 +333,7 @@ function MIMSAdminShellInner() {
     return () => window.removeEventListener('mims-advanced-forms', onChange)
   }, [])
 
-  // Capability-based filtering
-  const capabilityNav = (effectiveAccess?.unrestricted)
-    ? SYSTEM_NAV
-    : filterSystemNav(SYSTEM_NAV, effectiveAccess)
-  const scopedNav = hasGlobalAdminScope(user) ? capabilityNav : withoutPlatformOnly(capabilityNav)
+  const scopedNav = hasGlobalAdminScope(user) ? SYSTEM_NAV : withoutPlatformOnly(SYSTEM_NAV)
   const systemNav = advancedForms ? scopedNav : withoutAdvanced(scopedNav)
   const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
   const defaultEscalationItem = findFirstLeafValue(ESCALATION_NAV)
@@ -416,7 +341,7 @@ function MIMSAdminShellInner() {
   const defaultServiceItem = 'service-log-overview'
   const defaultActivityItem = 'system-activity-overview'
   const defaultTablesItem = findFirstLeafValue(TABLES_NAV)
-  const defaultSystemItem = findFirstLeafValue(systemNav, value => isSystemItemAllowed(effectiveAccess, value))
+  const defaultSystemItem = findFirstLeafValue(systemNav)
   const defaultHelpItem = findFirstLeafValue(HELP_NAV)
 
   const syncAdminState = useCallback((nextState) => {
@@ -502,7 +427,7 @@ function MIMSAdminShellInner() {
       return
     }
     if (nextTab === 'system') {
-      const value = nextItemKey === 'system' ? nextItemValue : (systemItem && isSystemItemAllowed(effectiveAccess, systemItem) ? systemItem : defaultSystemItem)
+      const value = nextItemKey === 'system' ? nextItemValue : (systemItem || defaultSystemItem)
       setSystemItem(value)
       setActiveTab(nextTab)
       syncAdminState({ tab: nextTab, system: value })
@@ -535,7 +460,6 @@ function MIMSAdminShellInner() {
     syncAdminState,
     systemItem,
     tablesItem,
-    effectiveAccess,
   ])
 
   function handleAuditSelect(value) {
@@ -630,10 +554,9 @@ function MIMSAdminShellInner() {
 
         <div className="mims-admin-tab-content">
           <Suspense fallback={<AdminTabLoader />}>
-            {activeTab === 'system' && systemItem && (!isSystemItemAllowed(effectiveAccess, systemItem)
+            {activeTab === 'system' && systemItem && PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)
                 // Reached by link or address: the menu hides these, the screen should too.
-                || (PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)))
-              ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem] || helpLabelFor({ activeTab, systemItem }) || 'this system option'} platformOnly={PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem)} />
+              ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem]} />
               : activeTab === 'service-log'
               ? <ServiceLogTab selectedItem={serviceItem} />
               : activeTab === 'system-activity'

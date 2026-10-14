@@ -1,11 +1,13 @@
 import { useAuth } from '../context/AuthContext'
+import { isAdminUser } from '../utils/adminScope'
 
-export default function ModuleAccessGuard({ moduleKey, moduleKeys, children }) {
-  const { hasModuleAccess, logout } = useAuth()
+// adminOnly: the screen is also for administrators only, as its menu entry is.
+export default function ModuleAccessGuard({ moduleKey, moduleKeys, adminOnly = false, children }) {
+  const { hasModuleAccess, logout, user } = useAuth()
   const allowedModules = Array.isArray(moduleKeys)
     ? moduleKeys.filter(Boolean)
     : (moduleKey ? [moduleKey] : [])
-  const canAccess = allowedModules.length === 0 || allowedModules.some(hasModuleAccess)
+  const canAccess = (allowedModules.length === 0 || allowedModules.some(hasModuleAccess)) && (!adminOnly || isAdminUser(user))
 
   if (!canAccess) {
     return (

@@ -51,7 +51,7 @@ const CUT_FIELDS = [
   // ── MI ──
   ...['Question Source', 'Question Channel', 'Urgency Level']
     .map(field => ({ section: 'MI — Category & Product', field })),
-  { section: 'MI — Response', field: 'Response Date', panel: true },
+  { section: 'MI — Response', field: 'Response Date', panel: true, decided: true },
   ...['Country-specific PI Reference', 'PI Version Used', 'Reference Documents Used', 'Response Template Used',
     'Approval Status', 'Reviewer Name', 'Reviewer Date', 'Approver Name', 'Approver Date',
     'HCP Wants Written Response', 'Translation Required', 'Target Language']
@@ -59,6 +59,14 @@ const CUT_FIELDS = [
   ...['Follow-up Channel', 'Follow-up Completed', 'Follow-up Completed Date', 'HCP Satisfaction Score',
     'HCP Feedback Notes', 'Closed-Loop Confirmation']
     .map(field => ({ section: 'MI — Follow-up & Outcome', field })),
+
+  // MI and PC review (Rohith, 13 Oct 2026, "go with all 6"): the answer lives in
+  // the signed letter, so the MI's own answer box goes; the classification
+  // block's off-label tick is the one that starts two signers; Patient-specific
+  // had no rule behind it. Hidden whatever they hold (migration 176).
+  { section: 'MI — Response', field: 'Response Provided', panel: true, decided: true },
+  { section: 'MI — Category & Product', field: 'Off-Label Discussion', decided: true },
+  { section: 'MI — Category & Product', field: 'Patient-specific', decided: true },
 
   // ── AE General: Date Received is Day 0, Latest Information Date is added ──
   { section: 'AE — General', field: 'AE Version' },
@@ -96,6 +104,25 @@ const CUT_FIELDS = [
     .map(field => ({ section: 'AE — Treatment of Event', field })),
 
   // ── PC ──
+  // MI and PC review (Rohith, 13 Oct 2026, "go with all 6"; migration 177),
+  // hidden whatever they hold:
+  // - seriousness and type graded five ways: Category and Severity stay;
+  // - sample available three times: the product's tick stays; complaint source
+  //   repeats the case's intake channel; trending is Quality's;
+  // - the patient is held as initials and age, not name and date of birth;
+  // - Investigation & CAPA keeps what the complaint record needs (21 CFR
+  //   211.198(b)(2)-(3)): investigation needed or why not and who decided, the
+  //   findings, the CAPA reference, and reportability. The investigation itself
+  //   runs in the client's quality system.
+  { section: 'PC — General', field: 'PC Classification', panel: true, decided: true },
+  ...['Visual Defect Type', 'Sample Available', 'Complaint Source', 'Trend / Cluster Flag']
+    .map(field => ({ section: 'PC — General', field, decided: true })),
+  { section: 'PC — Patient Information', field: 'Patient Name', panel: true, decided: true },
+  { section: 'PC — Patient Information', field: 'Date of Birth', panel: true, decided: true },
+  ...['Investigation Status', 'Investigator Assigned', 'Estimated Completion Date', 'Actual Completion Date',
+    'Root Cause Analysis', 'CAPA Required', 'CAPA Owner', 'CAPA Due Date', 'Field Action Required',
+    'Field Action Type', 'Regulatory Notification Required']
+    .map(field => ({ section: 'PC — Investigation & CAPA', field, decided: true })),
   { section: 'PC — General', field: 'PC Version' },
   { section: 'PC — General', field: 'Date Received', panel: true },
   { section: 'PC — General', field: 'Root Cause', panel: true },
@@ -119,6 +146,18 @@ const CUT_SECTIONS = [
 const NEW_FIELDS = [
   { section: 'Case Information', field: 'Latest Information Date', type: 'date', scope: 'shared', coreKey: 'latest_information_date', sortOrder: 3 },
   { section: 'AE — Product Information', field: 'Role', type: 'dropdown', scope: 'ae', coreKey: 'ae_product_info_role', sortOrder: 2 },
+  // MI and PC review (migration 177). Panel fields carry their core key; the
+  // three Investigation & CAPA fields are configured fields.
+  { section: 'PC — General', field: 'Reply Date', type: 'date', scope: 'pc', coreKey: 'pc_general_reply_date', sortOrder: 20 },
+  { section: 'PC — General', field: 'Reply to Complainant', type: 'textarea', scope: 'pc', coreKey: 'pc_general_reply_to_complainant', sortOrder: 21 },
+  { section: 'PC — General', field: 'Suspected Counterfeit or Tampering', type: 'checkbox', scope: 'pc', coreKey: 'pc_general_suspected_counterfeit_or_tampering', sortOrder: 22 },
+  { section: 'PC — General', field: 'Device Part Involved', type: 'checkbox', scope: 'pc', coreKey: 'pc_general_device_part_involved', sortOrder: 23 },
+  { section: 'PC — General', field: 'Device Malfunction', type: 'dropdown', scope: 'pc', coreKey: 'pc_general_device_malfunction', sortOrder: 24 },
+  { section: 'PC — Patient Information', field: 'Patient Initials', type: 'text', scope: 'pc', coreKey: 'pc_patient_info_patient_initials', sortOrder: 0 },
+  { section: 'PC — Product Information', field: 'Strength', type: 'text', scope: 'pc', coreKey: 'pc_product_info_strength', sortOrder: 2 },
+  { section: 'PC — Investigation & CAPA', field: 'Investigation Needed', type: 'dropdown', scope: 'pc', coreKey: null, picklist: 'yes_no_unknown', sortOrder: 0 },
+  { section: 'PC — Investigation & CAPA', field: 'Reason Not Investigated', type: 'textarea', scope: 'pc', coreKey: null, sortOrder: 1 },
+  { section: 'PC — Investigation & CAPA', field: 'Decided By', type: 'text', scope: 'pc', coreKey: null, sortOrder: 2 },
 ];
 
 // MI Follow-up Due Date shows only when Follow-up Required is ticked.
@@ -128,8 +167,21 @@ const FOLLOW_UP_RULE = {
   action_json: { action: 'show' },
 };
 
+// The why-not answer and who decided show when no investigation is needed;
+// the findings show when one is (21 CFR 211.198(b)(2)-(3)).
+const showWhen = (field, value) => ({ or: [{ field, op: '=', value }] });
+const FORM_RULES = [
+  FOLLOW_UP_RULE,
+  ...['Reason Not Investigated', 'Decided By'].map(field_name => ({
+    case_type: 'PC', section_name: 'PC — Investigation & CAPA', field_name, rule_type: 'visibility',
+    condition_json: showWhen('Investigation Needed', 'No'), action_json: { action: 'show' },
+  })),
+  { case_type: 'PC', section_name: 'PC — Investigation & CAPA', field_name: 'Investigation Findings', rule_type: 'visibility',
+    condition_json: showWhen('Investigation Needed', 'Yes'), action_json: { action: 'show' } },
+];
+
 const cutKey = (section, field) => `${section}::${String(field).trim().toLowerCase()}`;
 const CUT_FIELD_KEYS = new Set(CUT_FIELDS.map(f => cutKey(f.section, f.field)));
 const CUT_SECTION_NAMES = new Set(CUT_SECTIONS.map(s => s.section));
 
-module.exports = { CUT_FIELDS, CUT_SECTIONS, NEW_FIELDS, FOLLOW_UP_RULE, cutKey, CUT_FIELD_KEYS, CUT_SECTION_NAMES };
+module.exports = { CUT_FIELDS, CUT_SECTIONS, NEW_FIELDS, FOLLOW_UP_RULE, FORM_RULES, cutKey, CUT_FIELD_KEYS, CUT_SECTION_NAMES };

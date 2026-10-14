@@ -10,9 +10,11 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
-const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { enforceEvidenceGate, evaluateEvidenceChain } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory } = require('../../services/cmLineage');
 const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -78,7 +80,9 @@ router.get('/faqs', authenticate, async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
-      SELECT f.*, fo.name AS folder_name, u.name AS created_by_name
+      SELECT f.*, fo.name AS folder_name, u.name AS created_by_name,
+             (SELECT r.id FROM cm_faqs r WHERE r.revision_of = f.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
+             (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_faqs o WHERE o.id = f.revision_of) AS revises_version
       FROM cm_faqs f
       LEFT JOIN cm_folders fo ON f.folder_id = fo.id
       LEFT JOIN users u ON f.created_by = u.id
@@ -97,6 +101,7 @@ router.get('/faqs', authenticate, async (req, res) => {
     }
     // MIPM-210: drafts are for Content Management, not for agents browsing.
     if (await publishedOnly(req)) query += " AND f.status = 'Published'";
+    query += await folderFilterSql(req.user, 'f.folder_id');
     if (folder_id) {
       query += ' AND f.folder_id = ?';
       params.push(folder_id);
@@ -113,7 +118,7 @@ router.get('/faqs', authenticate, async (req, res) => {
       query += ' AND (f.expiry_date IS NULL OR f.expiry_date >= CURDATE())';
     }
 
-    const countQuery = query.replace('SELECT f.*, fo.name AS folder_name, u.name AS created_by_name', 'SELECT COUNT(*) AS total');
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) counted`;
     const [[{ total }]] = await pool.execute(countQuery, params);
 
     query += ` ORDER BY f.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
@@ -122,6 +127,33 @@ router.get('/faqs', authenticate, async (req, res) => {
     res.json({ faqs: faqs.map(decorateFaqRow), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /cm/faqs error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/faqs/:id/versions — the version history of the whole line of
+// versions. The screen had no history for faqs although it was recorded.
+router.get('/faqs/:id/versions', authenticate, async (req, res) => {
+  try {
+    const row = await getScopedFaq(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'FAQ not found.' });
+    if (await publishedOnly(req)) return res.status(404).json({ error: 'FAQ not found.' });
+    res.json({ versions: await lineageHistory('faq', row.id) });
+  } catch (err) {
+    console.error('GET /cm/faqs/:id/versions error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/faqs/:id/publish-checks — the publishing checks, run without publishing.
+router.get('/faqs/:id/publish-checks', authenticate, async (req, res) => {
+  try {
+    const faq = await getScopedFaq(req, req.params.id);
+    if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
+    const r = await evaluateEvidenceChain({ orgId: faq.folder_org_id || req.user.orgId, contentType: 'faq', contentId: faq.id, mode: 'publish' });
+    res.json({ allow: r.allow, blockers: r.blockers, warnings: r.warnings, checks: r.checks });
+  } catch (err) {
+    console.error('GET /cm/faqs/:id/publish-checks error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -385,10 +417,46 @@ router.post('/faqs/:id/publish', authenticate, requireCapability('content.publis
     const [[afterFaq]] = await pool.execute('SELECT version_major, version_minor FROM cm_faqs WHERE id = ?', [id]);
     const versionStr = `${afterFaq.version_major}.${afterFaq.version_minor}`;
     await addVersionHistory(Number(id), versionStr, 'Published', reason, req.user.userId);
+    // Publishing a revision retires the version it replaces.
+    if (faq.revision_of) {
+      const [[old]] = await pool.execute("SELECT id, version_major, version_minor FROM cm_faqs WHERE id = ? AND status = 'Published'", [faq.revision_of]);
+      if (old) {
+        await pool.execute("UPDATE cm_faqs SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?", [req.user.userId, old.id]);
+        await addVersionHistory(old.id, `${old.version_major}.${old.version_minor}`, 'Archived', `Superseded by version ${versionStr}.`, req.user.userId);
+        await audit(req.user.userId, req.user.email, 'SUPERSEDE', 'cm_faq', old.id, { superseded_by: Number(id), new_version: versionStr });
+      }
+    }
     await audit(req.user.userId, req.user.email, 'PUBLISH', 'cm_faq', Number(id), { reason, version: versionStr });
     res.json({ message: 'FAQ published.', version: versionStr });
   } catch (err) {
     console.error('POST /cm/faqs/:id/publish error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/faqs/:id/revise — draft the next version of a published FAQ. A
+// published FAQ could not be changed at all (check-out takes Draft only); the
+// published one stays in Browse Content until this one is published.
+router.post('/faqs/:id/revise', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
+  try {
+    const src = await getScopedFaq(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'FAQ not found.' });
+    if (src.status !== 'Published') return res.status(400).json({ error: 'Only a published FAQ is revised. Edit a draft directly.' });
+    const [[open]] = await pool.execute(
+      "SELECT id FROM cm_faqs WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
+    if (open) return res.status(409).json({ error: 'This FAQ already has a revision in progress.', id: open.id });
+    const [result] = await pool.execute(
+      `INSERT INTO cm_faqs (folder_id, question, answer_html, category, approval_required, expiry_date, search_tags,
+          status, version_major, version_minor, revision_of, created_by)
+       SELECT folder_id, question, answer_html, category, approval_required, expiry_date, search_tags,
+          'Draft', version_major, version_minor, id, ?
+         FROM cm_faqs WHERE id = ?`, [req.user.userId, src.id]);
+    const version = `${src.version_major}.${src.version_minor}`;
+    await addVersionHistory(result.insertId, version, 'Draft', `Revision of published version ${version} started.`, req.user.userId);
+    await audit(req.user.userId, req.user.email, 'REVISE', 'cm_faq', result.insertId, { revision_of: src.id, from_version: version });
+    res.status(201).json({ message: 'Revision started. The published FAQ stays in use until this one is published.', id: result.insertId });
+  } catch (err) {
+    console.error('POST /cm/faqs/:id/revise error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

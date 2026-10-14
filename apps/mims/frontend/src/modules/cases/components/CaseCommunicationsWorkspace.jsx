@@ -17,6 +17,7 @@ export default function CaseCommunicationsWorkspace({
   currentUserId,
   setSavedMsg,
   routePane = '',
+  readOnly = false,
   onCommentCount,
   onCorrespondenceCount,
 }) {
@@ -54,6 +55,7 @@ export default function CaseCommunicationsWorkspace({
             currentUserId={currentUserId}
             includeThreadedComments
             includeLiveChat={false}
+            readOnly={readOnly}
           />
         )}
         {activePane === 'chat' && (
@@ -74,6 +76,7 @@ export default function CaseCommunicationsWorkspace({
             setSavedMsg={setSavedMsg}
             onCountChange={onCorrespondenceCount}
             showCaseAttachments={false}
+            readOnly={readOnly}
           />
         )}
         {activePane === 'attachments' && <CaseAttachmentsPanel caseId={id} />}

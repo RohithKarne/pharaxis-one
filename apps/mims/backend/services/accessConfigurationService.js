@@ -13,16 +13,10 @@ const {
 const MODULE_CATALOG = [
   ['mims_core', 'MIMS Core'],
   ['inbox', 'Inbox'],
-  ['case_mgmt', 'Case Management'],
-  ['case_query', 'Case Query'],
-  ['utilities', 'Utilities'],
   ['transmissions', 'Transmissions'],
   ['browse_content', 'Browse Content'],
-  ['analytics', 'Analytics'],
-  ['user_mgmt', 'User Management'],
   ['admin_console', 'Admin Console'],
   ['content_mgmt', 'Content Management'],
-  ['data_visualization', 'Data Visualization'],
   ['reports', 'Reports'],
 ];
 
@@ -35,7 +29,7 @@ const GROUP_TEMPLATES = [
     // No content.author: writing and approving content in one group breaks the
     // blocking Segregation of Duties rule, so applying this template on Group
     // Security was refused. Content Managers write; administrators approve.
-    privileges: ['admin.access.manage', 'admin.access.approve', 'case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.create', 'transmission.approve', 'content.review', 'content.approve', 'content.publish', 'reports.view', 'reports.manage', 'reports.export'],
+    privileges: ['case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.unmask', 'case.unmask_all', 'transmission.create', 'transmission.approve', 'content.review', 'content.approve', 'content.publish', 'reports.manage', 'reports.export'],
   },
   {
     key: 'mi_agent',
@@ -50,14 +44,7 @@ const GROUP_TEMPLATES = [
     name: 'Reviewer',
     role: 'reviewer',
     description: 'Reviewer with case review, close, controlled exports, and report visibility.',
-    privileges: ['case.view', 'case.view_all', 'case.review', 'case.close', 'case.close_all', 'case.export', 'case.export_all', 'transmission.approve', 'content.review', 'reports.view', 'reports.export'],
-  },
-  {
-    key: 'manager',
-    name: 'Manager',
-    role: 'admin',
-    description: 'Operational manager with override, reopen, bulk action, unmask, export, and approval capabilities.',
-    privileges: ['case.view', 'case.view_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.approve', 'reports.view', 'reports.export'],
+    privileges: ['case.view', 'case.view_all', 'case.close', 'case.close_all', 'transmission.approve', 'content.review', 'reports.export'],
   },
   {
     key: 'content_manager',
@@ -74,7 +61,8 @@ const GROUP_TEMPLATES = [
     // reviewer's include changing cases (migration 167).
     role: 'auditor',
     description: 'Read-only inspection support with reports and audit visibility, no mutation privileges.',
-    privileges: ['reports.view'],
+    // Reports come with the role's Reports module; nothing to add.
+    privileges: [],
   },
 ];
 
@@ -83,7 +71,6 @@ const SCOPED_PRIVILEGE_COMPANIONS = Object.freeze({
   'case.update': 'case.update_all',
   'case.close': 'case.close_all',
   'case.assign': 'case.assign_all',
-  'case.export': 'case.export_all',
   'case.unmask': 'case.unmask_all',
 });
 
@@ -760,7 +747,6 @@ async function resolveActivityScope(user, privilegeKey) {
 async function userHasActivityPrivilege(user, privilegeKey) {
   if (!user || !privilegeKey) return false;
   if (hasGlobalAdminScope(user)) return true;
-  if (user.role === 'admin' && String(privilegeKey).startsWith('admin.')) return true;
   if (!user.orgId) return false;
   const effective = await resolveEffectivePrivileges(user.userId, user.orgId);
   const granted = new Set(effective?.privileges || []);

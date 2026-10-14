@@ -23,6 +23,7 @@ export default function CaseCommentsTab({
   onCountChange,
   includeThreadedComments = true,
   includeLiveChat = true,
+  readOnly = false,
 }) {
   const [conversationId, setConversationId] = useState('')
   const [conversationError, setConversationError] = useState('')
@@ -60,7 +61,7 @@ export default function CaseCommentsTab({
               Each comment is recorded in the case audit trail. The case owner is notified of comments from others.
             </div>
           </div>
-          <CommentThread caseId={id} />
+          <CommentThread caseId={id} readOnly={readOnly} />
         </div>
       )}
 

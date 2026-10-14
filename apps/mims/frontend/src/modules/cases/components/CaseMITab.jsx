@@ -50,7 +50,7 @@ function emptyMiRespForm(tab = null) {
     response_subject: '',
     body_html: '',
     custom_text: '',
-    channel: 'email',
+    channel: 'Email',
     responded_at: '',
     follow_up_required: false,
     selected_document_ids: [],
@@ -62,10 +62,10 @@ function emptyMiRespForm(tab = null) {
 }
 
 export default function CaseMITab({
-  id, token, headers, setSavedMsg, onCountChange,
+  id, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, coreField,
-  view = 'full',
+  view = 'full', readOnly = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings (Customize Forms) for this panel's own fields — label,
@@ -100,11 +100,27 @@ export default function CaseMITab({
   const [miEsignForm,    setMiEsignForm]    = useState({ password: '', reason: '' })
   const [miEsignSaving,  setMiEsignSaving]  = useState(false)
   const [builderContext, setBuilderContext] = useState(null)
+  const [showOtherProductDocs, setShowOtherProductDocs] = useState(false)
   const [builderLoading, setBuilderLoading] = useState(false)
   const [builderPreview, setBuilderPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => { loadMI(); loadMiResponses() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What this MI still needs before its answer can be sent (MI field review):
+  // the same check the server applies when a response is marked SENT.
+  const [sendCheck, setSendCheck] = useState(null)
+  const sendCheckTabId = miTabs[activeMiTab]?.id
+  async function loadSendCheck(tabId = sendCheckTabId) {
+    if (!tabId) { setSendCheck(null); return }
+    try {
+      // The response page checks every MI on the case; the MI tab, the open one.
+      const url = view === 'response' ? `${API}/cases/${id}/mi-send-check` : `${API}/cases/${id}/mi/${tabId}/send-check`
+      const res = await httpFetch(url, { headers })
+      setSendCheck(res.ok ? await res.json() : null)
+    } catch { setSendCheck(null) }
+  }
+  useEffect(() => { loadSendCheck() }, [sendCheckTabId, miTabs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // B8 — draft key now includes the active MI tab id so drafts don't bleed
   // across MI inquiries on the same case.
@@ -143,6 +159,7 @@ export default function CaseMITab({
       response_channel:     tab.response_channel      || '',
       status:               tab.status               || 'Open',
       literature_reference: tab.literature_reference || '',
+      ae_pc_screening:      tab.ae_pc_screening      || '',
     }
   }
 
@@ -353,24 +370,6 @@ export default function CaseMITab({
     setBuilderPreview(null)
   }
 
-  function applyBundle(bundleId) {
-    const bundle = builderContext?.bundles?.find(b => Number(b.id) === Number(bundleId))
-    if (!bundle) return
-    const tmpl = builderContext?.templates?.find(t => Number(t.id) === Number(bundle.template_id))
-    setMiRespForm(prev => ({
-      ...prev,
-      template_id: bundle.template_id || prev.template_id,
-      response_subject: tmpl?.subject || prev.response_subject,
-      body_html: tmpl?.body_html || prev.body_html,
-      selected_document_ids: parseJsonList(bundle.document_ids),
-      selected_module_ids: parseJsonList(bundle.module_ids),
-      language: bundle.language || prev.language,
-      is_customized: true,
-      customization_notes: bundle.name,
-    }))
-    setBuilderPreview(null)
-  }
-
   function toggleSelection(key, value) {
     const idNum = Number(value)
     setMiRespForm(prev => {
@@ -510,10 +509,25 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
-  const documents = builderContext?.documents || []
-  const modules = builderContext?.modules || []
-  const templates = builderContext?.templates || []
-  const bundles = builderContext?.bundles || []
+  const allDocuments = builderContext?.documents || []
+  const allModules = builderContext?.modules || []
+  const allTemplates = builderContext?.templates || []
+  // Languages: English plus every language the published content is written in.
+  const languages = [...new Set(['en', ...[...allTemplates, ...allDocuments, ...allModules].map(x => x.language).filter(Boolean)])]
+  // Content in the letter's language, and documents for this question's product
+  // or for any product. Another product's documents stay one click away.
+  const inLanguage = (x) => !x.language || x.language === miRespForm.language
+  const otherProductDocs = allDocuments.filter(d => d.product_match === 'other' && inLanguage(d))
+  // Anything already ticked stays in view, so it can be seen and unticked.
+  const ticked = (list, id) => (list || []).map(Number).includes(Number(id))
+  const documents = allDocuments.filter(d => ticked(miRespForm.selected_document_ids, d.id) || (inLanguage(d) && (d.product_match !== 'other' || showOtherProductDocs)))
+  const modules = allModules.filter(m => ticked(miRespForm.selected_module_ids, m.id) || inLanguage(m))
+  // Templates in the letter's language; the chosen one stays listed.
+  const templates = allTemplates.filter(t => String(t.id) === String(miRespForm.template_id) || inLanguage(t))
+  const LANGUAGE_NAMES = { en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', ja: 'Japanese', zh: 'Chinese', pt: 'Portuguese', nl: 'Dutch' }
+  const channels = builderContext?.channels?.length ? builderContext.channels : ['Email', 'Phone Call', 'Written Letter', 'Portal', 'Fax', 'In-Person Meeting']
+  const verbalChannel = !/^(email|portal)$/i.test(String(miRespForm.channel || ''))
+  const rules = builderContext?.response_rules || {}
   const chosenTemplate = selectedTemplate()
   const miCategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Category') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
   // Subcategories follow the chosen category (T19 / M-19, migration 119): a linked
@@ -537,11 +551,32 @@ export default function CaseMITab({
   const showCapture = view !== 'response'
   const showResponse = view !== 'capture'
 
+  const sendCheckCard = sendCheck && Array.isArray(sendCheck.items) && (
+    <section className="cf-handoff-card" data-testid="mi-send-check">
+      <div className="cf-handoff-card-head">
+        <h3>Before the answer can be sent</h3>
+        <span className={`cf-handoff-score ${sendCheck.ready ? 'is-ok' : 'is-blocked'}`}>
+          {sendCheck.items.filter(i => i.ok).length}/{sendCheck.items.length}
+        </span>
+      </div>
+      <ul className="cf-handoff-checks">
+        {sendCheck.items.map(item => (
+          <li key={item.label} className={item.ok ? 'is-ok' : item.level === 'block' ? 'is-missing' : 'is-warn'}>
+            <span className="cf-handoff-check-icon">{item.ok ? '✓' : item.level === 'block' ? '✕' : '!'}</span>
+            <span className="cf-handoff-check-label">{item.label}</span>
+            <span className="cf-handoff-check-reason">{item.detail || ''}</span>
+          </li>
+        ))}
+      </ul>
+      {!sendCheck.ready && <div className="cf-handoff-muted">Send Response stays blocked until the lines marked ✕ are done. Save the MI to refresh.</div>}
+    </section>
+  )
+
   return (
     <div id="tab-mi" className="cf-tab-pane">
       <div className="cf-section-header-row">
-        {showCapture && <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>}
-        {showResponse && (
+        {showCapture && !readOnly && <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>}
+        {showResponse && !readOnly && (
           <button className="cf-open-btn" style={{ marginLeft: showCapture ? 8 : 0 }} onClick={openResponseBuilder}>
             Build MI Response
           </button>
@@ -549,7 +584,7 @@ export default function CaseMITab({
       </div>
 
       {!showCapture ? null : miTabs.length === 0 ? (
-        <div className="cf-empty-msg">No MI components yet. Click "+ Add MI" to start.</div>
+        <div className="cf-empty-msg">{readOnly ? 'No MI components yet.' : 'No MI components yet. Click "+ Add MI" to start.'}</div>
       ) : (
         <>
           <div className="cf-mi-tabs">
@@ -559,7 +594,7 @@ export default function CaseMITab({
               </button>
             ))}
           </div>
-          <div className="cf-mi-panel">
+          <fieldset className="cf-mi-panel cf-fieldset-plain" disabled={readOnly}>
             {/* Sprint 2 #16 — off-label / solicited classification + promo review request */}
             {miTabs[activeMiTab]?.id && (
               <div className="cf-mi-approval-block">
@@ -571,6 +606,15 @@ export default function CaseMITab({
                 Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} Case #{miTabs[activeMiTab].converted_to_case_id}
               </div>
             )}
+            <div className="cf-form-field cf-mi-screening">
+              <label>Mentions an adverse event or product complaint? *</label>
+              <select aria-label="Mentions an adverse event or product complaint?" value={miForm.ae_pc_screening || ''} onChange={e => editMiForm(p => ({ ...p, ae_pc_screening: e.target.value }))}>
+                <option value="">— Not screened yet —</option>
+                <option value="no">No</option>
+                <option value="yes">Yes — convert the MI or link the AE / PC case</option>
+              </select>
+            </div>
+            {sendCheckCard}
             <div className="cf-form-grid">
               <div className="cf-form-field" style={miHide('mi_category')}>
                 <label>{miLabel('mi_category', 'MI Category')}</label>
@@ -628,26 +672,45 @@ export default function CaseMITab({
               <label>{miLabel('mi_literature_reference', 'Literature Reference')}</label>
               <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => editMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
             </div>
+            {(() => {
+              // The answer is the signed letter; the MI shows what went out
+              // instead of its own answer box (MI field review).
+              const tabId = miTabs[activeMiTab]?.id
+              const sent = miResponses.filter(r => r.response_status === 'SENT' && (!r.mi_tab_id || Number(r.mi_tab_id) === Number(tabId)))[0]
+              return (
+                <div className="cf-form-field cf-form-field--full" data-testid="mi-answer-sent">
+                  <label>Answer sent</label>
+                  <div className="cf-inline-note">
+                    {sent
+                      ? `Sent ${String(sent.sent_at || sent.responded_at || '').slice(0, 10)}${sent.channel ? ` by ${sent.channel}` : ''}${sent.recipient_name || sent.recipient_email ? ` to ${sent.recipient_name || sent.recipient_email}` : ''}.`
+                      : 'No answer sent yet. Write it with Build MI Response below.'}
+                  </div>
+                </div>
+              )
+            })()}
             <div className="cf-form-field cf-form-field--full">
-              <label>Linked Documents</label>
-              <CaseAssociatedDocs miTab={miTabs[activeMiTab]} token={token} />
+              <label>Documents sent</label>
+              <CaseAssociatedDocs miTab={miTabs[activeMiTab]} responses={miResponses} />
             </div>
-            <div className="cf-form-actions">
-              <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
-              <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
-              <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
-              <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
-            </div>
-          </div>
+            {!readOnly && (
+              <div className="cf-form-actions">
+                <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
+                <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
+                <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
+                <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
+              </div>
+            )}
+          </fieldset>
         </>
       )}
 
+      {showResponse && !showCapture && sendCheckCard}
       {showResponse && (
       <div className="cf-response-history">
         <div className="cf-response-history-title">Response History</div>
         {miRespLoading && <div className="cf-empty-msg">Loading responses...</div>}
         {!miRespLoading && miResponses.length === 0 && (
-          <div className="cf-empty-msg">No MI responses recorded yet. Click "Build MI Response" to create one.</div>
+          <div className="cf-empty-msg">{readOnly ? 'No MI responses recorded yet.' : 'No MI responses recorded yet. Click "Build MI Response" to create one.'}</div>
         )}
         {!miRespLoading && miResponses.map(r => {
           const st = r.response_status || 'DRAFT'
@@ -682,7 +745,7 @@ export default function CaseMITab({
               )}
               {!isVoided && !isSent && (
                 <div className="cf-mi-transition-row">
-                  {st === 'DRAFT' && <>
+                  {st === 'DRAFT' && !readOnly && <>
                     <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review</button>
                     <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
                   </>}
@@ -751,31 +814,24 @@ export default function CaseMITab({
                         <div className="cf-form-field">
                           <label>Language</label>
                           <select aria-label="Language" value={miRespForm.language} onChange={e => setMiRespForm(p => ({ ...p, language: e.target.value, is_customized: true }))} disabled={miRespSaving}>
-                            <option value="en">English</option>
-                            <option value="fr">French</option>
+                            {languages.map(l => <option key={l} value={l}>{LANGUAGE_NAMES[l] || l}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Response Channel</label>
                           <select aria-label="Response Channel" value={miRespForm.channel} onChange={e => setMiRespForm(p => ({ ...p, channel: e.target.value }))} disabled={miRespSaving}>
-                            {['email', 'phone', 'letter', 'portal', 'fax', 'in-person'].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                            {!channels.some(c => c.toLowerCase() === String(miRespForm.channel).toLowerCase()) && <option value={miRespForm.channel}>{miRespForm.channel}</option>}
+                            {channels.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                       </div>
 
                       <div className="cf-form-grid">
                         <div className="cf-form-field cf-form-field--full">
-                          <label>French / Scenario Bundle</label>
-                          <select aria-label="French / Scenario Bundle" value="" onChange={e => applyBundle(e.target.value)} disabled={miRespSaving || bundles.length === 0}>
-                            <option value="">Select optional bundle...</option>
-                            {bundles.map(bundle => <option key={bundle.id} value={bundle.id}>{bundle.name} ({bundle.language})</option>)}
-                          </select>
-                        </div>
-                        <div className="cf-form-field cf-form-field--full">
-                          <label>Email / Response Template</label>
+                          <label>Letter template</label>
                           <select aria-label="Email / Response Template" value={miRespForm.template_id} onChange={e => setTemplate(e.target.value)} disabled={miRespSaving}>
                             <option value="">Select template...</option>
-                            {templates.map(t => <option key={t.id} value={t.id}>{t.product_group_match ? '[Product Match] ' : ''}{t.name} - {t.type}</option>)}
+                            {templates.map(t => <option key={t.id} value={t.id}>{t.product_group_match ? '[Product Match] ' : ''}{t.name} - {t.type} v{t.version_major || 1}.{t.version_minor || 0}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field cf-form-field--full">
@@ -784,29 +840,54 @@ export default function CaseMITab({
                         </div>
                       </div>
 
+                      {rules.off_label && (
+                        <div className="cf-builder-note cf-builder-note--warn" data-testid="offlabel-rule">
+                          Off-label question. The off-label statement is added to this letter{rules.require_pi ? ', and the letter cannot be sent until it encloses a Prescribing Information document' : ''}.
+                          {rules.offlabel_statement && <div className="cf-builder-statement">{rules.offlabel_statement}</div>}
+                        </div>
+                      )}
                       {chosenTemplate && <div className="cf-builder-note">Template source: {chosenTemplate.name}. Editing below customizes this response only and does not update the original template.</div>}
 
                       <div className="cf-form-field cf-form-field--full">
-                        <label>Online Edit / Letter Body</label>
+                        <label>Letter</label>
                         <RichTextEditor value={miRespForm.body_html} onChange={v => { setMiRespForm(p => ({ ...p, body_html: v, is_customized: true })); setBuilderPreview(null) }} />
                       </div>
                       <div className="cf-form-field cf-form-field--full">
-                        <label>Additional Custom Text</label>
+                        <label>Text for this answer only</label>
                         <textarea aria-label="Additional Custom Text" rows={3} value={miRespForm.custom_text} onChange={e => { setMiRespForm(p => ({ ...p, custom_text: e.target.value, is_customized: true })); setBuilderPreview(null) }} placeholder="Optional response-specific text. This will be stored only on this response." disabled={miRespSaving} />
                       </div>
                     </div>
 
                     <div className="cf-builder-side">
                       <div className="cf-builder-card">
-                        <div className="cf-builder-card-title">Document Selection / SRL</div>
+                        <div className="cf-builder-card-title">Enclosures (published documents)</div>
                         <div className="cf-builder-list">
                           {documents.map(doc => (
                             <label key={doc.id} className="cf-builder-check">
                               <input type="checkbox" checked={miRespForm.selected_document_ids.map(Number).includes(Number(doc.id))} onChange={() => toggleSelection('selected_document_ids', doc.id)} />
-                              <span>{doc.name}<small>{doc.doc_type || 'Document'} {doc.language ? `- ${doc.language}` : ''}</small></span>
+                              <span>{doc.name}<small>{doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}{doc.language ? ` - ${doc.language}` : ''}{doc.product_name ? ` - ${doc.product_name}` : ''}{rules.require_pi && doc.doc_type === 'Prescribing Information' ? ' - needed for this off-label answer' : ''}</small></span>
                             </label>
                           ))}
-                          {documents.length === 0 && <div className="cf-empty-msg">No published documents available.</div>}
+                          {documents.length === 0 && <div className="cf-empty-msg">No published documents in this language for this product.</div>}
+                          {(() => {
+                            // Documents linked to a ticked one (Associated Documents), not yet ticked.
+                            const picked = miRespForm.selected_document_ids.map(Number)
+                            const suggest = [...new Set(allDocuments.filter(d => picked.includes(Number(d.id))).flatMap(d => (d.related || []).map(r => Number(r.id))))]
+                              .filter(id => !picked.includes(id)).map(id => allDocuments.find(d => Number(d.id) === id)).filter(Boolean)
+                            return suggest.length > 0 && (
+                              <div className="cf-builder-note" data-testid="related-suggestions">
+                                Often sent with what you chose:
+                                {suggest.map(d => (
+                                  <button key={d.id} type="button" className="cf-link-btn" style={{ display: 'block' }} onClick={() => toggleSelection('selected_document_ids', d.id)}>Add {d.name}</button>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                          {otherProductDocs.length > 0 && (
+                            <button type="button" className="cf-link-btn" onClick={() => setShowOtherProductDocs(v => !v)}>
+                              {showOtherProductDocs ? 'Hide other products\' documents' : `Show other products' documents (${otherProductDocs.length})`}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="cf-builder-card">
@@ -823,14 +904,20 @@ export default function CaseMITab({
                       </div>
                       <div className="cf-builder-card">
                         <div className="cf-builder-card-title">Response Controls</div>
-                        <label className="cf-builder-check">
-                          <input type="checkbox" checked={miRespForm.follow_up_required} onChange={e => setMiRespForm(p => ({ ...p, follow_up_required: e.target.checked }))} />
-                          <span>Follow-up required</span>
-                        </label>
-                        <div className="cf-form-field" style={{ marginTop: 10 }}>
-                          <label>Response Date</label>
-                          <input aria-label="Response Date" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
-                        </div>
+                        {/* A document written for another product, ticked for this question. */}
+                        {allDocuments.filter(d => d.product_match === 'other' && miRespForm.selected_document_ids.map(Number).includes(Number(d.id))).map(d => (
+                          <div key={d.id} className="cf-builder-note cf-builder-note--warn" role="alert">{d.name} is for {d.product_name}, not this question's product.</div>
+                        ))}
+                        {/* Follow-up is ticked once, on the MI (Follow-up Required and its
+                            due date); the letter's own tick went in the MI field review. */}
+                        {/* The sent date is recorded when the letter is sent; a date is asked
+                            only for an answer already given by phone, letter or in person. */}
+                        {verbalChannel ? (
+                          <div className="cf-form-field">
+                            <label>Date answered</label>
+                            <input aria-label="Date answered" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
+                          </div>
+                        ) : <div className="cf-builder-customized">The sent date is recorded when the letter is sent.</div>}
                         {miRespForm.is_customized && <div className="cf-builder-customized">Customized response flag will be saved.</div>}
                       </div>
                     </div>
@@ -905,6 +992,7 @@ export default function CaseMITab({
         <div className="cf-overview-card">
           <div className="cf-overview-kicker">Additional Fields</div>
           <h3>MI Configured Fields</h3>
+          <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
             sections={formConfig.sections}
             values={dynFieldValues || {}}
@@ -921,6 +1009,7 @@ export default function CaseMITab({
             caseType={caseType}
             displayTab="mi"
           />
+          </fieldset>
         </div>
       )}
     </div>

@@ -30,6 +30,15 @@ const ROLES_PRIVILEGED = ['admin', 'platform_admin', 'medical_director', 'qppv',
 async function needsTwoSigners({ orgId, response }) {
   const effectiveOrgId = response?.org_id || orgId;
   if (response?.requires_two_signers) return { required: true, reason: 'response_flag' };
+  // Every answer needs a second signer when the organisation says so (MI
+  // Response Settings, 14 Oct 2026). This rule type existed but was never read.
+  const [[allRule]] = await pool.execute(
+    `SELECT * FROM mi_two_signer_rules
+      WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1 AND condition_type = 'always'
+      LIMIT 1`,
+    [effectiveOrgId]
+  );
+  if (allRule) return { required: true, reason: 'always', required_approver_role: allRule.requires_approver_role };
   // Off-label inquiries auto-require two signers if a global rule is active
   const [[offLabelRule]] = await pool.execute(
     `SELECT * FROM mi_two_signer_rules

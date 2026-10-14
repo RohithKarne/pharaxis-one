@@ -1,5 +1,23 @@
 'use strict';
 
+/**
+ * scheduledExportService.js — reports and dashboards emailed or notified on a
+ * schedule.
+ *
+ * Reports review (Saad, 2026-10-14):
+ *   - each schedule covers a period (yesterday, last 7 days, last month ...)
+ *     worked out on the schedule's own calendar; only the daily case reports
+ *     got "yesterday" before and everything else covered the hours of today
+ *     that had passed at send time (RL3);
+ *   - daily, weekly, or monthly on the 1st;
+ *   - recipients are people in the organisation who can see the report
+ *     (reportRecipients), checked on save and on every send (RS6);
+ *   - the CSV is the screen export's: readable headers, no hidden link
+ *     columns, no formula cells (RL4, RS7);
+ *   - the run happens as the person who set the schedule up, so it only ever
+ *     contains what they could see.
+ */
+
 const pool = require('../database/db');
 const { decryptMailboxSecret } = require('./mailboxCrypto');
 const mailer = require('../utils/mailer');
@@ -12,15 +30,22 @@ const {
   getDashboardById,
   runDashboard,
   getModuleConfig,
+  canSeeAudience,
 } = require('./reportModuleService');
+const { periodRange, PERIODS } = require('./reportDatasetService');
+const { buildReportCsv } = require('./reportCsv');
+const { checkRecipients, parseAddresses } = require('./reportRecipients');
+const { isAdminUser } = require('../utils/adminScope');
+const { userHasActivityPrivilege } = require('./accessConfigurationService');
 
-function escapeCSV(value) {
-  if (value == null) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
+const FREQUENCIES = ['daily', 'weekly', 'monthly'];
+// What a schedule may carry from the filter bar.
+const SCHEDULE_FILTER_KEYS = ['period', 'case_type', 'product', 'owner_id', 'group_by', 'window_days'];
+
+function badRequest(message) {
+  const err = new Error(message);
+  err.statusCode = 400;
+  return err;
 }
 
 function parseFilters(filters) {
@@ -33,17 +58,14 @@ function parseFilters(filters) {
   }
 }
 
-function buildCSV(rows) {
-  if (!rows || rows.length === 0) return 'No data\n';
-
-  const headers = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row || {}).forEach((key) => set.add(key));
-      return set;
-    }, new Set())
-  );
-  const dataRows = rows.map((row) => headers.map((header) => escapeCSV(row[header])).join(','));
-  return [headers.join(','), ...dataRows].join('\n');
+function cleanFilters(filters) {
+  const parsed = parseFilters(filters);
+  const out = {};
+  for (const key of SCHEDULE_FILTER_KEYS) {
+    if (parsed[key] !== undefined && parsed[key] !== null && parsed[key] !== '') out[key] = parsed[key];
+  }
+  if (out.period && !PERIODS[out.period]) delete out.period;
+  return out;
 }
 
 async function loadSystemConfig() {
@@ -56,64 +78,6 @@ async function loadSystemConfig() {
     acc[row.config_key] = row.config_value;
     return acc;
   }, {});
-}
-
-function validateTimezone(timezoneName) {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: timezoneName }).format(new Date());
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function getZonedParts(date, timezoneName) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezoneName,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const values = {};
-  for (const part of parts) {
-    if (part.type !== 'literal') values[part.type] = part.value;
-  }
-  return {
-    year: Number(values.year),
-    month: Number(values.month),
-    day: Number(values.day),
-    hour: Number(values.hour),
-    minute: Number(values.minute),
-    second: Number(values.second || 0),
-  };
-}
-
-function addCalendarDays(year, month, day, deltaDays) {
-  const dt = new Date(Date.UTC(year, month - 1, day));
-  dt.setUTCDate(dt.getUTCDate() + deltaDays);
-  return {
-    year: dt.getUTCFullYear(),
-    month: dt.getUTCMonth() + 1,
-    day: dt.getUTCDate(),
-  };
-}
-
-function zonedLocalToUtc(year, month, day, hour, minute, timezoneName) {
-  let guess = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const target = Date.UTC(year, month - 1, day, hour, minute, 0);
-
-  for (let i = 0; i < 4; i += 1) {
-    const actual = getZonedParts(new Date(guess), timezoneName);
-    const actualAsUtc = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0);
-    guess += target - actualAsUtc;
-  }
-
-  return new Date(guess);
 }
 
 function parseScheduleTime(value) {
@@ -141,6 +105,16 @@ function computeNextRunAtUtc(config, now = new Date()) {
 
   let candidateUtc = zonedLocalToUtc(localDate.year, localDate.month, localDate.day, hour, minute, timezoneName);
 
+  // Monthly: the 1st of the month at the chosen time.
+  if (scheduleFrequency === 'monthly') {
+    candidateUtc = zonedLocalToUtc(localDate.year, localDate.month, 1, hour, minute, timezoneName);
+    if (candidateUtc <= now) {
+      const next = new Date(Date.UTC(localDate.year, localDate.month, 1));
+      candidateUtc = zonedLocalToUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, 1, hour, minute, timezoneName);
+    }
+    return candidateUtc;
+  }
+
   if (scheduleFrequency === 'weekly') {
     const todayWeekday = new Date(Date.UTC(localDate.year, localDate.month - 1, localDate.day)).getUTCDay();
     let deltaDays = scheduleWeekday - todayWeekday;
@@ -162,21 +136,45 @@ function computeNextRunAtUtc(config, now = new Date()) {
   return candidateUtc;
 }
 
-function getDefaultFiltersForRun(config, now = new Date(), reportKeyOverride = null) {
-  const parsedFilters = parseFilters(config.filters);
-  if (parsedFilters.date || parsedFilters.date_from || parsedFilters.date_to) return parsedFilters;
-
-  const effectiveKey = String(reportKeyOverride || config.report_key || '');
-  if (!(effectiveKey.startsWith('daily-case-') || effectiveKey === 'daily-operations-pack')) return parsedFilters;
-
-  const timezoneName = validateTimezone(config.timezone_name) ? config.timezone_name : 'UTC';
-  const zonedNow = getZonedParts(now, timezoneName);
-  const previousDay = addCalendarDays(zonedNow.year, zonedNow.month, zonedNow.day, -1);
-  const date = `${previousDay.year}-${String(previousDay.month).padStart(2, '0')}-${String(previousDay.day).padStart(2, '0')}`;
-  return { ...parsedFilters, date };
+// The period a schedule covers when it runs: its own choice, else yesterday,
+// the last 7 days or last month to match how often it runs. The dates are those
+// of the schedule's time zone on the day it runs.
+function defaultPeriodFor(frequency) {
+  if (frequency === 'monthly') return 'last_month';
+  if (frequency === 'weekly') return 'last_7_days';
+  return 'yesterday';
 }
 
-async function deliverByEmail(config, csvContent) {
+function scheduleFilters(config, now = new Date()) {
+  const filters = cleanFilters(config.filters);
+  const legacy = parseFilters(config.filters);
+  if (legacy.date_from || legacy.date_to) return { ...filters, date_from: legacy.date_from, date_to: legacy.date_to };
+  const period = filters.period || defaultPeriodFor(String(config.schedule_frequency || 'daily').toLowerCase());
+  const timezoneName = validateTimezone(config.timezone_name) ? config.timezone_name : 'UTC';
+  const local = getZonedParts(now, timezoneName);
+  const [dateFrom, dateTo] = periodRange(period, new Date(Date.UTC(local.year, local.month - 1, local.day)));
+  return { ...filters, period, date_from: dateFrom, date_to: dateTo };
+}
+
+// The person who set the schedule up, as the report engine sees a user.
+async function scheduleOwner(config) {
+  if (!config.created_by) return null;
+  const [[row]] = await pool.execute(
+    `SELECT u.id, u.role, u.is_active, uoa.role_at_org, uoa.is_active AS member
+       FROM users u LEFT JOIN user_org_access uoa ON uoa.user_id = u.id AND uoa.org_id = ?
+      WHERE u.id = ?`,
+    [config.org_id, config.created_by]
+  );
+  if (!row || !Number(row.is_active) || !Number(row.member)) return null;
+  return { userId: row.id, orgId: config.org_id, role: row.role_at_org || row.role };
+}
+
+async function ownerCanSee(owner, audience) {
+  const viewer = { admin: isAdminUser(owner), manage: await userHasActivityPrivilege(owner, 'reports.manage') };
+  return canSeeAudience(viewer, audience);
+}
+
+async function deliverByEmail(config, recipients, csvContent, summary) {
   const systemConfig = await loadSystemConfig();
   const moduleConfig = await getModuleConfig(config.org_id);
   const host = process.env.SMTP_HOST || systemConfig.smtp_host || '';
@@ -199,38 +197,34 @@ async function deliverByEmail(config, csvContent) {
     tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
   });
 
-  if (!config.delivery_target) {
-    throw new Error('Enter an email address to send the report to.');
-  }
-
   const fileDate = new Date().toISOString().slice(0, 10);
   const safeName = (config.export_name || 'scheduled_export').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   await transporter.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
-    to: config.delivery_target,
+    to: recipients.join(', '),
     replyTo: moduleConfig.reply_to_email || undefined,
     subject: config.email_subject || `${moduleConfig.digest_subject_prefix || '[MIMS Reports]'} ${config.export_name}`,
-    text: `Attached ${config.target_type || 'report'} output for ${config.export_name}.`,
+    text: `${summary}\n\nThe report is attached as a CSV file. It contains case data from MIMS: keep it inside the organisation.`,
     attachments: [
       {
         filename: `${safeName}_${fileDate}.csv`,
-        content: csvContent,
-        contentType: 'text/csv',
+        content: `﻿${csvContent}`,
+        contentType: 'text/csv; charset=utf-8',
       },
     ],
   });
 }
 
-async function deliverInApp(config, rowCount) {
+async function deliverInApp(config, summary) {
   if (!config.created_by) return;
   await createNotification(config.created_by, {
     category: 'scheduled_report',
     severity: 'info',
     title: `Scheduled report ready: ${config.export_name}`,
-    message: `${rowCount} row${rowCount === 1 ? '' : 's'} produced for ${config.report_key || 'case-summary'}.`,
+    message: summary,
     linkUrl: '/reports',
-    metadata: { config_id: config.id, report_key: config.report_key, row_count: rowCount },
+    metadata: { config_id: config.id, report_key: config.report_key },
     eventKey: 'scheduled-report-ready',
   });
 }
@@ -255,6 +249,34 @@ async function runScheduledExports(now = new Date()) {
   }
 }
 
+// One schedule's run: returns what it produced, or throws why it could not.
+async function runOneSchedule(config, now) {
+  const owner = await scheduleOwner(config);
+  if (!owner) throw new Error('The person who set up this schedule no longer has access to the organisation.');
+  const filters = scheduleFilters(config, now);
+  let target;
+  let columns;
+  let rows;
+  if ((config.target_type || 'report') === 'dashboard') {
+    target = await getDashboardById(config.org_id, config.target_id);
+    if (!target) throw new Error('The dashboard this schedule sends no longer exists.');
+    if (!await ownerCanSee(owner, target.visibility_scope)) throw new Error('The person who set up this schedule can no longer see this dashboard.');
+    const viewer = { admin: isAdminUser(owner), manage: await userHasActivityPrivilege(owner, 'reports.manage') };
+    const payload = await runDashboard(target, config.org_id, filters, viewer, { user: owner });
+    rows = payload.csv_rows;
+    columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  } else {
+    target = (config.target_id && await getReportDefinitionById(config.org_id, config.target_id))
+      || (config.report_key && await getReportDefinitionByKey(config.org_id, config.report_key));
+    if (!target) throw new Error('The report this schedule sends no longer exists.');
+    if (!await ownerCanSee(owner, target.visibility_scope)) throw new Error('The person who set up this schedule can no longer see this report.');
+    const payload = await runReportDefinition(target, config.org_id, filters, { user: owner });
+    rows = payload.rows;
+    columns = payload.columns;
+  }
+  return { target, filters, columns, rows };
+}
+
 async function runScheduledExportsLocked(now) {
   const [configs] = await pool.query(
     'SELECT * FROM scheduled_export_configs WHERE is_active = 1 ORDER BY id ASC'
@@ -277,56 +299,32 @@ async function runScheduledExportsLocked(now) {
     let runStatus = 'success';
     let lastError = null;
     let rowCount = 0;
+    let filters = null;
+    let diagnostics = null;
+    let sentTo = null;
     let runTargetType = config.target_type || 'report';
     let runTargetId = config.target_id || null;
-    let resolvedReportKey = config.report_key || 'case-summary';
-    let resolvedReportName = config.export_name || config.report_key || 'Scheduled Report';
+    let resolvedReportKey = config.report_key || 'scheduled-report';
+    let resolvedReportName = config.export_name || 'Scheduled Report';
 
     try {
-      let csvRows = [];
-
-      if ((config.target_type || 'report') === 'dashboard') {
-        const dashboard = await getDashboardById(config.org_id, config.target_id);
-        if (!dashboard) throw new Error('Scheduled dashboard target not found');
-        const filters = getDefaultFiltersForRun(config, now);
-        const dashboardPayload = await runDashboard(dashboard, config.org_id, filters);
-        csvRows = dashboardPayload.csv_rows;
-        rowCount = csvRows.length;
-        resolvedReportKey = dashboard.dashboard_key;
-        resolvedReportName = dashboard.name;
-        runTargetType = 'dashboard';
-        runTargetId = dashboard.id;
-      } else {
-        let definition = null;
-        if (config.target_id) {
-          definition = await getReportDefinitionById(config.org_id, config.target_id);
-        }
-        if (!definition && config.report_key) {
-          definition = await getReportDefinitionByKey(config.org_id, config.report_key);
-        }
-        if (!definition) {
-          throw new Error('Scheduled report target not found');
-        }
-        const filters = getDefaultFiltersForRun(config, now, definition.dataset_key);
-        const reportPayload = await runReportDefinition(definition, config.org_id, filters);
-        csvRows = reportPayload.rows;
-        rowCount = reportPayload.row_count;
-        resolvedReportKey = definition.report_key;
-        resolvedReportName = definition.name;
-        runTargetType = 'report';
-        runTargetId = definition.id;
-      }
-
-      const csvContent = buildCSV(csvRows);
+      const result = await runOneSchedule(config, now);
+      filters = result.filters;
+      rowCount = result.rows.length;
+      resolvedReportKey = result.target.report_key || result.target.dashboard_key;
+      resolvedReportName = result.target.name;
+      runTargetId = result.target.id;
+      const period = filters.date_from ? `${filters.date_from} to ${filters.date_to}` : 'current';
+      const summary = `${result.target.name} — ${period}, ${rowCount} row${rowCount === 1 ? '' : 's'}.`;
 
       if (config.delivery_method === 'email') {
-        await deliverByEmail(config, csvContent);
-      } else if (config.delivery_method === 'in_app') {
-        await deliverInApp(config, rowCount);
+        const { allowed, refused } = await checkRecipients(config.org_id, config.delivery_target, result.target.visibility_scope);
+        if (!allowed.length) throw new Error('None of the recipients can receive this report any more.');
+        sentTo = allowed.map((p) => p.email).join(', ');
+        if (refused.length) diagnostics = { recipients_skipped: refused };
+        await deliverByEmail(config, allowed.map((p) => p.email), buildReportCsv(result.columns, result.rows), summary);
       } else {
-        console.log(
-          `[ScheduledExport] report ran id=${config.id} target=${resolvedReportKey} rows=${rowCount}`
-        );
+        await deliverInApp(config, summary);
       }
     } catch (err) {
       runStatus = 'failed';
@@ -348,13 +346,14 @@ async function runScheduledExportsLocked(now) {
         targetId: runTargetId,
         runMode: 'scheduled',
         triggeredBy: config.created_by || null,
-        filters: getDefaultFiltersForRun(config, now),
+        filters: filters || cleanFilters(config.filters),
         timezoneName: config.timezone_name || 'UTC',
         rowCount,
         deliveryMethod: config.delivery_method || null,
-        deliveryTarget: config.delivery_target || null,
+        deliveryTarget: sentTo || config.delivery_target || null,
         status: runStatus,
         errorMessage: lastError,
+        diagnostics,
       }).catch(() => {});
       await pool.query(
         `UPDATE scheduled_export_configs
@@ -377,184 +376,104 @@ async function getExportConfigs(orgId) {
   return rows.map((row) => ({ ...row, filters: parseFilters(row.filters) }));
 }
 
-async function createExportConfig(orgId, userId, data) {
-  const exportName = String(data.export_name || '').trim();
-  if (!exportName) {
-    const err = new Error('Enter a name for the schedule.');
-    err.statusCode = 400;
-    throw err;
-  }
+// Everything a schedule needs, checked: name, target, how often, when, time
+// zone, period and filters, and recipients who may receive the target.
+async function normalizeSchedule(orgId, data, existing = {}) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(data, key);
+  const pick = (key, fallback) => (has(key) ? data[key] : (existing[key] ?? fallback));
   const moduleConfig = await getModuleConfig(orgId);
-  const deliveryMethod = data.delivery_method || moduleConfig.default_delivery_method || 'email';
-  const deliveryTarget = String(data.delivery_target || moduleConfig.default_delivery_target || '').trim();
-  if (deliveryMethod === 'email' && !deliveryTarget) {
-    const err = new Error('Enter an email address to send the report to.');
-    err.statusCode = 400;
-    throw err;
-  }
-  const timezoneName = validateTimezone(data.timezone_name) ? data.timezone_name : 'UTC';
-  const scheduleFrequency = String(data.schedule_frequency || 'daily').toLowerCase() === 'weekly' ? 'weekly' : 'daily';
-  const scheduleTimeLocal = String(data.schedule_time_local || '08:00');
-  const scheduleWeekday = Number.isInteger(Number(data.schedule_weekday)) ? Number(data.schedule_weekday) : 1;
-  const targetType = String(data.target_type || 'report').toLowerCase() === 'dashboard' ? 'dashboard' : 'report';
-  const targetId = data.target_id ? Number(data.target_id) : null;
-  const reportDefinition = targetType === 'report' && targetId
-    ? await getReportDefinitionById(orgId, targetId)
-    : null;
-  const dashboardDefinition = targetType === 'dashboard' && targetId
-    ? await getDashboardById(orgId, targetId)
-    : null;
-  if (targetType === 'report' && !reportDefinition) {
-    const err = new Error('Choose a report to schedule.');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (reportDefinition && !reportDefinition.is_built) {
-    const err = new Error('This report is not built yet, so it cannot be scheduled.');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (targetType === 'dashboard' && !dashboardDefinition) {
-    const err = new Error('Choose a dashboard to schedule.');
-    err.statusCode = 400;
-    throw err;
+
+  const exportName = String(pick('export_name', '') || '').trim();
+  if (!exportName) throw badRequest('Enter a name for the schedule.');
+
+  const targetType = String(pick('target_type', 'report')).toLowerCase() === 'dashboard' ? 'dashboard' : 'report';
+  const targetId = Number(pick('target_id', 0)) || null;
+  const target = targetType === 'dashboard'
+    ? (targetId && await getDashboardById(orgId, targetId))
+    : (targetId && await getReportDefinitionById(orgId, targetId));
+  if (!target) throw badRequest(targetType === 'dashboard' ? 'Choose a dashboard to schedule.' : 'Choose a report to schedule.');
+  if (targetType === 'report' && !target.is_built) throw badRequest('This report uses a data source that no longer exists, so it cannot be scheduled.');
+
+  const frequency = String(pick('schedule_frequency', 'daily')).toLowerCase();
+  if (!FREQUENCIES.includes(frequency)) throw badRequest('Choose daily, weekly or monthly.');
+  const time = String(pick('schedule_time_local', '08:00'));
+  if (!/^\d{2}:\d{2}$/.test(time)) throw badRequest('Enter the time as HH:MM.');
+  const weekday = Number(pick('schedule_weekday', 1));
+  const timezoneRaw = pick('timezone_name', null);
+  const timezoneName = validateTimezone(timezoneRaw) ? timezoneRaw
+    : (validateTimezone(moduleConfig.default_timezone) ? moduleConfig.default_timezone : 'UTC');
+  if (timezoneRaw && !validateTimezone(timezoneRaw)) throw badRequest(`"${timezoneRaw}" is not a time zone.`);
+
+  const deliveryMethod = String(pick('delivery_method', moduleConfig.default_delivery_method || 'email')) === 'in_app' ? 'in_app' : 'email';
+  let deliveryTarget = null;
+  if (deliveryMethod === 'email') {
+    const addresses = parseAddresses(pick('delivery_target', ''));
+    if (!addresses.length) throw badRequest('Choose who the report is emailed to.');
+    const { refused } = await checkRecipients(orgId, addresses.join(','), target.visibility_scope);
+    if (refused.length) {
+      throw badRequest(`Reports are only emailed to people in this organisation who can see this report. Not allowed: ${refused.join(', ')}.`);
+    }
+    deliveryTarget = addresses.join(', ');
+    if (deliveryTarget.length > 255) throw badRequest('Too many recipients for one schedule.');
   }
 
-  const payload = {
+  return {
     export_name: exportName,
     target_type: targetType,
-    report_key: data.report_key || reportDefinition?.report_key || (targetType === 'dashboard' ? `dashboard-${targetId || 'bundle'}` : 'daily-case-summary'),
-    target_id: targetId,
-    export_format: data.export_format || 'csv',
-    cron_expression: data.cron_expression || '0 6 * * 1',
-    schedule_frequency: scheduleFrequency,
-    schedule_time_local: scheduleTimeLocal,
-    schedule_weekday: scheduleWeekday,
+    report_key: target.report_key || target.dashboard_key,
+    target_id: target.id,
+    export_format: 'csv',
+    schedule_frequency: frequency,
+    schedule_time_local: time,
+    schedule_weekday: Math.min(6, Math.max(0, Number.isInteger(weekday) ? weekday : 1)),
     timezone_name: timezoneName,
-    filters: data.filters ? JSON.stringify(data.filters) : null,
+    filters: JSON.stringify(cleanFilters(pick('filters', {}))),
     delivery_method: deliveryMethod,
-    delivery_target: deliveryTarget || null,
-    email_subject: data.email_subject || null,
+    delivery_target: deliveryTarget,
+    email_subject: String(pick('email_subject', '') || '').trim() || null,
+    is_active: pick('is_active', 1) === false || Number(pick('is_active', 1)) === 0 ? 0 : 1,
   };
+}
 
-  const nextRunAtUtc = computeNextRunAtUtc(payload);
-
+async function createExportConfig(orgId, userId, data) {
+  const config = await normalizeSchedule(orgId, data || {});
   const [result] = await pool.query(
     `INSERT INTO scheduled_export_configs
-       (org_id, export_name, target_type, report_key, target_id, export_format, cron_expression, schedule_frequency, schedule_time_local,
-        schedule_weekday, timezone_name, next_run_at_utc, filters, delivery_method, delivery_target, email_subject, created_by)
+       (org_id, export_name, target_type, report_key, target_id, export_format, schedule_frequency, schedule_time_local,
+        schedule_weekday, timezone_name, next_run_at_utc, filters, delivery_method, delivery_target, email_subject, is_active, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      orgId,
-      payload.export_name,
-      payload.target_type,
-      payload.report_key,
-      payload.target_id,
-      payload.export_format,
-      payload.cron_expression,
-      payload.schedule_frequency,
-      payload.schedule_time_local,
-      payload.schedule_weekday,
-      payload.timezone_name,
-      nextRunAtUtc,
-      payload.filters,
-      payload.delivery_method,
-      payload.delivery_target,
-      payload.email_subject,
-      userId,
+      orgId, config.export_name, config.target_type, config.report_key, config.target_id, config.export_format,
+      config.schedule_frequency, config.schedule_time_local, config.schedule_weekday, config.timezone_name,
+      computeNextRunAtUtc(config), config.filters, config.delivery_method, config.delivery_target,
+      config.email_subject, config.is_active, userId,
     ]
   );
-
   return result.insertId;
 }
 
 async function updateExportConfig(id, orgId, data) {
-  const [existingRows] = await pool.query(
+  const [[existing]] = await pool.query(
     'SELECT * FROM scheduled_export_configs WHERE id = ? AND org_id = ? LIMIT 1',
     [id, orgId]
   );
-
-  if (!existingRows.length) {
+  if (!existing) {
     const err = new Error('Schedule not found.');
     err.statusCode = 404;
     throw err;
   }
-
-  const existing = existingRows[0];
-  const nextConfig = {
-    ...existing,
-    ...data,
-    timezone_name: data.timezone_name ? (validateTimezone(data.timezone_name) ? data.timezone_name : 'UTC') : existing.timezone_name,
-    schedule_frequency: data.schedule_frequency ? (String(data.schedule_frequency).toLowerCase() === 'weekly' ? 'weekly' : 'daily') : existing.schedule_frequency,
-    schedule_time_local: data.schedule_time_local || existing.schedule_time_local,
-    schedule_weekday: Object.prototype.hasOwnProperty.call(data, 'schedule_weekday')
-      ? Number(data.schedule_weekday)
-      : existing.schedule_weekday,
-    target_type: data.target_type ? (String(data.target_type).toLowerCase() === 'dashboard' ? 'dashboard' : 'report') : existing.target_type || 'report',
-    target_id: Object.prototype.hasOwnProperty.call(data, 'target_id') ? Number(data.target_id || 0) || null : existing.target_id,
-  };
-  nextConfig.report_key = data.report_key || existing.report_key || (nextConfig.target_type === 'dashboard' ? `dashboard-${nextConfig.target_id || 'bundle'}` : 'case-summary');
-
-  const nextReport = nextConfig.target_type === 'report' && nextConfig.target_id
-    ? await getReportDefinitionById(orgId, nextConfig.target_id)
-    : null;
-  if (nextConfig.target_type === 'report' && nextConfig.target_id && !nextReport) {
-    const err = new Error('Choose a report to schedule.');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (nextReport && !nextReport.is_built) {
-    const err = new Error('This report is not built yet, so it cannot be scheduled.');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (nextConfig.target_type === 'dashboard' && nextConfig.target_id && !await getDashboardById(orgId, nextConfig.target_id)) {
-    const err = new Error('Choose a dashboard to schedule.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(data, 'delivery_method') && nextConfig.delivery_method === 'email' && !String(nextConfig.delivery_target || '').trim()) {
-    const err = new Error('Enter an email address to send the report to.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const fields = [];
-  const values = [];
-  const allowed = [
-    'export_name',
-    'target_type',
-    'report_key',
-    'target_id',
-    'export_format',
-    'cron_expression',
-    'schedule_frequency',
-    'schedule_time_local',
-    'schedule_weekday',
-    'timezone_name',
-    'filters',
-    'delivery_method',
-    'delivery_target',
-    'email_subject',
-    'is_active',
-  ];
-
-  for (const key of allowed) {
-    if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
-    fields.push(`${key} = ?`);
-    values.push(key === 'filters' ? (data[key] ? JSON.stringify(data[key]) : null) : nextConfig[key]);
-  }
-
-  fields.push('next_run_at_utc = ?');
-  values.push(computeNextRunAtUtc(nextConfig));
-  values.push(id, orgId);
-
+  const config = await normalizeSchedule(orgId, data || {}, { ...existing, filters: parseFilters(existing.filters) });
   await pool.query(
     `UPDATE scheduled_export_configs
-     SET ${fields.join(', ')}, updated_at = NOW()
-     WHERE id = ? AND org_id = ?`,
-    values
+        SET export_name = ?, target_type = ?, report_key = ?, target_id = ?, schedule_frequency = ?, schedule_time_local = ?,
+            schedule_weekday = ?, timezone_name = ?, next_run_at_utc = ?, filters = ?, delivery_method = ?, delivery_target = ?,
+            email_subject = ?, is_active = ?, updated_at = NOW()
+      WHERE id = ? AND org_id = ?`,
+    [
+      config.export_name, config.target_type, config.report_key, config.target_id, config.schedule_frequency,
+      config.schedule_time_local, config.schedule_weekday, config.timezone_name, computeNextRunAtUtc(config),
+      config.filters, config.delivery_method, config.delivery_target, config.email_subject, config.is_active, id, orgId,
+    ]
   );
 }
 
@@ -614,4 +533,66 @@ module.exports = {
   deleteExportConfig,
   computeNextRunAtUtc,
   validateTimezone,
+  scheduleFilters,
 };
+
+// An empty name is not a time zone: Intl accepts undefined as "the server's
+// own", so a schedule saved without one stored NULL and failed to save.
+function validateTimezone(timezoneName) {
+  if (!timezoneName || typeof timezoneName !== 'string') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezoneName }).format(new Date());
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getZonedParts(date, timezoneName) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezoneName,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const values = {};
+  for (const part of parts) {
+    if (part.type !== 'literal') values[part.type] = part.value;
+  }
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second || 0),
+  };
+}
+
+function addCalendarDays(year, month, day, deltaDays) {
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  return {
+    year: dt.getUTCFullYear(),
+    month: dt.getUTCMonth() + 1,
+    day: dt.getUTCDate(),
+  };
+}
+
+function zonedLocalToUtc(year, month, day, hour, minute, timezoneName) {
+  let guess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const target = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+  for (let i = 0; i < 4; i += 1) {
+    const actual = getZonedParts(new Date(guess), timezoneName);
+    const actualAsUtc = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0);
+    guess += target - actualAsUtc;
+  }
+
+  return new Date(guess);
+}

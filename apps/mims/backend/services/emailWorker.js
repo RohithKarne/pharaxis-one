@@ -13,6 +13,7 @@
  */
 
 const pool        = require('../database/db');
+const { makeLetterPdf } = require('./pdfExportService');
 const mailer  = require('../utils/mailer');
 const crypto      = require('crypto');
 const { logger }  = require('./logger');
@@ -101,12 +102,50 @@ function stripHtml(html) {
   return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+const escapeHtml = (v) => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 function parseJsonSafe(raw, fallback) {
   // email_job_queue.payload is a JSON column, which mysql2 returns already
   // parsed. JSON.parse on the object threw, the fallback {} was used, and every
   // MI letter failed as "missing smtp_host" while the case said SENT (M-97).
   if (raw && typeof raw === 'object') return raw;
   try { return raw ? JSON.parse(raw) : fallback; } catch (_) { return fallback; }
+}
+
+// The files a letter encloses, in the order chosen.
+async function enclosureFiles(selected) {
+  const docIds = (Array.isArray(selected) ? selected : []).map((d) => Number(d?.id ?? d)).filter(Boolean);
+  if (!docIds.length) return [];
+  const [rows] = await pool.execute(
+    `SELECT id, doc_id, name, file_path, file_name, file_mime, content_html, standard_response_text,
+            response_doc_type, selected_modules, version_major, version_minor
+       FROM cm_documents WHERE id IN (${docIds.map(() => '?').join(',')})`, docIds);
+  const byId = new Map(rows.map((d) => [d.id, d]));
+  const out = [];
+  for (const id of docIds) {
+    const doc = byId.get(id);
+    if (!doc) continue;
+    if (doc.file_path && doc.file_name) {
+      out.push({ filename: doc.file_name, path: doc.file_path, contentType: doc.file_mime || undefined });
+      continue;
+    }
+    let html = doc.content_html || doc.standard_response_text || '';
+    if (doc.response_doc_type === 'Module') {
+      const ids = parseJsonSafe(doc.selected_modules, []).map(Number).filter(Boolean);
+      if (ids.length) {
+        const [mods] = await pool.execute(
+          `SELECT id, name, content_html, standard_response_text FROM cm_modules WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+        const m = new Map(mods.map((x) => [x.id, x]));
+        html = ids.map((mid) => m.get(mid)).filter(Boolean)
+          .map((x) => `<h3>${escapeHtml(x.name)}</h3>${x.content_html || x.standard_response_text || ''}`).join('');
+      }
+    }
+    if (!stripHtml(html)) continue;
+    const version = `${doc.version_major || 1}.${doc.version_minor || 0}`;
+    const { buffer } = makeLetterPdf({ title: doc.name, html, footer: `${doc.doc_id || ''} · version ${version}` });
+    out.push({ filename: `${String(doc.name).replace(/[\\/:*?"<>|]/g, '-')}.pdf`, content: buffer, contentType: 'application/pdf' });
+  }
+  return out;
 }
 
 // ── Core send logic ───────────────────────────────────────────────────────────
@@ -140,23 +179,12 @@ async function processJob(job) {
     socketTimeout:     SMTP_TIMEOUT_MS,
   });
 
-  // Resolve document attachments
-  let attachments = [];
-  const docIds = (parseJsonSafe(selected_documents, []))
-    .map((d) => Number(d?.id)).filter(Boolean);
-  if (docIds.length) {
-    const placeholders = docIds.map(() => '?').join(',');
-    const [docs] = await pool.execute(
-      `SELECT id, name, file_path, file_name, file_mime FROM cm_documents
-        WHERE id IN (${placeholders}) AND file_path IS NOT NULL AND file_name IS NOT NULL`,
-      docIds
-    );
-    attachments = docs.map((doc) => ({
-      filename:    doc.file_name || doc.name,
-      path:        doc.file_path,
-      contentType: doc.file_mime || undefined,
-    }));
-  }
+  // Every enclosed document goes out as a file. An uploaded document is sent as
+  // uploaded; one written on screen, or built from modules, is sent as a PDF made
+  // from its content. Only uploaded files were attached before, so a document
+  // written on screen — a prescribing information document, say — never reached
+  // the requester although the letter said it was enclosed.
+  const attachments = await enclosureFiles(parseJsonSafe(selected_documents, []));
 
   const fromLabel = display_name || 'Medical Information';
   const fromAddr  = from_email   || smtp_username;
@@ -393,4 +421,5 @@ async function enqueueMiEmail(jobData) {
   return result.insertId;
 }
 
-module.exports = { startEmailWorker, stopEmailWorker, enqueueMiEmail };
+module.exports = {
+  enclosureFiles, startEmailWorker, stopEmailWorker, enqueueMiEmail };

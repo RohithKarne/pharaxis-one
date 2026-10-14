@@ -13,6 +13,17 @@ import BulkUserImport from './BulkUserImport'
 import './Users.css'
 
 const API = '/api/admin'
+// The screens an administrator can give or take away per person. MIMS Admin
+// follows the administrator role and is not one of them.
+const PERSON_SCREENS = [
+  { key: 'mims_core', label: 'Cases' },
+  { key: 'inbox', label: 'Inbox' },
+  { key: 'transmissions', label: 'Transmissions' },
+  { key: 'browse_content', label: 'Browse Content' },
+  { key: 'content_mgmt', label: 'Content Management' },
+  { key: 'reports', label: 'Reports' },
+]
+const personScreens = (list) => (list || []).filter(k => PERSON_SCREENS.some(s => s.key === k)).sort()
 const PAGE_SIZE = 100
 
 function fmtDate(d) {
@@ -32,8 +43,7 @@ function isExpired(d) {
 const EMPTY_FORM = {
   user_id: '', name: '', email: '', initials: '', role: 'agent',
   security_group_id: '', network_user_id: '', department: '',
-  is_active: true, is_disabled: false, is_primary_ref: false,
-  access_admin_site: false, case_admin: false,
+  is_active: true, is_disabled: false, case_admin: false,
   tenant_ids: [],
 }
 
@@ -358,10 +368,9 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       department:       editUser.department       || '',
       is_active:        !!editUser.is_active,
       is_disabled:      !!editUser.is_disabled,
-      is_primary_ref:   !!editUser.is_primary_ref,
-      access_admin_site:!!editUser.access_admin_site,
       case_admin:       !!editUser.case_admin,
       tenant_ids:       editUser.tenant_ids       || [],
+      modules:          personScreens(editUser.modules),
       inactive_reason:  '',
       reactivation_reason: '',
     }
@@ -386,6 +395,9 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
     if (errors[key]) setErrors(e => ({ ...e, [key]: '' }))
   }
   function toggle(key) { set(key, !form[key]) }
+  function toggleScreen(key) {
+    set('modules', form.modules.includes(key) ? form.modules.filter(k => k !== key) : [...form.modules, key])
+  }
 
   function toggleTenant(orgId) {
     setForm(f => ({
@@ -430,8 +442,6 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         security_group_id: form.security_group_id ? parseInt(form.security_group_id, 10) : null,
         is_active:    form.is_active    ? 1 : 0,
         is_disabled:  form.is_disabled  ? 1 : 0,
-        is_primary_ref:    form.is_primary_ref    ? 1 : 0,
-        access_admin_site: form.access_admin_site ? 1 : 0,
         case_admin:        form.case_admin        ? 1 : 0,
       }
 
@@ -450,6 +460,15 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         })
         const dt = await rt.json()
         if (!rt.ok) { setApiErr(dt.error || 'Failed to update tenants.'); return }
+
+        // Screens, only when they changed
+        if (personScreens(form.modules).join() !== personScreens(editUser.modules).join()) {
+          const rm = await httpFetch(`/api/admin/users/${editUser.id}/modules`, {
+            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules }),
+          })
+          const dm = await rm.json()
+          if (!rm.ok) { setApiErr(dm.error || 'Failed to update screens.'); return }
+        }
       } else {
         // Create (tenants included in body)
         const r = await httpFetch('/api/admin/users', {
@@ -692,14 +711,6 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                 <div className="ma-usr-section-title" style={{ marginBottom: 10 }}>Privileges</div>
                 <div className="ma-usr-checks">
                   <label className="ma-usr-check">
-                    <input type="checkbox" checked={form.is_primary_ref} onChange={() => toggle('is_primary_ref')} />
-                    Primary Ref To
-                  </label>
-                  <label className="ma-usr-check">
-                    <input type="checkbox" checked={form.access_admin_site} onChange={() => toggle('access_admin_site')} />
-                    Access Admin Site
-                  </label>
-                  <label className="ma-usr-check">
                     <input type="checkbox" checked={form.case_admin} onChange={() => toggle('case_admin')} />
                     Case Admin
                   </label>
@@ -708,13 +719,34 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                       <input
                         type="checkbox"
                         checked={form.role === 'platform_admin'}
-                        onChange={e => set('role', e.target.checked ? 'platform_admin' : 'admin')}
+                        // Unticking gives back the role the person had; it used to make anyone an administrator.
+                        onChange={e => set('role', e.target.checked ? 'platform_admin' : (editUser?.role && editUser.role !== 'platform_admin' ? editUser.role : 'admin'))}
                       />
                       Platform Administrator
                     </label>
                   )}
                 </div>
               </div>
+
+              {/* Screens the person opens: the role's defaults, which an
+                  administrator can add to or take away (access review). */}
+              {isEdit && (
+                <div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>Screens</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    What this person sees in the menu. Marked “role” comes with their role; untick to take it away.
+                  </div>
+                  <div className="ma-usr-checks">
+                    {PERSON_SCREENS.map(sc => (
+                      <label key={sc.key} className="ma-usr-check">
+                        <input type="checkbox" checked={form.modules.includes(sc.key)} onChange={() => toggleScreen(sc.key)} />
+                        {sc.label}
+                        {(editUser.role_modules || []).includes(sc.key) && <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--text-muted)' }}>· role</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 

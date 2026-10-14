@@ -2,8 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 export default function FolderManager({ show, onClose, token }) {
+  const { hasCapability } = useAuth()
+  // Folders are set up by people with Configure folders (admins by default).
+  const canConfigure = hasCapability('content.folder.configure')
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
     [token]
@@ -27,9 +31,9 @@ export default function FolderManager({ show, onClose, token }) {
     setLoading(true)
     try {
       const [fRes, pRes, sRes] = await Promise.all([
-        httpFetch('/api/cm/folders', { headers: authHeaders }),
-        httpFetch('/api/admin/products-full', { headers: authHeaders }),
-        httpFetch('/api/admin/sites', { headers: authHeaders }),
+        httpFetch('/api/cm/folders?include_inactive=true', { headers: authHeaders }),
+        httpFetch('/api/cm/products', { headers: authHeaders }),
+        httpFetch('/api/cm/sites', { headers: authHeaders }),
       ])
       if (fRes.ok) setFolders((await fRes.json()).folders || [])
       if (pRes.ok) setProducts((await pRes.json()).products || [])
@@ -41,12 +45,12 @@ export default function FolderManager({ show, onClose, token }) {
   async function loadPermissions(folderId) {
     setPermLoading(true)
     try {
-      const [permRes, sgRes] = await Promise.all([
-        httpFetch(`/api/cm/folders/${folderId}/permissions`, { headers: authHeaders }),
-        httpFetch('/api/admin/security-groups', { headers: authHeaders }),
-      ])
-      if (permRes.ok) setPermissions((await permRes.json()).permissions || [])
-      if (sgRes.ok) setSecGroups((await sgRes.json()).groups || [])
+      const permRes = await httpFetch(`/api/cm/folders/${folderId}/permissions`, { headers: authHeaders })
+      if (permRes.ok) {
+        const d = await permRes.json()
+        setPermissions(d.permissions || [])
+        setSecGroups(d.groups || [])
+      }
     } catch { /* silent */ }
     setPermLoading(false)
   }
@@ -56,7 +60,7 @@ export default function FolderManager({ show, onClose, token }) {
     try {
       const res = await httpFetch(`/api/cm/folders/${permFolder.id}/permissions`, {
         method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ group_id: Number(permGroupId), permission_level: permLevel }),
+        body: JSON.stringify({ security_group_id: Number(permGroupId), permission_level: permLevel }),
       })
       if (res.ok) { setPermGroupId(''); loadPermissions(permFolder.id) }
       else { const d = await res.json(); toast.error(d.error || 'Failed to add permission.') }
@@ -68,6 +72,7 @@ export default function FolderManager({ show, onClose, token }) {
     try {
       const res = await httpFetch(`/api/cm/folders/${permFolder.id}/permissions/${groupId}`, { method: 'DELETE', headers: authHeaders })
       if (res.ok) loadPermissions(permFolder.id)
+      else { const d = await res.json(); toast.error(d.error || 'Failed to remove permission.') }
     } catch { toast.error('Network error.') }
   }
 
@@ -78,9 +83,9 @@ export default function FolderManager({ show, onClose, token }) {
       setLoading(true)
       try {
         const [fRes, pRes, sRes] = await Promise.all([
-          httpFetch('/api/cm/folders', { headers: authHeaders }),
-          httpFetch('/api/admin/products-full', { headers: authHeaders }),
-          httpFetch('/api/admin/sites', { headers: authHeaders }),
+          httpFetch('/api/cm/folders?include_inactive=true', { headers: authHeaders }),
+          httpFetch('/api/cm/products', { headers: authHeaders }),
+          httpFetch('/api/cm/sites', { headers: authHeaders }),
         ])
         if (cancelled) return
         if (fRes.ok) setFolders((await fRes.json()).folders || [])
@@ -114,7 +119,7 @@ export default function FolderManager({ show, onClose, token }) {
       const url = editFolder ? `/api/cm/folders/${editFolder.id}` : '/api/cm/folders'
       const method = editFolder ? 'PUT' : 'POST'
       const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
-      if (res.ok) { setShowForm(false); refreshFolders() }
+      if (res.ok) { setShowForm(false); refreshFolders(); toast.success(editFolder ? 'Folder saved.' : 'Folder created.') }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
     setSaving(false)
@@ -129,7 +134,7 @@ export default function FolderManager({ show, onClose, token }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h3 className="cm-modal-title" style={{ margin: 0 }}>Manage Folders</h3>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={openAdd}>+ Add Folder</button>
+            {canConfigure && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={openAdd}>+ Add Folder</button>}
             <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={onClose}>Close</button>
           </div>
         </div>
@@ -198,10 +203,10 @@ export default function FolderManager({ show, onClose, token }) {
                   <td>{f.site_name || '—'}</td>
                   <td><StatusBadge status={f.status || 'Active'} /></td>
                   <td>
-                    <div className="cm-action-btns">
+                    {canConfigure && <div className="cm-action-btns">
                       <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openEdit(f)}>Edit</button>
                       <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setPermFolder(f); loadPermissions(f.id) }}>Permissions</button>
-                    </div>
+                    </div>}
                   </td>
                 </tr>
               ))}
@@ -218,12 +223,12 @@ export default function FolderManager({ show, onClose, token }) {
             <h3 className="cm-modal-title" style={{ margin: 0 }}>Permissions — {permFolder.name}</h3>
             <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPermFolder(null)}>Close</button>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Control which security groups can access this folder and at what level.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Once a group is listed, only listed groups see this folder. Read opens its content, Write changes it, Manage changes the folder and this list. Administrators always have access.</p>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
             <select className="cm-form-select" style={{ flex: 1 }} value={permGroupId} onChange={e => setPermGroupId(e.target.value)}>
               <option value="">— Select security group —</option>
-              {secGroups.filter(sg => !permissions.some(p => p.group_id === sg.id)).map(sg => (
+              {secGroups.filter(sg => !permissions.some(p => Number(p.security_group_id) === Number(sg.id))).map(sg => (
                 <option key={sg.id} value={sg.id}>{sg.name}</option>
               ))}
             </select>
@@ -238,16 +243,16 @@ export default function FolderManager({ show, onClose, token }) {
           {permLoading ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>Loading…</p>
           ) : permissions.length === 0 ? (
-            <div className="cm-empty" style={{ padding: 20 }}><p>No group permissions set. All users with folder access can read.</p></div>
+            <div className="cm-empty" style={{ padding: 20 }}><p>No groups listed, so everyone who can use content can open this folder.</p></div>
           ) : (
             <table className="cm-table">
               <thead><tr><th>Security Group</th><th>Permission Level</th><th></th></tr></thead>
               <tbody>
                 {permissions.map(p => (
-                  <tr key={p.group_id}>
+                  <tr key={p.security_group_id}>
                     <td style={{ fontWeight: 500 }}>{p.group_name}</td>
                     <td><span style={{ textTransform: 'capitalize', fontSize: 12, padding: '2px 8px', borderRadius: 10, background: p.permission_level === 'manage' ? '#e8f5e9' : p.permission_level === 'write' ? '#fff8e1' : 'var(--bg)', color: p.permission_level === 'manage' ? '#2e7d32' : p.permission_level === 'write' ? '#856404' : 'var(--text-secondary)' }}>{p.permission_level}</span></td>
-                    <td><button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleRemovePermission(p.group_id)}>Remove</button></td>
+                    <td><button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleRemovePermission(p.security_group_id)}>Remove</button></td>
                   </tr>
                 ))}
               </tbody>

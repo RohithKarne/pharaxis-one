@@ -4,7 +4,9 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 
-export default function RichTextEditor({ value, onChange }) {
+// mergeFields: optional [{ key, label, group }] — an "Insert field" list in the
+// toolbar that puts {{key}} at the cursor (templates).
+export default function RichTextEditor({ value, onChange, mergeFields = null }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -39,6 +41,19 @@ export default function RichTextEditor({ value, onChange }) {
         <span className="cm-toolbar-sep">|</span>
         <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'active' : ''}>• List</button>
         <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'active' : ''}>1. List</button>
+        {mergeFields?.length > 0 && (
+          <>
+            <span className="cm-toolbar-sep">|</span>
+            <select aria-label="Insert field" value="" onChange={e => { if (e.target.value) editor.chain().focus().insertContent(`{{${e.target.value}}}`).run() }}>
+              <option value="">Insert field…</option>
+              {[...new Set(mergeFields.map(f => f.group))].map(g => (
+                <optgroup key={g} label={g}>
+                  {mergeFields.filter(f => f.group === g).map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </>
+        )}
       </div>
       <EditorContent editor={editor} className="cm-editor-content" />
     </div>

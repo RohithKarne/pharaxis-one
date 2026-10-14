@@ -1,5 +1,8 @@
 'use strict';
 
+// E2B(R3) E.i.1.1a, reaction as reported by the primary source: 250 characters.
+const VERBATIM_MAX = 250;
+
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -12,6 +15,19 @@ function esc(value) {
 function tag(name, value, attrs = '') {
   if (value === undefined || value === null || value === '') return '';
   return `<${name}${attrs}>${esc(value)}</${name}>`;
+}
+
+// E2B dates are CCYYMMDD. The database hands back DATE columns as Date objects
+// at UTC midnight (pool timezone +00:00), which String() wrote as
+// "Mon Oct 12 2026 00:00:00 GMT+0000 (…)" — no receiver reads that.
+function e2bDate(value) {
+  if (value === undefined || value === null || value === '') return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return `${value.getUTCFullYear()}${String(value.getUTCMonth() + 1).padStart(2, '0')}${String(value.getUTCDate()).padStart(2, '0')}`;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  return m ? `${m[1]}${m[2]}${m[3]}` : String(value);
 }
 
 function block(name, body, attrs = '') {
@@ -54,12 +70,13 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
   const reactionXml = reactions.map((reaction, index) => block('reaction', [
     // E.i.1.1a: the reaction as the reporter described it; the coded term is
     // the fallback for reactions saved before the verbatim was kept.
-    tag('reactionprimarysourcereaction', reaction.reaction_verbatim || reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`),
+    // The element holds 250 characters; the ICSR keeps longer words whole in the narrative.
+    tag('reactionprimarysourcereaction', String(reaction.reaction_verbatim || reaction.meddra_pt_name || reaction.term || `Reaction ${index + 1}`).slice(0, VERBATIM_MAX)),
     tag('reactionmeddraversionpt', reaction.meddra_version || dependencies.meddraVersion || ''),
     tag('reactionmeddrapt', reaction.meddra_pt || reaction.meddra_code || ''),
     tag('reactionmeddrallt', reaction.meddra_llt || ''),
-    tag('reactionstartdate', reaction.onset_date || ''),
-    tag('reactionenddate', reaction.end_date || ''),
+    tag('reactionstartdate', e2bDate(reaction.onset_date)),
+    tag('reactionenddate', e2bDate(reaction.end_date)),
     tag('reactionoutcome', reaction.outcome || ''),
     tag('termhighlighted', reaction.term_highlighted || 'n'),
   ].join(''))).join('');
@@ -76,8 +93,8 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     tag('drugindication', drug.indication || ''),
     tag('drugindicationmeddraversion', drug.indication_meddra_version || dependencies.meddraVersion || ''),
     tag('drugindicationmeddrallt', drug.indication_meddra || ''),
-    tag('drugstartdate', drug.start_date || ''),
-    tag('drugenddate', drug.end_date || ''),
+    tag('drugstartdate', e2bDate(drug.start_date)),
+    tag('drugenddate', e2bDate(drug.end_date)),
     tag('actiondrug', drug.action_taken || ''),
     tag('drugrecurreadministration', drug.rechallenge || ''),
     (icsr.causality || [])
@@ -91,16 +108,18 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
 
   const testXml = tests.map((test) => block('test', [
     tag('testname', test.test_name || ''),
-    tag('testdate', test.test_date || ''),
-    tag('testresult', test.result_text || test.result_unstructured || ''),
+    tag('testdate', e2bDate(test.test_date)),
+    // A normal range MIMS cannot split into low and high travels beside the
+    // result, so it is not lost when both are present.
+    tag('testresult', [test.result_text, test.result_unstructured].filter(v => v && String(v).trim()).join(' — ')),
     tag('lowtestrange', test.test_normal_low || ''),
     tag('hightestrange', test.test_normal_high || ''),
   ].join(''))).join('');
 
   const historyXml = history.map((entry) => block('medicalhistoryepisode', [
     tag('patientepisodename', entry.comments || entry.term || entry.structure || ''),
-    tag('patientmedicalstartdate', entry.start_date || ''),
-    tag('patientmedicalenddate', entry.end_date || ''),
+    tag('patientmedicalstartdate', e2bDate(entry.start_date)),
+    tag('patientmedicalenddate', e2bDate(entry.end_date)),
     tag('patientmeddrallt', entry.meddra_code || ''),
   ].join(''))).join('');
 
@@ -121,7 +140,7 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     ${tag('safetyreportid', report.sender_safety_report_id || `DRAFT-${report.case_id || 'CASE'}`)}
     ${tag('primarysourcecountry', report.primary_source_country || '')}
     ${tag('occurcountry', report.primary_source_country || '')}
-    ${tag('receiptdate', report.receive_date || '')}
+    ${tag('receiptdate', e2bDate(report.receive_date))}
     ${tag('senderreporttype', senderReportType(report.submission_type))}
     ${tag('transmissionreasoncode', senderReportType(report.submission_type))}
     ${tag('nullificationreason', report.nullification_reason || '')}
@@ -136,7 +155,7 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     ${block('primarysource', tag('reportercountry', report.primary_source_country || ''))}
     ${block('patient', [
       tag('patientinitial', patient.initials || patient.name || ''),
-      tag('patientbirthdate', patient.date_of_birth || patient.dob || ''),
+      tag('patientbirthdate', e2bDate(patient.date_of_birth || patient.dob)),
       tag('patientsex', patient.sex || patient.gender || ''),
       historyXml,
       reactionXml,
@@ -153,4 +172,4 @@ function safeJson(value, fallback) {
   try { return JSON.parse(value); } catch (_) { return fallback; }
 }
 
-module.exports = { generateE2BXml, esc, tag };
+module.exports = { generateE2BXml, esc, tag, e2bDate, VERBATIM_MAX };

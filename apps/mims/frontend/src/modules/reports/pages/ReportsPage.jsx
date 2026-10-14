@@ -5,31 +5,29 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
-import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import { Button } from '../../../shared/ui'
 
 import ReportFilterBar from '../components/ReportFilterBar'
 import ReportTableViewer from '../components/ReportTableViewer'
-import CustomReportBuilderPanel from '../components/CustomReportBuilderPanel'
 
+// The Overview (library counts and a table of links) and Governance (anomaly
+// flags on every empty run, recommendations, usage counts, templates, shares,
+// role defaults and delivery rules that changed nothing) are gone; Reports is
+// the first screen (reports review, RD2, RD5).
 const SECTION_LABELS = {
-  overview: 'Overview',
-  builder: 'Custom Builder',
   reports: 'Reports',
   dashboards: 'Dashboards',
-  schedules: 'Schedulers',
+  schedules: 'Schedules',
   history: 'Run History',
-  configuration: 'Configuration',
-  governance: 'Governance',
+  configuration: 'Settings',
 }
 
 const BLANK_REPORT_FORM = {
   dataset_key: '',
   name: '',
   description: '',
-  group_key: 'command_center',
   visibility_scope: 'shared',
-  default_filters: { date_from: '', date_to: '' },
+  default_filters: {},
   selected_columns: [],
   is_active: true,
 }
@@ -43,14 +41,10 @@ const BLANK_DASHBOARD_FORM = {
 }
 
 const BLANK_CONFIG_FORM = {
-  default_timezone: 'America/New_York',
-  default_delivery_method: 'email',
-  default_delivery_target: '',
   email_from_name: 'MIMS Reports',
   reply_to_email: '',
   scheduler_enabled: true,
   digest_subject_prefix: '[MIMS Reports]',
-  run_log_retention_days: 90,
 }
 
 function formatDateTime(value) {
@@ -60,27 +54,39 @@ function formatDateTime(value) {
   return dt.toLocaleString()
 }
 
-function exportRowsAsCsv(rows, filename) {
-  if (!rows || rows.length === 0) return
-  const headers = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row || {}).forEach((key) => {
-        if (!key.startsWith('__')) set.add(key)
-      })
-      return set
-    }, new Set())
-  )
-  const lines = [
-    headers.join(','),
-    ...rows.map((row) => headers.map((header) => {
-      const value = row?.[header] ?? ''
-      const text = String(value)
-      return text.includes(',') || text.includes('"') || text.includes('\n')
-        ? `"${text.replace(/"/g, '""')}"`
-        : text
-    }).join(',')),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+// Who may see a report or dashboard; checked on the server.
+const AUDIENCE_OPTIONS = [
+  { value: 'shared', label: 'Everyone with Reports' },
+  { value: 'managers', label: 'Report managers' },
+  { value: 'admin_only', label: 'Administrators' },
+]
+
+const LOCAL_TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+// The time zone was free text; a typo saved and the schedule ran in UTC.
+const TIMEZONES = (() => { try { return Intl.supportedValuesOf('timeZone') } catch { return [LOCAL_TIMEZONE, 'UTC'] } })()
+const FREQUENCY_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly, on the 1st' }
+const DELIVERY_LABELS = { email: 'Email', in_app: 'Notification in MIMS' }
+
+const RUN_MODE_LABELS = { manual: 'Run on screen', scheduled: 'Schedule', export: 'Exported', retry: 'Run again' }
+
+function blankSchedule() {
+  return {
+    target_type: 'report',
+    target_id: '',
+    export_name: '',
+    schedule_frequency: 'daily',
+    schedule_time_local: '08:00',
+    schedule_weekday: 1,
+    timezone_name: LOCAL_TIMEZONE,
+    delivery_method: 'email',
+    recipients: [],
+    filters: {},
+    email_subject: '',
+    is_active: true,
+  }
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -96,6 +102,9 @@ function badgeStyle(status) {
   }
   if (normalized === 'success') {
     return { background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }
+  }
+  if (normalized === 'paused') {
+    return { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }
   }
   return { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }
 }
@@ -139,36 +148,26 @@ function widgetRowsToList(rows) {
 export default function ReportsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { token, user, hasCapability } = useAuth()
+  const { token, hasCapability } = useAuth()
   const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
-  const isManager = isAdminUser(user)
-  // Capability is the authority for report actions (hasCapability returns true for
-  // superadmin / unrestricted / unresolved). Replaces the role-only isManager gate.
+  // Capabilities decide what shows; the server checks the same privileges.
+  // Schedules and Configuration were gated by the admin role here and by
+  // Manage Reports on the server, so a manager with Schedule reports saw nothing.
   const canManageReports = hasCapability('reports.manage')
   const canExportReports = hasCapability('reports.export')
+  const canScheduleReports = hasCapability('reports.schedule')
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
   )
 
-  const [section, setSection] = useState('overview')
-  const [summary, setSummary] = useState({ total_reports: 0, total_dashboards: 0, total_schedules: 0, failed_runs_last_7_days: 0 })
+  const [section, setSection] = useState('reports')
   const [datasets, setDatasets] = useState([])
   const [definitions, setDefinitions] = useState([])
   const [dashboards, setDashboards] = useState([])
   const [schedules, setSchedules] = useState([])
   const [historyRuns, setHistoryRuns] = useState([])
-  const [moduleConfig, setModuleConfig] = useState(BLANK_CONFIG_FORM)
   const [favorites, setFavorites] = useState([])
-  const [dashboardTemplates, setDashboardTemplates] = useState([])
-  const [dashboardShares, setDashboardShares] = useState([])
-  const [roleDefaults, setRoleDefaults] = useState([])
-  const [validationResult, setValidationResult] = useState({ issues: [] })
-  const [usageAnalytics, setUsageAnalytics] = useState([])
-  const [recommendations, setRecommendations] = useState([])
-  const [anomalyFlags, setAnomalyFlags] = useState([])
-  const [deliveryRules, setDeliveryRules] = useState([])
-  const [entityVersions, setEntityVersions] = useState([])
   const [runDetail, setRunDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -180,6 +179,8 @@ export default function ReportsPage() {
   const [reportForm, setReportForm] = useState(BLANK_REPORT_FORM)
   const [reportPreview, setReportPreview] = useState(null)
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false)
+  const [reportFilters, setReportFilters] = useState({})
+  const [filterOptions, setFilterOptions] = useState({})
   const [reportBuilderPreview, setReportBuilderPreview] = useState(null)
   const [reportBuilderPreviewLoading, setReportBuilderPreviewLoading] = useState(false)
 
@@ -192,19 +193,8 @@ export default function ReportsPage() {
   const [dashboardPreviewLoading, setDashboardPreviewLoading] = useState(false)
 
   const [editingScheduleId, setEditingScheduleId] = useState(null)
-  const [scheduleForm, setScheduleForm] = useState({
-    target_type: 'report',
-    target_id: '',
-    export_name: '',
-    schedule_frequency: 'daily',
-    schedule_time_local: '08:00',
-    schedule_weekday: 1,
-    timezone_name: BLANK_CONFIG_FORM.default_timezone,
-    delivery_method: BLANK_CONFIG_FORM.default_delivery_method,
-    delivery_target: '',
-    email_subject: '',
-    is_active: true,
-  })
+  const [scheduleForm, setScheduleForm] = useState(blankSchedule)
+  const [recipientOptions, setRecipientOptions] = useState([])
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
   const [historyFilters, setHistoryFilters] = useState({ target_type: '', status: '' })
@@ -233,83 +223,31 @@ export default function ReportsPage() {
     setLoading(true)
     setError('')
     try {
-      const requests = [
-        apiJson('/api/reports/module/summary'),
+      const [datasetsPayload, definitionsPayload, dashboardsPayload, schedulesPayload, historyPayload, favoritesPayload, configPayload] = await Promise.all([
         apiJson('/api/reports/module/datasets'),
         apiJson('/api/reports/module/definitions'),
         apiJson('/api/reports/module/dashboards'),
-        apiJson('/api/reports/module/schedules'),
+        canScheduleReports ? apiJson('/api/reports/module/schedules') : Promise.resolve({ schedules: [] }),
         apiJson('/api/reports/module/history?limit=20'),
         apiJson('/api/reports/module/favorites'),
-        apiJson('/api/reports/module/dashboard-templates'),
-      ]
-      if (isManager) {
-        requests.push(apiJson('/api/reports/module/config'))
-        requests.push(apiJson('/api/reports/module/config/validate'))
-        requests.push(apiJson('/api/reports/module/dashboard-shares'))
-        requests.push(apiJson('/api/reports/module/role-default-dashboards'))
-        requests.push(apiJson('/api/reports/module/usage-analytics'))
-        requests.push(apiJson('/api/reports/module/recommendations'))
-        requests.push(apiJson('/api/reports/module/anomalies'))
-        requests.push(apiJson('/api/reports/module/delivery-rules'))
-      }
-
-      const results = await Promise.all(requests)
-      const [
-        summaryPayload,
-        datasetsPayload,
-        definitionsPayload,
-        dashboardsPayload,
-        schedulesPayload,
-        historyPayload,
-        favoritesPayload,
-        templatesPayload,
-        configPayload,
-        validationPayload,
-        sharesPayload,
-        roleDefaultsPayload,
-        analyticsPayload,
-        recommendationsPayload,
-        anomalyPayload,
-        deliveryRulesPayload,
-      ] = results
-      setSummary(summaryPayload)
+        canManageReports ? apiJson('/api/reports/module/config') : Promise.resolve(null),
+      ])
       setDatasets(Array.isArray(datasetsPayload.datasets) ? datasetsPayload.datasets : [])
       const nextDefinitions = Array.isArray(definitionsPayload.definitions) ? definitionsPayload.definitions : []
       setDefinitions(nextDefinitions)
       setDashboards(Array.isArray(dashboardsPayload.dashboards) ? dashboardsPayload.dashboards : [])
-      const nextSchedules = Array.isArray(schedulesPayload.schedules) ? schedulesPayload.schedules : []
-      setSchedules(nextSchedules)
+      setSchedules(Array.isArray(schedulesPayload.schedules) ? schedulesPayload.schedules : [])
       setHistoryRuns(Array.isArray(historyPayload.runs) ? historyPayload.runs : [])
       setFavorites(Array.isArray(favoritesPayload?.favorites) ? favoritesPayload.favorites : [])
-      setDashboardTemplates(Array.isArray(templatesPayload?.templates) ? templatesPayload.templates : [])
-      setValidationResult(validationPayload || { issues: [] })
-      setDashboardShares(Array.isArray(sharesPayload?.shares) ? sharesPayload.shares : [])
-      setRoleDefaults(Array.isArray(roleDefaultsPayload?.defaults) ? roleDefaultsPayload.defaults : [])
-      setUsageAnalytics(Array.isArray(analyticsPayload?.analytics) ? analyticsPayload.analytics : [])
-      setRecommendations(Array.isArray(recommendationsPayload?.recommendations) ? recommendationsPayload.recommendations : [])
-      setAnomalyFlags(Array.isArray(anomalyPayload?.flags) ? anomalyPayload.flags : [])
-      setDeliveryRules(Array.isArray(deliveryRulesPayload?.rules) ? deliveryRulesPayload.rules : [])
 
-      if (isManager && configPayload) {
+      if (canManageReports && configPayload) {
         const normalizedConfig = {
-          default_timezone: configPayload.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-          default_delivery_method: configPayload.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-          default_delivery_target: configPayload.default_delivery_target || '',
           email_from_name: configPayload.email_from_name || BLANK_CONFIG_FORM.email_from_name,
           reply_to_email: configPayload.reply_to_email || '',
           scheduler_enabled: !!Number(configPayload.scheduler_enabled ?? 1),
           digest_subject_prefix: configPayload.digest_subject_prefix || BLANK_CONFIG_FORM.digest_subject_prefix,
-          run_log_retention_days: Number(configPayload.run_log_retention_days || 90),
         }
-        setModuleConfig(normalizedConfig)
         setConfigForm(normalizedConfig)
-        setScheduleForm((current) => ({
-          ...current,
-          timezone_name: editingScheduleId ? current.timezone_name : normalizedConfig.default_timezone,
-          delivery_method: editingScheduleId ? current.delivery_method : normalizedConfig.default_delivery_method,
-          delivery_target: editingScheduleId ? current.delivery_target : normalizedConfig.default_delivery_target,
-        }))
       }
 
       if (!selectedReportId && nextDefinitions.length > 0) {
@@ -323,7 +261,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [apiJson, editingScheduleId, isManager, selectedDashboardId, selectedReportId, token])
+  }, [apiJson, canManageReports, canScheduleReports, selectedDashboardId, selectedReportId, token])
 
   async function loadHistory() {
     if (!token) return
@@ -357,6 +295,20 @@ export default function ReportsPage() {
     loadModuleData()
   }, [loadModuleData])
 
+  // Who this schedule may be emailed to: people in the organisation who can
+  // see the chosen report or dashboard.
+  useEffect(() => {
+    if (section !== 'schedules' || !scheduleForm.target_id || !canScheduleReports) { setRecipientOptions([]); return }
+    apiJson(`/api/reports/module/recipients?target_type=${scheduleForm.target_type}&target_id=${scheduleForm.target_id}`)
+      .then((payload) => setRecipientOptions(Array.isArray(payload.recipients) ? payload.recipients : []))
+      .catch(() => setRecipientOptions([]))
+  }, [apiJson, canScheduleReports, scheduleForm.target_id, scheduleForm.target_type, section])
+
+  useEffect(() => {
+    if (!token) return
+    apiJson('/api/reports/module/filter-options').then(setFilterOptions).catch(() => setFilterOptions({}))
+  }, [apiJson, token])
+
   useEffect(() => {
     const params = new URLSearchParams(location.search || '')
     const sectionParam = params.get('section')
@@ -366,16 +318,20 @@ export default function ReportsPage() {
   }, [location.search])
 
   useEffect(() => {
-    if (!isManager && (section === 'schedules' || section === 'configuration' || section === 'governance')) {
-      pushSection('overview')
+    if ((!canScheduleReports && section === 'schedules') || (!canManageReports && section === 'configuration')) {
+      pushSection('reports')
     }
-  }, [isManager, pushSection, section])
+  }, [canManageReports, canScheduleReports, pushSection, section])
 
   useEffect(() => {
     if (!definitions.length) return
     const params = new URLSearchParams(location.search || '')
     const reportKey = params.get('reportKey')
-    if (reportKey) {
+    // A report named in the address opens the Reports section only when no
+    // other section is asked for: "Schedule Report" went to Schedulers and this
+    // pulled it straight back, so the button did nothing.
+    const sectionParam = params.get('section')
+    if (reportKey && (!sectionParam || sectionParam === 'reports')) {
       const match = definitions.find((item) => item.report_key === reportKey)
       if (match) {
         setSelectedReportId(match.id)
@@ -388,6 +344,8 @@ export default function ReportsPage() {
       if (match) {
         setSection('reports')
         setSelectedReportId(match.id)
+        setReportPreview(null)
+        setReportFilters({ ...(match.default_filters || {}), ...(location.state.appliedFilters || {}) })
       }
     }
   }, [location.state, location.search, definitions])
@@ -412,7 +370,6 @@ export default function ReportsPage() {
         dataset_key: definition.dataset_key,
         name: definition.name,
         description: definition.description || '',
-        group_key: definition.group_key || 'command_center',
         visibility_scope: definition.visibility_scope || 'shared',
         default_filters: { ...(definition.default_filters || {}) },
         selected_columns: Array.isArray(definition.selected_columns) ? definition.selected_columns : [],
@@ -452,33 +409,31 @@ export default function ReportsPage() {
     return text.includes(String(deferredDashboardSearch || '').toLowerCase())
   })
 
+  // The library under its headings, favourites first.
+  const libraryGroups = (() => {
+    const groups = new Map()
+    const favourites = filteredDefinitions.filter((item) => isFavorite('report', item.id))
+    if (favourites.length) groups.set('Favourites', favourites)
+    filteredDefinitions.forEach((item) => {
+      const label = item.is_system ? (item.group_label || 'Other') : 'Your organisation\'s reports'
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label).push(item)
+    })
+    return [...groups.entries()].map(([label, items]) => ({ label, items }))
+  })()
   const selectedReport = definitions.find((item) => Number(item.id) === Number(selectedReportId)) || null
   const selectedDashboard = dashboards.find((item) => Number(item.id) === Number(selectedDashboardId)) || null
   const sectionGroups = [
     {
-      label: 'Operate',
-      items: [
-        { key: 'overview', label: 'Overview' },
-        { key: 'history', label: 'Run History' },
-        ...(isManager ? [{ key: 'schedules', label: 'Schedulers' }] : []),
-      ],
-    },
-    {
-      label: 'Build',
+      label: 'Reports',
       items: [
         { key: 'reports', label: 'Reports' },
         { key: 'dashboards', label: 'Dashboards' },
+        ...(canScheduleReports ? [{ key: 'schedules', label: 'Schedules' }] : []),
+        { key: 'history', label: 'Run History' },
+        ...(canManageReports ? [{ key: 'configuration', label: 'Settings' }] : []),
       ],
     },
-    ...(isManager
-      ? [{
-          label: 'Govern',
-          items: [
-            { key: 'governance', label: 'Governance' },
-            { key: 'configuration', label: 'Configuration' },
-          ],
-        }]
-      : []),
   ]
 
   function isFavorite(targetType, targetId) {
@@ -510,41 +465,6 @@ export default function ReportsPage() {
     }
   }
 
-  async function publishReport(definitionId = selectedReportId) {
-    if (!definitionId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/publish`, { method: 'POST' })
-      await loadModuleData()
-      setSelectedReportId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to publish report.')
-    }
-  }
-
-  async function certifyReport(definitionId = selectedReportId) {
-    if (!definitionId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/certify`, {
-        method: 'POST',
-        body: JSON.stringify({ sensitivity_level: 'restricted' }),
-      })
-      await loadModuleData()
-      setSelectedReportId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to certify report.')
-    }
-  }
-
-  async function loadVersions(targetType, targetId) {
-    try {
-      const base = targetType === 'dashboard' ? 'dashboards' : 'definitions'
-      const payload = await apiJson(`/api/reports/module/${base}/${targetId}/versions`)
-      setEntityVersions(Array.isArray(payload.versions) ? payload.versions : [])
-    } catch (err) {
-      setError(err.message || 'Failed to load versions.')
-    }
-  }
-
   async function duplicateDashboard(dashboardId = selectedDashboardId) {
     if (!dashboardId) return
     try {
@@ -554,28 +474,6 @@ export default function ReportsPage() {
       pushSection('dashboards', { dashboardKey: payload.dashboard_key })
     } catch (err) {
       setError(err.message || 'Failed to duplicate dashboard.')
-    }
-  }
-
-  async function publishDashboard(dashboardId = selectedDashboardId) {
-    if (!dashboardId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/dashboards/${dashboardId}/publish`, { method: 'POST' })
-      await loadModuleData()
-      setSelectedDashboardId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to publish dashboard.')
-    }
-  }
-
-  async function saveDashboardTemplate(dashboardId = selectedDashboardId) {
-    if (!dashboardId) return
-    try {
-      await apiJson(`/api/reports/module/dashboards/${dashboardId}/templates`, { method: 'POST' })
-      await loadModuleData()
-      pushSection('governance')
-    } catch (err) {
-      setError(err.message || 'Failed to create dashboard template.')
     }
   }
 
@@ -633,7 +531,7 @@ export default function ReportsPage() {
     try {
       const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/run`, {
         method: 'POST',
-        body: JSON.stringify({ filters: selectedReport?.default_filters || {} }),
+        body: JSON.stringify({ filters: reportFilters }),
       })
       setReportPreview(payload)
     } catch (err) {
@@ -642,6 +540,25 @@ export default function ReportsPage() {
       setReportPreviewLoading(false)
       loadHistory()
       loadModuleData()
+    }
+  }
+
+  // Export runs on the server, which checks Export Reports and records it.
+  async function exportReport(definitionId, filters, fileBase = 'report') {
+    try {
+      const response = await httpFetch(`/api/reports/module/definitions/${definitionId}/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filters: filters || {} }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Export failed.')
+      }
+      // The file name is made here: a cross-origin response hides Content-Disposition.
+      downloadBlob(await response.blob(), `${fileBase}-${new Date().toISOString().slice(0, 10)}.csv`)
+    } catch (err) {
+      setError(err.message || 'Failed to export report.')
     }
   }
 
@@ -735,14 +652,18 @@ export default function ReportsPage() {
   // filled in. It used to open the old Scheduled Reports window, which posted to a
   // legacy service that never worked (Postgres SQL against a missing table — T16).
   function scheduleSelectedReport() {
-    if (!isManager) { setError('Only report managers can schedule reports.'); return }
+    if (!canScheduleReports) { setError('You do not have permission to schedule reports.'); return }
     setEditingScheduleId(null)
-    setScheduleForm((current) => ({
-      ...current,
+    // The schedule keeps the filters on screen; typed dates become the period,
+    // because fixed dates would send the same days for ever.
+    const { date_from: _from, date_to: _to, ...kept } = reportFilters
+    setScheduleForm({
+      ...blankSchedule(),
       target_type: 'report',
       target_id: String(selectedReport.id),
-      export_name: selectedReport.name || current.export_name,
-    }))
+      export_name: selectedReport.name,
+      filters: kept,
+    })
     pushSection('schedules')
   }
 
@@ -753,29 +674,19 @@ export default function ReportsPage() {
         ? `/api/reports/module/schedules/${editingScheduleId}`
         : '/api/reports/module/schedules'
       const method = editingScheduleId ? 'PUT' : 'POST'
+      const { recipients, ...form } = scheduleForm
       await apiJson(url, {
         method,
         body: JSON.stringify({
-          ...scheduleForm,
-          target_id: scheduleForm.target_id ? Number(scheduleForm.target_id) : null,
-          schedule_weekday: Number(scheduleForm.schedule_weekday || 1),
-          is_active: !!scheduleForm.is_active,
+          ...form,
+          delivery_target: form.delivery_method === 'email' ? recipients.join(', ') : '',
+          target_id: form.target_id ? Number(form.target_id) : null,
+          schedule_weekday: Number(form.schedule_weekday || 1),
+          is_active: !!form.is_active,
         }),
       })
       setEditingScheduleId(null)
-      setScheduleForm({
-        target_type: 'report',
-        target_id: '',
-        export_name: '',
-        schedule_frequency: 'daily',
-        schedule_time_local: '08:00',
-        schedule_weekday: 1,
-        timezone_name: moduleConfig.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-        delivery_method: moduleConfig.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-        delivery_target: moduleConfig.default_delivery_target || '',
-        email_subject: '',
-        is_active: true,
-      })
+      setScheduleForm(blankSchedule())
       await loadModuleData()
     } catch (err) {
       setError(err.message || 'Failed to save schedule.')
@@ -793,9 +704,10 @@ export default function ReportsPage() {
       schedule_frequency: schedule.schedule_frequency || 'daily',
       schedule_time_local: schedule.schedule_time_local || '08:00',
       schedule_weekday: Number(schedule.schedule_weekday || 1),
-      timezone_name: schedule.timezone_name || BLANK_CONFIG_FORM.default_timezone,
-      delivery_method: schedule.delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-      delivery_target: schedule.delivery_target || '',
+      timezone_name: schedule.timezone_name || LOCAL_TIMEZONE,
+      delivery_method: schedule.delivery_method === 'in_app' ? 'in_app' : 'email',
+      recipients: String(schedule.delivery_target || '').split(/[\s,;]+/).filter(Boolean),
+      filters: schedule.filters || {},
       email_subject: schedule.email_subject || '',
       is_active: !!Number(schedule.is_active ?? 1),
     })
@@ -820,20 +732,14 @@ export default function ReportsPage() {
         body: JSON.stringify({
           ...configForm,
           scheduler_enabled: !!configForm.scheduler_enabled,
-          run_log_retention_days: Number(configForm.run_log_retention_days || 90),
         }),
       })
       const normalized = {
-        default_timezone: payload.default_timezone,
-        default_delivery_method: payload.default_delivery_method,
-        default_delivery_target: payload.default_delivery_target || '',
         email_from_name: payload.email_from_name || '',
         reply_to_email: payload.reply_to_email || '',
         scheduler_enabled: !!Number(payload.scheduler_enabled ?? 1),
         digest_subject_prefix: payload.digest_subject_prefix || '',
-        run_log_retention_days: Number(payload.run_log_retention_days || 90),
       }
-      setModuleConfig(normalized)
       setConfigForm(normalized)
       await loadModuleData()
     } catch (err) {
@@ -845,90 +751,14 @@ export default function ReportsPage() {
 
 
 
-  function renderOverview() {
-    const links = [
-      { title: 'Report Library', desc: 'Discover approved reports and run trusted outputs.', section: 'reports' },
-      { title: 'Dashboard Library', desc: 'Saved operational and leadership surfaces.', section: 'dashboards' },
-      { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !isManager },
-      { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !isManager },
-    ].filter((item) => !item.hidden)
-    return (
-      <div style={{ display: 'grid', gap: 12 }}>
-        <div className="card">
-          <div className="card-header"><h3>Summary</h3></div>
-          <table className="admin-table mims-queue-table">
-            <tbody>
-              {[
-                { label: 'Active reports', value: summary.total_reports, hint: 'Approved library and custom definitions' },
-                { label: 'Dashboards', value: summary.total_dashboards, hint: 'Saved decision surfaces' },
-                { label: 'Schedulers', value: summary.total_schedules, hint: 'Active delivery jobs' },
-                { label: 'Failed runs (7 days)', value: summary.failed_runs_last_7_days, hint: 'Recent runs needing attention' },
-              ].map((item) => (
-                <tr key={item.label}>
-                  <td><strong>{item.label}</strong><div className="text-muted">{item.hint}</div></td>
-                  <td className="num">{item.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, alignItems: 'start' }}>
-          <div className="card">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>Reporting Workspace</h3>
-              <button className="btn btn-outline" onClick={() => pushSection('reports')}>Open Report Library</button>
-            </div>
-            <table className="admin-table mims-module-list">
-              <tbody>
-                {links.map((item) => (
-                  <tr key={item.title}>
-                    <td><a href="#" onClick={(e) => { e.preventDefault(); pushSection(item.section) }}>{item.title}</a></td>
-                    <td>{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><h3>Recent Run Activity</h3></div>
-            <table className="admin-table">
-              <thead>
-                <tr><th>Report</th><th>Type</th><th>Rows</th><th>Run</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {historyRuns.slice(0, 6).map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      {run.report_name}
-                      {run.error_message && <div style={{ fontSize: 12, color: '#b91c1c' }}>{run.error_message}</div>}
-                    </td>
-                    <td>{run.target_type || 'report'}, {run.run_mode}</td>
-                    <td>{run.row_count}</td>
-                    <td>{formatDateTime(run.created_at)}</td>
-                    <td style={{ color: badgeStyle(run.status).color, fontWeight: 700 }}>{String(run.status || 'unknown')}</td>
-                  </tr>
-                ))}
-                {!historyRuns.length && (
-                  <tr><td colSpan={5} className="text-muted">No runs recorded yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   function renderReportsSection() {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 18 }}>
         <div style={cardStyle()}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>Report Library</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Trusted reports with approved datasets and controlled definitions.</div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>Reports</div>
+              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Choose a report, set the filters and run it.</div>
             </div>
             <Button variant="primary" size="sm" disabled={!canManageReports}
               title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
@@ -941,12 +771,16 @@ export default function ReportsPage() {
             style={{ width: '100%', marginTop: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}
           />
           <div style={{ marginTop: 14, display: 'grid', gap: 10, maxHeight: 640, overflowY: 'auto' }}>
-            {filteredDefinitions.map((definition) => (
+            {libraryGroups.map((group) => (
+              <div key={group.label} style={{ display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: 4 }}>{group.label}</div>
+                {group.items.map((definition) => (
               <button
                 key={definition.id}
                 onClick={() => {
                   setSelectedReportId(definition.id)
                   setReportPreview(null)
+                  setReportFilters({ ...(definition.default_filters || {}) })
                   pushSection('reports', { reportKey: definition.report_key })
                 }}
                 style={{
@@ -954,19 +788,18 @@ export default function ReportsPage() {
                   border: Number(selectedReportId) === Number(definition.id) ? '1px solid var(--primary)' : '1px solid var(--border)',
                   background: Number(selectedReportId) === Number(definition.id) ? 'rgba(var(--primary-rgb, 79,70,229),0.08)' : '#fff',
                   borderRadius: 12,
-                  padding: 14,
+                  padding: 12,
                   cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{definition.name}</div>
-                  <span style={{ fontSize: 11, color: definition.is_built === false ? 'var(--text-muted)' : definition.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
-                    {definition.is_built === false ? 'NOT BUILT YET' : definition.is_system ? 'SYSTEM' : 'CUSTOM'}
-                  </span>
+                  <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{isFavorite('report', definition.id) ? '★ ' : ''}{definition.name}</div>
+                  {!definition.is_system && <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 800 }}>CUSTOM</span>}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{definition.group_label}</div>
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{definition.description}</div>
               </button>
+                ))}
+              </div>
             ))}
             {!filteredDefinitions.length && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No reports matched the current search.</div>}
           </div>
@@ -979,65 +812,20 @@ export default function ReportsPage() {
                 <div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{selectedReport.name}</h2>
-                    <span style={{ ...badgeStyle(selectedReport.is_active ? 'success' : 'failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
-                      {selectedReport.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    {!selectedReport.is_active && <span style={{ ...badgeStyle('failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>SWITCHED OFF</span>}
                   </div>
                   <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>{selectedReport.description}</div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
-                    <span>Dataset: {selectedReport.dataset_key}</span>
-                    <span>Group: {selectedReport.group_label}</span>
-                    <span>Scope: {selectedReport.visibility_scope}</span>
-                    <span>Status: {selectedReport.lifecycle_status || 'published'}</span>
-                    <span>Sensitivity: {selectedReport.sensitivity_level || 'standard'}</span>
-                    {selectedReport.certified_at && <span>Certified: {formatDateTime(selectedReport.certified_at)}</span>}
+                    <span>{selectedReport.is_system ? selectedReport.group_label : 'Your organisation\'s report'}</span>
+                    <span>Audience: {selectedReport.audience_label}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {selectedReport.is_built !== false && <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>}
                   <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
-                  <button onClick={() => loadVersions('report', selectedReport.id)} style={pillButtonStyle(false)}>Versions</button>
                   {canManageReports && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {canManageReports && selectedReport.lifecycle_status === 'draft' && <button onClick={() => publishReport(selectedReport.id)} style={pillButtonStyle(false)}>Publish</button>}
-                  {canManageReports && !selectedReport.is_system && <button onClick={() => certifyReport(selectedReport.id)} style={pillButtonStyle(false)}>Certify</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
-              </div>
-              <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Allowed Filters</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{selectedReport.allowed_filters?.join(', ') || 'None'}</div>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Selected Columns</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{selectedReport.selected_columns?.length || 0}</div>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Last Updated</div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{formatDateTime(selectedReport.updated_at)}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {entityVersions.length > 0 && selectedReport && (
-            <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this report.</div>
-                </div>
-                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
-              </div>
-              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                {entityVersions.slice(0, 8).map((version) => (
-                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                    <strong>Version {version.version_number}</strong>
-                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
-                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -1069,15 +857,9 @@ export default function ReportsPage() {
                   <input value={reportForm.name} onChange={(event) => setReportForm((current) => ({ ...current, name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Group Key</span>
-                  <input value={reportForm.group_key} onChange={(event) => setReportForm((current) => ({ ...current, group_key: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Visibility</span>
-                  <select value={reportForm.visibility_scope} onChange={(event) => setReportForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <option value="shared">Shared</option>
-                    <option value="admin_only">Admin Only</option>
-                    <option value="leadership">Leadership</option>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Who can see it</span>
+                  <select aria-label="Who can see it" value={reportForm.visibility_scope} onChange={(event) => setReportForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
               </div>
@@ -1088,13 +870,13 @@ export default function ReportsPage() {
               </label>
 
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                {/* A saved period moves with the calendar; saved dates went stale. */}
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Date From</span>
-                  <input type="date" value={reportForm.default_filters.date_from || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { ...(current.default_filters || {}), date_from: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Date To</span>
-                  <input type="date" value={reportForm.default_filters.date_to || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { ...(current.default_filters || {}), date_to: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default period</span>
+                  <select aria-label="Default period" value={reportForm.default_filters.period || ''} onChange={(event) => setReportForm((current) => ({ ...current, default_filters: { period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <option value="">The report's own default</option>
+                    {(filterOptions.periods || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 25 }}>
                   <input type="checkbox" checked={!!reportForm.is_active} onChange={(event) => setReportForm((current) => ({ ...current, is_active: event.target.checked }))} />
@@ -1133,7 +915,7 @@ export default function ReportsPage() {
                       </label>
                     ))}
                   </div>
-                  <ReportTableViewer columns={reportBuilderPreview.columns} rows={reportBuilderPreview.rows.slice(0, 12)} />
+                  <ReportTableViewer columns={reportBuilderPreview.columns} labels={reportBuilderPreview.column_labels} rows={reportBuilderPreview.rows.slice(0, 12)} />
                 </div>
               )}
             </div>
@@ -1141,37 +923,35 @@ export default function ReportsPage() {
 
           {selectedReport && (
             <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Report Preview</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Manual preview before sharing or scheduling.</div>
-                </div>
-                {selectedReport.is_built !== false && (
-                  <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(false)}>
-                    {reportPreviewLoading ? 'Running…' : 'Refresh Preview'}
-                  </button>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>Results</div>
+              <div style={{ marginTop: 14 }}>
+                <ReportFilterBar
+                  report={selectedReport}
+                  filters={reportFilters}
+                  options={filterOptions}
+                  onChange={setReportFilters}
+                  onRun={() => runSelectedReport(selectedReport.id)}
+                  running={reportPreviewLoading}
+                  onExport={canExportReports ? () => exportReport(selectedReport.id, reportFilters, selectedReport.report_key) : null}
+                  disableExport={!reportPreview?.rows?.length}
+                  onSchedule={canScheduleReports ? scheduleSelectedReport : null}
+                />
+                {reportPreview ? (
+                  <>
+                    {reportPreview.truncated && (
+                      <div style={{ marginBottom: 10, fontSize: 13, color: '#b45309' }}>Showing the first {reportPreview.row_count.toLocaleString()} rows. Narrow the period or filters to see the rest.</div>
+                    )}
+                    <ReportTableViewer
+                      columns={reportPreview.columns}
+                      labels={reportPreview.column_labels}
+                      rows={reportPreview.rows}
+                      onRowClick={(row) => row.__drill_route && navigate(row.__drill_route, { state: row.__drill_state })}
+                    />
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Choose the filters and press Run.</div>
                 )}
               </div>
-              {selectedReport.is_built === false ? (
-                <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
-                  This report is not built yet. It cannot be run or scheduled.
-                </div>
-              ) : reportPreview ? (
-                <div style={{ marginTop: 14 }}>
-                  {/* The made-up figures (turnaround 2.5h, conversion 94%), the filters
-                      wired to nothing and the placeholder chart are gone (M-90). */}
-                  <ReportFilterBar
-                    onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)}
-                    disableExport={!reportPreview.rows.length}
-                    onSchedule={scheduleSelectedReport}
-                  />
-                  <ReportTableViewer columns={reportPreview.columns} rows={reportPreview.rows} />
-                </div>
-              ) : (
-                <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
-                  Run the selected report to inspect live output.
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1182,6 +962,9 @@ export default function ReportsPage() {
   function renderDashboardWidgetPreview(widget) {
     if (widget.not_built) {
       return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>This report is not built yet.</div>
+    }
+    if (widget.not_available) {
+      return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>This report is not available to you.</div>
     }
     if (widget.display_mode === 'kpi-grid') {
       return (
@@ -1211,7 +994,7 @@ export default function ReportsPage() {
       )
     }
 
-    return <ReportTableViewer columns={widget.columns || []} rows={widget.rows || []} />
+    return <ReportTableViewer columns={widget.columns || []} labels={widget.column_labels} rows={widget.rows || []} />
   }
 
   function renderDashboardsSection() {
@@ -1221,7 +1004,7 @@ export default function ReportsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Library</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Saved decision views for operations, compliance, and observability.</div>
+              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Several reports run together on one screen.</div>
             </div>
             <Button variant="primary" size="sm" disabled={!canManageReports}
               title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
@@ -1253,9 +1036,7 @@ export default function ReportsPage() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                   <div style={{ fontWeight: 800 }}>{dashboard.name}</div>
-                  <span style={{ fontSize: 11, color: dashboard.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
-                    {dashboard.is_system ? 'SYSTEM' : 'CUSTOM'}
-                  </span>
+                  {!dashboard.is_system && <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 800 }}>CUSTOM</span>}
                 </div>
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{dashboard.description}</div>
               </button>
@@ -1271,50 +1052,22 @@ export default function ReportsPage() {
                 <div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{selectedDashboard.name}</h2>
-                    <span style={{ ...badgeStyle(selectedDashboard.is_active ? 'success' : 'failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
-                      {selectedDashboard.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    {!selectedDashboard.is_active && <span style={{ ...badgeStyle('failed'), borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>SWITCHED OFF</span>}
                   </div>
                   <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>{selectedDashboard.description}</div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>Widgets: {selectedDashboard.widgets?.length || 0}</span>
-                    <span>Scope: {selectedDashboard.visibility_scope}</span>
-                    <span>Status: {selectedDashboard.lifecycle_status || 'published'}</span>
-                    <span>Sensitivity: {selectedDashboard.sensitivity_level || 'standard'}</span>
+                    <span>Audience: {selectedDashboard.audience_label}</span>
                     <span>Last Updated: {formatDateTime(selectedDashboard.updated_at)}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(true)}>Run Dashboard</button>
                   <button onClick={() => toggleFavorite('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>{isFavorite('dashboard', selectedDashboard.id) ? 'Unfavorite' : 'Favorite'}</button>
-                  <button onClick={() => loadVersions('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>Versions</button>
                   {canManageReports && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {canManageReports && selectedDashboard.lifecycle_status === 'draft' && <button onClick={() => publishDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Publish</button>}
-                  {canManageReports && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {entityVersions.length > 0 && selectedDashboard && (
-            <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this dashboard.</div>
-                </div>
-                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
-              </div>
-              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                {entityVersions.slice(0, 8).map((version) => (
-                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                    <strong>Version {version.version_number}</strong>
-                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
-                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -1337,11 +1090,9 @@ export default function ReportsPage() {
                   <input value={dashboardForm.name} onChange={(event) => setDashboardForm((current) => ({ ...current, name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Visibility</span>
-                  <select value={dashboardForm.visibility_scope} onChange={(event) => setDashboardForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <option value="shared">Shared</option>
-                    <option value="leadership">Leadership</option>
-                    <option value="admin_only">Admin Only</option>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Who can see it</span>
+                  <select aria-label="Who can see it" value={dashboardForm.visibility_scope} onChange={(event) => setDashboardForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 25 }}>
@@ -1440,8 +1191,8 @@ export default function ReportsPage() {
             <div style={cardStyle()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Preview</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Widget outputs rendered from the current report definitions.</div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>Results</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Each panel runs its report with the report's own period.</div>
                 </div>
                 <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>
                   {dashboardPreviewLoading ? 'Running…' : 'Refresh Preview'}
@@ -1457,10 +1208,10 @@ export default function ReportsPage() {
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 800 }}>{widget.title}</div>
                           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                            {widget.display_mode} • {widget.row_count} row{widget.row_count !== 1 ? 's' : ''}
+                            {widget.rows?.length < widget.row_count ? `First ${widget.rows.length} of ${widget.row_count} rows` : `${widget.row_count} row${widget.row_count !== 1 ? 's' : ''}`}
                           </div>
                         </div>
-                        {canExportReports && <button onClick={() => exportRowsAsCsv(widget.rows || [], `${widget.report_key || widget.id}.csv`)} style={pillButtonStyle(false)}>Export Widget</button>}
+                        {canExportReports && !widget.not_built && !widget.not_available && <button onClick={() => exportReport(widget.definition_id, {}, widget.report_key)} style={pillButtonStyle(false)}>Export Widget</button>}
                       </div>
                       <div style={{ marginTop: 14 }}>{renderDashboardWidgetPreview(widget)}</div>
                     </div>
@@ -1479,8 +1230,8 @@ export default function ReportsPage() {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 18 }}>
         <div style={cardStyle()}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>Scheduler Management</div>
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Automated delivery for report definitions and dashboards.</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>Schedules</div>
+          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Reports and dashboards sent on a timetable.</div>
           <div style={{ marginTop: 14, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -1495,15 +1246,16 @@ export default function ReportsPage() {
                   <tr key={schedule.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ fontWeight: 700 }}>{schedule.export_name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.target_type || 'report'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.target_type === 'dashboard' ? 'Dashboard' : 'Report'}{schedule.filters?.period ? ` · ${(filterOptions.periods || []).find((p) => p.value === schedule.filters.period)?.label || schedule.filters.period}` : ''}</div>
                     </td>
-                    <td style={{ padding: '10px 12px' }}>{schedule.schedule_frequency}</td>
+                    <td style={{ padding: '10px 12px' }}>{FREQUENCY_LABELS[schedule.schedule_frequency] || schedule.schedule_frequency}</td>
                     <td style={{ padding: '10px 12px' }}>{schedule.schedule_time_local}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.timezone_name}</div></td>
-                    <td style={{ padding: '10px 12px' }}>{schedule.delivery_method}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.delivery_target || '—'}</div></td>
+                    <td style={{ padding: '10px 12px' }}>{DELIVERY_LABELS[schedule.delivery_method] || schedule.delivery_method}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.delivery_method === 'email' ? (schedule.delivery_target || '—') : 'To whoever set it up'}</div></td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ ...badgeStyle(schedule.last_run_status || (schedule.is_active ? 'success' : 'failed')), borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>
-                        {String(schedule.last_run_status || (schedule.is_active ? 'active' : 'inactive')).toUpperCase()}
+                      <span style={{ ...badgeStyle(!Number(schedule.is_active) ? 'paused' : (schedule.last_run_status || 'waiting')), borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>
+                        {!Number(schedule.is_active) ? 'PAUSED' : schedule.last_run_status === 'failed' ? 'LAST RUN FAILED' : schedule.last_run_status === 'success' ? 'LAST RUN SENT' : 'NOT RUN YET'}
                       </span>
+                      {schedule.last_run_status === 'failed' && schedule.last_error && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{schedule.last_error}</div>}
                     </td>
                     <td style={{ padding: '10px 12px' }}>{formatDateTime(schedule.next_run_at_utc)}</td>
                     <td style={{ padding: '10px 12px' }}>
@@ -1530,26 +1282,14 @@ export default function ReportsPage() {
             <div>
               <div style={{ fontSize: 18, fontWeight: 800 }}>{editingScheduleId ? 'Edit Schedule' : 'Create Schedule'}</div>
               <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-                Scheduler defaults follow the reporting configuration unless you override them here.
+                Emailed only to people in this organisation who can see the report.
               </div>
             </div>
             {editingScheduleId && (
               <button
                 onClick={() => {
                   setEditingScheduleId(null)
-                  setScheduleForm({
-                    target_type: 'report',
-                    target_id: '',
-                    export_name: '',
-                    schedule_frequency: 'daily',
-                    schedule_time_local: '08:00',
-                    schedule_weekday: 1,
-                    timezone_name: moduleConfig.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-                    delivery_method: moduleConfig.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-                    delivery_target: moduleConfig.default_delivery_target || '',
-                    email_subject: '',
-                    is_active: true,
-                  })
+                  setScheduleForm(blankSchedule())
                 }}
                 style={pillButtonStyle(false)}
               >
@@ -1566,7 +1306,7 @@ export default function ReportsPage() {
                 <option value="dashboard">Dashboard</option>
               </select>
             </label>
-            <label style={{ display: 'grid', gap: 6 }}>
+            <label style={{ display: 'grid', gap: 6, minWidth: 0 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target</span>
               <select value={scheduleForm.target_id} onChange={(event) => {
                 const targetId = event.target.value
@@ -1576,7 +1316,7 @@ export default function ReportsPage() {
                   target_id: targetId,
                   export_name: current.export_name || source?.name || '',
                 }))
-              }} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+              }} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', width: '100%' }}>
                 <option value="">Select target</option>
                 {targetOptions.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
@@ -1590,8 +1330,7 @@ export default function ReportsPage() {
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Frequency</span>
               <select value={scheduleForm.schedule_frequency} onChange={(event) => setScheduleForm((current) => ({ ...current, schedule_frequency: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
+                {Object.entries(FREQUENCY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
@@ -1609,19 +1348,23 @@ export default function ReportsPage() {
               </label>
             )}
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Timezone</span>
-              <input value={scheduleForm.timezone_name} onChange={(event) => setScheduleForm((current) => ({ ...current, timezone_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Time zone</span>
+              <select aria-label="Time zone" value={scheduleForm.timezone_name} onChange={(event) => setScheduleForm((current) => ({ ...current, timezone_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                {(TIMEZONES.includes(scheduleForm.timezone_name) ? TIMEZONES : [scheduleForm.timezone_name, ...TIMEZONES]).map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Period each send covers</span>
+              <select aria-label="Period each send covers" value={scheduleForm.filters?.period || ''} onChange={(event) => setScheduleForm((current) => ({ ...current, filters: { ...(current.filters || {}), period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', width: '100%' }}>
+                <option value="">{`Matches how often it runs (${scheduleForm.schedule_frequency === 'monthly' ? 'last month' : scheduleForm.schedule_frequency === 'weekly' ? 'last 7 days' : 'yesterday'})`}</option>
+                {(filterOptions.periods || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delivery Method</span>
               <select value={scheduleForm.delivery_method} onChange={(event) => setScheduleForm((current) => ({ ...current, delivery_method: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="email">Email</option>
-                <option value="in_app">In App</option>
+                {Object.entries(DELIVERY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delivery Target</span>
-              <input value={scheduleForm.delivery_target} onChange={(event) => setScheduleForm((current) => ({ ...current, delivery_target: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email Subject</span>
@@ -1629,13 +1372,41 @@ export default function ReportsPage() {
             </label>
           </div>
 
+          {scheduleForm.delivery_method === 'email' && (
+            <div style={{ marginTop: 14 }} data-testid="schedule-recipients">
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email to — people in this organisation who can see this report</div>
+              {!scheduleForm.target_id ? (
+                <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>Choose the report first.</div>
+              ) : (
+                <div style={{ marginTop: 6, display: 'grid', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 10, padding: 8 }}>
+                  {recipientOptions.map((person) => (
+                    <label key={person.email} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.recipients.includes(person.email)}
+                        onChange={(event) => setScheduleForm((current) => ({
+                          ...current,
+                          recipients: event.target.checked
+                            ? [...current.recipients, person.email]
+                            : current.recipients.filter((email) => email !== person.email),
+                        }))}
+                      />
+                      {person.name} <span style={{ color: 'var(--text-muted)' }}>{person.email}</span>
+                    </label>
+                  ))}
+                  {!recipientOptions.length && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nobody in this organisation can receive this report.</div>}
+                </div>
+              )}
+            </div>
+          )}
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
             <input type="checkbox" checked={!!scheduleForm.is_active} onChange={(event) => setScheduleForm((current) => ({ ...current, is_active: event.target.checked }))} />
             <span style={{ fontSize: 13 }}>Active schedule</span>
           </label>
 
           <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button onClick={saveSchedule} style={pillButtonStyle(true)} disabled={!scheduleForm.target_id || !scheduleForm.export_name.trim() || scheduleSaving}>
+            <button onClick={saveSchedule} style={pillButtonStyle(true)} disabled={!scheduleForm.target_id || !scheduleForm.export_name.trim() || scheduleSaving || (scheduleForm.delivery_method === 'email' && !scheduleForm.recipients.length)}>
               {scheduleSaving ? 'Saving…' : editingScheduleId ? 'Update Schedule' : 'Create Schedule'}
             </button>
           </div>
@@ -1691,7 +1462,7 @@ export default function ReportsPage() {
                 <tr key={run.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 12px' }}>{run.report_name}</td>
                   <td style={{ padding: '10px 12px' }}>{run.target_type || 'report'}</td>
-                  <td style={{ padding: '10px 12px' }}>{run.run_mode}</td>
+                  <td style={{ padding: '10px 12px' }}>{RUN_MODE_LABELS[run.run_mode] || run.run_mode}</td>
                   <td style={{ padding: '10px 12px' }}>{run.row_count}</td>
                   <td style={{ padding: '10px 12px' }}>{run.delivery_method || 'manual'}</td>
                   <td style={{ padding: '10px 12px' }}>
@@ -1726,198 +1497,60 @@ export default function ReportsPage() {
               </div>
               <button onClick={() => setRunDetail(null)} style={pillButtonStyle(false)}>Close</button>
             </div>
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div><strong>Target</strong><div>{runDetail.target_type} #{runDetail.target_id || '-'}</div></div>
-              <div><strong>Triggered By</strong><div>{runDetail.triggered_by_name || runDetail.triggered_by || '-'}</div></div>
-              <div><strong>Duration</strong><div>{runDetail.duration_ms == null ? '-' : `${runDetail.duration_ms}ms`}</div></div>
-              <div><strong>Retry Of</strong><div>{runDetail.retry_of_run_id || '-'}</div></div>
+            {/* Readable, not the raw JSON it showed before. */}
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontSize: 13 }}>
+              <div><strong>How</strong><div>{RUN_MODE_LABELS[runDetail.run_mode] || runDetail.run_mode}</div></div>
+              <div><strong>By</strong><div>{runDetail.triggered_by_name || '—'}</div></div>
+              <div><strong>Period</strong><div>{runDetail.filters?.date_from ? `${runDetail.filters.date_from} to ${runDetail.filters.date_to}` : ((filterOptions.periods || []).find((p) => p.value === runDetail.filters?.period)?.label || 'Report default')}</div></div>
+              <div><strong>Rows</strong><div>{runDetail.row_count}</div></div>
+              {runDetail.delivery_target && <div><strong>Sent to</strong><div>{runDetail.delivery_target}</div></div>}
+              {Object.entries(runDetail.filters || {}).filter(([key]) => !['period', 'date_from', 'date_to'].includes(key)).map(([key, value]) => (
+                <div key={key}><strong>{key.replace(/_/g, ' ')}</strong><div>{String(value)}</div></div>
+              ))}
+              {runDetail.diagnostics?.recipients_skipped && <div><strong>Not sent to</strong><div>{runDetail.diagnostics.recipients_skipped.join(', ')}</div></div>}
+              {runDetail.error_message && <div style={{ color: '#b91c1c' }}><strong>Why it failed</strong><div>{runDetail.error_message}</div></div>}
             </div>
-            <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', background: '#f8fafc', borderRadius: 10, padding: 12, fontSize: 12 }}>{JSON.stringify({ filters: runDetail.filters || {}, diagnostics: runDetail.diagnostics || {}, error: runDetail.error_message || null }, null, 2)}</pre>
           </div>
         )}
       </div>
     )
   }
 
+  // Settings that change what happens. Default delivery method and address,
+  // run-log retention (nothing deleted anything), the default time zone (each
+  // schedule has its own) and four "governance notes" are gone (RD4, RD8).
   function renderConfigurationSection() {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.9fr', gap: 18 }}>
-        <div style={cardStyle()}>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>Module Configuration</div>
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-            Scheduler defaults, report delivery identity, timezone behavior, and retention.
-          </div>
+      <div style={{ ...cardStyle(), maxWidth: 760 }}>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>Settings</div>
+        <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
+          How scheduled reports are emailed for this organisation.
+        </div>
 
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Timezone</span>
-              <input value={configForm.default_timezone} onChange={(event) => setConfigForm((current) => ({ ...current, default_timezone: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Delivery Method</span>
-              <select value={configForm.default_delivery_method} onChange={(event) => setConfigForm((current) => ({ ...current, default_delivery_method: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="email">Email</option>
-                <option value="in_app">In App</option>
-              </select>
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Delivery Target</span>
-              <input value={configForm.default_delivery_target} onChange={(event) => setConfigForm((current) => ({ ...current, default_delivery_target: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email From Name</span>
-              <input value={configForm.email_from_name} onChange={(event) => setConfigForm((current) => ({ ...current, email_from_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reply-To Email</span>
-              <input value={configForm.reply_to_email} onChange={(event) => setConfigForm((current) => ({ ...current, reply_to_email: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Subject Prefix</span>
-              <input value={configForm.digest_subject_prefix} onChange={(event) => setConfigForm((current) => ({ ...current, digest_subject_prefix: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Run Log Retention Days</span>
-              <input type="number" min="7" max="365" value={configForm.run_log_retention_days} onChange={(event) => setConfigForm((current) => ({ ...current, run_log_retention_days: Number(event.target.value || 90) }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-          </div>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-            <input type="checkbox" checked={!!configForm.scheduler_enabled} onChange={(event) => setConfigForm((current) => ({ ...current, scheduler_enabled: event.target.checked }))} />
-            <span style={{ fontSize: 13 }}>Scheduler enabled for this organisation</span>
+        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email from name</span>
+            <input value={configForm.email_from_name} onChange={(event) => setConfigForm((current) => ({ ...current, email_from_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
           </label>
-
-          <div style={{ marginTop: 18 }}>
-            <button onClick={saveConfiguration} style={pillButtonStyle(true)} disabled={configSaving}>
-              {configSaving ? 'Saving…' : 'Save Configuration'}
-            </button>
-          </div>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reply-to email</span>
+            <input value={configForm.reply_to_email} onChange={(event) => setConfigForm((current) => ({ ...current, reply_to_email: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Subject starts with</span>
+            <input value={configForm.digest_subject_prefix} onChange={(event) => setConfigForm((current) => ({ ...current, digest_subject_prefix: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+          </label>
         </div>
 
-        <div style={cardStyle()}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>Governance Notes</div>
-          <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
-            {[
-              'Reports are metadata-driven and tied to approved datasets only.',
-              'Dashboards can only consume saved report definitions.',
-              'Schedulers now handle report and dashboard targets from one control surface.',
-              'Module delivery identity is separated from raw SMTP credentials.',
-            ].map((note) => (
-              <div key={note} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: '#fafafa', fontSize: 13, color: 'var(--text-primary)' }}>
-                {note}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+          <input type="checkbox" checked={!!configForm.scheduler_enabled} onChange={(event) => setConfigForm((current) => ({ ...current, scheduler_enabled: event.target.checked }))} />
+          <span style={{ fontSize: 13 }}>Send scheduled reports (untick to pause every schedule in this organisation)</span>
+        </label>
 
-  function renderGovernanceSection() {
-    return (
-      <div style={{ display: 'grid', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Config Validation</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{validationResult.issues?.length || 0}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Open validation issue{validationResult.issues?.length === 1 ? '' : 's'}</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Templates</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardTemplates.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Reusable dashboard templates</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Shares</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardShares.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Role/org/user share rules</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Role Defaults</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{roleDefaults.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Mapped default dashboards</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18 }}>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Validation Issues</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {(validationResult.issues || []).map((issue, index) => (
-                <div key={`${issue.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: issue.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
-                  <strong>{issue.type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{issue.message}</div>
-                </div>
-              ))}
-              {!validationResult.issues?.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No report configuration issues found.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Anomaly Flags</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {anomalyFlags.slice(0, 10).map((flag) => (
-                <div key={flag.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: flag.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
-                  <strong>{flag.anomaly_type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{flag.message}</div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{formatDateTime(flag.created_at)}</div>
-                </div>
-              ))}
-              {!anomalyFlags.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No anomalies flagged yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Recommendations</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {recommendations.map((item, index) => (
-                <div key={`${item.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{item.type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{item.message}</div>
-                </div>
-              ))}
-              {!recommendations.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Recommendations will appear after more report usage data is collected.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Usage Analytics</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              {usageAnalytics.slice(0, 12).map((item, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                  <span>{item.event_type} / {item.target_type} #{item.target_id || '-'}</span>
-                  <strong>{item.count}</strong>
-                </div>
-              ))}
-              {!usageAnalytics.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No usage events captured yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Templates</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {dashboardTemplates.map((template) => (
-                <div key={template.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{template.name}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>{template.description || 'No description'}</div>
-                </div>
-              ))}
-              {!dashboardTemplates.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No dashboard templates saved yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Enterprise Delivery Rules</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {deliveryRules.map((rule) => (
-                <div key={rule.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{rule.rule_name}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Sensitivity: {rule.sensitivity_level} • Active: {Number(rule.is_active) ? 'Yes' : 'No'}</div>
-                </div>
-              ))}
-              {!deliveryRules.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No enterprise delivery rules configured yet.</div>}
-            </div>
-          </div>
+        <div style={{ marginTop: 18 }}>
+          <button onClick={saveConfiguration} style={pillButtonStyle(true)} disabled={configSaving}>
+            {configSaving ? 'Saving…' : 'Save Settings'}
+          </button>
         </div>
       </div>
     )
@@ -1968,13 +1601,11 @@ export default function ReportsPage() {
       )}
 
       <div className="workspace-content-stage">
-        {section === 'overview' && renderOverview()}
         {section === 'reports' && renderReportsSection()}
         {section === 'dashboards' && renderDashboardsSection()}
-        {section === 'schedules' && isManager && renderSchedulesSection()}
+        {section === 'schedules' && canScheduleReports && renderSchedulesSection()}
         {section === 'history' && renderHistorySection()}
-        {section === 'governance' && isManager && renderGovernanceSection()}
-        {section === 'configuration' && isManager && renderConfigurationSection()}
+        {section === 'configuration' && canManageReports && renderConfigurationSection()}
       </div>
     </div>
   )

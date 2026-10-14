@@ -14,7 +14,7 @@ const { authenticate, requireRole, requireCapability } = require('../../middlewa
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
-const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { enforceEvidenceGate, evaluateEvidenceChain } = require('../../services/contentIntelligenceService');
 
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -59,15 +59,6 @@ function invalidateAssembledCache(docId) {
   for (const k of _assembledCache.keys()) {
     if (k.startsWith(`${docId}:`)) _assembledCache.delete(k);
   }
-}
-
-async function logDocumentActivity(docId, userId, userName, action, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO cm_document_activity_log (doc_id, user_id, user_name, action, details) VALUES (?,?,?,?,?)`,
-      [docId, userId || null, userName || null, action, details ? JSON.stringify(details) : null]
-    );
-  } catch (_) {}
 }
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -149,6 +140,38 @@ function normalizeOptionalUrl(value) {
   }
 }
 
+// The product a document is about must be one of its organisation's products;
+// empty means any product.
+async function scopedProductId(value, orgId) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [[p]] = await pool.execute('SELECT id FROM products WHERE id = ? AND (org_id = ? OR org_id IS NULL)', [id, orgId]);
+  if (!p) { const e = new Error('That product is not in this organisation.'); e.statusCode = 400; throw e; }
+  return id;
+}
+
+// Periodic review: how many days a published document runs before its owner is
+// reminded to review it (cmReviewReminderService). The screen offered the field
+// but it was never saved, so no reminder could fire.
+function reviewCycleDays(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 && n <= 3650 ? n : null;
+}
+
+// Extra people emailed 90, 60 and 30 days before expiry (cmExpiryAlertService
+// reads them). The screen collected them but they were never saved. The form
+// sends a JSON list or a comma-separated string.
+function alertRecipients(value) {
+  let list = value;
+  if (typeof value === 'string') {
+    try { list = JSON.parse(value); } catch (_) { list = value.split(','); }
+  }
+  const emails = (Array.isArray(list) ? list : [])
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  return emails.length ? JSON.stringify([...new Set(emails)].slice(0, 20)) : null;
+}
+
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -188,6 +211,8 @@ function publicDoc(d) {
 // documents. The Browse Content page listed Draft, Under Review and Approved
 // documents next to published ones, and any of them could be opened and downloaded.
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory, lineageIds } = require('../../services/cmLineage');
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
@@ -250,7 +275,10 @@ router.get('/documents', authenticate, async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
-      SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
+      SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name,
+             (SELECT p.trade_name FROM products p WHERE p.id = d.product_id) AS product_name,
+             (SELECT r.id FROM cm_documents r WHERE r.revision_of = d.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
+             (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_documents o WHERE o.id = d.revision_of) AS revises_version
       FROM cm_documents d
       LEFT JOIN cm_folders f ON d.folder_id = f.id
       LEFT JOIN users u ON d.created_by = u.id
@@ -267,6 +295,7 @@ router.get('/documents', authenticate, async (req, res) => {
     if (await publishedOnly(req)) {
       query += " AND d.status = 'Published'";
     }
+    query += await folderFilterSql(req.user, 'd.folder_id');
     if (status) {
       query += ' AND d.status = ?';
       params.push(status);
@@ -291,14 +320,20 @@ router.get('/documents', authenticate, async (req, res) => {
       query += ' AND d.document_category = ?';
       params.push(req.query.category);
     }
+    if (req.query.product_id) {
+      // A document for no particular product applies to every product.
+      query += req.query.include_general === 'true' ? ' AND (d.product_id = ? OR d.product_id IS NULL)' : ' AND d.product_id = ?';
+      params.push(Number(req.query.product_id));
+    }
+    if (req.query.language) {
+      query += ' AND d.language = ?';
+      params.push(String(req.query.language));
+    }
     if (include_expired !== 'true') {
       query += ' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())';
     }
 
-    const countQuery = query.replace(
-      'SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name',
-      'SELECT COUNT(*) AS total'
-    );
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) counted`;
     const [[{ total }]] = await pool.execute(countQuery, params);
 
     query += ` ORDER BY d.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
@@ -325,6 +360,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id,
     } = req.body;
     const parsedSelectedModules = parseSelectedModules(selected_modules);
 
@@ -338,6 +374,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       await conn.rollback();
       return res.status(404).json({ error: 'Folder not found for active organisation.' });
     }
+    const productId = await scopedProductId(product_id, scopedFolder.org_id);
 
     const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
     const normalizedResponseDocType = response_doc_type || 'File';
@@ -379,8 +416,9 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
           publish_as_pdf, send_as_pdf, selected_modules, attributes,
           mi_category_id, document_category, standard_response_text, authoring_source,
           external_provider, external_document_url, external_share_url, external_document_id,
-          external_drive_id, external_account_email, external_api_endpoint, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          external_drive_id, external_account_email, external_api_endpoint, created_by,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         docId, folder_id, doc_type || 'SRD', normalizedResponseDocType, name.trim(), effectiveContentHtml,
         filePath, fileName, fileSize, fileMime,
@@ -395,6 +433,8 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
         normalizedExternalProvider, normalizedExternalDocumentUrl, normalizedExternalShareUrl,
         normalizedExternalDocumentId, normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
         req.user.userId,
+        reviewCycleDays(review_cycle_days), normalizeOptionalString(regulatory_ref, 255),
+        alertRecipients(expiry_alert_recipients), productId,
       ]
     );
 
@@ -413,10 +453,25 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     res.status(201).json({ message: 'Document created.', id: result.insertId, document: publicDoc(created) });
   } catch (err) {
     await conn.rollback();
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
     conn.release();
+  }
+});
+
+// GET /api/cm/products — the organisation's products, for tagging content. The
+// admin product list refuses content managers.
+router.get('/products', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, trade_name FROM products WHERE is_active = 1 AND (org_id = ? OR org_id IS NULL) ORDER BY trade_name',
+      [req.user.orgId]);
+    res.json({ products: rows });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/products' }, 'Failed to list products for content');
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 
@@ -436,6 +491,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     if (folder_id) { query += ` AND d.folder_id = ?`; params.push(folder_id); }
+    query += await folderFilterSql(req.user, 'd.folder_id');
     if (status) {
       query += ` AND d.status = ?`;
       params.push(status);
@@ -608,7 +664,9 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id,
     } = req.body;
+    const productId = product_id !== undefined ? await scopedProductId(product_id, doc.folder_org_id) : doc.product_id;
     const parsedSelectedModules = selected_modules !== undefined
       ? parseSelectedModules(selected_modules)
       : null;
@@ -674,6 +732,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
          standard_response_text = ?, authoring_source = ?, external_provider = ?,
          external_document_url = ?, external_share_url = ?, external_document_id = ?,
          external_drive_id = ?, external_account_email = ?, external_api_endpoint = ?,
+         review_cycle_days = ?, regulatory_ref = ?, expiry_alert_recipients = ?, product_id = ?,
          updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
@@ -699,6 +758,10 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
         normalizedAuthoringSource, normalizedExternalProvider,
         normalizedExternalDocumentUrl, normalizedExternalShareUrl, normalizedExternalDocumentId,
         normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
+        review_cycle_days !== undefined ? reviewCycleDays(review_cycle_days) : doc.review_cycle_days,
+        regulatory_ref !== undefined ? normalizeOptionalString(regulatory_ref, 255) : doc.regulatory_ref,
+        expiry_alert_recipients !== undefined ? alertRecipients(expiry_alert_recipients) : doc.expiry_alert_recipients,
+        productId,
         req.user.userId, id,
       ]
     );
@@ -718,6 +781,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
     res.json({ message: 'Document updated.' });
   } catch (err) {
     await conn.rollback();
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
@@ -725,13 +789,94 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
   }
 });
 
-// POST /api/cm/documents/:id/checkout — check out document (Draft or Published)
+// When a revision is published, the version it replaces leaves use: archived,
+// with the reason in its history. Runs inside the publish transaction.
+async function supersedeRevised(conn, doc, newVersion, user) {
+  if (!doc.revision_of) return;
+  const [[old]] = await conn.execute(
+    "SELECT id, doc_id, version_major, version_minor, status FROM cm_documents WHERE id = ? AND status = 'Published'", [doc.revision_of]);
+  if (!old) return;
+  await conn.execute("UPDATE cm_documents SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?", [user.userId, old.id]);
+  // Documents that link to the old version now link to the new one.
+  await conn.execute('UPDATE IGNORE cm_document_relations SET related_doc_id = ? WHERE related_doc_id = ?', [doc.id, old.id]);
+  await conn.execute(
+    'INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id) VALUES (?, ?, ?, ?, ?, ?)',
+    ['document', old.id, `${old.version_major}.${old.version_minor}`, 'Archived', `Superseded by version ${newVersion}.`, user.userId]);
+  await logAudit(user.userId, user.email, 'SUPERSEDE', 'cm_document', old.id, { doc_id: old.doc_id, superseded_by: doc.id, new_version: newVersion });
+}
+
+// POST /api/cm/documents/:id/revise — start the next version of a published
+// document. The published version stays in letters and Browse Content until
+// this draft is published, which archives it as superseded.
+router.post('/documents/:id/revise', authenticate, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const src = await getScopedDocument(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'Document not found.' });
+    if (src.status !== 'Published') return res.status(400).json({ error: 'Only a published document is revised. Edit a draft directly.' });
+    const [[open]] = await pool.execute(
+      "SELECT id FROM cm_documents WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
+    if (open) return res.status(409).json({ error: 'This document already has a revision in progress.', id: open.id });
+
+    await conn.beginTransaction();
+    const [result] = await conn.execute(
+      `INSERT INTO cm_documents
+         (doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
+          status, version_major, version_minor, expiry_date, activation_date, language,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
+          product_id, revision_of, created_by)
+       SELECT doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
+          'Draft', version_major, version_minor, expiry_date, activation_date, language,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
+          product_id, id, ?
+         FROM cm_documents WHERE id = ?`,
+      [req.user.userId, src.id]
+    );
+    const newId = result.insertId;
+    // The links and alert subscribers carry over to the new version.
+    await conn.execute(
+      `INSERT INTO cm_document_relations (doc_id, related_doc_id, relation_type, created_by)
+       SELECT ?, related_doc_id, relation_type, ? FROM cm_document_relations WHERE doc_id = ?`, [newId, req.user.userId, src.id]);
+    await conn.execute(
+      `INSERT IGNORE INTO cm_document_alert_subs (document_id, user_id, created_by)
+       SELECT ?, user_id, ? FROM cm_document_alert_subs WHERE document_id = ?`, [newId, req.user.userId, src.id]);
+    await conn.execute(
+      `INSERT INTO cm_document_attachments (document_id, file_path, file_name, file_size, file_mime, uploaded_by)
+       SELECT ?, file_path, file_name, file_size, file_mime, uploaded_by FROM cm_document_attachments WHERE document_id = ?`, [newId, src.id]);
+    await conn.commit();
+    const version = `${src.version_major}.${src.version_minor}`;
+    await addVersionHistory('document', newId, version, 'Draft', `Revision of published version ${version} started.`, req.user.userId);
+    await audit(req.user.userId, req.user.email, 'REVISE', 'cm_document', newId, { doc_id: src.doc_id, revision_of: src.id, from_version: version });
+    res.status(201).json({ message: 'Revision started. The published version stays in use until this one is published.', id: newId });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    logger.error({ err, route: '/api/cm/documents/:id/revise', document_id: req.params?.id }, 'Failed to revise CM document');
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /api/cm/documents/:id/checkout — check out a Draft document
 router.post('/documents/:id/checkout', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    if (!['Draft', 'Published'].includes(doc.status)) return res.status(400).json({ error: 'Only Draft or Published documents can be checked out.' });
+    // A published document is changed through Revise, so it stays in use while
+    // the new version is written; checking it out took it out of Published.
+    if (doc.status === 'Published') return res.status(400).json({ error: 'A published document stays in use while it changes: use Revise to draft its next version.' });
+    if (doc.status !== 'Draft') return res.status(400).json({ error: 'Only Draft documents can be checked out.' });
     if (doc.checked_out_by) return res.status(400).json({ error: 'Document is already checked out.' });
 
     await pool.execute(
@@ -796,7 +941,7 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
 // MIPM-174: the people in an organisation who may review content. The review
 // dialog read the admin user list, which a content manager is refused, so the
 // content team could never start a review.
-async function contentReviewers(orgId) {
+async function contentReviewers(orgId, privilege = 'content.review') {
   const [rows] = await pool.execute(
     `SELECT u.id, u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role
        FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id
@@ -804,7 +949,7 @@ async function contentReviewers(orgId) {
       ORDER BY u.name`, [orgId]);
   const out = [];
   for (const u of rows) {
-    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, 'content.review')) out.push({ id: u.id, name: u.name, email: u.email });
+    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, privilege)) out.push({ id: u.id, name: u.name, email: u.email });
   }
   return out;
 }
@@ -814,7 +959,8 @@ router.get('/reviewers', authenticate, async (req, res) => {
   try {
     const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
     if (!orgId) return res.json({ users: [] });
-    res.json({ users: await contentReviewers(orgId) });
+    // ?can=author lists who may author content — who can take over a review.
+    res.json({ users: await contentReviewers(orgId, req.query.can === 'author' ? 'content.author' : 'content.review') });
   } catch (err) {
     logger.error({ err, route: '/api/cm/reviewers' }, 'Failed to list content reviewers');
     res.status(500).json({ error: 'Server error.' });
@@ -825,9 +971,12 @@ router.get('/reviewers', authenticate, async (req, res) => {
 router.post('/documents/:id/initiate-review', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, planned_end_date, reviewer_ids, is_non_amendable, description } = req.body;
+    const { title, planned_end_date, reviewer_ids, description } = req.body;
     if (!title || !planned_end_date) {
       return res.status(400).json({ error: 'title and planned_end_date are required.' });
+    }
+    if (String(planned_end_date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+      return res.status(400).json({ error: 'The planned end date is in the past.' });
     }
     // MIPM-204: parallel (everyone at once) or sequential (one after another, in
     // the order chosen; the next reviewer is told once the one before decides).
@@ -866,9 +1015,9 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
       await conn.beginTransaction();
 
       const [reviewResult] = await conn.execute(
-        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, is_non_amendable, description, status, created_by, review_mode)
-         VALUES (?, 'document', ?, ?, ?, ?, 'Open', ?, ?)`,
-        [id, title, planned_end_date, is_non_amendable ? 1 : 0, description || null, req.user.userId, reviewMode]
+        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, description, status, created_by, review_mode)
+         VALUES (?, 'document', ?, ?, ?, 'Open', ?, ?)`,
+        [id, title, planned_end_date, description || null, req.user.userId, reviewMode]
       );
 
       if (Array.isArray(reviewer_ids) && reviewer_ids.length > 0) {
@@ -912,6 +1061,29 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
   }
 });
 
+// GET /api/cm/documents/:id/reviews — the document's reviews and each reviewer's
+// decision, newest first, so the approver sees what the reviewers said.
+router.get('/documents/:id/reviews', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const [reviews] = await pool.execute(
+      `SELECT r.id, r.title, r.status, r.review_mode, r.planned_end_date, r.created_at, r.updated_at, u.name AS owner_name
+         FROM cm_reviews r LEFT JOIN users u ON u.id = r.created_by
+        WHERE r.doc_type = 'document' AND r.doc_id = ? ORDER BY r.id DESC`, [doc.id]);
+    for (const r of reviews) {
+      const [rows] = await pool.execute(
+        `SELECT cr.status, cr.reason, cr.reviewed_at, u.name FROM cm_reviewers cr JOIN users u ON u.id = cr.user_id
+          WHERE cr.review_id = ? ORDER BY cr.sort_order, cr.id`, [r.id]);
+      r.reviewers = rows;
+    }
+    res.json({ reviews });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/reviews' }, 'Failed to list document reviews');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/cm/documents/:id/approve — approve (requires password + reason)
 router.post('/documents/:id/approve', authenticate, requireCapability('content.approve'), async (req, res) => {
   try {
@@ -946,6 +1118,21 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
     res.json({ message: 'Document approved.' });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/approve', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to approve CM document');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/documents/:id/publish-checks — the publishing checks for this
+// document, run without publishing, so the publisher sees what would stop it
+// and what is only a warning. Warnings were never shown to anyone.
+router.get('/documents/:id/publish-checks', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const r = await evaluateEvidenceChain({ orgId: doc.folder_org_id || req.user.orgId, contentType: 'document', contentId: doc.id, mode: 'publish' });
+    res.json({ allow: r.allow, blockers: r.blockers, warnings: r.warnings, checks: r.checks });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/publish-checks' }, 'Failed to run publishing checks');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -1005,6 +1192,7 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
 
       const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
       versionStr = `${after.version_major}.${after.version_minor}`;
+      await supersedeRevised(conn, doc, versionStr, req.user);
 
       await conn.commit();
     } catch (err) {
@@ -1054,7 +1242,9 @@ router.post('/documents/:id/release', authenticate, async (req, res) => {
     if (doc.owner_user_id !== req.user.userId) {
       return res.status(403).json({ error: 'Only the document owner can release this document.' });
     }
-    const allowedStatuses = ['Published', 'Approved', 'Pending', 'CheckedOut'];
+    // Releasing a published or approved document pulled it out of use; those
+    // change through Revise. Release returns work in progress to Draft.
+    const allowedStatuses = ['Pending', 'CheckedOut'];
     if (!allowedStatuses.includes(doc.status)) {
       return res.status(400).json({ error: 'Document cannot be released from its current status.' });
     }
@@ -1147,8 +1337,12 @@ router.get('/documents/:id/alert-config', authenticate, async (req, res) => {
        JOIN users u ON u.id = s.user_id WHERE s.document_id = ?`,
       [req.params.id]
     );
+    // alert_days is stored as JSON text; it was sent as text and the screen
+    // failed on it once days had been saved.
+    let days = doc.alert_days;
+    if (typeof days === 'string') { try { days = JSON.parse(days); } catch (_) { days = []; } }
     res.json({
-      alert_days: doc.alert_days || null,
+      alert_days: Array.isArray(days) ? days : [],
       alert_email_account_id: doc.alert_email_account_id || null,
       subscribers: subs,
     });
@@ -1163,9 +1357,14 @@ router.put('/documents/:id/alert-config', authenticate, async (req, res) => {
     const { alert_days, alert_email_account_id } = req.body;
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const { orgMailbox, cleanDays } = require('./settings');
+    const days = alert_days === null || alert_days === undefined ? [] : cleanDays(alert_days);
+    if (!days) return res.status(400).json({ error: 'Alert days must be a list of whole days.' });
+    const box = await orgMailbox(alert_email_account_id, doc.folder_org_id || req.user.orgId);
+    if (!box.ok) return res.status(400).json({ error: 'That mailbox is not an active sending mailbox of this organisation.' });
     await pool.execute(
       'UPDATE cm_documents SET alert_days = ?, alert_email_account_id = ?, updated_at = NOW() WHERE id = ?',
-      [alert_days ? JSON.stringify(alert_days) : null, alert_email_account_id || null, req.params.id]
+      [days.length ? JSON.stringify(days) : null, box.value, req.params.id]
     );
     res.json({ message: 'Alert config saved.' });
   } catch (err) {
@@ -1213,73 +1412,51 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
-    const offset = (page - 1) * limit;
-    // MIPM-218: Version History showed "—" as every version's author; who made
-    // each version is part of the record, so the name is looked up as for templates.
-    const [versions] = await pool.execute(
-      `SELECT vh.*, u.name AS author_name FROM cm_version_history vh
-       LEFT JOIN users u ON u.id = vh.author_id
-       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
-       ORDER BY vh.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      [req.params.id]
-    );
-    const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) as total FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?`,
-      [req.params.id]
-    );
-    res.json({ versions, total, page, limit });
+    // MIPM-218: each version's author is named. The whole line of versions is
+    // shown — since Revise each version is its own row, and a revision showed
+    // nothing of the versions before it (and only the latest ten were sent).
+    const versions = await lineageHistory('document', doc.id);
+    res.json({ versions, total: versions.length });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/versions', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document versions');
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// GET /api/cm/documents/:id/version-diff — compare two versions (CM-E2)
-router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
+// GET /api/cm/documents/:id/compare — the versions of this document that hold
+// content, and (with ?a=&b=) the content of two of them to compare.
+// The old version-diff matched history-row ids against version strings, so it
+// never found anything, and history rows hold notes, not content. Each
+// version's content lives in its own row since Revise, so that is what is
+// compared.
+router.get('/documents/:id/compare', authenticate, async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const { v1, v2 } = req.query;
-    if (!v1 || !v2) return res.status(400).json({ error: 'v1 and v2 version params required' });
-    const [versions] = await pool.execute(
-      `SELECT vh.id, vh.version, vh.status, vh.notes, vh.created_at, vh.author_id
-       FROM cm_version_history vh
-       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
-         AND vh.version IN (?,?)
-       ORDER BY vh.created_at ASC`,
-      [req.params.id, v1, v2]
-    );
-    if (versions.length < 2) {
-      return res.status(404).json({ error: 'One or both versions not found in history' });
-    }
-    res.json({ version_a: versions[0], version_b: versions[1] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const ids = await lineageIds('document', doc.id);
+    const [rows] = await pool.execute(
+      `SELECT id, status, version_major, version_minor, updated_at, content_html, standard_response_text, file_name
+         FROM cm_documents WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ids);
+    const label = (r) => `${r.version_major}.${r.version_minor} — ${r.status}`;
+    const versions = rows.map((r) => ({ id: r.id, label: label(r), status: r.status, current: r.id === doc.id }));
+    const pick = (x) => rows.find((r) => r.id === Number(x));
+    const a = pick(req.query.a), b = pick(req.query.b);
+    if (!a || !b) return res.json({ versions });
+    const body = (r) => ({ id: r.id, label: label(r), html: r.content_html || r.standard_response_text || '', file_name: r.file_name || null });
+    res.json({ versions, a: body(a), b: body(b) });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/compare' }, 'Failed to compare document versions');
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
-// POST /api/cm/documents/release-stale-checkouts — auto-release expired checkouts (CM-E4 + CM-T6)
+// POST /api/cm/documents/release-stale-checkouts — release expired check-outs now
+// (the scheduler does this every 15 minutes).
 router.post('/documents/release-stale-checkouts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [result] = hasPlatformAdminScope(req)
-      ? await pool.execute(
-        `UPDATE cm_documents
-         SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
-         WHERE checked_out_by IS NOT NULL
-           AND checkout_expires_at IS NOT NULL
-           AND checkout_expires_at < NOW()`
-      )
-      : await pool.execute(
-        `UPDATE cm_documents d
-         JOIN cm_folders f ON d.folder_id = f.id
-         SET d.checked_out_by = NULL, d.checked_out_at = NULL, d.checkout_expires_at = NULL
-         WHERE d.checked_out_by IS NOT NULL
-           AND d.checkout_expires_at IS NOT NULL
-           AND d.checkout_expires_at < NOW()
-           AND f.org_id = ?`,
-        [req.user.orgId]
-      );
-    res.json({ success: true, released: result.affectedRows });
+    const { releaseStaleCheckouts } = require('../../services/cmContentLifecycleService');
+    const { released } = await releaseStaleCheckouts(hasPlatformAdminScope(req) ? null : req.user.orgId);
+    res.json({ success: true, released });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1325,15 +1502,17 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
           continue;
         }
 
-        const newMajor = Number(doc.version_major || 0) + 1;
-        const versionStr = `${newMajor}.0`;
+        let versionStr;
         const conn = await pool.getConnection();
         try {
           await conn.beginTransaction();
           await conn.execute(
-            "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-            [newMajor, req.user.userId, req.user.userId, docId]
+            "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+            [req.user.userId, req.user.userId, docId]
           );
+          const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [docId]);
+          versionStr = `${after.version_major}.${after.version_minor}`;
+          await supersedeRevised(conn, doc, versionStr, req.user);
           await conn.commit();
         } catch (err) {
           await conn.rollback();
@@ -1458,8 +1637,8 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
        JOIN cm_folders f ON d.folder_id = f.id
        WHERE response_doc_type = 'Module'
          AND d.selected_modules IS NOT NULL
-         AND JSON_CONTAINS(d.selected_modules, CAST(? AS JSON))
-         ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}`,
+         AND JSON_CONTAINS(d.selected_modules, ?)
+         ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}${await folderFilterSql(req.user, 'd.folder_id')}`,
       hasPlatformAdminScope(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
     );
     res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });
@@ -1531,26 +1710,6 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/cm/documents/:id/activity — paginated activity log
-router.get('/documents/:id/activity', authenticate, async (req, res) => {
-  try {
-    const doc = await getScopedDocument(req, req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
-    const offset = (page - 1) * limit;
-    const [logs] = await pool.execute(
-      `SELECT * FROM cm_document_activity_log WHERE doc_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      [req.params.id]
-    );
-    const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) as total FROM cm_document_activity_log WHERE doc_id = ?`,
-      [req.params.id]
-    );
-    res.json({ logs, total, page, limit });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // POST /api/cm/documents/:id/view — log document view to cm_content_view_log (#11)
 router.post('/documents/:id/view', authenticate, async (req, res) => {
   try {
@@ -1582,8 +1741,8 @@ router.post('/documents/:id/clone', authenticate, async (req, res) => {
           publish_as_pdf, send_as_pdf, selected_modules, attributes,
           mi_category_id, document_category, standard_response_text, authoring_source,
           external_provider, external_document_url, external_share_url, external_document_id,
-          external_drive_id, external_account_email, external_api_endpoint, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          external_drive_id, external_account_email, external_api_endpoint, created_by, product_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newDocId, src.folder_id, src.doc_type, src.response_doc_type,
         `Copy of ${src.name}`, src.content_html,
@@ -1597,7 +1756,7 @@ router.post('/documents/:id/clone', authenticate, async (req, res) => {
         src.external_provider || null, src.external_document_url || null, src.external_share_url || null,
         src.external_document_id || null, src.external_drive_id || null,
         src.external_account_email || null, src.external_api_endpoint || null,
-        req.user.userId,
+        req.user.userId, src.product_id || null,
       ]
     );
     await conn.commit();

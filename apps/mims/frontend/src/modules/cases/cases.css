@@ -850,6 +850,19 @@
   font-weight: 600;
 }
 
+/* Someone who may read the case but not change it (access review). */
+.cf-readonly-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 9px;
+  font-weight: 700;
+}
+
+/* A plain box around fields that a read-only case locks together. */
+.cf-fieldset-plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+
 .cf-draft-save-chip {
   font-size: 12px;
   color: #0f766e;
@@ -3166,6 +3179,18 @@
 .icsr-builder-grid aside { display: flex; flex-direction: column; gap: 8px; }
 .icsr-builder-grid aside button { text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 2px; padding: 10px; cursor: pointer; }
 .icsr-builder-grid aside button.active { background: #1d3557; color: #fff; border-color: #1d3557; }
+/* ICSR builder sections, read as facts and tables (case form pending items) */
+.icsr-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; margin: 0 0 14px; }
+.icsr-facts div { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.icsr-facts dt { font-size: 11px; font-weight: 700; color: var(--text-secondary); }
+.icsr-facts dd { margin: 2px 0 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.icsr-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px; }
+.icsr-table th { text-align: left; font-size: 11px; color: var(--text-secondary); border-bottom: 1px solid var(--border); padding: 6px 8px; }
+.icsr-table td { border-bottom: 1px solid var(--border); padding: 6px 8px; vertical-align: top; overflow-wrap: break-word; }
+.icsr-table-wrap { overflow-x: auto; margin-bottom: 14px; }
+.icsr-table-wrap .icsr-table { margin-bottom: 0; }
+.icsr-empty { color: var(--text-secondary); margin: 0 0 14px; }
+.icsr-narrative { white-space: pre-wrap; margin: 0 0 14px; }
 .icsr-message { padding: 10px; border-radius: 2px; background: #ecfdf5; color: #047857; font-weight: 700; }
 .icsr-errors { display: grid; gap: 8px; margin-top: 12px; }
 .icsr-errors button { text-align: left; border: 1px solid #fecaca; background: #fff1f2; color: #be123c; border-radius: 2px; padding: 8px; }
@@ -4349,6 +4374,8 @@
 .cf-handoff-check-icon { font-weight: 800; }
 .cf-handoff-checks li.is-ok      .cf-handoff-check-icon { color: #16a34a; }
 .cf-handoff-checks li.is-missing .cf-handoff-check-icon { color: #dc2626; }
+.cf-handoff-checks li.is-warn    .cf-handoff-check-icon { color: #b45309; }
+.cf-mi-screening { margin: 0 0 12px; max-width: 520px; }
 .cf-handoff-check-label  { font-weight: 700; }
 .cf-handoff-check-reason { color: var(--text-muted, #6b7280); }
 
@@ -4457,3 +4484,10 @@
 .cf-bridge-q-head { color: var(--text-muted, #6b7280); font-size: 11.5px; }
 .cf-bridge-q-text { white-space: pre-wrap; }
 .cf-bridge-link { margin-left: 8px; border: 0; background: none; padding: 0; color: #b91c1c; cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* MI response builder: the off-label rule (MI response review, 14 Oct 2026). */
+.cf-builder-note--warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.cf-builder-statement { margin-top: 6px; padding: 6px 8px; background: #fff; border: 1px dashed #fcd34d; color: #374151; white-space: pre-wrap; }
+
+/* "Show other products' documents" in the letter builder: a quiet text button. */
+.cf-link-btn { background: none; border: none; padding: 6px 0 0; color: var(--primary); font-size: 12px; cursor: pointer; text-align: left; text-decoration: underline; }

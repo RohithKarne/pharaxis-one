@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 // Three steps, capture only. The old "Case Meta" step was deleted (locked with
 // Rohith 2026-07-28) because every field on it was system-assigned — status,
 // owner, priority, intake channel and date received are set by the system or at

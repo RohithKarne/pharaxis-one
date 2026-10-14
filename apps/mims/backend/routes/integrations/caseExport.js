@@ -1,12 +1,12 @@
 'use strict';
 
 const express = require('express');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const pool = require('../../database/db');
 
 const router = express.Router();
 
-router.get('/admin/cases/export', authenticate, async (req, res) => {
+router.get('/admin/cases/export', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -92,7 +92,7 @@ router.get('/admin/cases/export', authenticate, async (req, res) => {
   }
 });
 
-router.get('/admin/cases/export/e2b', authenticate, async (req, res) => {
+router.get('/admin/cases/export/e2b', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -171,7 +171,7 @@ router.get('/admin/cases/export/e2b', authenticate, async (req, res) => {
   }
 });
 
-router.get('/admin/cases/export/xlsx', authenticate, async (req, res) => {
+router.get('/admin/cases/export/xlsx', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -249,7 +249,7 @@ router.get('/admin/cases/export/xlsx', authenticate, async (req, res) => {
   }
 });
 
-router.get('/admin/cases/export/pdf', authenticate, async (req, res) => {
+router.get('/admin/cases/export/pdf', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });

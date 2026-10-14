@@ -3,16 +3,12 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
-const AdminContentIntelligenceSection = lazy(() => import('../../admin/components/AdminContentIntelligenceSection'))
 const AdminMICategoriesSection = lazy(() => import('../../admin/components/AdminMICategoriesSection'))
-const AdminPolicyGraphSection = lazy(() => import('../../admin/components/AdminPolicyGraphSection'))
 const FolderManager = lazy(() => import('../components/FolderManager'))
 const DocumentsSection = lazy(() => import('../components/DocumentsSection'))
 const ModulesSection = lazy(() => import('../components/ModulesSection'))
 const FAQsSection = lazy(() => import('../components/FAQsSection'))
-const MergeReportsSection = lazy(() => import('../components/MergeReportsSection'))
 const TemplatesSection = lazy(() => import('../components/TemplatesSection'))
-const BrowseSection = lazy(() => import('../components/BrowseSection'))
 const CMSettingsSection = lazy(() => import('../components/CMSettingsSection'))
 const ContentOperationsSection = lazy(() => import('../components/ContentOperationsSection'))
 
@@ -30,10 +26,11 @@ export default function ContentPage() {
   const standalone = searchParams.get('standalone') === '1'
   // ?view=reviews opens a reviewer's tasks — where a review notification lands (MIPM-176).
   const openReviews = searchParams.get('view') === 'reviews'
-  const [activeTab, setActiveTab] = useState(openReviews ? 'documents' : (['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents'))
+  // Browsing the approved library is the Browse Content page in the main menu;
+  // the copy that sat here as a tab is gone.
+  const [activeTab, setActiveTab] = useState('documents')
   const [showFolders, setShowFolders] = useState(false)
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-  const flash = () => {}
 
   const tabGroups = [
     {
@@ -44,8 +41,7 @@ export default function ContentPage() {
         { key: 'documents', label: 'Documents', description: 'Controlled source content and approval-ready assets.' },
         { key: 'modules', label: 'Modular Documents', description: 'Reusable modules for high-volume content assembly.' },
         { key: 'faqs', label: 'FAQs', description: 'Trusted answer sets for recurring medical information needs.' },
-        { key: 'templates', label: 'Templates', description: 'Reusable starting points for structured content creation.' },
-        { key: 'merge-reports', label: 'Merge Reports', description: 'Output packages and merge-driven reporting assets.' },
+        { key: 'templates', label: 'Templates', description: 'Approved letter wording, merged with case data for a letter.' },
       ],
     },
     {
@@ -54,7 +50,6 @@ export default function ContentPage() {
       description: 'Publish, browse, and govern what users can trust.',
       items: [
         { key: 'operations', label: 'Operations Dashboard', description: 'Work queues, expiring content, and CM follow-up items.' },
-        { key: 'browse', label: 'Browse Content', description: 'The consumer-facing approved content library.' },
         { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
       ],
     },
@@ -107,17 +102,10 @@ export default function ContentPage() {
             {activeTab === 'documents' && <DocumentsSection token={token} user={user} initialSubTab={openReviews ? 'reviews' : 'all'} />}
             {activeTab === 'modules' && <ModulesSection token={token} />}
             {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
-            {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
             {activeTab === 'templates' && <TemplatesSection token={token} />}
             {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
-            {activeTab === 'browse' && <BrowseSection token={token} />}
             {activeTab === 'settings' && <CMSettingsSection token={token} />}
             {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-            {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-            {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-            {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-            {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-            {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
           </Suspense>
         </div>
       </section>

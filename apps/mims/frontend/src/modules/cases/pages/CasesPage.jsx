@@ -208,10 +208,10 @@ export default function CasesPage() {
   // ── Load cases ────────────────────────────────────────────────────────────
   useEffect(() => {
     const tab = (searchParams.get('tab') || '').toLowerCase()
-    if (tab === 'my' || tab === 'unassigned' || tab === 'deleted') {
+    if (tab === 'my' || tab === 'unassigned' || (tab === 'deleted' && isAdminUser(user))) {
       setActiveTab(tab)
     }
-  }, [searchParams])
+  }, [searchParams, user])
 
   // The sidebar's New Case button lands here with ?new=1. It used to open only
   // the case list, so the button did not do what it says.
@@ -345,7 +345,7 @@ export default function CasesPage() {
     setSortBy(filters.sortBy || 'created_at')
     setPage(0)
     setActiveViewId(view.id)
-    if (filters.tab === 'my' || filters.tab === 'unassigned' || filters.tab === 'deleted') {
+    if (filters.tab === 'my' || filters.tab === 'unassigned' || (filters.tab === 'deleted' && isAdminUser(user))) {
       handleTabChange(filters.tab, { preserveSavedView: true })
     }
   }
@@ -621,7 +621,8 @@ export default function CasesPage() {
           {[
             { key: 'my',         label: 'My Cases' },
             { key: 'unassigned', label: 'Unassigned Cases' },
-            { key: 'deleted',    label: 'Deleted Cases' },
+            // Deleted cases: administrators only (the server refuses others).
+            ...(isAdminUser(user) ? [{ key: 'deleted', label: 'Deleted Cases' }] : []),
           ].map(t => (
             <button
               key={t.key}

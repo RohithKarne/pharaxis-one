@@ -51,39 +51,6 @@ function groupVisibleToRequest(group, req) {
   return tenantIds.includes(Number(req.user.orgId));
 }
 
-function mergeSystemOptions(groups) {
-  return mergeBooleanOptions(groups, 'system_options');
-}
-
-function mergeCaseOptions(groups) {
-  return mergeBooleanOptions(groups, 'case_options');
-}
-
-function mergeBooleanOptions(groups, key) {
-  const merged = {};
-  for (const group of groups) {
-    const privileges = parsePrivileges(group.privileges);
-    const optionSet = privileges[key] || {};
-    for (const [sectionKey, options] of Object.entries(optionSet)) {
-      if (!merged[sectionKey]) merged[sectionKey] = {};
-      for (const [optionKey, value] of Object.entries(options || {})) {
-        merged[sectionKey][optionKey] = Boolean(merged[sectionKey][optionKey] || value);
-      }
-    }
-  }
-  return merged;
-}
-
-function hasConfiguredOptionSet(groups, key) {
-  return groups.some(group => {
-    const optionSet = parsePrivileges(group.privileges)?.[key];
-    if (!optionSet || typeof optionSet !== 'object') return false;
-    return Object.values(optionSet).some(options => (
-      options && typeof options === 'object' && Object.keys(options).length > 0
-    ));
-  });
-}
-
 async function loadPicklistChoices(req, names) {
   const lowerNames = names.map(name => String(name).toLowerCase());
   const placeholders = lowerNames.map(() => '?').join(', ');
@@ -212,7 +179,7 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
   try {
     if (hasGlobalAdminScope(req.user)) {
       // null privileges = unrestricted (capability checks pass for everything).
-      return res.json({ unrestricted: true, groups: [], system_options: null, privileges: null });
+      return res.json({ unrestricted: true, groups: [], privileges: null });
     }
 
     const [groups] = await pool.execute(
@@ -226,8 +193,6 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
     );
 
     const visibleGroups = groups.filter(group => groupVisibleToRequest(group, req));
-    const hasSystemOptions = hasConfiguredOptionSet(visibleGroups, 'system_options');
-    const hasCaseOptions = hasConfiguredOptionSet(visibleGroups, 'case_options');
 
     // New capability model: surface the user's EFFECTIVE capability keys so the
     // frontend can hide/disable actions/menus they lack (server still enforces).
@@ -257,8 +222,6 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
     res.json({
       unrestricted: visibleGroups.length === 0,
       groups: visibleGroups.map(group => ({ id: group.id, name: group.name })),
-      system_options: hasSystemOptions ? mergeSystemOptions(visibleGroups) : null,
-      case_options: hasCaseOptions ? mergeCaseOptions(visibleGroups) : null,
       privileges,
     });
   } catch (err) {

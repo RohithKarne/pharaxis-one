@@ -5,6 +5,7 @@ import DocumentCreationScreen from './DocumentCreationScreen'
 import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal, VersionHistoryModal, ContentUsageModal, DocumentRelationsModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { DOC_TYPES } from './ContentUtils'
 
 const DEFAULT_FILTERS = {
   folder_id: '',
@@ -40,6 +41,91 @@ function ReviewRow({ r, onOpen }) {
             : <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>}
       </td>
     </tr>
+  )
+}
+
+// Reviews I started: progress, who is still deciding, and the owner's End and
+// Transfer. The routes existed but no screen used them, so an owner could not
+// see a review's progress or stop one that had stalled.
+function StartedReviews({ token }) {
+  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [rows, setRows] = useState(null)
+  const [authors, setAuthors] = useState([])
+  const [transfer, setTransfer] = useState({ id: null, to: '' })
+
+  const [refresh, setRefresh] = useState(0)
+  const load = () => setRefresh(k => k + 1)
+
+  useEffect(() => {
+    let cancelled = false
+    httpFetch('/api/cm/reviews/all?mine=true&limit=100', { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { reviews: [] })
+      .then(d => { if (!cancelled) setRows(d.reviews || []) })
+      .catch(() => { if (!cancelled) setRows([]) })
+    return () => { cancelled = true }
+  }, [token, refresh]) // eslint-disable-line
+  useEffect(() => {
+    httpFetch('/api/cm/reviewers?can=author', { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { users: [] }).then(d => setAuthors(d.users || [])).catch(() => {})
+  }, [token]) // eslint-disable-line
+
+  async function endReview(r) {
+    const reason = prompt(`End "${r.title}"? The document goes back to Pending. Reason:`)
+    if (reason === null) return
+    const res = await httpFetch(`/api/cm/reviews/${r.id}/end`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ reason }) })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok) { toast.success(d.message); load() } else toast.error(d.error || 'Could not end the review.')
+  }
+
+  async function doTransfer(r) {
+    if (!transfer.to) return toast.warn('Choose who takes over.')
+    const res = await httpFetch(`/api/cm/reviews/${r.id}/transfer`, { method: 'PUT', headers: authHeaders, body: JSON.stringify({ new_owner_id: Number(transfer.to) }) })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok) { toast.success(d.message); setTransfer({ id: null, to: '' }); load() } else toast.error(d.error || 'Could not transfer the review.')
+  }
+
+  if (rows === null) return <p style={{ color: 'var(--text-muted)', padding: 16 }}>Loading…</p>
+  if (!rows.length) return <div className="cm-empty"><p>You have not started any reviews.</p></div>
+  const today = new Date().toISOString().slice(0, 10)
+  return (
+    <table className="cm-table">
+      <thead><tr><th>Document</th><th>Review</th><th>Planned End</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {rows.map(r => {
+          const due = r.planned_end_date ? String(r.planned_end_date).slice(0, 10) : ''
+          const overdue = r.status === 'Open' && due && due < today
+          return (
+            <tr key={r.id}>
+              <td style={{ fontWeight: 500 }}>{r.document_name || '—'}</td>
+              <td>{r.title}{r.review_mode === 'sequential' && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>· in order</span>}</td>
+              <td style={{ fontSize: 12, color: overdue ? 'var(--danger)' : undefined }}>{due ? new Date(`${due}T00:00:00`).toLocaleDateString() : '—'}{overdue ? ' · overdue' : ''}</td>
+              <td style={{ fontSize: 12 }}>
+                {r.reviewer_decided} of {r.reviewer_total} decided
+                <div style={{ color: 'var(--text-muted)' }}>{(r.reviewers || []).map(x => `${x.user_name}: ${x.status === 'Ongoing' ? 'not decided' : x.status}`).join(' · ')}</div>
+              </td>
+              <td><StatusBadge status={r.status} /></td>
+              <td>
+                {r.status === 'Open' && (transfer.id === r.id ? (
+                  <span style={{ display: 'inline-flex', gap: 4 }}>
+                    <select aria-label="New owner" className="cm-form-select" style={{ width: 160 }} value={transfer.to} onChange={e => setTransfer({ id: r.id, to: e.target.value })}>
+                      <option value="">— Who takes over —</option>
+                      {authors.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                    <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => doTransfer(r)}>Transfer</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setTransfer({ id: null, to: '' })}>Cancel</button>
+                  </span>
+                ) : (
+                  <div className="cm-action-btns">
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setTransfer({ id: r.id, to: '' })}>Transfer</button>
+                    <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => endReview(r)}>End Review</button>
+                  </div>
+                ))}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }
 
@@ -180,22 +266,22 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
   useEffect(() => { if (subTab === 'checkedin') loadCheckedIn() }, [loadCheckedIn, subTab])
   useEffect(() => { if (subTab === 'checkedout') loadCheckedOut() }, [loadCheckedOut, subTab])
 
-  async function handleCheckOut(doc) {
-    try {
-      const res = await httpFetch(`/api/cm/documents/${doc.id}/checkout`, { method: 'POST', headers: authHeaders })
-      if (res.ok) loadDocs()
-      else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
-    } catch { toast.error('Network error.') }
-  }
-
-  async function handleCheckIn() {
+  async function handleCheckIn(notes) {
     setCheckInLoading(true)
     try {
-      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ notes: notes || undefined }) })
       if (res.ok) { setCheckInDoc(null); loadDocs() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
     setCheckInLoading(false)
+  }
+
+  async function handleRevise(doc) {
+    try {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); loadDocs() } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
   }
 
   async function handleArchive(doc) {
@@ -242,7 +328,9 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
       btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
     } else if (s === 'Pending') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      if (hasCapability('content.review')) btns.push(<button key="ir" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
+      // Starting a review is the author's step; the server checks content.author.
+      // The button asked for content.review, so authors never saw it.
+      if (hasCapability('content.author')) btns.push(<button key="ir" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
       if (hasCapability('content.approve')) btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
     } else if (s === 'Under Review') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
@@ -252,7 +340,9 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
       if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setPublishDoc(doc)}>Publish</button>)
     } else if (s === 'Published') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
+      // Revise keeps this version in use while the next one is drafted (Check Out took it out of Published).
+      if (doc.open_revision_id) btns.push(<span key="rev" style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>Revision in progress</span>)
+      else if (hasCapability('content.author')) btns.push(<button key="rev" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(doc)}>Revise</button>)
       btns.push(<button key="usage" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageDoc(doc)}>Usage</button>)
       if (hasCapability('content.publish')) btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
     } else if (s === 'Archived') {
@@ -301,6 +391,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
           {/* The badge counted closed and already-decided reviews too (MIPM-205). */}
           My Review Tasks {pendingReviews > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{pendingReviews}</span>}
         </div>
+        {hasCapability('content.author') && <div className={`cm-sub-tab ${subTab === 'started' ? 'active' : ''}`} onClick={() => setSubTab('started')}>Reviews I Started</div>}
       </div>
 
       {subTab === 'all' && (
@@ -312,7 +403,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
             </select>
             <select className="cm-form-select" aria-label="Document type" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
               <option value="">All Types</option>
-              <option>SRD</option><option>Enclosure</option><option>Information Document</option><option>Internal Document</option>
+              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <select className="cm-form-select" aria-label="Status" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
               <option value="">All Statuses</option>
@@ -431,7 +522,11 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
                         />
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
-                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>{d.name}</td>
+                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>
+                        {d.name}
+                        {d.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{d.revises_version}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{d.product_name || 'Any product'} · {d.language || 'en'}</div>
+                      </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span>{d.doc_type}</span>
@@ -552,6 +647,8 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
           </table>
         )
       )}
+
+      {subTab === 'started' && <StartedReviews token={token} />}
 
       {showDrawer && (
         <DocumentCreationScreen

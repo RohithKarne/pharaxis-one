@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { AssociatedDocsPanel } from './ContentPanels'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
+  // What changed goes into the version history (it was always "Checked in").
+  const [notes, setNotes] = useState('')
   return (
     <div className="cm-modal-overlay">
       <div className="cm-modal">
@@ -11,9 +14,11 @@ export function CheckInModal({ item, onClose, onConfirm, loading }) {
           Check in <strong>"{item?.name || item?.question || item?.title}"</strong>?<br />
           This will move it to <strong>Pending</strong> status.
         </p>
+        <label className="cm-form-label" htmlFor="checkin-notes">What changed</label>
+        <textarea id="checkin-notes" className="cm-form-textarea" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional — recorded in the version history" />
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="cm-btn cm-btn-primary" onClick={onConfirm} disabled={loading}>{loading ? 'Checking in…' : 'Confirm'}</button>
+          <button className="cm-btn cm-btn-primary" onClick={() => onConfirm(notes.trim())} disabled={loading}>{loading ? 'Checking in…' : 'Confirm'}</button>
         </div>
       </div>
     </div>
@@ -26,7 +31,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   const [usersLoaded, setUsersLoaded] = useState(false)
   // MIPM-204: review_mode — parallel (everyone at once) or sequential (one after
   // another, in the order the reviewers are listed).
-  const [form, setForm] = useState({ title: '', planned_end_date: '', non_amendable: false, reviewers: [], description: '', review_mode: 'parallel' })
+  const [form, setForm] = useState({ title: '', planned_end_date: '', reviewers: [], description: '', review_mode: 'parallel' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -62,11 +67,12 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/documents/${doc.id}/initiate-review`, {
-        // The server reads reviewer_ids and is_non_amendable; sending the form as-is
-        // attached no reviewer and dropped Non-Amendable (MIPM-174).
+        // The server reads reviewer_ids; sending the form as-is attached no reviewer (MIPM-174).
+        // Non-Amendable was removed: it was stored and never enforced, and a
+        // document under review cannot be edited anyway.
         method: 'POST', headers: authHeaders, body: JSON.stringify({
           title: form.title, planned_end_date: form.planned_end_date, description: form.description,
-          reviewer_ids: form.reviewers, is_non_amendable: form.non_amendable, review_mode: form.review_mode,
+          reviewer_ids: form.reviewers, review_mode: form.review_mode,
         })
       })
       if (res.ok) { onDone(); onClose() }
@@ -85,13 +91,8 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Planned End Date <span className="required">*</span></label>
-          <input type="date" className="cm-form-input" value={form.planned_end_date} onChange={e => setForm(p => ({ ...p, planned_end_date: e.target.value }))} />
-        </div>
-        <div className="cm-form-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-            <input type="checkbox" checked={form.non_amendable} onChange={e => setForm(p => ({ ...p, non_amendable: e.target.checked }))} />
-            Non-Amendable
-          </label>
+          <input type="date" aria-label="Planned End Date" className="cm-form-input" min={new Date().toISOString().slice(0, 10)} value={form.planned_end_date} onChange={e => setForm(p => ({ ...p, planned_end_date: e.target.value }))} />
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>Reviewers still deciding after this date are reminded each day, and so are you.</p>
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">How reviewers decide</label>
@@ -151,10 +152,51 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   )
 }
 
+const ACCEPTED_DECISIONS = ['Accepted', 'Accepted with Changes', 'Approved']
+
+// The publishing checks, run before the publisher signs: what will stop the
+// publish and what is only a warning. Warnings were never shown to anyone, and
+// a blocker surfaced only as an error after signing.
+export function PublishChecks({ url, token, onResult }) {
+  const [checks, setChecks] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    httpFetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (cancelled) return; setChecks(d); onResult?.(d) })
+      .catch(() => { if (!cancelled) setChecks(null) })
+    return () => { cancelled = true }
+  }, [url, token]) // eslint-disable-line
+  if (!checks) return null
+  const fails = (checks.checks || []).filter(c => c.status !== 'pass')
+  return (
+    <div className="cm-form-group" data-testid="publish-checks">
+      <label className="cm-form-label">Publishing checks</label>
+      {fails.length === 0
+        ? <p style={{ fontSize: 13, color: 'var(--success, #2e7d32)', margin: 0 }}>All {checks.checks?.length || 0} checks pass.</p>
+        : fails.map((c, i) => (
+          <div key={i} style={{ fontSize: 13, padding: '3px 0', color: c.status === 'fail' ? 'var(--danger)' : '#92400e' }}>
+            <strong>{c.status === 'fail' ? 'Stops publishing' : 'Warning'}:</strong> {c.rule_name} — {c.detail}
+          </div>
+        ))}
+    </div>
+  )
+}
+
 export function ApproveModal({ doc, user, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [form, setForm] = useState({ password: '', reason: '' })
   const [loading, setLoading] = useState(false)
+  // What the reviewers said, so the approver signs knowing it (the dialog showed
+  // nothing of the review).
+  const [review, setReview] = useState(undefined)
+
+  useEffect(() => {
+    httpFetch(`/api/cm/documents/${doc.id}/reviews`, { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { reviews: [] })
+      .then(d => setReview((d.reviews || [])[0] || null))
+      .catch(() => setReview(null))
+  }, [doc.id]) // eslint-disable-line
 
   async function handleSubmit() {
     if (!form.password) return toast.warn('Password is required.')
@@ -175,6 +217,22 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
       <div className="cm-modal">
         <h3 className="cm-modal-title">Approve Document</h3>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Approving: <strong>{doc.name}</strong></p>
+        <div className="cm-form-group" data-testid="approve-review-outcome">
+          <label className="cm-form-label">Review</label>
+          {review === undefined ? <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+            : !review ? <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No review was held for this document.</p>
+            : (
+              <div style={{ fontSize: 13 }}>
+                <div style={{ marginBottom: 4 }}><strong>{review.title}</strong> · {review.status} · started by {review.owner_name || '—'}</div>
+                {review.reviewers.map((r, i) => (
+                  <div key={i} style={{ padding: '3px 0', borderTop: '1px solid var(--border)' }}>
+                    {r.name} — <strong style={{ color: r.status === 'Rejected' ? 'var(--danger)' : ACCEPTED_DECISIONS.includes(r.status) ? 'var(--success, #2e7d32)' : 'var(--text-secondary)' }}>{r.status === 'Ongoing' ? 'not decided' : r.status}</strong>
+                    {r.reason ? <span style={{ color: 'var(--text-secondary)' }}>: {r.reason}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
         <div className="cm-form-group">
           <label className="cm-form-label">User ID</label>
           <input aria-label="User ID" className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
@@ -198,7 +256,11 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
 
 export function PublishModal({ doc, user, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [form, setForm] = useState({ password: '', org_version: '', reason: '' })
+  const [form, setForm] = useState({ password: '', reason: '' })
+  // Publishing makes the next major version (1.0, 2.0, …). The dialog read a
+  // field that is never sent, so it always said 1.0; Org Version was ignored.
+  const nextVersion = `${(Number(doc.version_major) || 0) + 1}.0`
+  const [blocked, setBlocked] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
@@ -228,13 +290,10 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
           <label className="cm-form-label">Password <span className="required">*</span></label>
           <input type="password" className="cm-form-input" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Enter your password" />
         </div>
+        <PublishChecks url={`/api/cm/documents/${doc.id}/publish-checks`} token={token} onResult={d => setBlocked(d ? !d.allow : false)} />
         <div className="cm-form-group">
-          <label className="cm-form-label">System Version</label>
-          <input aria-label="System Version" className="cm-form-input" value={doc.version || '1.0'} readOnly style={{ background: 'var(--bg)' }} />
-        </div>
-        <div className="cm-form-group">
-          <label className="cm-form-label">Org Version</label>
-          <input aria-label="Org Version" className="cm-form-input" value={form.org_version} onChange={e => setForm(p => ({ ...p, org_version: e.target.value }))} placeholder="Optional (e.g. v2.1-CORP)" />
+          <label className="cm-form-label">Version</label>
+          <input aria-label="Version" className="cm-form-input" value={`Will be published as version ${nextVersion}`} readOnly style={{ background: 'var(--bg)' }} />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Reason for Publishing <span className="required">*</span></label>
@@ -242,7 +301,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
         </div>
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="cm-btn cm-btn-primary" onClick={handleSubmit} disabled={loading}>{loading ? 'Publishing…' : 'Publish'}</button>
+          <button className="cm-btn cm-btn-primary" onClick={handleSubmit} disabled={loading || blocked} title={blocked ? 'Fix what stops publishing first' : undefined}>{loading ? 'Publishing…' : 'Publish'}</button>
         </div>
       </div>
     </div>
@@ -251,18 +310,22 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
 
 export function ReviewStatusModal({ review, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [form, setForm] = useState({ status: 'Ongoing', reason: '' })
+  const [form, setForm] = useState({ status: '', reason: '' })
   const [loading, setLoading] = useState(false)
+  // A plain acceptance needs no reason; anything else says why.
+  const reasonNeeded = form.status && form.status !== 'Accepted'
 
   async function handleSubmit() {
-    if (!form.reason.trim()) return toast.warn('Reason is required.')
+    if (!form.status) return toast.warn('Choose a decision.')
+    if (reasonNeeded && !form.reason.trim()) return toast.warn('Say why — a reason is needed for this decision.')
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/reviews/${review.id}/reviewer-status`, {
         method: 'PUT', headers: authHeaders, body: JSON.stringify(form)
       })
-      if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { if (d.message) toast.success(d.message); onDone(); onClose() }
+      else toast.error(d.error || 'Failed to update status.')
     } catch { toast.error('Network error.') }
     setLoading(false)
   }
@@ -270,12 +333,12 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
   return (
     <div className="cm-modal-overlay">
       <div className="cm-modal">
-        <h3 className="cm-modal-title">Update Review Status</h3>
+        <h3 className="cm-modal-title">Your Review Decision</h3>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>{review.document_name} — {review.title}</p>
         <div className="cm-form-group">
-          <label className="cm-form-label">Status <span className="required">*</span></label>
-          <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
-            <option>Ongoing</option>
+          <label className="cm-form-label">Decision <span className="required">*</span></label>
+          <select aria-label="Decision" className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+            <option value="">— Choose —</option>
             <option>Accepted</option>
             <option>Accepted with Changes</option>
             <option>Declined</option>
@@ -283,8 +346,8 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
           </select>
         </div>
         <div className="cm-form-group">
-          <label className="cm-form-label">Reason <span className="required">*</span></label>
-          <textarea className="cm-form-textarea" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} rows={3} placeholder="Provide your reason…" />
+          <label className="cm-form-label">Reason {reasonNeeded && <span className="required">*</span>}</label>
+          <textarea aria-label="Reason" className="cm-form-textarea" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} rows={3} placeholder={reasonNeeded ? 'Say why…' : 'Optional'} />
         </div>
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
@@ -295,17 +358,15 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
   )
 }
 
-// ── #9 / #14 / #22: Version History Modal (documents and templates) ──────────
+// ── Version History Modal (documents, templates, modules, FAQs) ─────────────
+const VERSION_URL = { document: 'documents', template: 'templates', module: 'modules', faq: 'faqs' }
 export function VersionHistoryModal({ entityType, entityId, entityName, token, onClose }) {
   const authHeaders = { Authorization: `Bearer ${token}` }
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const url = entityType === 'template'
-      ? `/api/cm/templates/${entityId}/versions`
-      : `/api/cm/documents/${entityId}/versions`
-    httpFetch(url, { headers: authHeaders })
+    httpFetch(`/api/cm/${VERSION_URL[entityType] || 'documents'}/${entityId}/versions`, { headers: authHeaders })
       .then(r => r.json())
       .then(d => setVersions(d.versions || []))
       .catch(() => {})
@@ -473,103 +534,19 @@ export function ModuleUsageModal({ module: mod, token, onClose }) {
   )
 }
 
-// ── #6: Document Relations Modal ──────────────────────────────────────────────
+// ── Document Relations Modal ─────────────────────────────────────────────────
+// The list's Relations button opens the same panel as the document's Associated
+// Documents tab. It had its own copy, which sent the wrong field (every link
+// failed) and removed a just-linked row by the wrong id.
 export function DocumentRelationsModal({ doc, token, onClose }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const authHeadersGet = { Authorization: `Bearer ${token}` }
-  const [relations, setRelations] = useState([])
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const visibleSearchResults = search.trim().length < 2 ? [] : searchResults
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    httpFetch(`/api/cm/documents/${doc.id}/relations`, { headers: authHeadersGet })
-      .then(r => r.json())
-      .then(d => setRelations(d.relations || d.related || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [doc.id]) // eslint-disable-line
-
-  useEffect(() => {
-    if (search.trim().length < 2) return
-    const t = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const r = await httpFetch(`/api/cm/documents?search=${encodeURIComponent(search)}&limit=20`, { headers: authHeadersGet })
-        const d = await r.json()
-        setSearchResults((d.documents || []).filter(x => x.id !== doc.id))
-      } catch { /* silent */ }
-      setSearching(false)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [search]) // eslint-disable-line
-
-  async function linkDoc(related) {
-    try {
-      const res = await httpFetch(`/api/cm/documents/${doc.id}/relations`, {
-        method: 'POST', headers: authHeaders, body: JSON.stringify({ related_document_id: related.id })
-      })
-      if (res.ok) {
-        setRelations(p => [...p, related])
-        setSearch('')
-        setSearchResults([])
-        toast.success(`Linked: ${related.name}`)
-      } else { const d = await res.json(); toast.error(d.error || 'Link failed.') }
-    } catch { toast.error('Network error.') }
-  }
-
-  async function removeRelation(relatedId) {
-    try {
-      await httpFetch(`/api/cm/documents/${doc.id}/relations/${relatedId}`, { method: 'DELETE', headers: authHeadersGet })
-      setRelations(p => p.filter(r => r.id !== relatedId))
-    } catch { toast.error('Network error.') }
-  }
-
   return (
     <div className="cm-modal-overlay">
-      <div className="cm-modal" style={{ width: 580 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 className="cm-modal-title" style={{ margin: 0 }}>Document Relations — {doc.name}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>×</button>
+      <div className="cm-modal" style={{ width: 720, maxWidth: '95vw' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h3 className="cm-modal-title" style={{ margin: 0 }}>Related Documents — {doc.name}</h3>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>×</button>
         </div>
-        <div style={{ marginBottom: 16, position: 'relative' }}>
-          <input className="cm-form-input" placeholder="Search documents to link…" value={search} onChange={e => { const next = e.target.value; setSearch(next); if (next.trim().length < 2) setSearchResults([]) }} style={{ width: '100%' }} />
-          {(searching || visibleSearchResults.length > 0) && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 4, zIndex: 10, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,.1)' }}>
-              {searching ? (
-                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Searching…</div>
-              ) : visibleSearchResults.map(r => (
-                <div key={r.id}
-                  onClick={() => linkDoc(r)}
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-tint, #f0f4ff)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ fontWeight: 500 }}>{r.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>Loading…</p>
-        ) : relations.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16, fontSize: 13 }}>No related documents. Search above to link one.</p>
-        ) : (
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-            {relations.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                <div>
-                  <span style={{ fontWeight: 500 }}>{r.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{r.status}</span>
-                </div>
-                <button onClick={() => removeRelation(r.id)} className="cm-btn cm-btn-danger cm-btn-sm">Remove</button>
-              </div>
-            ))}
-          </div>
-        )}
+        <AssociatedDocsPanel docId={doc.id} token={token} />
         <div className="cm-modal-footer" style={{ marginTop: 16 }}>
           <button className="cm-btn cm-btn-secondary" onClick={onClose}>Close</button>
         </div>

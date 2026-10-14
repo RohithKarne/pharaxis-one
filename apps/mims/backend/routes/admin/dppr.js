@@ -128,7 +128,7 @@ function orgScope(req) {
 }
 
 // ── GET /api/admin/dppr/domains ───────────────────────────────────────────────
-router.get('/dppr/domains', authenticate, (_req, res) => {
+router.get('/dppr/domains', authenticate, requireRole('admin', 'platform_admin'), (_req, res) => {
   res.json({ domains: DPPR_DOMAINS });
 });
 
@@ -177,7 +177,7 @@ router.get('/dppr/conflicts', authenticate, requireRole('admin', 'platform_admin
 });
 
 // ── GET /api/admin/dppr/execution-log ────────────────────────────────────────
-router.get('/dppr/execution-log', authenticate, async (req, res) => {
+router.get('/dppr/execution-log', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { page = 1, limit = 50, org_id } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -361,7 +361,7 @@ router.post('/dppr/legal-holds/:id/release', authenticate, requireRole('admin', 
 });
 
 // ── GET /api/admin/dppr ───────────────────────────────────────────────────────
-router.get('/dppr', authenticate, async (req, res) => {
+router.get('/dppr', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { page = 1, limit = 50, domain, is_active, org_id } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -430,7 +430,7 @@ router.post('/dppr', authenticate, requireRole('admin', 'platform_admin'), valid
 });
 
 // ── GET /api/admin/dppr/:id ───────────────────────────────────────────────────
-router.get('/dppr/:id', authenticate, async (req, res) => {
+router.get('/dppr/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const scope = orgScope(req);
     const params = [req.params.id];
@@ -544,7 +544,7 @@ router.delete('/dppr/:id', authenticate, requireRole('admin', 'platform_admin'),
 // ── Individual DPPR — Case-level overrides ────────────────────────────────────
 
 // GET /api/admin/dppr/cases/:caseId/overrides
-router.get('/dppr/cases/:caseId/overrides', authenticate, async (req, res) => {
+router.get('/dppr/cases/:caseId/overrides', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [overrides] = await pool.execute(
       `SELECT o.*, u.name AS created_by_name

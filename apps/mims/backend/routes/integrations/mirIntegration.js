@@ -2,14 +2,14 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const {
   sendCaseToMir,
   testMirConnection,
   getMirSyncLog,
 } = require('../../services/mirService');
 
-router.post('/admin/integrations/mir/test-connection', authenticate, async (req, res) => {
+router.post('/admin/integrations/mir/test-connection', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const result = await testMirConnection(req.user.orgId);
     return res.json(result);
@@ -18,7 +18,7 @@ router.post('/admin/integrations/mir/test-connection', authenticate, async (req,
   }
 });
 
-router.post('/admin/integrations/mir/send-case/:caseId', authenticate, async (req, res) => {
+router.post('/admin/integrations/mir/send-case/:caseId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const result = await sendCaseToMir(req.user.orgId, req.params.caseId);
     return res.json(result);
@@ -27,7 +27,7 @@ router.post('/admin/integrations/mir/send-case/:caseId', authenticate, async (re
   }
 });
 
-router.get('/admin/integrations/mir/sync-log', authenticate, async (req, res) => {
+router.get('/admin/integrations/mir/sync-log', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const logs = await getMirSyncLog(req.user.orgId);
     return res.json({ logs });

@@ -12,6 +12,10 @@ const { authenticate } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 const { createNotification } = require('../../services/notificationCenterService');
+const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
+
+// Decisions that count as the reviewer accepting the content.
+const ACCEPTED = ['Accepted', 'Accepted with Changes', 'Approved'];
 
 async function audit(userId, userName, action, entity, entityId, details) {
   await logAudit(userId, userName, action, entity, entityId, details);
@@ -121,7 +125,9 @@ router.get('/reviews/all', authenticate, async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
-      SELECT r.*, u.name AS created_by_name
+      SELECT r.*, u.name AS created_by_name, COALESCE(d.name, f.question) AS document_name,
+             (SELECT COUNT(*) FROM cm_reviewers x WHERE x.review_id = r.id) AS reviewer_total,
+             (SELECT COUNT(*) FROM cm_reviewers x WHERE x.review_id = r.id AND x.status <> 'Ongoing') AS reviewer_decided
       FROM cm_reviews r
       LEFT JOIN users u ON r.created_by = u.id
       ${reviewOrgJoins()}
@@ -134,6 +140,11 @@ router.get('/reviews/all', authenticate, async (req, res) => {
       params.push(...scope.params);
     }
 
+    // "Reviews I started": the review owner's own reviews.
+    if (req.query.mine === 'true') {
+      query += ' AND r.created_by = ?';
+      params.push(req.user.userId);
+    }
     if (status) {
       query += ' AND r.status = ?';
       params.push(status);
@@ -143,8 +154,7 @@ router.get('/reviews/all', authenticate, async (req, res) => {
       params.push(doc_type);
     }
 
-    const countQuery = query.replace('SELECT r.*, u.name AS created_by_name', 'SELECT COUNT(*) AS total');
-    const [[{ total }]] = await pool.execute(countQuery, params);
+    const [[{ total }]] = await pool.execute(`SELECT COUNT(*) AS total FROM (${query}) counted`, params);
 
     query += ` ORDER BY r.created_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
@@ -160,6 +170,8 @@ router.get('/reviews/all', authenticate, async (req, res) => {
         [review.id]
       );
       review.reviewers = reviewers;
+      const turn = review.status === 'Open' ? await currentTurn(review) : null;
+      review.waiting_on_name = turn?.name || null;
     }
 
     res.json({ reviews, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
@@ -188,9 +200,14 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
     // MIPM-178: the decisions the reviewer's dialog offers. The route accepted only
     // Approved/Withdrawn besides Ongoing/Rejected, so Accepted, Accepted with
     // Changes and Declined were refused and a reviewer could only reject.
-    const validStatuses = ['Ongoing', 'Accepted', 'Accepted with Changes', 'Declined', 'Rejected', 'Approved', 'Withdrawn'];
+    // "Ongoing" is where a reviewer starts, not a decision: saving it with a
+    // reason recorded nothing and moved nothing.
+    const validStatuses = ['Accepted', 'Accepted with Changes', 'Declined', 'Rejected', 'Approved', 'Withdrawn'];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+      return res.status(400).json({ error: `Choose a decision: ${validStatuses.slice(0, 4).join(', ')}.` });
+    }
+    if (status !== 'Accepted' && status !== 'Approved' && !String(reason || '').trim()) {
+      return res.status(400).json({ error: 'Say why — a reason is needed for this decision.' });
     }
     // MIPM-204: in a sequential review only the reviewer whose turn it is decides.
     const turn = await currentTurn(review);
@@ -206,10 +223,10 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
     // MIPM-179: the last decision closes the review — there was no way to close one on screen.
     // MIPM-204: a rejection in a sequential review closes it at once; the reviewers
     // after it are not asked to read a document that is going back to Draft.
-    const decided = review.status === 'Open' && status !== 'Ongoing';
+    const decided = review.status === 'Open';
     if (decided && (!(await undecidedCount(id)) || (review.review_mode === 'sequential' && status === 'Rejected'))) {
-      const wasRejected = await closeReview(review, req);
-      return res.json({ message: wasRejected ? 'Decision saved. The review is closed and the document returned to Draft.' : 'Decision saved. The review is closed and the document is ready for approval.', closed: true, wasRejected });
+      const outcome = await closeReview(review, req);
+      return res.json({ message: `Decision saved. ${OUTCOME_TEXT[outcome]}`, closed: true, wasRejected: outcome === 'rejected', outcome });
     }
     if (decided && review.review_mode === 'sequential') {
       const next = await currentTurn(review);
@@ -228,21 +245,34 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
 // approver's e-signed step, and the author may not approve their own document.
 // Before, the owner (the author) could close a review nobody had answered and
 // the document became Approved with no decision and no signature.
+// The three ways a review ends: someone rejected it (back to Draft); nobody
+// accepted it — every reviewer declined or withdrew (back to Pending, for a new
+// review); or at least one accepted and none rejected (ready for approval).
+// A review that nobody accepted used to be "ready for approval" as well.
+const OUTCOME_TEXT = {
+  rejected: 'The review is closed and the document returned to Draft.',
+  none_accepted: 'The review is closed. Nobody accepted the document, so it is back in Pending for a new review.',
+  accepted: 'The review is closed and the document is ready for approval.',
+};
+
 async function closeReview(review, req) {
-  const [[{ rejectedCount }]] = await pool.execute(
-    `SELECT COUNT(*) AS rejectedCount FROM cm_reviewers WHERE review_id = ? AND status = 'Rejected'`,
-    [review.id]
+  const [[counts]] = await pool.execute(
+    `SELECT SUM(status = 'Rejected') AS rejected,
+            SUM(status IN (${ACCEPTED.map(() => '?').join(',')})) AS accepted
+       FROM cm_reviewers WHERE review_id = ?`,
+    [...ACCEPTED, review.id]
   );
-  const wasRejected = rejectedCount > 0;
+  const outcome = Number(counts?.rejected) > 0 ? 'rejected' : Number(counts?.accepted) > 0 ? 'accepted' : 'none_accepted';
+  const wasRejected = outcome === 'rejected';
+  const table = review.doc_type === 'faq' ? 'cm_faqs' : 'cm_documents';
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     await conn.execute("UPDATE cm_reviews SET status = 'Closed', updated_at = NOW() WHERE id = ?", [review.id]);
-    // Rejected → back to the author as Draft. Accepted → stays Under Review, ready for approval.
-    if (wasRejected && review.doc_type === 'document') {
-      await conn.execute("UPDATE cm_documents SET status = 'Draft', updated_at = NOW() WHERE id = ? AND status = 'Under Review'", [review.doc_id]);
-    } else if (wasRejected && review.doc_type === 'faq') {
-      await conn.execute("UPDATE cm_faqs SET status = 'Draft', updated_at = NOW() WHERE id = ? AND status = 'Under Review'", [review.doc_id]);
+    if (outcome !== 'accepted') {
+      await conn.execute(
+        `UPDATE ${table} SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'Under Review'`,
+        [wasRejected ? 'Draft' : 'Pending', review.doc_id]);
     }
     await conn.commit();
   } catch (err) {
@@ -263,18 +293,16 @@ async function closeReview(review, req) {
         [
           owner.notify_user_id,
           wasRejected ? 'cm_review_rejected' : 'content_review',
-          wasRejected ? 'Review Rejected' : 'Review complete',
-          wasRejected
-            ? `Review "${review.title}" was closed with rejections. The ${review.doc_type} has been returned to Draft.`
-            : `Review "${review.title}" is complete. The ${review.doc_type} is ready for approval.`,
+          { rejected: 'Review Rejected', none_accepted: 'Review closed — nobody accepted', accepted: 'Review complete' }[outcome],
+          `Review "${review.title}": ${OUTCOME_TEXT[outcome].replace('the document', `the ${review.doc_type}`)}`,
           JSON.stringify({ review_id: Number(review.id), doc_id: review.doc_id, doc_type: review.doc_type }),
         ]
       );
     }
   } catch (_) {}
 
-  await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(review.id), { doc_id: review.doc_id, doc_type: review.doc_type, wasRejected });
-  return wasRejected;
+  await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(review.id), { doc_id: review.doc_id, doc_type: review.doc_type, outcome });
+  return outcome;
 }
 
 async function undecidedCount(reviewId) {
@@ -297,11 +325,8 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
     if (await undecidedCount(id)) {
       return res.status(409).json({ error: 'Every reviewer must decide before the review is closed.' });
     }
-    const wasRejected = await closeReview(review, req);
-    res.json({
-      message: wasRejected ? 'Review closed with rejections. Document returned to Draft.' : 'Review closed. The document is ready for approval.',
-      wasRejected,
-    });
+    const outcome = await closeReview(review, req);
+    res.json({ message: OUTCOME_TEXT[outcome], wasRejected: outcome === 'rejected', outcome });
   } catch (err) {
     console.error('POST /cm/reviews/:id/close error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -353,6 +378,18 @@ router.post('/reviews/:id/end', authenticate, async (req, res) => {
     }
 
     await audit(req.user.userId, req.user.email, 'END_REVIEW', 'cm_review', Number(id), { reason: reason || null });
+    // Reviewers still deciding are told, so the task does not sit in their list.
+    const [waiting] = await pool.execute("SELECT user_id FROM cm_reviewers WHERE review_id = ? AND status = 'Ongoing'", [id]);
+    for (const w of waiting) {
+      await createNotification(Number(w.user_id), {
+        category: 'content_review',
+        title: `Review ended — ${review.title}`,
+        message: `${req.user.name || req.user.email} ended this review${reason ? `: ${reason}` : ''}. Nothing more is needed from you.`,
+        linkUrl: '/content?view=reviews',
+        metadata: { review_id: Number(id) },
+        eventKey: 'cm-review-ended',
+      }).catch(() => {});
+    }
     res.json({ message: 'Review cancelled. Document returned to Pending.' });
   } catch (err) {
     console.error('POST /cm/reviews/:id/end error:', err);
@@ -377,6 +414,11 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
     if (!newOwner) return res.status(404).json({ error: 'New owner user not found.' });
     if (!hasPlatformAdminScope(req) && !await isUserInScopeOrg(new_owner_id, req.user.orgId)) {
       return res.status(403).json({ error: 'New owner must belong to your organisation.' });
+    }
+    if (review.status !== 'Open') return res.status(400).json({ error: 'Only an open review can change owner.' });
+    const [[ownerRow]] = await pool.execute('SELECT role FROM users WHERE id = ?', [new_owner_id]);
+    if (!(await userHasActivityPrivilege({ userId: Number(new_owner_id), orgId: review.org_id || req.user.orgId, role: ownerRow?.role }, 'content.author'))) {
+      return res.status(400).json({ error: `${newOwner.name} cannot author content, so cannot own a review.` });
     }
 
     await pool.execute(

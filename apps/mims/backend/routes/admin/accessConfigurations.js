@@ -2,7 +2,6 @@
 
 const express = require('express');
 const { authenticate } = require('../../middleware/auth');
-const { requireActivityPrivilege } = require('../../middleware/accessPolicy');
 const accessService = require('../../services/accessConfigurationService');
 const { hasGlobalAdminScope, isAdminUser } = require('../../utils/adminScope');
 const { findSodConflicts, hasBlockingSodConflict, describeSodConflict } = require('../../services/sodEvaluator');
@@ -124,7 +123,7 @@ router.get('/access-config/overview', authenticate, requireAccessAdmin, async (r
   }
 });
 
-router.post('/access-config/templates/seed', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.post('/access-config/templates/seed', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const templates = await accessService.seedAccessTemplates(orgId, req.user.userId);
@@ -145,7 +144,7 @@ router.get('/access-config/groups/:id/privileges', authenticate, requireAccessAd
   }
 });
 
-router.put('/access-config/groups/:id/privileges', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.put('/access-config/groups/:id/privileges', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const keys = req.body?.privilege_keys || req.body?.privileges || [];
@@ -220,7 +219,7 @@ router.get('/access-config/site-access', authenticate, requireAccessAdmin, async
   }
 });
 
-router.post('/access-config/site-access', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.post('/access-config/site-access', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const row = await accessService.upsertSiteAccess({
@@ -239,7 +238,7 @@ router.post('/access-config/site-access', authenticate, requireAccessAdmin, requ
   }
 });
 
-router.delete('/access-config/site-access/:id', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.delete('/access-config/site-access/:id', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req);
     await accessService.deleteSiteAccess(orgId, Number(req.params.id), req.user.userId, req.body?.reason || null);
@@ -259,7 +258,7 @@ router.get('/access-config/site-rules', authenticate, requireAccessAdmin, async 
   }
 });
 
-router.put('/access-config/site-rules/:siteId', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.put('/access-config/site-rules/:siteId', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const rules = await accessService.replaceSiteRules({
@@ -285,7 +284,7 @@ router.get('/access-config/auth-policy', authenticate, requireAccessAdmin, async
   }
 });
 
-router.put('/access-config/auth-policy', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.put('/access-config/auth-policy', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const policy = await accessService.saveAuthPolicy(orgId, req.body || {}, req.user.userId, req.body?.reason || null);
@@ -305,7 +304,7 @@ router.get('/access-config/requests', authenticate, requireAccessAdmin, async (r
   }
 });
 
-router.post('/access-config/requests', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.post('/access-config/requests', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const id = await accessService.createAccessRequest({
@@ -324,7 +323,7 @@ router.post('/access-config/requests', authenticate, requireAccessAdmin, require
   }
 });
 
-router.put('/access-config/requests/:id/review', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.approve'), async (req, res) => {
+router.put('/access-config/requests/:id/review', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const request = await accessService.reviewAccessRequest({
@@ -370,7 +369,7 @@ router.get('/access-config/review-snapshots', authenticate, requireAccessAdmin, 
   }
 });
 
-router.post('/access-config/review-snapshots', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
+router.post('/access-config/review-snapshots', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
     const snapshot = await accessService.createAccessReviewSnapshot(orgId, req.user.userId, req.body?.snapshot_name || null);

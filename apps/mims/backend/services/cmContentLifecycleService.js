@@ -92,4 +92,29 @@ async function runCmContentAutoArchive() {
   return { archivedDocs, archivedFaqs };
 }
 
-module.exports = { runCmContentAutoArchive };
+// A check-out holds a document for two hours. The screen said it "auto-releases"
+// then, but nothing released it; and the manual release cleared the holder while
+// leaving the status CheckedOut, so nobody could check it in or out again. An
+// expired check-out goes back to Draft — the edits saved during it are kept.
+async function releaseStaleCheckouts(orgId = null) {
+  const [rows] = await pool.execute(
+    `SELECT d.id, d.doc_id, d.name, d.checked_out_by, d.version_major, d.version_minor
+       FROM cm_documents d JOIN cm_folders f ON f.id = d.folder_id
+      WHERE d.status = 'CheckedOut' AND d.checkout_expires_at IS NOT NULL AND d.checkout_expires_at < NOW()
+        ${orgId ? 'AND f.org_id = ?' : ''}`,
+    orgId ? [orgId] : []
+  );
+  for (const doc of rows) {
+    await pool.execute(
+      `UPDATE cm_documents SET status = 'Draft', checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL, updated_at = NOW()
+        WHERE id = ? AND status = 'CheckedOut'`, [doc.id]);
+    await addVersionHistory('document', doc.id, `${doc.version_major || 1}.${doc.version_minor || 0}`, 'Draft', 'Check-out expired after two hours; returned to Draft.');
+    await addAuditLog('CHECKOUT_EXPIRED', 'cm_document', doc.id, { doc_id: doc.doc_id, checked_out_by: doc.checked_out_by });
+    await addNotification(doc.checked_out_by, 'Check-out expired',
+      `Your check-out of "${doc.name}"${doc.doc_id ? ` (${doc.doc_id})` : ''} expired and it is back in Draft. Your saved changes are kept.`,
+      { document_id: doc.id, doc_code: doc.doc_id });
+  }
+  return { released: rows.length };
+}
+
+module.exports = { runCmContentAutoArchive, releaseStaleCheckouts };

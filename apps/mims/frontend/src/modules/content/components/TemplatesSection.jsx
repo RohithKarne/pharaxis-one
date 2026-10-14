@@ -5,6 +5,11 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
+import { DEFAULT_LANGUAGES } from './ContentUtils'
+
+// The kinds of template the letter builder uses ("Transmission" was never read).
+const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email']
 
 function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const authHeaders = useMemo(
@@ -19,6 +24,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     body_html: template?.body_html || template?.body || '',
     expiry_date: template?.expiry_date ? String(template.expiry_date).slice(0, 10) : '',
     folder_id: template?.folder_id || '',
+    language: template?.language || 'en',
   })
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -27,6 +33,22 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const [caseResults, setCaseResults] = useState([])
   const [selectedCase, setSelectedCase] = useState(null)
   const [caseSearching, setCaseSearching] = useState(false)
+  // The organisation's languages (Settings > Language), else the defaults.
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
+  useEffect(() => {
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : { picklists: [] }))
+      .then(d => { if ((d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
+  }, [authHeaders])
+  // The fields a template can use, from the server's one list.
+  const [mergeFields, setMergeFields] = useState([])
+  useEffect(() => {
+    httpFetch('/api/cm/merge-fields', { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : { fields: [] }))
+      .then(d => setMergeFields(d.fields || []))
+      .catch(() => setMergeFields([]))
+  }, [authHeaders])
 
   useEffect(() => {
     if (caseSearch.trim().length < 2) return
@@ -42,6 +64,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   }, [authHeaders, caseSearch])
 
   async function handleSave() {
+    if (!form.folder_id) return toast.warn('Folder is required.')
     if (!form.name.trim()) return toast.warn('Template name is required.')
     if (!form.body_html || form.body_html === '<p></p>') return toast.warn('Body is required.')
     setSaving(true)
@@ -90,19 +113,22 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
         <div className="cm-drawer-body">
           <div className="cm-form-group">
             <label className="cm-form-label">Template Type <span className="required">*</span></label>
-            <select className="cm-form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
-              <option>Response</option>
-              <option>Transmission</option>
-              <option>Correspondence</option>
-              <option>Email</option>
-              <option>Acknowledgment</option>
+            <select aria-label="Template Type" className="cm-form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
+              {TEMPLATE_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="cm-form-group">
-            <label className="cm-form-label">Folder</label>
+            <label className="cm-form-label">Folder <span className="required">*</span></label>
             <select aria-label="Folder" className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
-              <option value="">— No folder —</option>
+              <option value="">— Select Folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div className="cm-form-group">
+            <label className="cm-form-label">Language</label>
+            <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+              {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {!languages.some(l => l.value === form.language) && <option value={form.language}>{form.language}</option>}
             </select>
           </div>
           <div className="cm-form-group">
@@ -115,7 +141,8 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Body <span className="required">*</span></label>
-            <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} />
+            <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} mergeFields={mergeFields} />
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Use Insert field to add case data — the requester, product, question, dates and more.</p>
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Expiry Date</label>
@@ -129,7 +156,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
               <label className="cm-form-label">Lifecycle Status</label>
               <div><StatusBadge status={template.status || 'Draft'} /></div>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                Status changes via Approve / Publish / Archive on the list. Editing approved or published content returns it to Draft for re-approval.
+                Status changes via Approve / Publish / Archive on the list. Editing approved wording returns it to Draft; a published template changes through Revise.
               </p>
             </div>
           )}
@@ -138,7 +165,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           <div style={{ padding: '0 24px 16px', borderTop: '1px solid var(--border)' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 8px', fontWeight: 600 }}>MERGE FIELD PREVIEW</p>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-              Supported fields: {'{{case_number}} {{case_type}} {{contact_name}} {{contact_email}} {{patient_name}} (initials) {{product_name}} {{agent_name}} {{org_name}} {{date}}'}
+              Pick a case to see the template with its data.
             </p>
             <div style={{ marginBottom: 8 }}>
               <div style={{ position: 'relative' }}>
@@ -213,6 +240,13 @@ export default function TemplatesSection({ token }) {
   const [editTemplate, setEditTemplate] = useState(null)
   const [historyTemplate, setHistoryTemplate] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const { hasCapability, hasModuleAccess } = useAuth()
+  // A letter is filed on a case, so making one needs Cases and Update case.
+  const canMakeLetter = hasModuleAccess('mims_core') && hasCapability('case.update')
+  // Approve and publish are electronic signatures: password and reason.
+  const [esign, setEsign] = useState(null)
+  const [esignPw, setEsignPw] = useState('')
+  const [esignReason, setEsignReason] = useState('')
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
@@ -238,13 +272,42 @@ export default function TemplatesSection({ token }) {
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
 
-  async function transition(t, action) {
+  async function transition(t, action, signature = {}) {
     try {
-      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders, body: JSON.stringify(signature) })
       const d = await res.json().catch(() => ({}))
-      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1) }
-      else toast.error(d.error || 'Action failed.')
+      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1); return true }
+      toast.error(d.error || 'Action failed.')
     } catch { toast.error('Network error.') }
+    return false
+  }
+
+  // Make a letter for a case from a published template; it is filed on the case.
+  const [letter, setLetter] = useState(null)
+  async function makeLetter() {
+    if (!letter.caseNumber.trim()) return toast.warn('Enter the case number.')
+    setLetter(p => ({ ...p, busy: true }))
+    try {
+      const res = await httpFetch(`/api/cm/templates/${letter.t.id}/generate`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ case_number: letter.caseNumber.trim() }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) setLetter(p => ({ ...p, busy: false, result: d }))
+      else { toast.error(d.error || 'The letter could not be made.'); setLetter(p => ({ ...p, busy: false })) }
+    } catch { toast.error('Network error.'); setLetter(p => ({ ...p, busy: false })) }
+  }
+
+  // The published version stays in letters while its next version is drafted.
+  async function revise(t) {
+    try {
+      const res = await httpFetch(`/api/cm/templates/${t.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
+
+  function openEsign(t, action) { setEsign({ t, action }); setEsignPw(''); setEsignReason('') }
+  async function submitEsign() {
+    if (!esignPw || !esignReason.trim()) return toast.warn('Your password and a reason are required.')
+    if (await transition(esign.t, esign.action, { password: esignPw, reason: esignReason.trim() })) setEsign(null)
   }
 
   return (
@@ -256,11 +319,7 @@ export default function TemplatesSection({ token }) {
       <div className="cm-filters">
         <select className="cm-form-select" style={{ width: 180 }} value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value }))}>
           <option value="">All Types</option>
-          <option>Response</option>
-          <option>Transmission</option>
-          <option>Correspondence</option>
-          <option>Email</option>
-          <option>Acknowledgment</option>
+          {TEMPLATE_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
         <select className="cm-form-select" style={{ width: 160 }} value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
           <option value="">All Statuses</option>
@@ -292,6 +351,7 @@ export default function TemplatesSection({ token }) {
               <th>Type</th>
               <th>Folder</th>
               <th>Subject</th>
+              <th>Version</th>
               <th>Status</th>
               <th>Expiry</th>
               <th>Last Updated</th>
@@ -301,10 +361,14 @@ export default function TemplatesSection({ token }) {
           <tbody>
             {templates.map(t => (
               <tr key={t.id}>
-                <td style={{ fontWeight: 500 }}>{t.name}</td>
-                <td>{t.type}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {t.name}
+                  {t.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{t.revises_version}</div>}
+                </td>
+                <td>{t.type}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.language || 'en'}</div></td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{folders.find(f => f.id === t.folder_id)?.name || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{t.version}</td>
                 <td><StatusBadge status={t.status || 'Draft'} /></td>
                 <td style={{ fontSize: 12 }}>
                   {t.expiry_date
@@ -316,12 +380,15 @@ export default function TemplatesSection({ token }) {
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
+                    {t.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>}
+                    {t.status === 'Published' && canMakeLetter && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setLetter({ t, caseNumber: '', busy: false, result: null })}>Make letter</button>}
+                    {t.status === 'Published' && !t.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => revise(t)}>Revise</button>}
+                    {t.status === 'Published' && t.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
-                    {t.status === 'Draft' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'approve')}>Approve</button>}
-                    {t.status === 'Approved' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'publish')}>Publish</button>}
+                    {t.status === 'Draft' && hasCapability('content.approve') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'approve')}>Approve</button>}
+                    {t.status === 'Approved' && hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'publish')}>Publish</button>}
                     {t.status === 'Published' && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
-                    {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
+                    {(t.status === 'Approved' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
                   </div>
                 </td>
               </tr>
@@ -331,6 +398,55 @@ export default function TemplatesSection({ token }) {
       )}
       {showDrawer && (
         <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
+      )}
+      {letter && (
+        <div className="cm-modal-overlay" onClick={() => !letter.busy && setLetter(null)}>
+          <div className="cm-modal" style={{ width: 720, maxWidth: '96vw', maxHeight: '90vh', overflow: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px' }}>Make a letter — {letter.t.name}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+              Version {letter.t.version}. The template is filled with the case's data and the letter is filed on the case, under Attachments.
+            </p>
+            {!letter.result ? (
+              <>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }} htmlFor="letter-case">Case number</label>
+                <input id="letter-case" className="cm-form-input" style={{ marginBottom: 16 }} value={letter.caseNumber} onChange={e => setLetter(p => ({ ...p, caseNumber: e.target.value }))} placeholder="e.g. MI-289396" />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="cm-btn cm-btn-secondary" onClick={() => setLetter(null)} disabled={letter.busy}>Cancel</button>
+                  <button className="cm-btn cm-btn-primary" onClick={makeLetter} disabled={letter.busy}>{letter.busy ? 'Making…' : 'Make and file letter'}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="cm-letter-filed" role="status">
+                  Filed on case <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/cases/${letter.result.case_id}?section=attachments`}>{letter.result.case_number}</a> as “{letter.result.file_name}”.
+                </div>
+                <p style={{ margin: '12px 0 4px', fontWeight: 600 }}>{letter.result.rendered_subject}</p>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 12, fontSize: 13 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(letter.result.rendered_body || '') }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <button className="cm-btn cm-btn-primary" onClick={() => setLetter(null)}>Done</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {esign && (
+        <div className="cm-modal-overlay" onClick={() => setEsign(null)}>
+          <div className="cm-modal" style={{ width: 460, maxWidth: '94vw', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px' }}>{esign.action === 'approve' ? 'Approve template' : 'Publish template'}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+              {esign.t.name} · version {esign.t.version}. {esign.action === 'publish' ? 'Once published it can be used in letters.' : 'You are signing that the wording is correct.'}
+            </p>
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
+            <input aria-label="Your Password" type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={esignPw} onChange={e => setEsignPw(e.target.value)} autoComplete="current-password" />
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>
+            <input aria-label="Reason" className="cm-form-input" style={{ marginBottom: 16 }} value={esignReason} onChange={e => setEsignReason(e.target.value)} placeholder="Reason for this action" />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="cm-btn cm-btn-secondary" onClick={() => setEsign(null)}>Cancel</button>
+              <button className="cm-btn cm-btn-primary" onClick={submitEsign}>{esign.action === 'approve' ? 'Sign and approve' : 'Sign and publish'}</button>
+            </div>
+          </div>
+        </div>
       )}
       {historyTemplate && (
         <VersionHistoryModal entityType="template" entityId={historyTemplate.id} entityName={historyTemplate.name} token={token} onClose={() => setHistoryTemplate(null)} />

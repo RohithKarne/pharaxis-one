@@ -50,6 +50,21 @@ const HEADER_KEYS = ['case_number', 'case_type', 'org_id', 'date_of_intake', 'in
 //   1 = Reporter & Patient, 2 = Product & Details, 3 = Response & Workflow.
 // Only an added field (no core key, not a contact field) can be moved: the
 // rest are drawn by their own screen.
+// A show-only-when rule in words. Customize Forms showed these until it was
+// retired; the rules stay (seeded, e.g. MI Follow-up Due Date) and the case
+// form still applies them, so the screen says when such a field appears.
+const OP_WORDS = { '=': 'is', '==': 'is', '!=': 'is not', '<>': 'is not', '>': 'is over', '>=': 'is at least', '<': 'is under', '<=': 'is at most', EMPTY: 'is empty', NOT_EMPTY: 'is filled in', IN: 'is one of', NOT_IN: 'is not one of' };
+function describeCondition(c) {
+  if (!c || typeof c !== 'object') return '';
+  if (Array.isArray(c.and)) return c.and.map(describeCondition).filter(Boolean).join(' and ');
+  if (Array.isArray(c.or)) return [...new Set(c.or.map(describeCondition).filter(Boolean))].join(' or ');
+  const op = String(c.op || c.operator || '=').toUpperCase();
+  if ((op === '=' || op === '==') && ['true', '1', true, 1].includes(c.value)) return `${c.field} is ticked`;
+  if (op === 'EMPTY' || op === 'NOT_EMPTY') return `${c.field} ${OP_WORDS[op]}`;
+  return `${c.field} ${OP_WORDS[op] || op} ${Array.isArray(c.value) ? c.value.join(', ') : c.value}`;
+}
+const parseJson = (v) => { if (!v || typeof v === 'object') return v || {}; try { return JSON.parse(v); } catch { return {}; } };
+
 function stepOf(f) {
   if (f.section_name === 'Contact / Requestor') return { step: 1, label: 'Step 1 · Reporter & Patient', movable: false };
   if (f.core_key && HEADER_KEYS.includes(f.core_key)) return { step: 0, label: 'Case header', movable: false };
@@ -113,6 +128,17 @@ router.get('/case-fields', authenticate, requireRole(...ADMIN), async (req, res)
       if (!existing || (existing.org_id === null && row.org_id !== null)) byKey.set(key, row);
     }
 
+    const [visibilityRules] = await pool.execute(
+      `SELECT section_name, field_name, condition_json, action_json FROM case_form_rules
+        WHERE org_id = ? AND rule_type = 'visibility' AND is_active = 1 AND case_type IN (?, 'ALL')`,
+      [orgId, caseType]
+    );
+    const shownWhen = new Map(visibilityRules.map(rule => {
+      const words = describeCondition(parseJson(rule.condition_json));
+      const hide = parseJson(rule.action_json).action === 'hide';
+      return [cutKey(rule.section_name, rule.field_name), words && (hide ? `Hidden when ${words}` : `Shown only when ${words}`)];
+    }));
+
     const fields = [...byKey.values()].map(r => ({
       ...r,
       is_required: !!r.is_required,
@@ -124,6 +150,7 @@ router.get('/case-fields', authenticate, requireRole(...ADMIN), async (req, res)
       step: stepOf(r),
       e2b: e2bTag(r.section_name, r.field_name),
       removed_in_cleanup: CUT_FIELD_KEYS.has(cutKey(r.section_name, r.field_name)),
+      shown_when: shownWhen.get(cutKey(r.section_name, r.field_name)) || null,
     }));
 
     // Section on / off for this case type (case_form_definition). Switching a

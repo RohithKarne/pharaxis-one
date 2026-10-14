@@ -10,6 +10,8 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireModule } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { handoffDays } = require('../../services/transmissionTargets');
+const { addWorkingDays } = require('../../utils/workingDays');
 
 function hasPlatformAdminScope(req) {
   return hasGlobalAdminScope(req.user);
@@ -41,6 +43,37 @@ async function hasCaseAccess(req, caseId) {
 // GET /api/admin/transmission-audit-trail/cases-summary — cases with outbound transmissions
 // The Transmissions page is for everyone with the Transmissions module, agents
 // included; rows stay limited to the caller's organisation (MIPM-150).
+// Reconciliation (MI response and hand-off review, 14 Oct 2026): AE and PC cases
+// that have not left MIMS — no successful transmission to a safety or quality
+// system and no hand-off to a person — with the date they were due. The list
+// MI and safety teams compare each month so no adverse event or complaint is
+// lost between them.
+router.get('/transmission-reconciliation', authenticate, requireModule('transmissions'), async (req, res) => {
+  try {
+    const params = [];
+    let where = `c.is_deleted = 0 AND c.case_type IN ('AE', 'PC')
+      AND NOT EXISTS (SELECT 1 FROM transmission_audit_trail t WHERE t.case_id = c.id AND UPPER(t.status) = 'SENT')
+      AND NOT EXISTS (SELECT 1 FROM case_ae_transmissions a WHERE a.case_id = c.id)
+      AND NOT EXISTS (SELECT 1 FROM case_pc_transmissions p WHERE p.case_id = c.id)`;
+    if (!hasPlatformAdminScope(req)) { where += ' AND c.org_id = ?'; params.push(req.user.orgId); }
+    const [rows] = await pool.execute(
+      `SELECT c.id, c.case_number, c.case_type, c.org_id, COALESCE(c.awareness_date, c.date_received, DATE(c.created_at)) AS aware_on
+         FROM cases c WHERE ${where}
+        ORDER BY aware_on ASC, c.id ASC LIMIT 500`, params);
+    const today = new Date().toISOString().slice(0, 10);
+    const daysCache = new Map();
+    const out = [];
+    for (const r of rows) {
+      const key = `${r.org_id}:${r.case_type}`;
+      if (!daysCache.has(key)) daysCache.set(key, await handoffDays(r.org_id, r.case_type));
+      const aware = r.aware_on instanceof Date ? r.aware_on.toISOString().slice(0, 10) : String(r.aware_on || '').slice(0, 10);
+      const due = aware ? addWorkingDays(aware, daysCache.get(key)) : null;
+      out.push({ case_id: r.id, case_number: r.case_number, case_type: r.case_type, aware_on: aware || null, due, late: !!due && today > due });
+    }
+    res.json({ rows: out, total: out.length, late: out.filter(r => r.late).length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/transmission-audit-trail/cases-summary', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { search, page = 1, limit = 50 } = req.query;
@@ -140,7 +173,7 @@ router.get('/transmission-audit-trail', authenticate, requireModule('transmissio
 });
 
 // GET /api/admin/transmission-audit-trail/:caseId — list transmissions for a specific case
-router.get('/transmission-audit-trail/:caseId', authenticate, async (req, res) => {
+router.get('/transmission-audit-trail/:caseId', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { caseId } = req.params;
     if (!await hasCaseAccess(req, caseId)) return res.status(404).json({ error: 'Case not found.' });
@@ -155,31 +188,9 @@ router.get('/transmission-audit-trail/:caseId', authenticate, async (req, res) =
   }
 });
 
-// POST /api/admin/transmission-audit-trail — record a transmission (called by integration layer)
-router.post('/transmission-audit-trail', authenticate, async (req, res) => {
-  try {
-    const { case_id, target_system, payload_summary, status, response_code } = req.body;
-    if (!case_id || !target_system) {
-      return res.status(400).json({ error: 'case_id and target_system are required.' });
-    }
-    if (!await hasCaseAccess(req, case_id)) return res.status(404).json({ error: 'Case not found.' });
-
-    const [result] = await pool.execute(
-      `INSERT INTO transmission_audit_trail (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [case_id, req.user.userId, req.user.email,
-       target_system, payload_summary || null, status || 'Sent', response_code || null]
-    );
-    res.status(201).json({ message: 'Transmission recorded.', id: result.insertId });
-  } catch (err) {
-    console.error('POST /transmission-audit-trail error:', err);
-    await logTransmissionError(
-      req.user?.orgId, req.body?.case_id, req.body?.target_system,
-      'API_ERROR', err.message, { route: 'POST transmission-audit-trail', user: req.user?.email }
-    );
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
+// The transmission audit trail is written by the server when a hand-off or
+// ICSR is sent. A route let anyone in the organisation write their own
+// entries into it, and nothing called it (access review): removed.
 
 // GET /api/admin/transmission-error-logs
 router.get('/transmission-error-logs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -210,7 +221,7 @@ router.get('/transmission-error-logs', authenticate, requireRole('admin', 'platf
 });
 
 // POST /api/admin/transmission-screen-audit — log a user interaction event
-router.post('/transmission-screen-audit', authenticate, async (req, res) => {
+router.post('/transmission-screen-audit', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { action, context } = req.body;
     if (!action) return res.status(400).json({ error: 'action is required.' });

@@ -20,6 +20,8 @@ const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory } = require('../../services/cmLineage');
 const bcrypt = require('bcrypt');
 
 // MIPM-191: a module's status came straight from the request, so an author could
@@ -62,11 +64,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
+// Modules have no review step (approval is signed directly); "Under Review"
+// was offered on screen and led nowhere.
 const MODULE_STATUSES = new Set([
   'Draft',
   'CheckedOut',
   'Pending',
-  'Under Review',
   'Approved',
   'Published',
   'Archived',
@@ -281,9 +284,12 @@ router.get('/modules', authenticate, async (req, res) => {
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
     const draftsHidden = await publishedOnly(req);
+    const folderFilter = await folderFilterSql(req.user, 'm.folder_id');
     const buildQuery = (includeCreatedBy) => {
       let query = `
-        SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''}
+        SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''},
+               (SELECT r.id FROM cm_modules r WHERE r.revision_of = m.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
+               (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_modules o WHERE o.id = m.revision_of) AS revises_version
         FROM cm_modules m
         LEFT JOIN cm_folders f ON m.folder_id = f.id
         ${includeCreatedBy ? 'LEFT JOIN users u ON m.created_by = u.id' : ''}
@@ -296,7 +302,9 @@ router.get('/modules', authenticate, async (req, res) => {
       }
       if (status) { query += ' AND m.status = ?'; params.push(status); }
       if (draftsHidden) query += " AND m.status = 'Published'";
+      query += folderFilter;
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
+      if (req.query.language) { query += ' AND m.language = ?'; params.push(String(req.query.language)); }
       if (search) {
         query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
         params.push(`%${search}%`, `%${search}%`, `%${search}%`);
@@ -321,6 +329,20 @@ router.get('/modules', authenticate, async (req, res) => {
   } catch (err) {
     console.error('GET /cm/modules error:', err);
     res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
+  }
+});
+
+// GET /api/cm/modules/:id/versions — the version history of the whole line of
+// versions. The screen had no history for modules although it was recorded.
+router.get('/modules/:id/versions', authenticate, async (req, res) => {
+  try {
+    const row = await getScopedModule(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Module not found.' });
+    if (await publishedOnly(req)) return res.status(404).json({ error: 'Module not found.' });
+    res.json({ versions: await lineageHistory('module', row.id) });
+  } catch (err) {
+    console.error('GET /cm/modules/:id/versions error:', err);
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 
@@ -369,6 +391,7 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
       return res.status(404).json({ error: 'Folder not found for active organisation.' });
     }
 
+    if (status && !MODULE_STATUSES.has(String(status).trim())) return res.status(400).json({ error: `A module cannot be saved as ${status}.` });
     const resolvedStatus = isPastDate(expiry_date) ? 'Archived' : normalizeStatus(status, 'Draft');
     // MIPM-220: a module could be created already Approved or Published, by its
     // author, with no approval at all. New modules start as Draft or Pending.
@@ -482,9 +505,21 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       }
     }
 
+    // A status modules do not have is refused, not quietly ignored.
+    if (status && !MODULE_STATUSES.has(String(status).trim())) {
+      await conn.rollback();
+      return res.status(400).json({ error: `A module cannot be saved as ${status}.` });
+    }
     const nextStatus = isPastDate(expiry_date || existing.expiry_date)
       ? 'Archived'
       : normalizeStatus(status, existing.status || 'Draft');
+    // A published module stays in use while it changes: its next version is
+    // drafted through Revise. Setting it back to Draft stopped every document
+    // built from it from being sent until it was approved and published again.
+    if (existing.status === 'Published' && !['Published', 'Archived'].includes(nextStatus)) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'A published module stays in use while it changes: use Revise to draft its next version.' });
+    }
     if (!(await moduleStatusAllowed(req, nextStatus, existing.status))) {
       await conn.rollback();
       return res.status(403).json({ error: `You do not have permission to save a module as ${nextStatus}.` });
@@ -574,6 +609,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
     if (signing) {
       const versionStr = `${updated.version_major || 1}.${updated.version_minor || 0}`;
       await addVersionHistory('module', updated.id, versionStr, nextStatus, String(req.body.esign_reason).trim(), req.user.userId);
+      if (nextStatus === 'Published' && updated.revision_of) await supersedeModule(updated, versionStr, req.user);
     }
 
     const movedToArchived = existing.status !== 'Archived' && updated?.status === 'Archived';
@@ -595,6 +631,57 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
     return res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
   } finally {
     conn.release();
+  }
+});
+
+// Publishing a revision: documents built from the old version now use the new
+// one, and the old version is archived as superseded — without the archive
+// cascade, which would archive those documents.
+async function supersedeModule(revision, newVersion, user) {
+  const [[old]] = await pool.execute(
+    "SELECT m.id, m.module_id, m.version_major, m.version_minor, f.org_id FROM cm_modules m JOIN cm_folders f ON f.id = m.folder_id WHERE m.id = ? AND m.status = 'Published'",
+    [revision.revision_of]);
+  if (!old) return;
+  const [docs] = await pool.execute(
+    `SELECT d.id, d.selected_modules FROM cm_documents d JOIN cm_folders f ON f.id = d.folder_id
+      WHERE f.org_id = ? AND d.response_doc_type = 'Module' AND d.selected_modules IS NOT NULL`, [old.org_id]);
+  for (const d of docs) {
+    const ids = parseJsonField(d.selected_modules, []);
+    if (!Array.isArray(ids) || !ids.map(Number).includes(Number(old.id))) continue;
+    const next = ids.map((x) => (Number(x) === Number(old.id) ? Number(revision.id) : Number(x)));
+    await pool.execute('UPDATE cm_documents SET selected_modules = ? WHERE id = ?', [JSON.stringify(next), d.id]);
+  }
+  await pool.execute("UPDATE cm_modules SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?", [user.userId, old.id]);
+  await addVersionHistory('module', old.id, `${old.version_major || 1}.${old.version_minor || 0}`, 'Archived', `Superseded by version ${newVersion}.`, user.userId);
+  await audit(user.userId, user.email, 'SUPERSEDE', 'cm_module', old.id, { superseded_by: revision.id, new_version: newVersion });
+}
+
+// POST /api/cm/modules/:id/revise — draft the next version of a published module.
+// The published one stays in letters and documents until this one is published.
+router.post('/modules/:id/revise', authenticate, async (req, res) => {
+  try {
+    await ensureCmModulesSchema();
+    const src = await getScopedModule(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'Module not found.' });
+    if (src.status !== 'Published') return res.status(400).json({ error: 'Only a published module is revised. Edit a draft directly.' });
+    const [[open]] = await pool.execute(
+      "SELECT id FROM cm_modules WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
+    if (open) return res.status(409).json({ error: 'This module already has a revision in progress.', id: open.id });
+    const [result] = await pool.execute(
+      `INSERT INTO cm_modules (module_id, folder_id, module_type, name, content_html, file_path, file_name, file_size, file_mime,
+          status, version_major, version_minor, expiry_date, activation_date, language, search_tags, usage_instructions,
+          document_category, standard_response_text, publish_as_pdf, send_as_pdf, attributes, revision_of, created_by)
+       SELECT module_id, folder_id, module_type, name, content_html, file_path, file_name, file_size, file_mime,
+          'Draft', version_major, version_minor, expiry_date, activation_date, language, search_tags, usage_instructions,
+          document_category, standard_response_text, publish_as_pdf, send_as_pdf, attributes, id, ?
+         FROM cm_modules WHERE id = ?`, [req.user.userId, src.id]);
+    const version = `${src.version_major || 1}.${src.version_minor || 0}`;
+    await addVersionHistory('module', result.insertId, version, 'Draft', `Revision of published version ${version} started.`, req.user.userId);
+    await audit(req.user.userId, req.user.email, 'REVISE', 'cm_module', result.insertId, { revision_of: src.id, from_version: version });
+    return res.status(201).json({ message: 'Revision started. The published version stays in use until this one is published.', id: result.insertId });
+  } catch (err) {
+    console.error('POST /cm/modules/:id/revise error:', err);
+    return res.status(500).json({ error: 'Server error.' });
   }
 });
 

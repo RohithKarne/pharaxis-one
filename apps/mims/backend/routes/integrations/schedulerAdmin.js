@@ -1,12 +1,12 @@
 'use strict';
 
 const express = require('express');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { getJobStatus } = require('../../services/scheduler');
 
 const router = express.Router();
 
-router.get('/scheduler/jobs', authenticate, (_req, res) => {
+router.get('/scheduler/jobs', authenticate, requireRole('admin', 'platform_admin'), (_req, res) => {
   try {
     return res.json({ jobs: getJobStatus() });
   } catch (_error) {

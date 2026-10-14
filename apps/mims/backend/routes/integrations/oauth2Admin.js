@@ -1,12 +1,12 @@
 'use strict';
 
 const express = require('express');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { getToken, revokeToken } = require('../../services/oauth2Service');
 
 const router = express.Router();
 
-router.post('/integrations/oauth2/token', authenticate, async (req, res) => {
+router.post('/integrations/oauth2/token', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { integrationType } = req.body;
     await getToken(req.user.orgId, integrationType);
@@ -17,7 +17,7 @@ router.post('/integrations/oauth2/token', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/integrations/oauth2/token', authenticate, async (req, res) => {
+router.delete('/integrations/oauth2/token', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { integrationType } = req.body;
     await revokeToken(req.user.orgId, integrationType);

@@ -25,6 +25,10 @@ const { fireIntegrationEvent } = require('./integrationEngine');
 
 const PAYLOAD_VERSION = 'mims-canonical-intake/v1';
 
+const { pcHandoffCheck } = require('./pcHandoffCheck');
+const { handoffDays } = require('./transmissionTargets');
+const { addWorkingDays } = require('../utils/workingDays');
+
 async function _rows(sql, params) {
   try { const [rows] = await pool.execute(sql, params); return rows; }
   catch (err) {
@@ -48,55 +52,26 @@ async function _one(sql, params) {
  * apply. A product complaint needs a reporter we can go back to, an identifiable
  * product, and a description of what went wrong.
  */
-async function _assessComplaintReadiness(caseId) {
-  const reporter = await _one(
-    `SELECT id FROM case_contacts
-      WHERE case_id = ? AND LOWER(contact_role) = 'reporter'
-        AND (email IS NOT NULL OR phone IS NOT NULL)
-      ORDER BY is_primary DESC, id ASC LIMIT 1`,
-    [caseId]
-  );
-  const intake = await _one(
-    'SELECT product_name, complaint_description FROM case_pc_intake WHERE case_id = ? ORDER BY id DESC LIMIT 1',
-    [caseId]
-  );
-  const general = await _one(
-    `SELECT g.complaint_description
-       FROM case_pc_versions v JOIN case_pc_general g ON g.version_id = v.id
-      WHERE v.case_id = ? ORDER BY v.id DESC LIMIT 1`,
-    [caseId]
-  );
-
-  const productName = intake?.product_name || null;
-  const complaint = intake?.complaint_description || general?.complaint_description || null;
-
-  const elements = [
-    {
-      key: 'reporter',
-      satisfied: !!reporter,
-      reason: reporter ? 'Reporter has email or phone.' : 'Reporter with email or phone is missing.',
-    },
-    {
-      key: 'product',
-      satisfied: !!productName,
-      reason: productName ? 'Product is identified.' : 'Product name is missing.',
-    },
-    {
-      key: 'complaint',
-      satisfied: !!complaint,
-      reason: complaint ? 'Complaint description exists.' : 'Complaint description is missing.',
-    },
-  ];
-  const score = elements.filter(e => e.satisfied).length;
-  return { score, required: elements.length, elements, blocking_for_submission: score < elements.length };
-}
-
 /**
  * Readiness for handoff. AE reuses caseValidityService so there is exactly one
  * implementation of the ICH validity test in the codebase.
  */
+// PC readiness is the same check as Route to Quality (services/pcHandoffCheck.js,
+// 14 Oct 2026): one test, so the two hand-offs never disagree. Its blocking
+// lines become the elements; the lot, a counterfeit and the Field Alert date
+// travel as notes.
+const PC_ELEMENT_KEY = { complainant: 'reporter', product: 'product', description: 'complaint', safety: 'safety' };
+async function _assessComplaintReadinessShared(caseId) {
+  const check = await pcHandoffCheck(caseId);
+  const blocking = check.items.filter(i => i.level === 'block');
+  const elements = blocking.map(i => ({ key: PC_ELEMENT_KEY[i.key] || i.key, label: i.label, satisfied: !!i.ok, reason: i.ok ? (i.detail || 'Present.') : (i.detail || `${i.label} is missing.`) }));
+  const score = elements.filter(e => e.satisfied).length;
+  const notes = check.items.filter(i => i.level !== 'block').map(i => ({ key: i.key, label: i.label, ok: !!i.ok, detail: i.detail || '' }));
+  return { score, required: elements.length, elements, notes, blocking_for_submission: !check.ready };
+}
+
 async function assessReadiness({ orgId, caseId, caseType }) {
-  if (caseType === 'PC') return _assessComplaintReadiness(caseId);
+  if (caseType === 'PC') return _assessComplaintReadinessShared(caseId);
   const validity = await assess({ orgId, caseId });
   if (!validity) return null;
   return { ...validity, required: 4 };
@@ -406,12 +381,42 @@ async function listTransmissions({ caseId }) {
   );
 }
 
-/** Enabled integrations for the org, as candidate handoff targets. */
-async function listTargets({ orgId }) {
-  return _rows(
+/**
+ * Enabled integrations for the org that receive this case type's hand-off — the
+ * safety system for AE, the quality system for PC (Transmission Setup, 14 Oct
+ * 2026). It listed every enabled integration, CRM and content feeds included,
+ * though only the subscribed ones were ever sent to.
+ */
+async function listTargets({ orgId, caseType = null }) {
+  const rows = await _rows(
     'SELECT id, integration_type, endpoint_url, event_triggers FROM org_integrations WHERE org_id = ? AND enabled = 1',
     [orgId]
   );
+  if (!caseType) return rows;
+  const event = caseType === 'PC' ? 'case.pc.handoff' : 'case.ae.handoff';
+  const subscribed = (r) => { try { const t = typeof r.event_triggers === 'string' ? JSON.parse(r.event_triggers) : (r.event_triggers || []); return Array.isArray(t) && t.includes(event); } catch { return false; } };
+  return rows.filter(subscribed);
 }
 
-module.exports = { buildPayload, assessReadiness, transmit, listTransmissions, listTargets, PAYLOAD_VERSION };
+/**
+ * When the case is due at its target: the awareness date (AE) or Date Received
+ * (PC) plus the working days set on Transmission Setup, and whether it was, or
+ * is now, late.
+ */
+function isHandoffSend(h) {
+  return String(h.status).toUpperCase() === 'SENT' && String(h.target_system || '') !== 'MI Email';
+}
+
+async function handoffDeadline({ orgId, caseId, caseType, awarenessDate, history }) {
+  if (!['AE', 'PC'].includes(caseType) || !awarenessDate) return null;
+  const days = await handoffDays(orgId, caseType);
+  const due = addWorkingDays(awarenessDate, days);
+  // An MI letter emailed on the case is written to the same trail ('MI Email',
+  // 'Sent'); it is not the hand-off and must not stop the clock.
+  const sent = (history || []).filter(h => isHandoffSend(h))
+    .map(h => String(h.timestamp instanceof Date ? h.timestamp.toISOString() : h.timestamp).slice(0, 10)).sort()[0] || null;
+  const today = new Date().toISOString().slice(0, 10);
+  return { from: String(awarenessDate instanceof Date ? awarenessDate.toISOString() : awarenessDate).slice(0, 10), days, due, sent_on: sent, late: sent ? sent > due : today > due };
+}
+
+module.exports = { buildPayload, assessReadiness, transmit, listTransmissions, listTargets, handoffDeadline, isHandoffSend, PAYLOAD_VERSION };

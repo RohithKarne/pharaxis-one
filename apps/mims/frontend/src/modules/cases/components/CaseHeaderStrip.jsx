@@ -60,6 +60,9 @@ export default function CaseHeaderStrip({ caseData, infoForm = {}, statuses = []
       .then(d => { if (!cancelled) setLinks(d.links || []) })
       .catch(() => {})
     return () => { cancelled = true }
+    // Keyed on the token, not the headers object: the page builds a new object
+    // each render, and depending on it would refetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, headers?.Authorization])
 
   useEffect(() => {

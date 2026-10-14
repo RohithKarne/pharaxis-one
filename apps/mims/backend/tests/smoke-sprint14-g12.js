@@ -125,22 +125,6 @@ async function main() {
       users: inboxUsers.data.users.length,
     };
 
-    const reportVolume = await req('/api/reports/case-volume', { token });
-    assert(reportVolume.ok, `GET /api/reports/case-volume failed (${reportVolume.status})`);
-    assert(Array.isArray(reportVolume.data?.data), 'case-volume payload missing data array');
-
-    const reportStatus = await req('/api/reports/case-status', { token });
-    assert(reportStatus.ok, `GET /api/reports/case-status failed (${reportStatus.status})`);
-
-    const reportHealth = await req('/api/reports/system-health', { token });
-    assert(reportHealth.ok, `GET /api/reports/system-health failed (${reportHealth.status})`);
-
-    summary.checks.reports = {
-      case_volume_status: reportVolume.status,
-      case_status_status: reportStatus.status,
-      system_health_status: reportHealth.status,
-    };
-
     const newGroupName = `S14-G12-DEP-${Date.now()}`;
     const createGroup = await req('/api/admin/security-groups', {
       method: 'POST',

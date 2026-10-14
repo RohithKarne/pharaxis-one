@@ -69,6 +69,7 @@ export default function CaseContactsTab({
   getFieldConfig,
   getPicklistOptions,
   onCountChange,
+  readOnly = false,
 }) {
   const [contacts, setContacts] = useState([])
   const [contactSearch, setContactSearch] = useState('')
@@ -246,9 +247,11 @@ export default function CaseContactsTab({
 
   return (
     <div id="tab-contacts" className="cf-tab-pane">
-      <div className="cf-section-header-row">
-        <button className="cf-add-btn" onClick={() => { setEditingId(null); setAddContactForm(BLANK_CONTACT); setShowContactAdd(true) }}>+ Add Contact</button>
-      </div>
+      {!readOnly && (
+        <div className="cf-section-header-row">
+          <button className="cf-add-btn" onClick={() => { setEditingId(null); setAddContactForm(BLANK_CONTACT); setShowContactAdd(true) }}>+ Add Contact</button>
+        </div>
+      )}
 
       {contacts.length === 0 && !showContactAdd && <div className="cf-empty-msg">No contacts added yet.</div>}
 
@@ -268,8 +271,10 @@ export default function CaseContactsTab({
             {c.email && <span> · {c.email}</span>}
             {c.phone && <span> · {c.phone}</span>}
           </div>
-          <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
-          <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
+          {!readOnly && <>
+            <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
+            <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
+          </>}
           {/* One action per case: it erases every reporter record on the case. */}
           {canErase && c.id === contacts.find(x => x.contact_role === 'reporter' && hasIdentity(x))?.id && (
             <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>

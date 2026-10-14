@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // resolve ("Failed to parse URL from /api/..."). These are render/navigation
 // tests, so the network is stubbed rather than exercised.
 beforeEach(() => {
-  global.fetch = vi.fn(() => Promise.resolve({
+  globalThis.fetch = vi.fn(() => Promise.resolve({
     ok: true,
     status: 200,
     json: () => Promise.resolve({}),
@@ -75,7 +75,6 @@ vi.mock('../modules/content/components/FolderManager', () => ({ default: ({ show
 vi.mock('../modules/content/components/DocumentsSection', () => ({ default: () => <div data-testid="documents-section">documents</div> }))
 vi.mock('../modules/content/components/ModulesSection', () => ({ default: () => <div data-testid="modules-section">modules</div> }))
 vi.mock('../modules/content/components/FAQsSection', () => ({ default: () => <div data-testid="faqs-section">faqs</div> }))
-vi.mock('../modules/content/components/MergeReportsSection', () => ({ default: () => <div data-testid="merge-reports-section">merge</div> }))
 vi.mock('../modules/content/components/TemplatesSection', () => ({ default: () => <div data-testid="templates-section">templates</div> }))
 vi.mock('../modules/content/components/BrowseSection', () => ({ default: () => <div data-testid="browse-section">browse</div> }))
 vi.mock('../modules/content/components/CMSettingsSection', () => ({ default: () => <div data-testid="settings-section">settings</div> }))
@@ -156,8 +155,10 @@ describe('Sprint 21 split regression: ContentPage', () => {
     )
 
     expect(await screen.findByTestId('documents-section')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Browse Content/ }))
-    expect(await screen.findByTestId('browse-section')).toBeInTheDocument()
+    // Browse Content left this tab bar for the main menu's Browse Content page
+    // (content review, 2026-10-14); the switch is checked on Modular Documents.
+    fireEvent.click(screen.getByRole('button', { name: /^Modular Documents/ }))
+    expect(await screen.findByTestId('modules-section')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
     expect(await screen.findByTestId('settings-section')).toBeInTheDocument()
   })

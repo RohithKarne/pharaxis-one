@@ -288,6 +288,8 @@ app.get('/api/users', authenticate, async (req, res) => {
 function mountRoutes(r, prefix = '') {
   // Auth
   r.use(`${prefix}/auth`, authRateLimiter, require('./routes/auth'));
+  // Every case screen's data: the Cases module and View (or Update) for that case.
+  r.use(prefix || '/', require('./middleware/caseAccess').caseAccess);
   r.use(`${prefix}/inbox`, require('./routes/inbox'));
 
   // Admin
@@ -319,11 +321,10 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/consent'));
   r.use(`${prefix}/admin`, require('./routes/admin/emailCaseImport'));
   r.use(`${prefix}/admin`, require('./routes/admin/caseFields'));
+  r.use(`${prefix}/admin`, require('./routes/admin/miResponseSettings'));
+  r.use(`${prefix}/admin`, require('./routes/admin/transmissionSetup'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
-  r.use(`${prefix}/admin`, require('./routes/admin/customizeForms'));
-  r.use(`${prefix}/admin`, require('./routes/admin/caseFormRules'));
-  r.use(`${prefix}/admin`, require('./routes/admin/reportsAccess'));
   r.use(`${prefix}/admin`, require('./routes/admin/picklistsTable'));
   r.use(`${prefix}/admin`, require('./routes/admin/dashboardActivity'));
   r.use(`${prefix}/admin`, require('./routes/admin/userPreferences'));
@@ -333,7 +334,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/observability'));
   r.use(`${prefix}/admin`, require('./routes/admin/config'));
   r.use(`${prefix}/admin/orgs`, require('./routes/admin/orgs'));
-  r.use(`${prefix}/admin`, require('./routes/admin/reportAccessRequests'));
   r.use(`${prefix}/admin`, changeApprovals);
   r.use(`${prefix}/admin`, dependencyCheck);
   r.use(`${prefix}/admin`, require('./routes/admin/impactPreview'));
@@ -385,7 +385,6 @@ function mountRoutes(r, prefix = '') {
 
   // Canonical platform-admin endpoints
   r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin'));
-  r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin/reportsAccess'));
 
   // Cases & core
   r.use(prefix || '/', require('./routes/cases'));
@@ -401,14 +400,12 @@ function mountRoutes(r, prefix = '') {
     r.use(prefix || '/', require('./routes/chat'));
   }
   r.use(prefix || '/', require('./routes/reportModule'));
-  r.use(prefix || '/', require('./routes/reports'));
   r.use(prefix || '/', require('./routes/help'));
   r.use(prefix || '/', require('./routes/integrations/integrationsAdmin'));
   r.use(prefix || '/', require('./routes/integrations/emirRules'));
   r.use(prefix || '/', require('./routes/integrations/mirIntegration'));
   r.use(prefix || '/', require('./routes/integrations/crmIntegration'));
   r.use(prefix || '/', require('./routes/integrations/caseImport'));
-  r.use(prefix || '/', require('./routes/integrations/scheduledExports'));
   r.use(prefix || '/', require('./routes/integrations/vaultAdmin'));
   r.use(prefix || '/', require('./routes/integrations/emirAdmin'));
   r.use(prefix || '/', require('./routes/integrations/vaultQuery'));
@@ -421,14 +418,17 @@ function mountRoutes(r, prefix = '') {
 
   // Content management
   // MIPM-175: Content Management changes follow the screen's access rules.
+  r.use(`${prefix}/cm`, require('./middleware/cmAccess').cmReadAccess);
   r.use(`${prefix}/cm`, require('./middleware/cmAccess').cmWriteAccess);
+  r.use(`${prefix}/cm`, require('./middleware/cmAccess').cmFolderAccess);
   r.use(`${prefix}/cm`, require('./routes/cm/picklists'));
   r.use(`${prefix}/cm`, require('./routes/cm/settings'));
   r.use(`${prefix}/cm`, require('./routes/cm/folders'));
   r.use(`${prefix}/cm`, require('./routes/cm/documents'));
   r.use(`${prefix}/cm`, require('./routes/cm/modules'));
   r.use(`${prefix}/cm`, require('./routes/cm/faqs'));
-  r.use(`${prefix}/cm`, require('./routes/cm/mergeReports'));
+  // Merge Reports retired (content review, 2026-10-14): a case letter is made from a
+  // published template (POST /cm/templates/:id/generate). cm_merge_reports is kept.
   r.use(`${prefix}/cm`, require('./routes/cm/templates'));
   r.use(`${prefix}/cm`, require('./routes/cm/reviews'));
 

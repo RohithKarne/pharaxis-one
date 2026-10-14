@@ -13,17 +13,19 @@ import { isAdminUser } from '../utils/adminScope.js'
 import { httpFetch } from '../api/httpFetch.js'
 import Icon from './Icon'
 
+// Each entry carries the module its page is guarded by (App.jsx), so quick
+// search offers what the user can open and nothing that ends in Access Denied.
 const DESTINATIONS = [
   { label: 'Overview', to: '/dashboard', icon: 'overview', module: 'mims_core' },
-  { label: 'Inbox', to: '/inbox', icon: 'inbox', module: 'mims_core' },
+  { label: 'Inbox', to: '/inbox', icon: 'inbox', module: 'inbox' },
   { label: 'My Cases', to: '/cases?tab=my', icon: 'folder', module: 'mims_core' },
   { label: 'Unassigned Cases', to: '/cases?tab=unassigned', icon: 'folder', module: 'mims_core' },
-  { label: 'Case correspondence', to: '/cases?view=correspondence', icon: 'search', module: 'mims_core' },
+  { label: 'Correspondence', to: '/cases?view=correspondence', icon: 'search', module: 'mims_core' },
   { label: 'Transmissions', to: '/transmissions', icon: 'transmissions', module: 'transmissions' },
-  { label: 'Browse Content', to: '/browse-content', icon: 'browse', module: 'content_mgmt' },
+  { label: 'Browse Content', to: '/browse-content', icon: 'browse', module: 'browse_content' },
   { label: 'Content Management', to: '/content', icon: 'content', module: 'content_mgmt' },
-  { label: 'Reports', to: '/reports', icon: 'reports', module: 'reports', adminOnly: true },
-  { label: 'Response Log', to: '/response-log', icon: 'content' },
+  { label: 'Reports', to: '/reports', icon: 'reports', module: 'reports' },
+  { label: 'Response Log', to: '/response-log', icon: 'content', module: 'mims_core' },
   { label: 'MIMS Admin', to: '/mims-admin', icon: 'admin', module: 'admin_console', adminOnly: true },
 ]
 

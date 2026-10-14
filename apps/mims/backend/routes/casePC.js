@@ -25,7 +25,11 @@ router.put('/cases/pc/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('pc', 'case_pc_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+
+const PC_VERSION_TABLES = ['case_pc_general', 'case_pc_patient_info', 'case_pc_product_info', 'case_pc_return_retrieval',
+  'case_pc_replacement', 'case_pc_refund_credit', 'case_pc_flex_fields'];
 const { auditChanges, versionCase } = require('../services/componentAudit');
+const { writeCaseAudit } = require('../services/caseHelpers');
 
 // MIPM-169: every PC change goes to the case audit trail, field by field.
 async function audit(req, versionId, section, before, after, action = 'PC_UPDATED') {
@@ -149,18 +153,24 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       }
     }
 
-    // "Copy from PC" — copy complaint_description from previous version's general tab only
+    // A follow-up version starts as a copy of the version it follows, as AE
+    // versions do (MIPM-170). It used to copy the description only, so the
+    // product, lot, expiry, patient and status had to be typed again — and a
+    // complaint record needs product and lot (21 CFR 211.198(b)). Every tab
+    // table is keyed by version_id; the copy takes all its columns but the
+    // row's own keys. The version's defect codes and lot link come too.
     if (latest) {
-      const [[prevGeneral]] = await conn.execute(
-        'SELECT complaint_description FROM case_pc_general WHERE version_id = ?',
-        [latest.id]
-      );
-      if (prevGeneral && prevGeneral.complaint_description) {
-        await conn.execute(
-          'INSERT INTO case_pc_general (version_id, complaint_description) VALUES (?, ?)',
-          [result.insertId, prevGeneral.complaint_description]
-        );
+      for (const table of PC_VERSION_TABLES) {
+        const [cols] = await conn.execute(`SHOW COLUMNS FROM ${table}`);
+        const list = cols.map(c => c.Field).filter(f => !['id', 'version_id', 'created_at', 'updated_at'].includes(f))
+          .map(f => `\`${f}\``).join(', ');
+        await conn.execute(`INSERT INTO ${table} (version_id, ${list}) SELECT ?, ${list} FROM ${table} WHERE version_id = ? ORDER BY id`, [result.insertId, latest.id]);
       }
+      await conn.execute(
+        `UPDATE case_pc_versions n JOIN case_pc_versions o ON o.id = ?
+            SET n.manufacturer_defect_code_id = o.manufacturer_defect_code_id, n.component_defect_code_id = o.component_defect_code_id,
+                n.application_use_code_id = o.application_use_code_id, n.lot_master_id = o.lot_master_id
+          WHERE n.id = ?`, [latest.id, result.insertId]);
     }
 
     await conn.commit();
@@ -238,11 +248,17 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
       complaint_description, pc_status, pc_category, pc_classification,
       date_of_complaint, date_received, severity, root_cause,
       additional_info, additional_info_general,
+      reply_date, reply_summary, suspected_counterfeit, device_involved, device_malfunction,
     } = req.body;
+    // MI and PC review (migration 177): the reply to the complainant (21 CFR
+    // 211.198(b)(1)), suspected counterfeit or tampering, and whether a device
+    // part was involved, with its malfunction answer only when it was.
+    const deviceInvolved = device_involved ? 1 : 0;
     await pool.execute(
       `INSERT INTO case_pc_general
-        (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, root_cause, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, root_cause, additional_info,
+         reply_date, reply_summary, suspected_counterfeit, device_involved, device_malfunction)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         complaint_description = VALUES(complaint_description),
         pc_status = VALUES(pc_status),
@@ -252,11 +268,25 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
         date_received = VALUES(date_received),
         severity = VALUES(severity),
         root_cause = VALUES(root_cause),
-        additional_info = VALUES(additional_info)`,
+        additional_info = VALUES(additional_info),
+        reply_date = VALUES(reply_date), reply_summary = VALUES(reply_summary),
+        suspected_counterfeit = VALUES(suspected_counterfeit), device_involved = VALUES(device_involved),
+        device_malfunction = VALUES(device_malfunction)`,
       [req.params.versionId, complaint_description || null, pc_status || null,
        pc_category || null, pc_classification || null,
-       date_of_complaint || null, date_received || null, severity || null, root_cause || null, additional_info_general ?? additional_info ?? null]
+       date_of_complaint || null, date_received || null, severity || null, root_cause || null, additional_info_general ?? additional_info ?? null,
+       reply_date || null, reply_summary || null, suspected_counterfeit ? 1 : 0, deviceInvolved,
+       deviceInvolved && device_malfunction ? String(device_malfunction).slice(0, 10) : null]
     );
+    // A suspected counterfeit is urgent: illegitimate product is notified to FDA
+    // within 24 hours of the determination (DSCSA). The case moves to Urgent once.
+    if (suspected_counterfeit && !Number(before?.suspected_counterfeit)) {
+      const [[c]] = await pool.execute('SELECT v.case_id, cs.priority FROM case_pc_versions v JOIN cases cs ON cs.id = v.case_id WHERE v.id = ?', [req.params.versionId]);
+      if (c && String(c.priority || '').toLowerCase() !== 'urgent') {
+        await pool.execute("UPDATE cases SET priority = 'urgent' WHERE id = ?", [c.case_id]);
+        await writeCaseAudit(c.case_id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'Priority (suspected counterfeit or tampering)', c.priority || null, 'urgent');
+      }
+    }
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]
     );
@@ -285,22 +315,23 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
     const {
       patient_name, date_of_birth, age, age_unit, sex, weight_kg,
       therapy_start_date, therapy_end_date, indication, injury_experienced,
-      additional_info, additional_info_patient,
+      additional_info, additional_info_patient, patient_initials,
     } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_patient_info
-        (version_id, patient_name, date_of_birth, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, patient_name, date_of_birth, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info, patient_initials)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         patient_name = VALUES(patient_name), date_of_birth = VALUES(date_of_birth),
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), therapy_start_date = VALUES(therapy_start_date),
         therapy_end_date = VALUES(therapy_end_date), indication = VALUES(indication),
         injury_experienced = VALUES(injury_experienced),
-        additional_info = VALUES(additional_info)`,
+        additional_info = VALUES(additional_info), patient_initials = VALUES(patient_initials)`,
       [req.params.versionId, patient_name || null, date_of_birth || null, age || null, age_unit || null, sex || null,
        weight_kg || null, therapy_start_date || null, therapy_end_date || null,
-       indication || null, injury_experienced || null, additional_info_patient ?? additional_info ?? null]
+       indication || null, injury_experienced || null, additional_info_patient ?? additional_info ?? null,
+       patient_initials ? String(patient_initials).trim().slice(0, 20) : null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]
@@ -334,22 +365,24 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
     const {
       product_id, product_name, product_type, product_category, lot_number,
       expiry_date, manufacturing_date, pack_size, quantity_available,
-      storage_conditions, additional_info, additional_info_product,
+      storage_conditions, additional_info, additional_info_product, strength,
     } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_product_info
-        (version_id, product_id, product_name, product_type, product_category, lot_number, expiry_date, manufacturing_date, pack_size, quantity_available, storage_conditions, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, product_id, product_name, product_type, product_category, lot_number, expiry_date, manufacturing_date, pack_size, quantity_available, storage_conditions, additional_info, strength)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         product_id = VALUES(product_id), product_name = VALUES(product_name),
         product_type = VALUES(product_type), product_category = VALUES(product_category),
         lot_number = VALUES(lot_number), expiry_date = VALUES(expiry_date),
         manufacturing_date = VALUES(manufacturing_date), pack_size = VALUES(pack_size),
         quantity_available = VALUES(quantity_available),
-        storage_conditions = VALUES(storage_conditions), additional_info = VALUES(additional_info)`,
+        storage_conditions = VALUES(storage_conditions), additional_info = VALUES(additional_info),
+        strength = VALUES(strength)`,
       [req.params.versionId, product_id || null, product_name || null,
        product_type || null, product_category || null, lot_number || null, expiry_date || null,
-       manufacturing_date || null, pack_size || null, quantity_available ?? null, storage_conditions || null, additional_info_product ?? additional_info ?? null]
+       manufacturing_date || null, pack_size || null, quantity_available ?? null, storage_conditions || null, additional_info_product ?? additional_info ?? null,
+       strength || null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_product_info WHERE version_id = ?', [req.params.versionId]

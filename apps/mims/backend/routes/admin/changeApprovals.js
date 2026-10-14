@@ -50,7 +50,7 @@ router.post('/change-approvals/policy', authenticate, requireRole('admin', 'plat
 });
 
 // POST /api/admin/change-approvals — submit a change for approval
-router.post('/change-approvals', authenticate, requireOrg, async (req, res) => {
+router.post('/change-approvals', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { entity, entity_id, field_name, current_value, proposed_value, reason } = req.body;
     if (!entity || !field_name || proposed_value === undefined) {
@@ -82,7 +82,7 @@ router.get('/change-approvals', authenticate, requireRole('admin', 'platform_adm
 });
 
 // GET /api/admin/change-approvals/my-requests — list own requests
-router.get('/change-approvals/my-requests', authenticate, requireOrg, async (req, res) => {
+router.get('/change-approvals/my-requests', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       'SELECT * FROM change_approval_requests WHERE requester_id = ? ORDER BY created_at DESC',

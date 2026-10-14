@@ -13,13 +13,26 @@
  */
 
 const pool = require('../database/db');
+const { getSettings } = require('./miResponseSettings');
+const { buildMergeData, applyHtml, applyText } = require('./mergeFields');
+
+const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { folderFilterSql } = require('./cmFolderAccess');
 const {
   uniquePositiveInts,
   stripHtml,
   applyMergeFields,
   parseJsonSafe,
 } = require('./caseHelpers');
+
+// A template belongs to the organisation that owns its folder. A template with no
+// folder (older ones) falls back to its creator's organisations. Same rule as the
+// Templates screen; takes the organisation id three times.
+const TEMPLATE_ORG_SQL = `(
+  EXISTS (SELECT 1 FROM cm_folders cf WHERE cf.id = t.folder_id AND cf.org_id = ?)
+  OR (t.folder_id IS NULL AND (u.org_id = ? OR EXISTS (
+    SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1))))`;
 
 // ── Case + MI tab scope helpers ───────────────────────────────────────────────
 
@@ -130,17 +143,18 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   let template = null;
   if (payload.template_id) {
     // MIPM-190: a response uses a published template; templates are never 'Active'.
+    // It must also be in date, and belong to the case's organisation by its folder
+    // — the creator's organisations let a template cross to another organisation.
     const [templateRows] = await pool.execute(
       `SELECT t.* FROM cm_templates t LEFT JOIN users u ON u.id = t.created_by
         WHERE t.id = ? AND t.status = 'Published'
-          AND (? = 1 OR u.org_id = ? OR EXISTS (
-            SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
-          )) LIMIT 1`,
-      [payload.template_id, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+          AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
+          AND (? = 1 OR ${TEMPLATE_ORG_SQL})${await folderFilterSql(req.user, 't.folder_id')} LIMIT 1`,
+      [payload.template_id, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id, scopedCase.org_id]
     );
     template = templateRows[0] || null;
     if (!template) {
-      const error = new Error('Template not found for this organisation.');
+      const error = new Error('That template is not published and in date for this organisation.');
       error.statusCode = 404;
       throw error;
     }
@@ -157,12 +171,13 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     const [rows] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.content_html,
               d.standard_response_text, d.file_path, d.file_name, d.file_mime, d.language,
-              d.send_as_pdf, d.selected_modules
+              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor
          FROM cm_documents d INNER JOIN cm_folders f ON f.id = d.folder_id
         WHERE d.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)
           AND d.status = 'Published'
+          AND COALESCE(d.doc_type, '') <> 'Internal Document'
           AND (d.expiry_date     IS NULL OR d.expiry_date     >= CURDATE())
-          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())`,
+          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())${await folderFilterSql(req.user, 'd.folder_id')}`,
       [...selectedDocumentIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     selectedDocuments = rows;
@@ -175,7 +190,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       const found   = new Set(rows.map((d) => d.id));
       const blocked = selectedDocumentIds.filter((id) => !found.has(id));
       const error = new Error(
-        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date and not expired.`
+        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date, not expired, not an internal document, and in a folder you can open.`
       );
       error.statusCode = 400;
       throw error;
@@ -190,14 +205,33 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   let selectedModules = [];
   if (allModuleIds.length) {
     const placeholders = allModuleIds.map(() => '?').join(',');
+    // A module goes out only when published and in date, as a document does. Any
+    // status was accepted, so a draft or unapproved module could reach a doctor,
+    // and a published document carried whatever its modules said that day.
     const [rows] = await pool.execute(
       `SELECT m.id, m.module_id, m.name, m.module_type, m.content_html, m.standard_response_text,
-              m.language, m.send_as_pdf
+              m.language, m.send_as_pdf, m.version_major, m.version_minor
          FROM cm_modules m INNER JOIN cm_folders f ON f.id = m.folder_id
-        WHERE m.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)`,
+        WHERE m.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)
+          AND m.status = 'Published'
+          AND (m.expiry_date     IS NULL OR m.expiry_date     >= CURDATE())
+          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())${await folderFilterSql(req.user, 'm.folder_id')}`,
       [...allModuleIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
-    selectedModules = rows;
+    if (rows.length !== allModuleIds.length) {
+      const found = new Set(rows.map((m) => m.id));
+      const [missing] = await pool.execute(
+        `SELECT name FROM cm_modules WHERE id IN (${allModuleIds.filter((id) => !found.has(id)).map(() => '?').join(',')})`,
+        allModuleIds.filter((id) => !found.has(id)));
+      const error = new Error(
+        `These modules are not published and in date, or are in a folder you cannot open, so they cannot be sent: ${missing.map((m) => m.name).join(', ') || 'unknown module'}.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+    // Keep the order the author chose, not the database's.
+    const byId = new Map(rows.map((m) => [m.id, m]));
+    selectedModules = allModuleIds.map((id) => byId.get(id));
   }
 
   // Assemble content blocks
@@ -211,30 +245,19 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   });
   const selectedContent = contentBlocks.join('\n');
 
-  // {{patient_name}} was the recipient (usually the reporting HCP) and
-  // {{agent_name}} an email (M-47, same slip as merge letters). The patient is
-  // recorded by initials only; the recipient has its own fields.
-  const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
-  const [[patientRow]] = await pool.execute('SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1', [scopedCase.id]);
-
-  // Merge field map
-  const mergeData = {
-    date:             new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-    agent_name:       agent?.name || req.user.name || req.user.email || '',
-    case_number:      scopedCase.case_number || '',
-    case_type:        scopedCase.case_type || '',
-    org_name:         scopedCase.org_name || '',
-    recipient_name:   recipient.name || recipient.email || 'Requestor',
-    recipient_email:  recipient.email || '',
-    patient_name:     patientRow?.initials || '',
-    patient_email:    '',
-    product_name:     product?.trade_name || miTab?.product_name || '',
-    product_family:   product?.family_name || miTab?.family_name || '',
-    mi_question:      miTab?.question_summary || miTab?.detailed_question || '',
-    selected_content: selectedContent,
-    smpc_link:        payload.smpc_link || '',
-    qr_code:          payload.qr_code || '',
-  };
+  // One set of merge values for every letter (services/mergeFields.js): the case,
+  // the requester chosen here, this MI and its product, plus the chosen content.
+  const mergeData = await buildMergeData({
+    caseId: scopedCase.id,
+    userId: req.user.userId,
+    recipient,
+    miTab,
+    productName: product?.trade_name || null,
+  });
+  mergeData.recipient_name = mergeData.recipient_name || 'Requestor';
+  mergeData.contact_name = mergeData.recipient_name;
+  if (product?.family_name) mergeData.product_family = product.family_name;
+  mergeData.selected_content = selectedContent;
 
   const templateSubject = payload.subject !== undefined
     ? payload.subject
@@ -244,11 +267,26 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     : (template?.body_html || payload.response_text || '');
   const customText = String(payload.custom_text || '').trim();
   const bodyWithCustomText = customText
-    ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${customText.replace(/\n/g, '<br/>')}</p></section>`
+    ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${escapeHtml(customText).replace(/\n/g, '<br/>')}</p></section>`
     : templateBody;
 
-  const renderedSubject = applyMergeFields(templateSubject, mergeData);
-  const renderedBody    = applyMergeFields(bodyWithCustomText || '{{selected_content}}', mergeData);
+  // The organisation's statements (MI Response Settings): the off-label
+  // statement on an answer about an unapproved use, and the closing statement on
+  // every answer. Plain text from the settings screen, merge fields allowed.
+  const settings = await getSettings(scopedCase.org_id);
+  const statementData = { ...mergeData, product_name: mergeData.product_name || 'This product' };
+  const asHtml = (text) => escapeHtml(applyMergeFields(String(text), statementData)).replace(/\n/g, '<br/>');
+  const statementBlocks = [];
+  if (miTab?.is_off_label && String(settings.offlabel_statement || '').trim()) {
+    statementBlocks.push(`<section data-offlabel-statement="true"><p>${asHtml(settings.offlabel_statement)}</p></section>`);
+  }
+  if (String(settings.closing_statement || '').trim()) {
+    statementBlocks.push(`<section data-closing-statement="true"><p>${asHtml(settings.closing_statement)}</p></section>`);
+  }
+
+  const renderedSubject = applyText(templateSubject, mergeData);
+  // Values are escaped in the letter body, so a typed name or question cannot add markup.
+  const renderedBody    = applyHtml(bodyWithCustomText || '{{selected_content}}', mergeData) + statementBlocks.join('');
   const previewHtml     = `<article class="mi-response-preview"><h2>${renderedSubject}</h2>${renderedBody}</article>`;
 
   return {
@@ -280,6 +318,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       version: `${doc.version_major || 1}.${doc.version_minor || 0}`,
     })),
     merge_data: mergeData,
+    off_label: !!miTab?.is_off_label,
     language:     payload.language || template?.language || selectedDocuments[0]?.language || 'en',
     is_customized: payload.is_customized !== undefined
       ? !!payload.is_customized
@@ -293,4 +332,5 @@ module.exports = {
   getResponseBuilderRecipient,
   listResponseBuilderRecipients,
   buildResponsePackage,
+  TEMPLATE_ORG_SQL,
 };

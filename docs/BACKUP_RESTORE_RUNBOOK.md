@@ -119,7 +119,7 @@ tar -xzf cp-files-<stamp>.tar.gz -C apps/cp-portal/backend
 Where these folders are set:
 
 - `apps/mims/backend/routes/platformAdmin.js` — org logos, `storage/org_logos`
-- `apps/mims/backend/routes/cm/documents.js`, `modules.js`, `mergeReports.js` — `storage/cm_documents`
+- `apps/mims/backend/routes/cm/documents.js`, `modules.js` — `storage/cm_documents` (Merge Reports, which also wrote here, was retired 2026-10-14; its old files stay)
 - `apps/mims/backend/services/fileStorageService.js` — attachments, `storage/uploads`, or `STORAGE_LOCAL_ROOT`; `STORAGE_PROVIDER=s3` with `STORAGE_S3_BUCKET` for cloud
 - `apps/mims/backend/services/emailPoller.js` — `storage/email_attachments`
 - `apps/mims/backend/services/emailCaseImportService.js` — `storage/email_case_sources`

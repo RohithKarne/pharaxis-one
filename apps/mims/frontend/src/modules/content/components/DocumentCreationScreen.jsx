@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
-import { normalizeSelectedModules, parseMaybeJson } from './ContentUtils'
-import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
+import { normalizeSelectedModules, parseMaybeJson, DOC_TYPES, DEFAULT_LANGUAGES } from './ContentUtils'
+import { AssociatedDocsPanel, VersionComparePanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function deriveContentMode(document) {
@@ -31,13 +31,15 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     activation_date: doc?.activation_date ? doc.activation_date.slice(0, 10) : '',
     expiry_alert_recipients: parseMaybeJson(doc?.expiry_alert_recipients, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     language: doc?.language || 'en',
+    product_id: doc?.product_id || '',
     search_tags: doc?.search_tags || '',
     mi_category_id: doc?.mi_category_id || '',
     document_category: doc?.document_category || '',
     version_notes: doc?.version_notes || '',
-    review_cycle_days: doc?.review_cycle_days || '',
+    // A new document is reviewed yearly unless changed — the cycle most medical
+    // information teams use for standard responses. Existing ones keep theirs.
+    review_cycle_days: doc?.id ? (doc.review_cycle_days || '') : 365,
     regulatory_ref: doc?.regulatory_ref || '',
-    custom_attributes: parseMaybeJson(doc?.custom_attributes, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     bump_type: 'minor',
     is_product_specific: doc?.is_product_specific ? true : false,
     is_site_specific: doc?.is_site_specific ? true : false,
@@ -66,6 +68,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const [folders, setFolders] = useState([])
   const [miCategories, setMiCategories] = useState([])
   const [docCategories, setDocCategories] = useState([])
+  const [products, setProducts] = useState([])
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
   const [microsoftProvider, setMicrosoftProvider] = useState(null)
 
   useEffect(() => {
@@ -81,6 +85,16 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       .then(r => r.ok ? r.json() : { picklists: [] })
       .then(d => setDocCategories(d.picklists || []))
       .catch(() => setDocCategories([]))
+    // The product a document is about, from the organisation's product list.
+    httpFetch('/api/cm/products', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { products: [] })
+      .then(d => setProducts(d.products || []))
+      .catch(() => setProducts([]))
+    // The organisation's own language list (Settings > Language), else the defaults.
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { picklists: [] })
+      .then(d => { if ((d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
     httpFetch('/api/auth/sso/providers', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { providers: [] })
       .then(d => {
@@ -229,7 +243,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
-        if (k === 'selected_modules') fd.append(k, JSON.stringify(v))
+        // version_notes and bump_type go with the check-in, not the save.
+        if (k === 'version_notes' || k === 'bump_type') return
+        if (Array.isArray(v)) fd.append(k, JSON.stringify(v))
         else if (v !== null && v !== undefined) fd.append(k, v)
       })
       fd.set('authoring_source', effectiveAuthoringSource)
@@ -256,7 +272,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           const ciRes = await httpFetch(`/api/cm/documents/${docId}/checkin`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes: 'Checked in on creation' }),
+            // What changed and how big a change it is (Other Attributes) go with
+            // the check-in into the version history; both were dropped before.
+            body: JSON.stringify({ notes: form.version_notes.trim() || (isEdit ? 'Checked in' : 'Checked in on creation'), bump_type: form.bump_type }),
           })
           if (!ciRes.ok) {
             const ciErr = await ciRes.json()
@@ -281,7 +299,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     { key: 'other', label: 'Other Attributes' },
     { key: 'associated', label: 'Associated Documents' },
     { key: 'usage', label: 'Usage Instructions' },
-    { key: 'versions', label: 'Version Alerts' },
+    { key: 'versions', label: 'Versions & Alerts' },
   ]
 
   return (
@@ -302,7 +320,12 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 1fr', gap: 16, marginBottom: 24, alignItems: 'end' }}>
           <div className="cm-form-group" style={{ margin: 0 }}>
             <label className="cm-form-label">Folder <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
+            <select className="cm-form-select" value={form.folder_id} onChange={e => {
+              // A folder kept for one product gives a new document that product,
+              // unless one is already chosen.
+              const folder = folders.find(f => String(f.id) === e.target.value)
+              setForm(p => ({ ...p, folder_id: e.target.value, product_id: p.product_id || folder?.product_id || '' }))
+            }}>
               <option value="">— Select Folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
@@ -310,10 +333,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           <div className="cm-form-group" style={{ margin: 0 }}>
             <label className="cm-form-label">Document Type <span style={{ color: 'var(--danger)' }}>*</span></label>
             <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
-              <option>SRD</option>
-              <option>Enclosure</option>
-              <option>Information Document</option>
-              <option>Internal Document</option>
+              {/* Prescribing Information is enclosed with an off-label answer (MI Response Settings). */}
+              {/* A document's own type is kept even when it is not in the list, so saving does not change it. */}
+              {[...new Set([...DOC_TYPES, form.doc_type].filter(Boolean))].map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="cm-form-group" style={{ margin: 0 }}>
@@ -546,16 +568,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
-                Publish as PDF
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
-                Send as PDF
-              </label>
-            </div>
 
             {form.response_doc_type === 'Module' && (() => {
               const selectedIds = normalizeSelectedModules(form.selected_modules)
@@ -642,6 +654,24 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               )
             })()}
 
+            {/* The letter builder offers a document for its product's questions (and
+                one with no product for any question), in the language chosen. */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Product</label>
+                <select aria-label="Product" className="cm-form-select" value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
+                  <option value="">Any product</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
+                </select>
+              </div>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Language</label>
+                <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+                  {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                  {!languages.some(l => l.value === form.language) && <option value={form.language}>{form.language}</option>}
+                </select>
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Search Tags</label>
@@ -762,11 +792,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         {/* ── Other Attributes Tab ── */}
         {activeTab === 'other' && (
           <div style={{ padding: '4px 0', maxWidth: 800 }}>
-            {doc && doc.owner_user_id && (
-              <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 16px', marginBottom: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>This document is <strong>locked</strong> to its owner. Only the owner can publish or release it.</span>
-              </div>
-            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               {doc && doc.version_major > 1 && (
@@ -792,9 +817,10 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               <div className="cm-form-group">
                 <label className="cm-form-label">Review Cycle</label>
                 <select aria-label="Review Cycle" className="cm-form-select" value={form.review_cycle_days || ''} onChange={e => setForm(p => ({ ...p, review_cycle_days: e.target.value }))}>
-                  <option value="">— Select —</option>
-                  {[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
+                  <option value="">— None —</option>
+                  {[[90, 'Every 3 months'], [180, 'Every 6 months'], [365, 'Every year'], [730, 'Every 2 years']].map(([d, l]) => <option key={d} value={d}>{l}</option>)}
                 </select>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>The owner is reminded to review the published document this often.</p>
               </div>
 
               <div className="cm-form-group">
@@ -803,29 +829,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
             </div>
 
-            <div className="cm-form-group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label className="cm-form-label" style={{ margin: 0 }}>Custom Attributes</label>
-                <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: [...(p.custom_attributes || []), { key: '', value: '' }] }))}
-                  style={{ fontSize: 12, padding: '3px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--primary)' }}>
-                  + Add Attribute
-                </button>
-              </div>
-              {(form.custom_attributes || []).length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No custom attributes. Click "+ Add Attribute" to add org-specific metadata.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(form.custom_attributes || []).map((attr, idx) => (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Key" value={attr.key} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], key: e.target.value }; return { ...p, custom_attributes: a }; })} />
-                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Value" value={attr.value} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], value: e.target.value }; return { ...p, custom_attributes: a }; })} />
-                      <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: p.custom_attributes.filter((_, i) => i !== idx) }))}
-                        style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 4, color: 'var(--danger)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -852,7 +855,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         {/* ── Version Alerts Tab ── */}
         {activeTab === 'versions' && doc && (
           <>
-            <VersionDiffPanel docId={doc.id} token={token} />
+            <VersionComparePanel docId={doc.id} token={token} />
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 24, paddingTop: 24 }}>
               <VersionAlertsPanel docId={doc.id} token={token} />
             </div>

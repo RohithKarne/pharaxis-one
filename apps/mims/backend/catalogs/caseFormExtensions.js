@@ -274,7 +274,7 @@ const EXTRA_PICKLIST_GROUPS = [
   { category: 'Product Complaint', field: 'field_action_required', values: ['None', 'Recall', 'Correction', 'Investigation Only', 'Field Safety Notice'] },
   { category: 'Product Complaint', field: 'field_action_type',  values: ['Class I', 'Class II', 'Class III', 'Not Classified'] },
   { category: 'Product Complaint', field: 'regulatory_notification', values: ['FDA MDR', 'EU MIR', 'MHRA', 'PMDA', 'Health Canada', 'None Required'] },
-  { category: 'Product Complaint', field: 'reportability_determination', values: ['2-day', '30-day', 'Annual', 'Not Reportable'] },
+  { category: 'Product Complaint', field: 'reportability_determination', values: ['Field Alert Report (3 working days)', '2-day', '30-day', 'Annual', 'Not Reportable'] },
 
   { category: 'Cross-Case', field: 'yes_no_unknown',  values: ['Yes', 'No', 'Unknown'] },
   { category: 'Cross-Case', field: 'comm_direction',  values: ['Inbound', 'Outbound'] },

@@ -11,6 +11,9 @@
 
 const express = require('express');
 const router  = express.Router();
+const { miSendCheck } = require('../services/miSendCheck');
+const { getSettings: getMiResponseSettings } = require('../services/miResponseSettings');
+const { pcHandoffCheck } = require('../services/pcHandoffCheck');
 let bcrypt;
 try {
   bcrypt = require('bcryptjs');
@@ -65,8 +68,9 @@ const { ISO_COUNTRIES } = require('../catalogs/isoCountries');
 
 const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
-  listResponseBuilderRecipients, buildResponsePackage,
+  listResponseBuilderRecipients, buildResponsePackage, TEMPLATE_ORG_SQL,
 } = require('../services/miResponseService');
+const { folderFilterSql } = require('../services/cmFolderAccess');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const { auditChanges } = require('../services/componentAudit');
@@ -214,6 +218,12 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     } = req.query;
     const limit  = clamp(parseIntSafe(req.query.limit, 50), 1, 500);
     const offset = Math.max(0, parseIntSafe(req.query.offset, 0));
+
+    // Deleted cases are for administrators, who alone can delete one; the list
+    // was open to anyone who could view cases (menu review, 14 Oct 2026).
+    if (deleted === 'true' && !isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Only administrators can see deleted cases.' });
+    }
 
     if (corr_from && !isValidDateOnly(corr_from)) {
       return res.status(400).json({ error: 'corr_from must be YYYY-MM-DD.' });
@@ -2301,7 +2311,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       ? `EXISTS (SELECT 1 FROM product_group_assignments pga WHERE pga.target_type = 'cm_template' AND pga.target_id = t.id AND pga.group_id IN (${responseGroupIds.map(() => '?').join(',')}))`
       : '0';
     const [templates] = await pool.execute(
-      `SELECT t.id, t.type, t.name, t.subject, t.body_html, t.status,
+      `SELECT t.id, t.type, t.name, t.subject, t.body_html, t.status, t.language,
               t.version_major, t.version_minor,
               ${groupSelect} AS product_group_match
          FROM cm_templates t
@@ -2309,58 +2319,82 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
         WHERE t.status = 'Published'
           AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
           AND t.type IN ('Response','Email','Acknowledgment','Correspondence')
-          AND (? = 1 OR u.org_id = ? OR EXISTS (
-            SELECT 1 FROM user_org_access uoa
-             WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
-          ))
+          AND (? = 1 OR ${TEMPLATE_ORG_SQL})${await folderFilterSql(req.user, 't.folder_id')}
         ORDER BY product_group_match DESC, FIELD(t.type, 'Response','Email','Acknowledgment','Correspondence'), t.name ASC`,
-      [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+      [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id, scopedCase.org_id]
     );
     const [documents] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
               d.language, d.document_category, d.standard_response_text, d.content_html,
-              d.send_as_pdf, d.selected_modules
+              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor,
+              d.product_id, p.trade_name AS product_name,
+              CASE WHEN d.product_id IS NULL THEN 'any' WHEN d.product_id = ? THEN 'this' ELSE 'other' END AS product_match
          FROM cm_documents d
          INNER JOIN cm_folders f ON f.id = d.folder_id
+         LEFT JOIN products p ON p.id = d.product_id
         WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
-        ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
+          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())
+          AND COALESCE(d.doc_type, '') <> 'Internal Document'${await folderFilterSql(req.user, 'd.folder_id')}
+        ORDER BY CASE WHEN d.product_id = ? THEN 0 WHEN d.product_id IS NULL THEN 1 ELSE 2 END,
+                 CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
-      [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
+      [productId || 0, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, productId || 0]
     );
     const [modules] = await pool.execute(
       `SELECT m.id, m.module_id, m.name, m.module_type, m.status,
               m.language, m.document_category, m.standard_response_text, m.content_html, m.send_as_pdf
          FROM cm_modules m
          INNER JOIN cm_folders f ON f.id = m.folder_id
-        WHERE m.status IN ('Published','Approved')
+        WHERE m.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())
+          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())${await folderFilterSql(req.user, 'm.folder_id')}
         ORDER BY CASE WHEN m.document_category = 'Response Builder' THEN 0 ELSE 1 END, m.name ASC
         LIMIT 200`,
       [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
-    const [bundles] = await pool.execute(
-      `SELECT * FROM response_template_bundles
-        WHERE org_id = ? AND is_active = 1
-        ORDER BY language ASC, name ASC`,
-      [scopedCase.org_id]
-    ).catch(() => [[]]);
 
+    // Documents linked to an offered document (Associated Documents on the
+    // document screen), so the builder can suggest them when it is ticked.
+    let related = [];
+    if (documents.length) {
+      const ids = documents.map((d) => d.id);
+      const [rows] = await pool.execute(
+        `SELECT r.doc_id, r.related_doc_id, r.relation_type FROM cm_document_relations r
+          WHERE r.doc_id IN (${ids.map(() => '?').join(',')}) AND r.related_doc_id IN (${ids.map(() => '?').join(',')})`,
+        [...ids, ...ids]);
+      related = rows;
+    }
+
+    // What the builder needs to say about this answer (MI Response Settings):
+    // an off-label MI must enclose the prescribing information when required.
+    const settings = await getMiResponseSettings(scopedCase.org_id);
+    // Response channels come from the organisation's Response Channel list, as
+    // the MI screen's own channel does; the builder had its own fixed list.
+    const [channelRows] = await pool.execute(
+      `SELECT value FROM picklists WHERE org_id = ? AND field_type = 'response_channel' AND status = 'Active' ORDER BY sort_order, value`,
+      [scopedCase.org_id]).catch(() => [[]]);
     res.json({
+      channels: channelRows.map(r => r.value),
       case: scopedCase,
       mi_tab: miTab,
+      response_rules: {
+        off_label: !!miTab?.is_off_label,
+        require_pi: !!miTab?.is_off_label && !!settings.require_pi_offlabel,
+        offlabel_statement: miTab?.is_off_label ? settings.offlabel_statement : null,
+        closing_statement: settings.closing_statement || null,
+      },
       recipients,
       response_product_groups: responseGroups,
       templates,
-      documents: documents.map((doc) => ({ ...doc, selected_modules: parseJsonSafe(doc.selected_modules, []) })),
-      modules,
-      bundles: bundles.map((bundle) => ({
-        ...bundle,
-        document_ids: parseJsonSafe(bundle.document_ids, []),
-        module_ids: parseJsonSafe(bundle.module_ids, []),
+      documents: documents.map((doc) => ({
+        ...doc,
+        selected_modules: parseJsonSafe(doc.selected_modules, []),
+        related: related.filter((r) => r.doc_id === doc.id).map((r) => ({ id: r.related_doc_id, relation_type: r.relation_type })),
       })),
+      modules,
     });
   } catch (err) {
     logger.error({ err }, 'GET /cases/:id/mi-response-builder/context error');
@@ -2412,6 +2446,7 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          COALESCE(r.cm_document_name, d.name) AS cm_document_name,
          r.selected_documents,
          r.selected_modules,
+         r.source_document_snapshot,
          r.language,
          r.is_customized,
          r.customization_notes,
@@ -2584,6 +2619,15 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     if (responseStatus === 'SENT' && existing.response_status !== 'APPROVED') {
       return res.status(400).json({ error: 'Response must be APPROVED before it can be SENT.' });
     }
+    // What the MI needs before its answer goes out (MI field review, 13 Oct
+    // 2026): who asked, the product, the question, and the adverse event /
+    // product complaint screening — with the AE or PC case when it found one.
+    if (responseStatus === 'SENT') {
+      const check = await miSendCheck(req.params.id, existing.mi_tab_id || null, undefined, { responseId: Number(req.params.responseId) });
+      if (!check.ready) {
+        return res.status(400).json({ error: `Before this response can be sent: ${check.missing.join('; ')}.`, missing: check.missing });
+      }
+    }
     // Sign-off rules (M-86). Only the password was checked, so anyone who could
     // open the case could approve and send, including the person who wrote it.
     // Approving needs "Approve letter" and someone other than the writer;
@@ -2704,6 +2748,16 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       // Bridge row 8: an answer going out is a change to the case, so a connected
       // portal's change list picks it up and shows the person their answer.
       if (responseStatus === 'SENT') await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [req.params.id]);
+      // The MI it answers moves to Answered when the response goes out. MI Status
+      // was set by hand only, so an answered question still read "Open" (case
+      // form MI review, 13 Oct 2026). A Closed MI is left closed.
+      if (responseStatus === 'SENT' && existing.mi_tab_id) {
+        const [[tab]] = await conn.execute('SELECT status FROM case_mi WHERE id = ? AND case_id = ?', [existing.mi_tab_id, req.params.id]);
+        if (tab && !['Answered', 'Closed'].includes(tab.status)) {
+          await conn.execute("UPDATE case_mi SET status = 'Answered' WHERE id = ?", [existing.mi_tab_id]);
+          await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'MI Status (response sent)', tab.status, 'Answered', conn);
+        }
+      }
       // MIPM-188: what went out is recorded against each enclosed document and
       // module, so its Usage view shows where it was used. Nothing wrote usage before.
       if (responseStatus === 'SENT') {
@@ -2865,7 +2919,9 @@ async function caseIsClosed(caseId) {
   return Number(row?.is_closed) === 1;
 }
 
-router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
+// Starting a hand-off needs Create transmission (agents and admins by default);
+// the privilege existed but nothing checked it (access review).
+router.post('/cases/:id/ae-transmissions', authenticate, requireCapability('transmission.create'), async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
@@ -2991,6 +3047,14 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
 // ─── CF-E9/E10: PC TRANSMISSIONS ─────────────────────────────────────────────
 
 // GET /api/cases/:id/pc-transmissions
+// What the complaint still needs before it can be handed to Quality (PC field review).
+router.get('/cases/:id/pc-handoff-check', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    res.json(await pcHandoffCheck(req.params.id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
@@ -3005,10 +3069,17 @@ router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/pc-transmissions — route to quality team
-router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
+router.post('/cases/:id/pc-transmissions', authenticate, requireCapability('transmission.create'), async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
+    // What the complaint needs before Quality takes it (PC field review, 13 Oct
+    // 2026): the product, the description, and the AE case when the patient
+    // was injured. The lot is a warning on the card, not a block.
+    const handoff = await pcHandoffCheck(req.params.id);
+    if (!handoff.ready) {
+      return res.status(400).json({ error: `Before this complaint goes to Quality: ${handoff.missing.length ? handoff.missing.join('; ') : 'a PC version'}.`, missing: handoff.missing });
+    }
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const priority = normalizePcTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;

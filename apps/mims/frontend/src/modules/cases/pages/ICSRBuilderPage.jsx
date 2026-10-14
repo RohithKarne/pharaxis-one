@@ -7,6 +7,96 @@ import '../cases.css'
 
 const SECTIONS = ['Sender / Receiver / IDs', 'Patient + History', 'Reactions', 'Drugs', 'Tests', 'Narrative + Causality']
 
+// Each section as a person reads it, in place of the raw record.
+const day = (v) => (v ? String(v).slice(0, 10) : '')
+const YES_NO = { y: 'Yes', n: 'No', u: 'Unknown', na: 'Not applicable' }
+const SERIOUSNESS = { death: 'Death', lifeThreatening: 'Life-threatening', hospitalization: 'Hospitalisation', disability: 'Disability', congenitalAnomaly: 'Congenital anomaly', otherMI: 'Other medically important' }
+const ROLES = { suspect: 'Suspect', concomitant: 'Concomitant', interacting: 'Interacting', treatment: 'Treatment', past: 'Past' }
+
+function Facts({ rows }) {
+  return (
+    <dl className="icsr-facts">
+      {rows.map(([label, value]) => (
+        <div key={label}><dt>{label}</dt><dd>{value || value === 0 ? value : '—'}</dd></div>
+      ))}
+    </dl>
+  )
+}
+
+function Rows({ items, columns, empty }) {
+  if (!items?.length) return <p className="icsr-empty">{empty}</p>
+  return (
+    <div className="icsr-table-wrap"><table className="icsr-table">
+      <thead><tr>{columns.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
+      <tbody>{items.map((item, i) => (
+        <tr key={item.id ?? i}>{columns.map(([label, read]) => <td key={label}>{read(item) || '—'}</td>)}</tr>
+      ))}</tbody>
+    </table></div>
+  )
+}
+
+function SectionView({ active, data, report }) {
+  if (active === 0) {
+    const serious = Object.entries(report.seriousness_classification || {}).filter(([, on]) => on).map(([k]) => SERIOUSNESS[k] || k)
+    return <Facts rows={[
+      ['Safety report ID', report.sender_safety_report_id],
+      ['Receiver', report.receiver_id],
+      ['Status', report.status],
+      ['Report type', report.report_type],
+      ['Latest information date', day(report.receive_date)],
+      ['Primary source country', report.primary_source_country],
+      ['Seriousness', serious.length ? serious.join(', ') : 'Not serious'],
+      ['Times submitted', report.submission_count],
+      ['Locked', report.locked ? `Yes, ${day(report.locked_at)}` : 'No'],
+    ]} />
+  }
+  if (active === 1) {
+    const p = data.patient || {}
+    return <>
+      <Facts rows={[
+        ['Initials', p.initials || p.name],
+        ['Sex', p.sex],
+        ['Date of birth', day(p.dob)],
+        ['Age', p.age ? `${p.age} ${p.age_unit || ''}`.trim() : ''],
+        ['Weight (kg)', p.weight_kg],
+        ['Height (cm)', p.height_cm],
+      ]} />
+      <h3>Medical history</h3>
+      <Rows items={data.history} empty="No medical history on this report." columns={[
+        ['Condition', h => h.comments], ['Start', h => day(h.start_date)], ['End', h => day(h.end_date)],
+      ]} />
+    </>
+  }
+  if (active === 2) {
+    return <Rows items={data.reactions} empty="No reactions on this report." columns={[
+      ['As reported', r => r.reaction_verbatim], ['Coded term', r => r.meddra_pt_name], ['Onset', r => day(r.onset_date)],
+      ['End', r => day(r.end_date)], ['Outcome', r => r.outcome], ['Serious', r => (r.term_highlighted === 'y' ? 'Yes' : 'No')],
+    ]} />
+  }
+  if (active === 3) {
+    return <Rows items={data.drugs} empty="No products on this report." columns={[
+      ['Role', d => ROLES[d.drug_role] || d.drug_role], ['Product', d => d.medicinal_product_name], ['Batch', d => d.batch_no],
+      ['Dose', d => [d.dose_amount, d.dose_unit].filter(Boolean).join(' ')], ['Route', d => d.route_of_admin], ['Indication', d => d.indication],
+      ['Start', d => day(d.start_date)], ['End', d => day(d.end_date)], ['Action taken', d => d.action_taken],
+      ['Dechallenge', d => YES_NO[d.dechallenge]], ['Rechallenge', d => YES_NO[d.rechallenge]],
+    ]} />
+  }
+  if (active === 4) {
+    return <Rows items={data.tests} empty="No test results on this report." columns={[
+      ['Test', t => t.test_name], ['Date', t => day(t.test_date)], ['Result', t => t.result_text],
+      ['Normal low', t => t.test_normal_low], ['Normal high', t => t.test_normal_high], ['Notes', t => t.result_unstructured],
+    ]} />
+  }
+  return <>
+    <h3>Narrative</h3>
+    <p className="icsr-narrative">{report.narrative || 'No narrative.'}</p>
+    <h3>Causality</h3>
+    <Rows items={data.causality} empty="No causality assessed on this case." columns={[
+      ['Assessor', c => c.assessor], ['Method', c => String(c.method || '').replace(/_/g, ' ')], ['Result', c => c.category],
+    ]} />
+  </>
+}
+
 export default function ICSRBuilderPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -111,7 +201,7 @@ export default function ICSRBuilderPage() {
           <aside>{SECTIONS.map((s, i) => <button key={s} className={active === i ? 'active' : ''} onClick={() => setActive(i)}>{i + 1}. {s}</button>)}</aside>
           <main>
             <h2>{SECTIONS[active]}</h2>
-            <pre>{JSON.stringify(active === 0 ? report : active === 2 ? data.reactions : active === 3 ? data.drugs : active === 4 ? data.tests : active === 1 ? data.history : { narrative: report.narrative, causality: report.causality_per_drug }, null, 2)}</pre>
+            <SectionView active={active} data={data} report={report} />
             {message && <div className="icsr-message">{message}</div>}
             {errors.length > 0 && <div className="icsr-errors">{errors.map((e, i) => <button key={i} onClick={() => setActive(0)}>{e.path || 'XML'}: {e.reason}</button>)}</div>}
             <div className="icsr-sign-box">

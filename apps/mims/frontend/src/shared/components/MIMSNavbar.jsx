@@ -11,13 +11,14 @@ import { isAdminUser } from '../utils/adminScope.js'
 import { prefetchRoutePath } from '../utils/routePrefetch.js'
 import Icon from './Icon'
 
-const CASE_MGMT_ROUTES = {
-  'My Cases': '/cases?tab=my',
-  'Unassigned Cases': '/cases?tab=unassigned',
-  'Deleted Cases': '/cases?tab=deleted',
-  'Response Log': '/response-log',
-}
-const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases', 'Response Log']
+// Under Cases. Correspondence (the old Case Query) was reachable only from quick
+// search; Deleted Cases moved into the case list, for administrators.
+const CASE_ITEMS = [
+  { label: 'My Cases', to: '/cases?tab=my' },
+  { label: 'Unassigned Cases', to: '/cases?tab=unassigned' },
+  { label: 'Correspondence', to: '/cases?view=correspondence' },
+  { label: 'Response Log', to: '/response-log' },
+]
 
 function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
   const cls = `mims-sidenav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`
@@ -44,136 +45,124 @@ function NavSection({ title, collapsed }) {
   return <div className="mims-sidenav-section">{title}</div>
 }
 
+/**
+ * The menu (Rohith, 14 Oct 2026, Saad's recommendation):
+ *   - New Case sits at the top, the one action people take most;
+ *   - Work · Knowledge · Reporting · Administration — Reports and MIMS Admin
+ *     sat under Knowledge;
+ *   - an item the user cannot open is not shown (it was greyed: a content
+ *     author saw four dead items), and a heading with nothing under it goes too;
+ *   - "Cases" opens the case list; its arrow shows My Cases, Unassigned,
+ *     Correspondence and the Response Log.
+ * Each item follows the access rule of the page it opens (its route's module).
+ */
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess, hasCaseOption, user } = useAuth()
+  const { hasModuleAccess, hasCapability, user } = useAuth()
 
-  const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
-  const userRole = user?.role
+  const [casesOpen, setCasesOpen] = useState(false)
 
-  // Close accordions when sidebar collapses
+  // Close the Cases list when the sidebar collapses
   useEffect(() => {
     if (!collapsed) return
-    const frame = requestAnimationFrame(() => {
-      setCaseMgmtOpen(false)
-    })
+    const frame = requestAnimationFrame(() => setCasesOpen(false))
     return () => cancelAnimationFrame(frame)
   }, [collapsed])
 
-  function isActive(path)  { return location.pathname === path }
-  function isCasesActive() {
-    return location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log'
-  }
+  const isActive = (path) => location.pathname === path
+  const isCasesActive = location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log'
+  const can = (k) => hasModuleAccess(k)
 
-  function canAccess(k)         { return hasModuleAccess(k) }
-  function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
-  function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
-  const isAdmin = isAdminUser(userRole)
-  const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
+  const canUseCases = can('mims_core')
+  // New Case shows to people who may create cases (the case list's own button
+  // checks the same).
+  const canCreateCases = canUseCases && (hasCapability ? hasCapability('case.create') : true)
+  const work = { overview: canUseCases, inbox: can('inbox'), cases: canUseCases, transmissions: can('transmissions') }
+  const knowledge = { browse: can('browse_content'), content: can('content_mgmt') }
+  const reporting = can('reports')
+  const administration = isAdminUser(user?.role) && can('admin_console')
 
   return (
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
 
-      {/* Toggle button */}
       <button className="mims-sidenav-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
         <span className="mims-sidenav-icon"><Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} /></span>
         {!collapsed && <span className="mims-sidenav-label" style={{ fontSize: 11 }}>Collapse</span>}
       </button>
 
-      <div className="mims-sidenav-divider" />
-
-      {/* Home */}
-      <NavSection collapsed={collapsed} title="Work" />
-      <NavItem collapsed={collapsed} to="/dashboard" icon={<Icon name="overview" />} label="Overview" active={isActive('/dashboard')} />
-
-      {/* Inbox */}
-      <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox"
-        active={isActive('/inbox')}
-        disabled={!canAccess('inbox')} />
-
-
-      {/* Case Management — accordion */}
-      <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canAccessAny('mims_core', 'case_mgmt') ? ' disabled' : ''}`}
-        title={collapsed ? 'Case Management' : undefined}
-        onMouseEnter={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
-        onFocus={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
-        onClick={() => {
-          if (!canAccessAny('mims_core', 'case_mgmt')) return
-          if (collapsed) {
-            navigate('/cases?tab=my')
-            return
-          }
-          setCaseMgmtOpen(o => !o)
-        }}>
-        <span className="mims-sidenav-icon"><Icon name="folder" /></span>
-        {!collapsed && <span className="mims-sidenav-label">Case Management</span>}
-        {!collapsed && canAccessAny('mims_core', 'case_mgmt') && (
-          <span className="mims-sidenav-arrow"><Icon name={caseMgmtOpen ? 'chevron-up' : 'chevron-down'} size={14} /></span>
-        )}
-      </div>
-      {caseMgmtOpen && !collapsed && (
-        <div className="mims-sidenav-sub">
-          {CASE_MGMT_ITEMS.map(item => (
-            <Link key={item} to={CASE_MGMT_ROUTES[item]}
-              className={`mims-sidenav-sub-item${location.pathname + location.search === CASE_MGMT_ROUTES[item] ? ' active' : ''}`}
-              onMouseEnter={() => prefetchRoutePath(CASE_MGMT_ROUTES[item])}
-              onFocus={() => prefetchRoutePath(CASE_MGMT_ROUTES[item])}
-              onClick={() => setCaseMgmtOpen(false)}>
-              {item}
-            </Link>
-          ))}
+      {canCreateCases && (
+        <div className="mims-sidenav-new-case">
+          <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
+            onMouseEnter={() => prefetchRoutePath('/cases')}
+            onFocus={() => prefetchRoutePath('/cases')}
+            onClick={() => navigate('/cases?new=1')}
+            aria-label="Create new case">
+            {collapsed ? <Icon name="plus" size={16} /> : <><Icon name="plus" size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />New Case</>}
+          </button>
         </div>
       )}
 
-      {/* Utilities — accordion */}
-      <NavItem collapsed={collapsed} to="/transmissions" icon={<Icon name="transmissions" />} label="Transmissions"
-        active={isActive('/transmissions')}
-        disabled={!canAccess('transmissions')} />
+      <div className="mims-sidenav-divider" />
 
-      <NavSection collapsed={collapsed} title="Knowledge" />
-
-      {/* Browse Content */}
-      <NavItem collapsed={collapsed} to="/browse-content" icon={<Icon name="browse" />} label="Browse Content"
-        active={isActive('/browse-content')}
-        disabled={!canAccessAny('browse_content', 'content_mgmt')} />
-
-      {/* Content Management */}
-      {canAccess('content_mgmt') && (
-        <NavItem collapsed={collapsed} to="/content" icon={<Icon name="content" />} label="Content Management"
-          active={isActive('/content')}
-        />
+      {Object.values(work).some(Boolean) && <NavSection collapsed={collapsed} title="Work" />}
+      {work.overview && (
+        <NavItem collapsed={collapsed} to="/dashboard" icon={<Icon name="overview" />} label="Overview" active={isActive('/dashboard')} />
+      )}
+      {work.inbox && (
+        <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox" active={isActive('/inbox')} />
+      )}
+      {work.cases && (
+        <>
+          <div className={`mims-sidenav-item${isCasesActive ? ' active' : ''}`} title={collapsed ? 'Cases' : undefined}>
+            <Link to="/cases?tab=my" className="mims-sidenav-link" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, color: 'inherit', textDecoration: 'none', minWidth: 0 }}
+              onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')}>
+              <span className="mims-sidenav-icon"><Icon name="folder" /></span>
+              {!collapsed && <span className="mims-sidenav-label">Cases</span>}
+            </Link>
+            {!collapsed && (
+              <button type="button" className="mims-sidenav-arrow" onClick={() => setCasesOpen((o) => !o)}
+                aria-expanded={casesOpen} aria-label={casesOpen ? 'Hide case lists' : 'Show case lists'}
+                style={{ background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: '0 2px' }}>
+                <Icon name={casesOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+              </button>
+            )}
+          </div>
+          {casesOpen && !collapsed && (
+            <div className="mims-sidenav-sub">
+              {CASE_ITEMS.map((item) => (
+                <Link key={item.label} to={item.to}
+                  className={`mims-sidenav-sub-item${location.pathname + location.search === item.to ? ' active' : ''}`}
+                  onMouseEnter={() => prefetchRoutePath(item.to)}
+                  onFocus={() => prefetchRoutePath(item.to)}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {work.transmissions && (
+        <NavItem collapsed={collapsed} to="/transmissions" icon={<Icon name="transmissions" />} label="Transmissions" active={isActive('/transmissions')} />
       )}
 
-      {/* Reports */}
-      {canAccess('reports') && (
-        <NavItem collapsed={collapsed} to="/reports" icon={<Icon name="reports" />} label="Reports"
-          active={isActive('/reports')}
-        />
+      {Object.values(knowledge).some(Boolean) && <NavSection collapsed={collapsed} title="Knowledge" />}
+      {knowledge.browse && (
+        <NavItem collapsed={collapsed} to="/browse-content" icon={<Icon name="browse" />} label="Browse Content" active={isActive('/browse-content')} />
+      )}
+      {knowledge.content && (
+        <NavItem collapsed={collapsed} to="/content" icon={<Icon name="content" />} label="Content Management" active={isActive('/content')} />
       )}
 
-      {/* MIMS Admin */}
-      {(isAdmin && canAccess('admin_console')) && (
-        <NavItem collapsed={collapsed} to="/mims-admin" icon={<Icon name="admin" />} label="MIMS Admin"
-          active={isActive('/mims-admin')}
-        />
+      {reporting && <NavSection collapsed={collapsed} title="Reporting" />}
+      {reporting && (
+        <NavItem collapsed={collapsed} to="/reports" icon={<Icon name="reports" />} label="Reports" active={isActive('/reports')} />
       )}
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* + New Case */}
-      <div className="mims-sidenav-new-case">
-        <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
-          onMouseEnter={() => canCreateCase && prefetchRoutePath('/cases')}
-          onFocus={() => canCreateCase && prefetchRoutePath('/cases')}
-          onClick={() => canCreateCase && navigate('/cases?new=1')}
-          disabled={!canCreateCase}
-          aria-label="Create new case"
-          title={!canCreateCase ? 'Your security group does not allow Add New Case.' : undefined}>
-          {collapsed ? <Icon name="plus" size={16} /> : <><Icon name="plus" size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />New Case</>}
-        </button>
-      </div>
+      {administration && <NavSection collapsed={collapsed} title="Administration" />}
+      {administration && (
+        <NavItem collapsed={collapsed} to="/mims-admin" icon={<Icon name="admin" />} label="MIMS Admin" active={isActive('/mims-admin')} />
+      )}
 
     </nav>
   )

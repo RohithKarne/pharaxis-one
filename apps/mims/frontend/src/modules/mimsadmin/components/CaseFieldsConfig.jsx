@@ -254,6 +254,7 @@ export default function CaseFieldsConfig() {
                       {f.is_inherited && <span className="cf-fieldcfg-badge cf-fieldcfg-badge--inherit">inherited</span>}
                       {f.e2b && <span className="cf-fieldcfg-badge cf-fieldcfg-badge--e2b" title={`Sent in the E2B file as <${f.e2b}>`}>E2B</span>}
                       {f.removed_in_cleanup && f.is_hidden && <span className="cf-fieldcfg-badge cf-fieldcfg-badge--cut" title="Hidden by the case form clean-up; values kept">clean-up</span>}
+                      {f.shown_when && <span className="cf-fieldcfg-when">{f.shown_when}</span>}
                     </td>
                     <td>
                       <input
