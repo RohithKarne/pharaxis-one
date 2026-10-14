@@ -173,10 +173,10 @@ export default function FAQsSection({ token }) {
     } catch { toast.error('Network error.') }
   }
 
-  async function handleCheckIn() {
+  async function handleCheckIn(notes) {
     setCheckInLoading(true)
     try {
-      const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ notes: notes || undefined }) })
       if (res.ok) { setCheckInFaq(null); setRefreshKey(key => key + 1) }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }

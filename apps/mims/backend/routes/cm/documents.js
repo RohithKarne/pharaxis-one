@@ -149,6 +149,28 @@ function normalizeOptionalUrl(value) {
   }
 }
 
+// Periodic review: how many days a published document runs before its owner is
+// reminded to review it (cmReviewReminderService). The screen offered the field
+// but it was never saved, so no reminder could fire.
+function reviewCycleDays(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 && n <= 3650 ? n : null;
+}
+
+// Extra people emailed 90, 60 and 30 days before expiry (cmExpiryAlertService
+// reads them). The screen collected them but they were never saved. The form
+// sends a JSON list or a comma-separated string.
+function alertRecipients(value) {
+  let list = value;
+  if (typeof value === 'string') {
+    try { list = JSON.parse(value); } catch (_) { list = value.split(','); }
+  }
+  const emails = (Array.isArray(list) ? list : [])
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  return emails.length ? JSON.stringify([...new Set(emails)].slice(0, 20)) : null;
+}
+
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -325,6 +347,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients,
     } = req.body;
     const parsedSelectedModules = parseSelectedModules(selected_modules);
 
@@ -379,8 +402,9 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
           publish_as_pdf, send_as_pdf, selected_modules, attributes,
           mi_category_id, document_category, standard_response_text, authoring_source,
           external_provider, external_document_url, external_share_url, external_document_id,
-          external_drive_id, external_account_email, external_api_endpoint, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          external_drive_id, external_account_email, external_api_endpoint, created_by,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         docId, folder_id, doc_type || 'SRD', normalizedResponseDocType, name.trim(), effectiveContentHtml,
         filePath, fileName, fileSize, fileMime,
@@ -395,6 +419,8 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
         normalizedExternalProvider, normalizedExternalDocumentUrl, normalizedExternalShareUrl,
         normalizedExternalDocumentId, normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
         req.user.userId,
+        reviewCycleDays(review_cycle_days), normalizeOptionalString(regulatory_ref, 255),
+        alertRecipients(expiry_alert_recipients),
       ]
     );
 
@@ -608,6 +634,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients,
     } = req.body;
     const parsedSelectedModules = selected_modules !== undefined
       ? parseSelectedModules(selected_modules)
@@ -674,6 +701,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
          standard_response_text = ?, authoring_source = ?, external_provider = ?,
          external_document_url = ?, external_share_url = ?, external_document_id = ?,
          external_drive_id = ?, external_account_email = ?, external_api_endpoint = ?,
+         review_cycle_days = ?, regulatory_ref = ?, expiry_alert_recipients = ?,
          updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
@@ -699,6 +727,9 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
         normalizedAuthoringSource, normalizedExternalProvider,
         normalizedExternalDocumentUrl, normalizedExternalShareUrl, normalizedExternalDocumentId,
         normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
+        review_cycle_days !== undefined ? reviewCycleDays(review_cycle_days) : doc.review_cycle_days,
+        regulatory_ref !== undefined ? normalizeOptionalString(regulatory_ref, 255) : doc.regulatory_ref,
+        expiry_alert_recipients !== undefined ? alertRecipients(expiry_alert_recipients) : doc.expiry_alert_recipients,
         req.user.userId, id,
       ]
     );
@@ -1258,28 +1289,13 @@ router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/cm/documents/release-stale-checkouts — auto-release expired checkouts (CM-E4 + CM-T6)
+// POST /api/cm/documents/release-stale-checkouts — release expired check-outs now
+// (the scheduler does this every 15 minutes).
 router.post('/documents/release-stale-checkouts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [result] = hasPlatformAdminScope(req)
-      ? await pool.execute(
-        `UPDATE cm_documents
-         SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
-         WHERE checked_out_by IS NOT NULL
-           AND checkout_expires_at IS NOT NULL
-           AND checkout_expires_at < NOW()`
-      )
-      : await pool.execute(
-        `UPDATE cm_documents d
-         JOIN cm_folders f ON d.folder_id = f.id
-         SET d.checked_out_by = NULL, d.checked_out_at = NULL, d.checkout_expires_at = NULL
-         WHERE d.checked_out_by IS NOT NULL
-           AND d.checkout_expires_at IS NOT NULL
-           AND d.checkout_expires_at < NOW()
-           AND f.org_id = ?`,
-        [req.user.orgId]
-      );
-    res.json({ success: true, released: result.affectedRows });
+    const { releaseStaleCheckouts } = require('../../services/cmContentLifecycleService');
+    const { released } = await releaseStaleCheckouts(hasPlatformAdminScope(req) ? null : req.user.orgId);
+    res.json({ success: true, released });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

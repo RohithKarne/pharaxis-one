@@ -3,6 +3,8 @@ import toast from '../../../shared/utils/toast'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
+  // What changed goes into the version history (it was always "Checked in").
+  const [notes, setNotes] = useState('')
   return (
     <div className="cm-modal-overlay">
       <div className="cm-modal">
@@ -11,9 +13,11 @@ export function CheckInModal({ item, onClose, onConfirm, loading }) {
           Check in <strong>"{item?.name || item?.question || item?.title}"</strong>?<br />
           This will move it to <strong>Pending</strong> status.
         </p>
+        <label className="cm-form-label" htmlFor="checkin-notes">What changed</label>
+        <textarea id="checkin-notes" className="cm-form-textarea" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional — recorded in the version history" />
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="cm-btn cm-btn-primary" onClick={onConfirm} disabled={loading}>{loading ? 'Checking in…' : 'Confirm'}</button>
+          <button className="cm-btn cm-btn-primary" onClick={() => onConfirm(notes.trim())} disabled={loading}>{loading ? 'Checking in…' : 'Confirm'}</button>
         </div>
       </div>
     </div>

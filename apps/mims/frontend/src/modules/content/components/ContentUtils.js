@@ -1,3 +1,7 @@
+// The document types, in one place for the document screen and its filter (the
+// filter had its own list and missed Prescribing Information).
+export const DOC_TYPES = ['SRD', 'Prescribing Information', 'Enclosure', 'Information Document', 'Internal Document']
+
 export function parseMaybeJson(value, fallback = null) {
   if (value === undefined || value === null || value === '') return fallback
   if (typeof value === 'string') {

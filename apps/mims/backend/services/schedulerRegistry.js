@@ -57,6 +57,14 @@ module.exports = [
     configRoute:    '/browse-content',
   },
   {
+    name:           'cm-release-stale-checkouts',
+    source:         'Content Management',
+    cronExpression: '*/15 * * * *',
+    description:    'Returns documents to Draft when a two-hour check-out has expired',
+    type:           'cron',
+    configRoute:    '/browse-content',
+  },
+  {
     name:           'cm-review-reminders',
     source:         'Content Management',
     cronExpression: '0 8 * * 1',

@@ -5,6 +5,7 @@ import DocumentCreationScreen from './DocumentCreationScreen'
 import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal, VersionHistoryModal, ContentUsageModal, DocumentRelationsModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { DOC_TYPES } from './ContentUtils'
 
 const DEFAULT_FILTERS = {
   folder_id: '',
@@ -188,10 +189,10 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
     } catch { toast.error('Network error.') }
   }
 
-  async function handleCheckIn() {
+  async function handleCheckIn(notes) {
     setCheckInLoading(true)
     try {
-      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ notes: notes || undefined }) })
       if (res.ok) { setCheckInDoc(null); loadDocs() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
@@ -312,7 +313,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
             </select>
             <select className="cm-form-select" aria-label="Document type" style={{ width: 180 }} value={filters.doc_type} onChange={e => { setFilters(p => ({ ...p, doc_type: e.target.value })); setPage(1) }}>
               <option value="">All Types</option>
-              <option>SRD</option><option>Enclosure</option><option>Information Document</option><option>Internal Document</option>
+              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <select className="cm-form-select" aria-label="Status" style={{ width: 160 }} value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
               <option value="">All Statuses</option>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
-import { normalizeSelectedModules, parseMaybeJson } from './ContentUtils'
+import { normalizeSelectedModules, parseMaybeJson, DOC_TYPES } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -37,7 +37,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     version_notes: doc?.version_notes || '',
     review_cycle_days: doc?.review_cycle_days || '',
     regulatory_ref: doc?.regulatory_ref || '',
-    custom_attributes: parseMaybeJson(doc?.custom_attributes, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     bump_type: 'minor',
     is_product_specific: doc?.is_product_specific ? true : false,
     is_site_specific: doc?.is_site_specific ? true : false,
@@ -229,7 +228,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
-        if (k === 'selected_modules') fd.append(k, JSON.stringify(v))
+        // version_notes and bump_type go with the check-in, not the save.
+        if (k === 'version_notes' || k === 'bump_type') return
+        if (Array.isArray(v)) fd.append(k, JSON.stringify(v))
         else if (v !== null && v !== undefined) fd.append(k, v)
       })
       fd.set('authoring_source', effectiveAuthoringSource)
@@ -256,7 +257,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           const ciRes = await httpFetch(`/api/cm/documents/${docId}/checkin`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes: 'Checked in on creation' }),
+            // What changed and how big a change it is (Other Attributes) go with
+            // the check-in into the version history; both were dropped before.
+            body: JSON.stringify({ notes: form.version_notes.trim() || (isEdit ? 'Checked in' : 'Checked in on creation'), bump_type: form.bump_type }),
           })
           if (!ciRes.ok) {
             const ciErr = await ciRes.json()
@@ -310,12 +313,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           <div className="cm-form-group" style={{ margin: 0 }}>
             <label className="cm-form-label">Document Type <span style={{ color: 'var(--danger)' }}>*</span></label>
             <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
-              <option>SRD</option>
-              {/* Enclosed with an off-label answer (MI Response Settings, 14 Oct 2026). */}
-              <option>Prescribing Information</option>
-              <option>Enclosure</option>
-              <option>Information Document</option>
-              <option>Internal Document</option>
+              {/* Prescribing Information is enclosed with an off-label answer (MI Response Settings). */}
+              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="cm-form-group" style={{ margin: 0 }}>
@@ -764,11 +763,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         {/* ── Other Attributes Tab ── */}
         {activeTab === 'other' && (
           <div style={{ padding: '4px 0', maxWidth: 800 }}>
-            {doc && doc.owner_user_id && (
-              <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 16px', marginBottom: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>This document is <strong>locked</strong> to its owner. Only the owner can publish or release it.</span>
-              </div>
-            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               {doc && doc.version_major > 1 && (
@@ -794,9 +788,10 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               <div className="cm-form-group">
                 <label className="cm-form-label">Review Cycle</label>
                 <select aria-label="Review Cycle" className="cm-form-select" value={form.review_cycle_days || ''} onChange={e => setForm(p => ({ ...p, review_cycle_days: e.target.value }))}>
-                  <option value="">— Select —</option>
-                  {[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
+                  <option value="">— None —</option>
+                  {[[90, 'Every 3 months'], [180, 'Every 6 months'], [365, 'Every year'], [730, 'Every 2 years']].map(([d, l]) => <option key={d} value={d}>{l}</option>)}
                 </select>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>The owner is reminded to review the published document this often.</p>
               </div>
 
               <div className="cm-form-group">
@@ -805,29 +800,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
             </div>
 
-            <div className="cm-form-group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label className="cm-form-label" style={{ margin: 0 }}>Custom Attributes</label>
-                <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: [...(p.custom_attributes || []), { key: '', value: '' }] }))}
-                  style={{ fontSize: 12, padding: '3px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--primary)' }}>
-                  + Add Attribute
-                </button>
-              </div>
-              {(form.custom_attributes || []).length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No custom attributes. Click "+ Add Attribute" to add org-specific metadata.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(form.custom_attributes || []).map((attr, idx) => (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Key" value={attr.key} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], key: e.target.value }; return { ...p, custom_attributes: a }; })} />
-                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Value" value={attr.value} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], value: e.target.value }; return { ...p, custom_attributes: a }; })} />
-                      <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: p.custom_attributes.filter((_, i) => i !== idx) }))}
-                        style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 4, color: 'var(--danger)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
