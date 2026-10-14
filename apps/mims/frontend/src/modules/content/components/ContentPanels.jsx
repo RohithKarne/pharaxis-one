@@ -75,7 +75,8 @@ export function AssociatedDocsPanel({ docId, token }) {
   async function handleRemove(relId) {
     if (!await confirm('Remove this linked document?')) return
     try {
-      await httpFetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Could not remove the link.') }
       refreshRelations()
     } catch { toast.error('Network error.') }
   }
@@ -85,7 +86,7 @@ export function AssociatedDocsPanel({ docId, token }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Associated Documents</h4>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Linked documents appear automatically on the case form when this document is used in a response.</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>When this document is chosen for a letter, the letter builder suggests the documents linked here.</p>
         </div>
         <button onClick={() => setShowSearch(s => !s)} style={{ padding: '6px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
           + Link Document

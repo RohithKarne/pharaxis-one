@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { AssociatedDocsPanel } from './ContentPanels'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
   // What changed goes into the version history (it was always "Checked in").
@@ -502,103 +503,19 @@ export function ModuleUsageModal({ module: mod, token, onClose }) {
   )
 }
 
-// ── #6: Document Relations Modal ──────────────────────────────────────────────
+// ── Document Relations Modal ─────────────────────────────────────────────────
+// The list's Relations button opens the same panel as the document's Associated
+// Documents tab. It had its own copy, which sent the wrong field (every link
+// failed) and removed a just-linked row by the wrong id.
 export function DocumentRelationsModal({ doc, token, onClose }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const authHeadersGet = { Authorization: `Bearer ${token}` }
-  const [relations, setRelations] = useState([])
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const visibleSearchResults = search.trim().length < 2 ? [] : searchResults
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    httpFetch(`/api/cm/documents/${doc.id}/relations`, { headers: authHeadersGet })
-      .then(r => r.json())
-      .then(d => setRelations(d.relations || d.related || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [doc.id]) // eslint-disable-line
-
-  useEffect(() => {
-    if (search.trim().length < 2) return
-    const t = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const r = await httpFetch(`/api/cm/documents?search=${encodeURIComponent(search)}&limit=20`, { headers: authHeadersGet })
-        const d = await r.json()
-        setSearchResults((d.documents || []).filter(x => x.id !== doc.id))
-      } catch { /* silent */ }
-      setSearching(false)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [search]) // eslint-disable-line
-
-  async function linkDoc(related) {
-    try {
-      const res = await httpFetch(`/api/cm/documents/${doc.id}/relations`, {
-        method: 'POST', headers: authHeaders, body: JSON.stringify({ related_document_id: related.id })
-      })
-      if (res.ok) {
-        setRelations(p => [...p, related])
-        setSearch('')
-        setSearchResults([])
-        toast.success(`Linked: ${related.name}`)
-      } else { const d = await res.json(); toast.error(d.error || 'Link failed.') }
-    } catch { toast.error('Network error.') }
-  }
-
-  async function removeRelation(relatedId) {
-    try {
-      await httpFetch(`/api/cm/documents/${doc.id}/relations/${relatedId}`, { method: 'DELETE', headers: authHeadersGet })
-      setRelations(p => p.filter(r => r.id !== relatedId))
-    } catch { toast.error('Network error.') }
-  }
-
   return (
     <div className="cm-modal-overlay">
-      <div className="cm-modal" style={{ width: 580 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 className="cm-modal-title" style={{ margin: 0 }}>Document Relations — {doc.name}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>×</button>
+      <div className="cm-modal" style={{ width: 720, maxWidth: '95vw' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h3 className="cm-modal-title" style={{ margin: 0 }}>Related Documents — {doc.name}</h3>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>×</button>
         </div>
-        <div style={{ marginBottom: 16, position: 'relative' }}>
-          <input className="cm-form-input" placeholder="Search documents to link…" value={search} onChange={e => { const next = e.target.value; setSearch(next); if (next.trim().length < 2) setSearchResults([]) }} style={{ width: '100%' }} />
-          {(searching || visibleSearchResults.length > 0) && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 4, zIndex: 10, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,.1)' }}>
-              {searching ? (
-                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Searching…</div>
-              ) : visibleSearchResults.map(r => (
-                <div key={r.id}
-                  onClick={() => linkDoc(r)}
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-tint, #f0f4ff)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ fontWeight: 500 }}>{r.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>Loading…</p>
-        ) : relations.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16, fontSize: 13 }}>No related documents. Search above to link one.</p>
-        ) : (
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-            {relations.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                <div>
-                  <span style={{ fontWeight: 500 }}>{r.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{r.status}</span>
-                </div>
-                <button onClick={() => removeRelation(r.id)} className="cm-btn cm-btn-danger cm-btn-sm">Remove</button>
-              </div>
-            ))}
-          </div>
-        )}
+        <AssociatedDocsPanel docId={doc.id} token={token} />
         <div className="cm-modal-footer" style={{ marginTop: 16 }}>
           <button className="cm-btn cm-btn-secondary" onClick={onClose}>Close</button>
         </div>
