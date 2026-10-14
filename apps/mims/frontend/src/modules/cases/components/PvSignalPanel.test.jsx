@@ -24,7 +24,7 @@ const SIGNAL_ROWS = [
 ]
 
 beforeEach(() => {
-  global.fetch = vi.fn((url) => {
+  globalThis.fetch = vi.fn((url) => {
     if (String(url).includes('/pv/signals')) {
       return Promise.resolve({
         ok: true,

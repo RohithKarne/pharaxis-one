@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 /**
  * Asks for what the organisation's change-control rules require before a case is
@@ -9,7 +9,9 @@ import { useEffect, useState } from 'react'
  */
 export default function CaseChangeControlModal({ ask, onSubmit, onCancel }) {
   const [value, setValue] = useState('')
-  useEffect(() => { setValue('') }, [ask])
+  // A new question starts empty: reset while rendering, not in an effect.
+  const [prevAsk, setPrevAsk] = useState(ask)
+  if (ask !== prevAsk) { setPrevAsk(ask); setValue('') }
   if (!ask) return null
   const isPassword = ask.needs === 'password'
 

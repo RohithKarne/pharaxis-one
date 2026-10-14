@@ -38,6 +38,9 @@ export default function CaseBridgePanel({ caseId, headers }) {
       .then(d => { if (!cancelled) setInfo(d) })
       .catch(() => {})
     return () => { cancelled = true }
+    // Keyed on the token, not the headers object: the page builds a new object
+    // each render, and depending on it would refetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, headers?.Authorization])
 
   if (!info || (!info.source && !info.possible_duplicate)) return null
