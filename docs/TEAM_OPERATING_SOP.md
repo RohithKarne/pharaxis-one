@@ -3773,6 +3773,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-14 | Saad | MI response and hand-off review: MI Response Settings (off-label and closing statements, prescribing information required on off-label letters, routine/urgent working days, second-signer rules; migration 178); Transmission Setup screen (safety and quality targets, encrypted key, hand-off days, test); hand-off due date and reconciliation list. Sections 8 and 9b updated. |
 | 2026-10-14 | Saad | Content management review: letters use only published, in-date modules, templates and documents; templates signed on approve and publish with an independent approver and moving versions; document fields that were dropped now saved (review cycle, regulatory reference, extra expiry recipients); expired check-outs released; Revise for published documents and templates (migration 179); product and language on documents, followed by the letter builder (migration 180); one merge-field list with case fields and Insert field; Make letter files a letter on the case; Merge Reports retired; MI shows documents sent; linked documents suggested. Sections 1 and 7 updated. |
 | 2026-10-14 | Saad | Content management review follow-up: Revise for modules (documents built from a module move to its new version) and FAQs (migration 181); Make letter files a PDF; templates carry a language (migration 182); new documents default to a yearly review. Section 7 updated. |
+| 2026-10-14 | Saad | Content management in-depth review: emailed letters enclose on-screen and module-built documents as PDFs; folder permissions enforced (and Configure folders checked); review outcome when nobody accepts, reviewer decisions shown to the approver, Reviews I Started, daily overdue reminders; version history across revisions and for modules and FAQs; compare versions by text; Relations, alert settings, publishing checks, Browse filters and bookmarks, dashboard review queues and the module form fixed; unreachable screens, the activity log and the duplicate Browse tab removed. No migration. Section 7 updated. |
 
 ---
 
@@ -4140,7 +4141,15 @@ Backend on port 3000. All routes under `/api/`.
 ##### Content Management
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/cm/folders` | Active content folders |
+| GET | `/api/cm/folders` | Active content folders the user may open (`?include_inactive=true` for Folder Manager), with published counts for Browse |
+| POST/PUT/DELETE | `/api/cm/folders[/:id]` | Folder setup — needs Configure folders (`content.folder.configure`); a folder holding live documents, FAQs, modules or templates cannot be closed |
+| GET/POST/DELETE | `/api/cm/folders/:id/permissions[/:groupId]` | Groups on a folder (`security_group_id`, level read / write / manage). Enforced by `services/cmFolderAccess.js` and `middleware/cmAccess.js`: no groups = open; with groups, only members see the folder's content (lists, items, downloads, Browse, letter builder); Write to change content, Manage to change the folder; administrators always pass |
+| GET | `/api/cm/sites`, `/api/cm/mailboxes` | The organisation's sites (Folder Manager) and sending mailboxes (expiry alerts), for content managers |
+| GET | `/api/cm/documents/:id/reviews` | The document's reviews and each reviewer's decision (Approve dialog) |
+| GET | `/api/cm/documents/:id/publish-checks`, `/api/cm/faqs/:id/publish-checks` | The publishing checks run without publishing (publish dialogs) |
+| GET | `/api/cm/publishing-checks` | The checks run at publish, read-only (Content Settings) |
+| GET | `/api/cm/documents/:id/compare` | The versions in a document's line; with `?a=&b=` the text of two to compare (replaces `version-diff`, removed 2026-10-14) |
+| GET | `/api/cm/{documents,modules,faqs,templates}/:id/versions` | Version history of the whole line of versions (`services/cmLineage.js`) |
 | CRUD | `/api/cm/documents` | Documents — Draft → Published lifecycle |
 | POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor) and notes into the version history. Auto-sets owner_user_id on first checkin. |
 | POST | `/api/cm/documents/:id/publish` | Publish — password and reason; next major version. Publishing a revision archives the version it replaces ("Superseded by version N"). |
@@ -4157,7 +4166,7 @@ Backend on port 3000. All routes under `/api/`.
 | CRUD | `/api/cm/templates` | Letter templates (Response, Acknowledgment, Correspondence, Email); a folder is required. Approve and publish need password and reason, and the author cannot approve. Publish = next major version; a wording change adds to the minor. A published template changes through `POST /:id/revise`. |
 | GET | `/api/cm/merge-fields` | The merge-field catalogue (`services/mergeFields.js`), one list for the letter builder, the preview and generated letters; values escaped in a letter body |
 | POST | `/api/cm/templates/:id/generate` | Make a letter for a case number from a published, in-date template; filed on the case as a PDF attachment (field `Letters`, `makeLetterPdf` in `services/pdfExportService.js`) and audited. Replaces Merge Reports (retired 2026-10-14; `cm_merge_reports` kept). |
-| GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers |
+| GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers. A decision is Accepted, Accepted with Changes, Declined or Rejected (a reason for all but Accepted). A review nobody accepted returns the document to Pending; a rejection to Draft. `GET /reviews/all?mine=true` is Reviews I Started (progress, End, Transfer to someone who can author content). Reviews past their end date remind reviewers and owner daily (`cm-review-overdue`). |
 | CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
 
 ##### Regression Testing Suite
