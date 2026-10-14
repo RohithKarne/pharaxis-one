@@ -428,7 +428,8 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/cm`, require('./routes/cm/documents'));
   r.use(`${prefix}/cm`, require('./routes/cm/modules'));
   r.use(`${prefix}/cm`, require('./routes/cm/faqs'));
-  r.use(`${prefix}/cm`, require('./routes/cm/mergeReports'));
+  // Merge Reports retired (content review, 2026-10-14): a case letter is made from a
+  // published template (POST /cm/templates/:id/generate). cm_merge_reports is kept.
   r.use(`${prefix}/cm`, require('./routes/cm/templates'));
   r.use(`${prefix}/cm`, require('./routes/cm/reviews'));
 

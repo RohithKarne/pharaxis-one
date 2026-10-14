@@ -14,6 +14,7 @@
 
 const pool = require('../database/db');
 const { getSettings } = require('./miResponseSettings');
+const { buildMergeData, applyHtml, applyText } = require('./mergeFields');
 
 const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -243,30 +244,19 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   });
   const selectedContent = contentBlocks.join('\n');
 
-  // {{patient_name}} was the recipient (usually the reporting HCP) and
-  // {{agent_name}} an email (M-47, same slip as merge letters). The patient is
-  // recorded by initials only; the recipient has its own fields.
-  const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
-  const [[patientRow]] = await pool.execute('SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1', [scopedCase.id]);
-
-  // Merge field map
-  const mergeData = {
-    date:             new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-    agent_name:       agent?.name || req.user.name || req.user.email || '',
-    case_number:      scopedCase.case_number || '',
-    case_type:        scopedCase.case_type || '',
-    org_name:         scopedCase.org_name || '',
-    recipient_name:   recipient.name || recipient.email || 'Requestor',
-    recipient_email:  recipient.email || '',
-    patient_name:     patientRow?.initials || '',
-    patient_email:    '',
-    product_name:     product?.trade_name || miTab?.product_name || '',
-    product_family:   product?.family_name || miTab?.family_name || '',
-    mi_question:      miTab?.question_summary || miTab?.detailed_question || '',
-    selected_content: selectedContent,
-    smpc_link:        payload.smpc_link || '',
-    qr_code:          payload.qr_code || '',
-  };
+  // One set of merge values for every letter (services/mergeFields.js): the case,
+  // the requester chosen here, this MI and its product, plus the chosen content.
+  const mergeData = await buildMergeData({
+    caseId: scopedCase.id,
+    userId: req.user.userId,
+    recipient,
+    miTab,
+    productName: product?.trade_name || null,
+  });
+  mergeData.recipient_name = mergeData.recipient_name || 'Requestor';
+  mergeData.contact_name = mergeData.recipient_name;
+  if (product?.family_name) mergeData.product_family = product.family_name;
+  mergeData.selected_content = selectedContent;
 
   const templateSubject = payload.subject !== undefined
     ? payload.subject
@@ -276,7 +266,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     : (template?.body_html || payload.response_text || '');
   const customText = String(payload.custom_text || '').trim();
   const bodyWithCustomText = customText
-    ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${customText.replace(/\n/g, '<br/>')}</p></section>`
+    ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${escapeHtml(customText).replace(/\n/g, '<br/>')}</p></section>`
     : templateBody;
 
   // The organisation's statements (MI Response Settings): the off-label
@@ -293,8 +283,9 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     statementBlocks.push(`<section data-closing-statement="true"><p>${asHtml(settings.closing_statement)}</p></section>`);
   }
 
-  const renderedSubject = applyMergeFields(templateSubject, mergeData);
-  const renderedBody    = applyMergeFields(bodyWithCustomText || '{{selected_content}}', mergeData) + statementBlocks.join('');
+  const renderedSubject = applyText(templateSubject, mergeData);
+  // Values are escaped in the letter body, so a typed name or question cannot add markup.
+  const renderedBody    = applyHtml(bodyWithCustomText || '{{selected_content}}', mergeData) + statementBlocks.join('');
   const previewHtml     = `<article class="mi-response-preview"><h2>${renderedSubject}</h2>${renderedBody}</article>`;
 
   return {

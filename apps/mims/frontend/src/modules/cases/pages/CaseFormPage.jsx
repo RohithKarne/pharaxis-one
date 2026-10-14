@@ -92,6 +92,8 @@ export default function CaseFormPage() {
       communications: { step: 3, tab: 'workflow' },
       comments: { step: 3, tab: 'workflow', communicationsPane: 'threads' },
       correspondence: { step: 3, tab: 'workflow', communicationsPane: 'correspondence' },
+      // Where a letter made from a template is filed (Templates > Make letter).
+      attachments: { step: 3, tab: 'workflow', communicationsPane: 'attachments' },
       icsr: { step: 3, tab: 'workflow' },
       dppr: { step: 3, tab: 'workflow' },
     }

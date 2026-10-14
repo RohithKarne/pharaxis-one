@@ -10,7 +10,6 @@ const FolderManager = lazy(() => import('../components/FolderManager'))
 const DocumentsSection = lazy(() => import('../components/DocumentsSection'))
 const ModulesSection = lazy(() => import('../components/ModulesSection'))
 const FAQsSection = lazy(() => import('../components/FAQsSection'))
-const MergeReportsSection = lazy(() => import('../components/MergeReportsSection'))
 const TemplatesSection = lazy(() => import('../components/TemplatesSection'))
 const BrowseSection = lazy(() => import('../components/BrowseSection'))
 const CMSettingsSection = lazy(() => import('../components/CMSettingsSection'))
@@ -44,8 +43,7 @@ export default function ContentPage() {
         { key: 'documents', label: 'Documents', description: 'Controlled source content and approval-ready assets.' },
         { key: 'modules', label: 'Modular Documents', description: 'Reusable modules for high-volume content assembly.' },
         { key: 'faqs', label: 'FAQs', description: 'Trusted answer sets for recurring medical information needs.' },
-        { key: 'templates', label: 'Templates', description: 'Reusable starting points for structured content creation.' },
-        { key: 'merge-reports', label: 'Merge Reports', description: 'Output packages and merge-driven reporting assets.' },
+        { key: 'templates', label: 'Templates', description: 'Approved letter wording, merged with case data for a letter.' },
       ],
     },
     {
@@ -107,7 +105,6 @@ export default function ContentPage() {
             {activeTab === 'documents' && <DocumentsSection token={token} user={user} initialSubTab={openReviews ? 'reviews' : 'all'} />}
             {activeTab === 'modules' && <ModulesSection token={token} />}
             {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
-            {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
             {activeTab === 'templates' && <TemplatesSection token={token} />}
             {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
             {activeTab === 'browse' && <BrowseSection token={token} />}

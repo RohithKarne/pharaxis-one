@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { getCaseProductName } = require('../../services/caseProductName');
+const { MERGE_FIELDS, buildMergeData, applyHtml, applyText } = require('../../services/mergeFields');
 const { authenticate } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -448,10 +448,12 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cm/templates/:id/render — render template with live case data (merge fields)
-// Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}},
-//   {{contact_name}}, {{contact_email}}, {{product_name}}, {{agent_name}},
-//   {{org_name}}, {{date}}. {{patient_email}} is kept but always blank.
+// GET /api/cm/merge-fields — the fields a template can use, for the editors.
+router.get('/merge-fields', authenticate, (req, res) => {
+  res.json({ fields: MERGE_FIELDS });
+});
+
+// POST /api/cm/templates/:id/render — preview a template with a case's data.
 router.post('/templates/:id/render', authenticate, async (req, res) => {
   try {
     const { case_id } = req.body;
@@ -462,80 +464,78 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
       scopedCase = await getScopedCase(req, case_id);
       if (!scopedCase) return res.status(404).json({ error: 'Case not found.' });
     }
-    const evidenceOrgId = Number(req.user.orgId || scopedCase?.org_id || 0) || null;
-    if (evidenceOrgId) {
-      const evidenceGate = await enforceEvidenceGate({
-        orgId: evidenceOrgId,
-        contentType: 'template',
-        contentId: Number(req.params.id),
-        mode: 'response',
-        actorUserId: req.user.userId,
-        metadata: { route: '/api/cm/templates/:id/render', case_id: case_id || null },
-      });
-      if (!evidenceGate.allow) {
-        return res.status(422).json({
-          error: `This template cannot be used in a response yet: ${(evidenceGate.result?.blockers || []).join(' ') || 'it did not pass the evidence check.'}`,
-          run_id: evidenceGate.run_id,
-          evidence: evidenceGate.result,
-        });
-      }
-    }
-
-    // Build merge data
-    // The token carries no display name, so agent_name printed an email (M-47).
-    const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
-    const mergeData = {
-      date: new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-      agent_name: agent?.name || req.user.name || req.user.email || '',
-      case_number: '',
-      case_type: '',
-      patient_name: '',
-      patient_email: '',
-      contact_name: '',
-      contact_email: '',
-      product_name: '',
-      org_name: '',
-    };
-
-    if (case_id) {
-      mergeData.case_number = scopedCase.case_number || '';
-      mergeData.case_type   = scopedCase.case_type || '';
-      mergeData.org_name    = scopedCase.org_name || '';
-
-      const [[contactRow]] = await pool.execute(
-        `SELECT CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) AS full_name, email
-         FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
-        [case_id]
-      );
-      // The first contact is who the letter is for, not the patient (M-47).
-      if (contactRow) {
-        mergeData.contact_name  = contactRow.full_name?.trim() || '';
-        mergeData.contact_email = contactRow.email || '';
-      }
-      const [[patientRow]] = await pool.execute(
-        'SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1',
-        [case_id]
-      );
-      mergeData.patient_name = patientRow?.initials || '';
-
-      mergeData.product_name = await getCaseProductName(case_id);
-    }
-
-    // Apply merge fields to subject and body
-    function applyMerge(text) {
-      if (!text) return text;
-      return text.replace(/\{\{(\w+)\}\}/g, (_, key) => mergeData[key] !== undefined ? mergeData[key] : `{{${key}}}`);
-    }
-
+    // A preview is not a send: the evidence gate applies when a letter is made.
+    const mergeData = await buildMergeData({ caseId: scopedCase?.id || null, userId: req.user.userId });
     res.json({
-      rendered_subject: applyMerge(template.subject),
-      rendered_body:    applyMerge(template.body_html),
+      rendered_subject: applyText(template.subject, mergeData),
+      rendered_body:    applyHtml(template.body_html, mergeData),
       merge_data:       mergeData,
       template_id:      template.id,
       template_name:    template.name,
     });
   } catch (err) {
     console.error('POST /cm/templates/:id/render error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/templates/:id/generate — make a letter for a case from a
+// published template and file it on the case (its Letters attachments). This
+// replaces Merge Reports, which made letters from unapproved wording, kept the
+// output on the report itself and never put it on the case.
+router.post('/templates/:id/generate', authenticate, async (req, res) => {
+  try {
+    const caseNumber = String(req.body?.case_number || '').trim();
+    if (!caseNumber) return res.status(400).json({ error: 'Enter the case number the letter is for.' });
+    const [cases] = await pool.execute(
+      hasPlatformAdminScope(req)
+        ? 'SELECT id, org_id, case_number FROM cases WHERE case_number = ? AND is_deleted = 0 LIMIT 2'
+        : 'SELECT id, org_id, case_number FROM cases WHERE case_number = ? AND org_id = ? AND is_deleted = 0 LIMIT 2',
+      hasPlatformAdminScope(req) ? [caseNumber] : [caseNumber, req.user.orgId]);
+    if (cases.length !== 1) return res.status(404).json({ error: `No case ${caseNumber} in this organisation.` });
+    const theCase = cases[0];
+
+    const template = await getScopedTemplate(req, req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found.' });
+    const expired = template.expiry_date && new Date(template.expiry_date) < new Date(new Date().toISOString().slice(0, 10));
+    if (template.status !== 'Published' || expired) {
+      return res.status(409).json({ error: 'A letter is made only from a published, in-date template.' });
+    }
+    const evidenceGate = await enforceEvidenceGate({
+      orgId: theCase.org_id, contentType: 'template', contentId: Number(template.id), mode: 'response',
+      actorUserId: req.user.userId, metadata: { route: '/api/cm/templates/:id/generate', case_id: theCase.id },
+    });
+    if (!evidenceGate.allow) {
+      return res.status(422).json({ error: `This template cannot be used yet: ${(evidenceGate.result?.blockers || []).join(' ')}` });
+    }
+
+    const mergeData = await buildMergeData({ caseId: theCase.id, userId: req.user.userId });
+    const subject = applyText(template.subject || template.name, mergeData);
+    const body = applyHtml(template.body_html, mergeData);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${subject.replace(/</g, '&lt;')}</title></head>`
+      + `<body style="font-family:Arial,sans-serif;font-size:13px;line-height:1.6;max-width:800px;margin:40px auto">${body}</body></html>`;
+    const storage = require('../../services/fileStorageService');
+    const crypto = require('crypto');
+    const buf = Buffer.from(html, 'utf8');
+    const key = storage.generateKey('.html');
+    await storage.put({ orgId: theCase.org_id, key, body: buf, contentType: 'text/html' });
+    const fileName = `${template.name} - ${theCase.case_number} - ${new Date().toISOString().slice(0, 10)}.html`.replace(/[\\/:*?"<>|]/g, '-');
+    const [ins] = await pool.execute(
+      `INSERT INTO attachments (org_id, entity_type, entity_id, field_name, storage_provider, storage_key, original_name, mime_type, size_bytes, checksum_sha256, uploaded_by, ocr_status)
+       VALUES (?, 'case', ?, 'Letters', ?, ?, ?, 'text/html', ?, ?, ?, 'skipped')`,
+      [theCase.org_id, theCase.id, storage.PROVIDER || 'local', key, fileName, buf.length,
+       crypto.createHash('sha256').update(buf).digest('hex'), req.user.userId]);
+    await audit(req.user.userId, req.user.email, 'GENERATE_LETTER', 'cm_template', Number(template.id), {
+      case_id: theCase.id, case_number: theCase.case_number, attachment_id: ins.insertId,
+      template_version: `${template.version_major || 1}.${template.version_minor || 0}`,
+    });
+    res.status(201).json({
+      message: `Letter filed on case ${theCase.case_number}.`,
+      attachment_id: ins.insertId, file_name: fileName, case_id: theCase.id, case_number: theCase.case_number,
+      rendered_subject: subject, rendered_body: body,
+    });
+  } catch (err) {
+    console.error('POST /cm/templates/:id/generate error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

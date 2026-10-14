@@ -31,6 +31,14 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const [caseResults, setCaseResults] = useState([])
   const [selectedCase, setSelectedCase] = useState(null)
   const [caseSearching, setCaseSearching] = useState(false)
+  // The fields a template can use, from the server's one list.
+  const [mergeFields, setMergeFields] = useState([])
+  useEffect(() => {
+    httpFetch('/api/cm/merge-fields', { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : { fields: [] }))
+      .then(d => setMergeFields(d.fields || []))
+      .catch(() => setMergeFields([]))
+  }, [authHeaders])
 
   useEffect(() => {
     if (caseSearch.trim().length < 2) return
@@ -116,7 +124,8 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Body <span className="required">*</span></label>
-            <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} />
+            <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} mergeFields={mergeFields} />
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Use Insert field to add case data — the requester, product, question, dates and more.</p>
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Expiry Date</label>
@@ -139,7 +148,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           <div style={{ padding: '0 24px 16px', borderTop: '1px solid var(--border)' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 8px', fontWeight: 600 }}>MERGE FIELD PREVIEW</p>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-              Supported fields: {'{{case_number}} {{case_type}} {{contact_name}} {{contact_email}} {{patient_name}} (initials) {{product_name}} {{agent_name}} {{org_name}} {{date}}'}
+              Pick a case to see the template with its data.
             </p>
             <div style={{ marginBottom: 8 }}>
               <div style={{ position: 'relative' }}>
@@ -254,6 +263,19 @@ export default function TemplatesSection({ token }) {
     return false
   }
 
+  // Make a letter for a case from a published template; it is filed on the case.
+  const [letter, setLetter] = useState(null)
+  async function makeLetter() {
+    if (!letter.caseNumber.trim()) return toast.warn('Enter the case number.')
+    setLetter(p => ({ ...p, busy: true }))
+    try {
+      const res = await httpFetch(`/api/cm/templates/${letter.t.id}/generate`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ case_number: letter.caseNumber.trim() }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) setLetter(p => ({ ...p, busy: false, result: d }))
+      else { toast.error(d.error || 'The letter could not be made.'); setLetter(p => ({ ...p, busy: false })) }
+    } catch { toast.error('Network error.'); setLetter(p => ({ ...p, busy: false })) }
+  }
+
   // The published version stays in letters while its next version is drafted.
   async function revise(t) {
     try {
@@ -340,6 +362,7 @@ export default function TemplatesSection({ token }) {
                 <td>
                   <div className="cm-action-btns">
                     {t.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>}
+                    {t.status === 'Published' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setLetter({ t, caseNumber: '', busy: false, result: null })}>Make letter</button>}
                     {t.status === 'Published' && !t.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => revise(t)}>Revise</button>}
                     {t.status === 'Published' && t.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
@@ -356,6 +379,37 @@ export default function TemplatesSection({ token }) {
       )}
       {showDrawer && (
         <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
+      )}
+      {letter && (
+        <div className="cm-modal-overlay" onClick={() => !letter.busy && setLetter(null)}>
+          <div className="cm-modal" style={{ width: 720, maxWidth: '96vw', maxHeight: '90vh', overflow: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px' }}>Make a letter — {letter.t.name}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+              Version {letter.t.version}. The template is filled with the case's data and the letter is filed on the case, under Attachments.
+            </p>
+            {!letter.result ? (
+              <>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }} htmlFor="letter-case">Case number</label>
+                <input id="letter-case" className="cm-form-input" style={{ marginBottom: 16 }} value={letter.caseNumber} onChange={e => setLetter(p => ({ ...p, caseNumber: e.target.value }))} placeholder="e.g. MI-289396" />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="cm-btn cm-btn-secondary" onClick={() => setLetter(null)} disabled={letter.busy}>Cancel</button>
+                  <button className="cm-btn cm-btn-primary" onClick={makeLetter} disabled={letter.busy}>{letter.busy ? 'Making…' : 'Make and file letter'}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="cm-letter-filed" role="status">
+                  Filed on case <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/cases/${letter.result.case_id}?section=attachments`}>{letter.result.case_number}</a> as “{letter.result.file_name}”.
+                </div>
+                <p style={{ margin: '12px 0 4px', fontWeight: 600 }}>{letter.result.rendered_subject}</p>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 12, fontSize: 13 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(letter.result.rendered_body || '') }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <button className="cm-btn cm-btn-primary" onClick={() => setLetter(null)}>Done</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
       {esign && (
         <div className="cm-modal-overlay" onClick={() => setEsign(null)}>

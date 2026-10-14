@@ -75,7 +75,6 @@ vi.mock('../modules/content/components/FolderManager', () => ({ default: ({ show
 vi.mock('../modules/content/components/DocumentsSection', () => ({ default: () => <div data-testid="documents-section">documents</div> }))
 vi.mock('../modules/content/components/ModulesSection', () => ({ default: () => <div data-testid="modules-section">modules</div> }))
 vi.mock('../modules/content/components/FAQsSection', () => ({ default: () => <div data-testid="faqs-section">faqs</div> }))
-vi.mock('../modules/content/components/MergeReportsSection', () => ({ default: () => <div data-testid="merge-reports-section">merge</div> }))
 vi.mock('../modules/content/components/TemplatesSection', () => ({ default: () => <div data-testid="templates-section">templates</div> }))
 vi.mock('../modules/content/components/BrowseSection', () => ({ default: () => <div data-testid="browse-section">browse</div> }))
 vi.mock('../modules/content/components/CMSettingsSection', () => ({ default: () => <div data-testid="settings-section">settings</div> }))

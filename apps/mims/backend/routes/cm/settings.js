@@ -65,12 +65,12 @@ router.get('/overview', authenticate, async (req, res) => {
       scoped.params
     );
 
-    const [mergeReportStatusRows] = await pool.execute(
-      `SELECT mr.status, COUNT(*) AS total
-       FROM cm_merge_reports mr
-       JOIN cm_folders f ON f.id = mr.folder_id
+    const [templateStatusRows] = await pool.execute(
+      `SELECT t.status, COUNT(*) AS total
+       FROM cm_templates t
+       JOIN cm_folders f ON f.id = t.folder_id
        WHERE 1=1${scoped.clause}
-       GROUP BY mr.status`,
+       GROUP BY t.status`,
       scoped.params
     );
 
@@ -104,7 +104,7 @@ router.get('/overview', authenticate, async (req, res) => {
       counts: {
         documents: Object.fromEntries(documentStatusRows.map((row) => [row.status, Number(row.total || 0)])),
         faqs: Object.fromEntries(faqStatusRows.map((row) => [row.status, Number(row.total || 0)])),
-        merge_reports: Object.fromEntries(mergeReportStatusRows.map((row) => [row.status, Number(row.total || 0)])),
+        templates: Object.fromEntries(templateStatusRows.map((row) => [row.status, Number(row.total || 0)])),
       },
       queues: {
         expiring_documents: expiringDocuments,

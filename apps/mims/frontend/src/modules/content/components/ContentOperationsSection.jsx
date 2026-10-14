@@ -68,13 +68,13 @@ export default function ContentOperationsSection({ token, onNavigate }) {
         <QueueCard label="Docs Ready to Publish" value={countFor(overview?.counts?.documents, 'Approved')} tone="success" onClick={() => onNavigate?.('documents')} />
         <QueueCard label="FAQs Pending Review" value={countFor(overview?.counts?.faqs, 'Pending')} tone="warning" onClick={() => onNavigate?.('faqs')} />
         <QueueCard label="Checked Out Docs" value={countFor(overview?.counts?.documents, 'CheckedOut')} tone="danger" onClick={() => onNavigate?.('documents')} />
-        <QueueCard label="Merge Reports in Draft" value={countFor(overview?.counts?.merge_reports, 'Draft')} onClick={() => onNavigate?.('merge-reports')} />
+        <QueueCard label="Templates Ready to Publish" value={countFor(overview?.counts?.templates, 'Approved')} tone="success" onClick={() => onNavigate?.('templates')} />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         <button className="cm-btn cm-btn-secondary" onClick={() => onNavigate?.('documents')}>Open Documents</button>
         <button className="cm-btn cm-btn-secondary" onClick={() => onNavigate?.('faqs')}>Open FAQs</button>
-        <button className="cm-btn cm-btn-secondary" onClick={() => onNavigate?.('merge-reports')}>Open Merge Reports</button>
+        <button className="cm-btn cm-btn-secondary" onClick={() => onNavigate?.('templates')}>Open Templates</button>
         <button className="cm-btn cm-btn-secondary" onClick={() => onNavigate?.('settings')}>Open Settings</button>
       </div>
 
