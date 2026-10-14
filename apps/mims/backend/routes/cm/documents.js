@@ -14,7 +14,7 @@ const { authenticate, requireRole, requireCapability } = require('../../middlewa
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
-const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { enforceEvidenceGate, evaluateEvidenceChain } = require('../../services/contentIntelligenceService');
 
 const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -1113,6 +1113,21 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
     res.json({ message: 'Document approved.' });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/approve', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to approve CM document');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/documents/:id/publish-checks — the publishing checks for this
+// document, run without publishing, so the publisher sees what would stop it
+// and what is only a warning. Warnings were never shown to anyone.
+router.get('/documents/:id/publish-checks', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const r = await evaluateEvidenceChain({ orgId: doc.folder_org_id || req.user.orgId, contentType: 'document', contentId: doc.id, mode: 'publish' });
+    res.json({ allow: r.allow, blockers: r.blockers, warnings: r.warnings, checks: r.checks });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/publish-checks' }, 'Failed to run publishing checks');
     res.status(500).json({ error: 'Server error.' });
   }
 });

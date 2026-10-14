@@ -10,7 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
-const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { enforceEvidenceGate, evaluateEvidenceChain } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
@@ -141,6 +141,19 @@ router.get('/faqs/:id/versions', authenticate, async (req, res) => {
     res.json({ versions: await lineageHistory('faq', row.id) });
   } catch (err) {
     console.error('GET /cm/faqs/:id/versions error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/faqs/:id/publish-checks — the publishing checks, run without publishing.
+router.get('/faqs/:id/publish-checks', authenticate, async (req, res) => {
+  try {
+    const faq = await getScopedFaq(req, req.params.id);
+    if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
+    const r = await evaluateEvidenceChain({ orgId: faq.folder_org_id || req.user.orgId, contentType: 'faq', contentId: faq.id, mode: 'publish' });
+    res.json({ allow: r.allow, blockers: r.blockers, warnings: r.warnings, checks: r.checks });
+  } catch (err) {
+    console.error('GET /cm/faqs/:id/publish-checks error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

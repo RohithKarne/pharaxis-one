@@ -161,6 +161,25 @@ router.put('/settings', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/cm/publishing-checks — the checks run before content is published
+// (and before a template goes into a letter), read-only. They were built-in
+// defaults with no reachable screen.
+router.get('/publishing-checks', authenticate, async (req, res) => {
+  try {
+    const { listEvidenceRules } = require('../../services/contentIntelligenceService');
+    const org = orgId(req);
+    const out = [];
+    for (const [type, mode] of [['document', 'publish'], ['faq', 'publish'], ['template', 'response']]) {
+      for (const r of await listEvidenceRules(org, type, mode)) {
+        out.push({ content: type, name: r.rule_name, check_type: r.check_type, config: r.check_config, severity: r.severity });
+      }
+    }
+    res.json({ checks: out });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/cm/mailboxes — the organisation's sending mailboxes, for expiry
 // alerts. The screens read the admin mailbox list, which refuses content
 // managers, and showed names from fields that do not exist.

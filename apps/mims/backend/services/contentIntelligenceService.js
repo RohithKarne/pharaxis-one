@@ -1154,6 +1154,7 @@ module.exports = {
   normalizeMode,
   evaluateEvidenceChain,
   compileEvidenceChain,
+  listEvidenceRules,
   enforceEvidenceGate,
   listEvidenceRuns,
   runContradictionScan,

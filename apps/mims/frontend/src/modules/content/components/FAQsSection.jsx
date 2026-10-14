@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
-import { CheckInModal, VersionHistoryModal } from './ContentModals'
+import { CheckInModal, VersionHistoryModal, PublishChecks } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
 
@@ -357,6 +357,7 @@ export default function FAQsSection({ token }) {
           <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 4px' }}>{faqEsign.action === 'approve' ? 'Approve FAQ' : 'Publish FAQ'}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-muted)' }}>Electronic signature required</p>
+            {faqEsign.action === 'publish' && <PublishChecks url={`/api/cm/faqs/${faqEsign.faq.id}/publish-checks`} token={token} />}
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
             <input aria-label="Your Password" type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={faqEsignPw} onChange={e => setFaqEsignPw(e.target.value)} placeholder="Enter your password" />
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>

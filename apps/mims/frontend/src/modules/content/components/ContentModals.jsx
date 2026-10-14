@@ -154,6 +154,35 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
 
 const ACCEPTED_DECISIONS = ['Accepted', 'Accepted with Changes', 'Approved']
 
+// The publishing checks, run before the publisher signs: what will stop the
+// publish and what is only a warning. Warnings were never shown to anyone, and
+// a blocker surfaced only as an error after signing.
+export function PublishChecks({ url, token, onResult }) {
+  const [checks, setChecks] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    httpFetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (cancelled) return; setChecks(d); onResult?.(d) })
+      .catch(() => { if (!cancelled) setChecks(null) })
+    return () => { cancelled = true }
+  }, [url, token]) // eslint-disable-line
+  if (!checks) return null
+  const fails = (checks.checks || []).filter(c => c.status !== 'pass')
+  return (
+    <div className="cm-form-group" data-testid="publish-checks">
+      <label className="cm-form-label">Publishing checks</label>
+      {fails.length === 0
+        ? <p style={{ fontSize: 13, color: 'var(--success, #2e7d32)', margin: 0 }}>All {checks.checks?.length || 0} checks pass.</p>
+        : fails.map((c, i) => (
+          <div key={i} style={{ fontSize: 13, padding: '3px 0', color: c.status === 'fail' ? 'var(--danger)' : '#92400e' }}>
+            <strong>{c.status === 'fail' ? 'Stops publishing' : 'Warning'}:</strong> {c.rule_name} — {c.detail}
+          </div>
+        ))}
+    </div>
+  )
+}
+
 export function ApproveModal({ doc, user, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [form, setForm] = useState({ password: '', reason: '' })
@@ -231,6 +260,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
   // Publishing makes the next major version (1.0, 2.0, …). The dialog read a
   // field that is never sent, so it always said 1.0; Org Version was ignored.
   const nextVersion = `${(Number(doc.version_major) || 0) + 1}.0`
+  const [blocked, setBlocked] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
@@ -260,6 +290,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
           <label className="cm-form-label">Password <span className="required">*</span></label>
           <input type="password" className="cm-form-input" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Enter your password" />
         </div>
+        <PublishChecks url={`/api/cm/documents/${doc.id}/publish-checks`} token={token} onResult={d => setBlocked(d ? !d.allow : false)} />
         <div className="cm-form-group">
           <label className="cm-form-label">Version</label>
           <input aria-label="Version" className="cm-form-input" value={`Will be published as version ${nextVersion}`} readOnly style={{ background: 'var(--bg)' }} />
@@ -270,7 +301,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
         </div>
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="cm-btn cm-btn-primary" onClick={handleSubmit} disabled={loading}>{loading ? 'Publishing…' : 'Publish'}</button>
+          <button className="cm-btn cm-btn-primary" onClick={handleSubmit} disabled={loading || blocked} title={blocked ? 'Fix what stops publishing first' : undefined}>{loading ? 'Publishing…' : 'Publish'}</button>
         </div>
       </div>
     </div>
