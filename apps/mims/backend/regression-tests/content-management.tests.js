@@ -549,7 +549,7 @@ module.exports = [
       'POST /api/cm/documents/:id/alert-subs',
       'DELETE /api/cm/documents/:id/alert-subs/:sub_id',
       'GET /api/cm/documents/:id/versions',
-      'GET /api/cm/documents/:id/version-diff',
+      'GET /api/cm/documents/:id/compare',
       'GET /api/cm/documents/:id/activity',
       'POST /api/cm/documents/release-stale-checkouts',
       'POST /api/cm/documents/bulk',
@@ -696,7 +696,7 @@ module.exports = [
           reason: 'Regression publish',
         }, token);
         const versions = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/versions?page=1&limit=10`, null, token);
-        const versionDiff = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/version-diff?v1=2.0&v2=3.0`, null, token);
+        const versionDiff = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/compare`, null, token);
         const activity = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/activity?page=1&limit=10`, null, token);
         const release = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/release`, {}, token);
         const archive = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/archive`, {

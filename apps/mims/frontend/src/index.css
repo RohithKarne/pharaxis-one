@@ -6140,3 +6140,9 @@ a.nav-item { text-decoration: none; color: inherit; }
 .cm-editor-toolbar select { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); }
 /* Make letter: where the letter was filed. */
 .cm-letter-filed { padding: 10px 14px; border-radius: 6px; background: #e6f9ee; border: 1px solid #a7f3c1; color: #1a7a3f; font-size: 13px; }
+
+/* Compare versions: removed and added text (content review, 2026-10-14) */
+.cm-diff-del { background: #fde8e8; color: #9b1c1c; text-decoration: line-through; }
+.cm-diff-ins { background: #e3f6ea; color: #14532d; text-decoration: none; border-bottom: 1px solid #4ade80; }
+[data-theme="dark"] .cm-diff-del { background: #4a1d1d; color: #fca5a5; }
+[data-theme="dark"] .cm-diff-ins { background: #14321f; color: #86efac; }

@@ -171,95 +171,125 @@ export function AssociatedDocsPanel({ docId, token }) {
   )
 }
 
-export function VersionDiffPanel({ docId, token }) {
-  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
-  const [versions, setVersions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [v1, setV1] = useState('')
-  const [v2, setV2] = useState('')
-  const [diff, setDiff] = useState(null)
-  const [diffLoading, setDiffLoading] = useState(false)
-  const [diffError, setDiffError] = useState('')
+// ── Compare versions ─────────────────────────────────────────────────────────
+// Each version of a document is its own row since Revise, so two versions can be
+// compared by what they actually say. The old panel compared history entries
+// (notes and status, no content) and never found the versions it was asked for.
+
+function htmlToParagraphs(html) {
+  const marked = String(html || '').replace(/<\/(p|div|li|h[1-6]|tr|blockquote)>|<br\s*\/?>/gi, '\n')
+  const text = new DOMParser().parseFromString(DOMPurify.sanitize(marked), 'text/html').body.textContent || ''
+  return text.split('\n').map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean)
+}
+
+// Longest-common-subsequence diff of two lists: [{ op: 'same'|'del'|'ins', a?, b? }].
+function diffLists(A, B) {
+  const n = A.length, m = B.length
+  const L = Array.from({ length: n + 1 }, () => new Int32Array(m + 1))
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  const out = []
+  let i = 0, j = 0
+  while (i < n && j < m) {
+    if (A[i] === B[j]) { out.push({ op: 'same', a: A[i] }); i++; j++ }
+    else if (L[i + 1][j] >= L[i][j + 1]) out.push({ op: 'del', a: A[i++] })
+    else out.push({ op: 'ins', b: B[j++] })
+  }
+  while (i < n) out.push({ op: 'del', a: A[i++] })
+  while (j < m) out.push({ op: 'ins', b: B[j++] })
+  return out
+}
+
+function WordDiff({ a, b }) {
+  const A = a.split(' '), B = b.split(' ')
+  if (A.length * B.length > 250000) return <><del className="cm-diff-del">{a}</del> <ins className="cm-diff-ins">{b}</ins></>
+  return diffLists(A, B).map((d, k) => d.op === 'same' ? <span key={k}>{d.a} </span>
+    : d.op === 'del' ? <del key={k} className="cm-diff-del">{d.a} </del>
+    : <ins key={k} className="cm-diff-ins">{d.b} </ins>)
+}
+
+export function VersionComparePanel({ docId, token }) {
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
+  const [versions, setVersions] = useState(null)
+  const [pick, setPick] = useState({ a: '', b: '' })
+  const [pair, setPair] = useState(null)
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      try {
-        const res = await httpFetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
-        const data = res.ok ? await res.json() : { versions: [] }
-        if (!cancelled) setVersions(data.versions || [])
-      } catch {
-        if (!cancelled) setVersions([])
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+    httpFetch(`/api/cm/documents/${docId}/compare`, { headers: H })
+      .then(r => r.ok ? r.json() : { versions: [] })
+      .then(d => {
+        if (cancelled) return
+        const list = d.versions || []
+        setVersions(list)
+        // By default: the published version (else the one before) against this one.
+        const current = list.find(v => v.current)
+        const base = list.find(v => v.status === 'Published' && !v.current) || [...list].reverse().find(v => current && v.id < current.id)
+        if (current && base) setPick({ a: String(base.id), b: String(current.id) })
+      })
+      .catch(() => { if (!cancelled) setVersions([]) })
     return () => { cancelled = true }
   }, [docId, H])
 
-  async function fetchDiff() {
-    if (!v1 || !v2) return
-    if (v1 === v2) { setDiffError('Select two different versions.'); return }
-    setDiffError(''); setDiffLoading(true); setDiff(null)
-    try {
-      const res = await httpFetch(`/api/cm/documents/${docId}/version-diff?v1=${encodeURIComponent(v1)}&v2=${encodeURIComponent(v2)}`, { headers: H })
-      if (res.ok) { const d = await res.json(); setDiff(d) }
-      else { const d = await res.json(); setDiffError(d.error || 'Failed to load diff.') }
-    } catch { setDiffError('Network error.') }
-    setDiffLoading(false)
-  }
+  useEffect(() => {
+    if (!pick.a || !pick.b || pick.a === pick.b) return
+    let cancelled = false
+    httpFetch(`/api/cm/documents/${docId}/compare?a=${pick.a}&b=${pick.b}`, { headers: H })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) setPair(d && d.a ? d : null) })
+      .catch(() => { if (!cancelled) setPair(null) })
+    return () => { cancelled = true }
+  }, [docId, H, pick])
 
-  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20 }}>Loading versions…</p>
+  const rows = useMemo(() => {
+    if (!pair) return []
+    const ops = diffLists(htmlToParagraphs(pair.a.html), htmlToParagraphs(pair.b.html))
+    // A removed paragraph followed by an added one is one changed paragraph.
+    const out = []
+    for (let k = 0; k < ops.length; k++) {
+      if (ops[k].op === 'del' && ops[k + 1]?.op === 'ins') { out.push({ op: 'chg', a: ops[k].a, b: ops[k + 1].b }); k++ }
+      else out.push(ops[k])
+    }
+    return out
+  }, [pair])
 
+  if (versions === null) return <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20 }}>Loading versions…</p>
+  const counts = rows.reduce((c, r) => ({ ...c, [r.op]: (c[r.op] || 0) + 1 }), {})
   return (
-    <div>
-      <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>Version Comparison</h4>
+    <div data-testid="version-compare">
+      <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>Compare Versions</h4>
       {versions.length < 2 ? (
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>At least 2 versions required for comparison. Save and check-in the document to create versions.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>This document has one version so far. Once it is revised, its versions can be compared here.</p>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version A</label>
-              <select aria-label="Version A" className="cm-form-select" style={{ width: 160 }} value={v1} onChange={e => setV1(e.target.value)}>
-                <option value="">— select —</option>
-                {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
-              </select>
-            </div>
-            <span style={{ marginTop: 16, color: 'var(--text-muted)' }}>vs</span>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version B</label>
-              <select aria-label="Version B" className="cm-form-select" style={{ width: 160 }} value={v2} onChange={e => setV2(e.target.value)}>
-                <option value="">— select —</option>
-                {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
-              </select>
-            </div>
-            <button className="cm-btn cm-btn-primary cm-btn-sm" style={{ marginTop: 16 }} onClick={fetchDiff} disabled={!v1 || !v2 || diffLoading}>
-              {diffLoading ? 'Loading…' : 'Compare'}
-            </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap' }}>
+            {['a', 'b'].map(k => (
+              <div key={k}>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{k === 'a' ? 'From' : 'To'}</label>
+                <select aria-label={k === 'a' ? 'Compare from' : 'Compare to'} className="cm-form-select" style={{ width: 220 }} value={pick[k]} onChange={e => setPick(p => ({ ...p, [k]: e.target.value }))}>
+                  <option value="">— select —</option>
+                  {versions.map(v => <option key={v.id} value={v.id}>{v.label}{v.current ? ' (this one)' : ''}</option>)}
+                </select>
+              </div>
+            ))}
           </div>
-          {diffError && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{diffError}</p>}
-          {diff && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
-              {[{ label: `Version A — ${diff.version_a?.version || ''}`, data: diff.version_a }, { label: `Version B — ${diff.version_b?.version || ''}`, data: diff.version_b }].map(({ label, data }) => (
-                <div key={label} style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-                  <div style={{ padding: '8px 14px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</div>
-                  <div style={{ padding: 14 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-                      Status: <strong>{data?.status || '—'}</strong> &nbsp;|&nbsp; Author: <strong>{data?.author_name || '—'}</strong>
-                    </div>
-                    {data?.notes && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', fontStyle: 'italic' }}>{data.notes}</p>}
-                    {data?.content_snapshot ? (
-                      <div style={{ maxHeight: 300, overflowY: 'auto', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, padding: 10 }}
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content_snapshot || '') }} />
-                    ) : (
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No content snapshot stored for this version.</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {pick.a && pick.a === pick.b && <p style={{ color: 'var(--danger)', fontSize: 13 }}>Choose two different versions.</p>}
+          {pair && (
+            <>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                {(counts.chg || 0) + (counts.ins || 0) + (counts.del || 0) === 0 ? 'No differences in the text.' : `${counts.chg || 0} paragraph(s) changed, ${counts.ins || 0} added, ${counts.del || 0} removed.`}
+                {(pair.a.file_name || pair.b.file_name) && ' Uploaded files are not compared.'}
+              </p>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 12, maxHeight: 420, overflowY: 'auto', fontSize: 13, lineHeight: 1.6 }}>
+                {rows.map((r, k) => (
+                  <p key={k} style={{ margin: '0 0 8px' }}>
+                    {r.op === 'same' ? r.a
+                      : r.op === 'del' ? <del className="cm-diff-del">{r.a}</del>
+                      : r.op === 'ins' ? <ins className="cm-diff-ins">{r.b}</ins>
+                      : <WordDiff a={r.a} b={r.b} />}
+                  </p>
+                ))}
+              </div>
+            </>
           )}
         </>
       )}

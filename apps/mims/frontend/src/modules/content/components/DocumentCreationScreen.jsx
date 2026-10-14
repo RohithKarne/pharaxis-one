@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
 import { normalizeSelectedModules, parseMaybeJson, DOC_TYPES, DEFAULT_LANGUAGES } from './ContentUtils'
-import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
+import { AssociatedDocsPanel, VersionComparePanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function deriveContentMode(document) {
@@ -299,7 +299,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     { key: 'other', label: 'Other Attributes' },
     { key: 'associated', label: 'Associated Documents' },
     { key: 'usage', label: 'Usage Instructions' },
-    { key: 'versions', label: 'Version Alerts' },
+    { key: 'versions', label: 'Versions & Alerts' },
   ]
 
   return (
@@ -854,7 +854,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         {/* ── Version Alerts Tab ── */}
         {activeTab === 'versions' && doc && (
           <>
-            <VersionDiffPanel docId={doc.id} token={token} />
+            <VersionComparePanel docId={doc.id} token={token} />
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 24, paddingTop: 24 }}>
               <VersionAlertsPanel docId={doc.id} token={token} />
             </div>

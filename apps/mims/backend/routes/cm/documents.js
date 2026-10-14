@@ -221,7 +221,7 @@ function publicDoc(d) {
 // documents next to published ones, and any of them could be opened and downloaded.
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
-const { lineageHistory } = require('../../services/cmLineage');
+const { lineageHistory, lineageIds } = require('../../services/cmLineage');
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
@@ -1403,26 +1403,31 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/cm/documents/:id/version-diff — compare two versions (CM-E2)
-router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
+// GET /api/cm/documents/:id/compare — the versions of this document that hold
+// content, and (with ?a=&b=) the content of two of them to compare.
+// The old version-diff matched history-row ids against version strings, so it
+// never found anything, and history rows hold notes, not content. Each
+// version's content lives in its own row since Revise, so that is what is
+// compared.
+router.get('/documents/:id/compare', authenticate, async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const { v1, v2 } = req.query;
-    if (!v1 || !v2) return res.status(400).json({ error: 'v1 and v2 version params required' });
-    const [versions] = await pool.execute(
-      `SELECT vh.id, vh.version, vh.status, vh.notes, vh.created_at, vh.author_id
-       FROM cm_version_history vh
-       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
-         AND vh.version IN (?,?)
-       ORDER BY vh.created_at ASC`,
-      [req.params.id, v1, v2]
-    );
-    if (versions.length < 2) {
-      return res.status(404).json({ error: 'One or both versions not found in history' });
-    }
-    res.json({ version_a: versions[0], version_b: versions[1] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const ids = await lineageIds('document', doc.id);
+    const [rows] = await pool.execute(
+      `SELECT id, status, version_major, version_minor, updated_at, content_html, standard_response_text, file_name
+         FROM cm_documents WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ids);
+    const label = (r) => `${r.version_major}.${r.version_minor} — ${r.status}`;
+    const versions = rows.map((r) => ({ id: r.id, label: label(r), status: r.status, current: r.id === doc.id }));
+    const pick = (x) => rows.find((r) => r.id === Number(x));
+    const a = pick(req.query.a), b = pick(req.query.b);
+    if (!a || !b) return res.json({ versions });
+    const body = (r) => ({ id: r.id, label: label(r), html: r.content_html || r.standard_response_text || '', file_name: r.file_name || null });
+    res.json({ versions, a: body(a), b: body(b) });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/compare' }, 'Failed to compare document versions');
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // POST /api/cm/documents/release-stale-checkouts — release expired check-outs now
