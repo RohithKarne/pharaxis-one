@@ -365,7 +365,11 @@ export default function ReportsPage() {
     if (!definitions.length) return
     const params = new URLSearchParams(location.search || '')
     const reportKey = params.get('reportKey')
-    if (reportKey) {
+    // A report named in the address opens the Reports section only when no
+    // other section is asked for: "Schedule Report" went to Schedulers and this
+    // pulled it straight back, so the button did nothing.
+    const sectionParam = params.get('section')
+    if (reportKey && (!sectionParam || sectionParam === 'reports')) {
       const match = definitions.find((item) => item.report_key === reportKey)
       if (match) {
         setSelectedReportId(match.id)
