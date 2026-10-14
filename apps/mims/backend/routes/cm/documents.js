@@ -321,8 +321,13 @@ router.get('/documents', authenticate, async (req, res) => {
       params.push(req.query.category);
     }
     if (req.query.product_id) {
-      query += ' AND d.product_id = ?';
+      // A document for no particular product applies to every product.
+      query += req.query.include_general === 'true' ? ' AND (d.product_id = ? OR d.product_id IS NULL)' : ' AND d.product_id = ?';
       params.push(Number(req.query.product_id));
+    }
+    if (req.query.language) {
+      query += ' AND d.language = ?';
+      params.push(String(req.query.language));
     }
     if (include_expired !== 'true') {
       query += ' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())';

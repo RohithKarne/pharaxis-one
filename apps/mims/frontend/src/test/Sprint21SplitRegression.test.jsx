@@ -155,8 +155,10 @@ describe('Sprint 21 split regression: ContentPage', () => {
     )
 
     expect(await screen.findByTestId('documents-section')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Browse Content/ }))
-    expect(await screen.findByTestId('browse-section')).toBeInTheDocument()
+    // Browse Content left this tab bar for the main menu's Browse Content page
+    // (content review, 2026-10-14); the switch is checked on Modular Documents.
+    fireEvent.click(screen.getByRole('button', { name: /^Modular Documents/ }))
+    expect(await screen.findByTestId('modules-section')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
     expect(await screen.findByTestId('settings-section')).toBeInTheDocument()
   })

@@ -303,6 +303,7 @@ router.get('/modules', authenticate, async (req, res) => {
       if (draftsHidden) query += " AND m.status = 'Published'";
       query += folderFilter;
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
+      if (req.query.language) { query += ' AND m.language = ?'; params.push(String(req.query.language)); }
       if (search) {
         query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
         params.push(`%${search}%`, `%${search}%`, `%${search}%`);

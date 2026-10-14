@@ -82,19 +82,29 @@ export default function BrowseSection({ token, types = ['documents', 'faqs'] }) 
     return () => { cancelled = true }
   }, [authHeaders, contentType, search, selectedFolderId])
 
-  async function openItem(item) {
+  // `type` lets a bookmark open an item of either kind.
+  async function openItem(item, type = contentType) {
+    if (type !== contentType) setContentType(type)
+    setShowBookmarks(false)
     setDetailLoading(true)
     setSelectedItem({ ...item, _loading: true })
-    const viewEndpoint = contentType === 'documents'
-      ? `/api/cm/documents/${item.id}/view`
-      : `/api/cm/faqs/${item.id}/view`
-    httpFetch(viewEndpoint, { method: 'POST', headers: authHeaders }).catch(() => {})
-    const endpoint = contentType === 'documents'
-      ? `/api/cm/documents/${item.id}`
-      : `/api/cm/faqs/${item.id}`
-    const r = await httpFetch(endpoint, { headers: authHeaders }).then(x => x.json()).catch(() => item)
-    setSelectedItem(r.document || r.faq || r)
+    const base = type === 'documents' ? '/api/cm/documents' : '/api/cm/faqs'
+    httpFetch(`${base}/${item.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})
+    const r = await httpFetch(`${base}/${item.id}`, { headers: authHeaders }).then(x => x.json()).catch(() => item)
+    setSelectedItem({ ...(r.document || r.faq || r), _type: type })
     setDetailLoading(false)
+  }
+
+  // The file comes through the API with the session, as a download. A plain
+  // link to /api/... skipped the address the app is served from.
+  async function downloadFile(item) {
+    const res = await httpFetch(`/api/cm/documents/${item.id}/download`, { headers: authHeaders }).catch(() => null)
+    if (!res || !res.ok) return
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url; a.download = item.file_name || 'document'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   return (
@@ -109,7 +119,8 @@ export default function BrowseSection({ token, types = ['documents', 'faqs'] }) 
             <span>All Content</span>
           </div>
           {folders.map(f => {
-            const count = contentType === 'documents' ? (f.doc_count ?? 0) : contentType === 'faqs' ? (f.faq_count ?? 0) : (f.module_count ?? 0)
+            // Published and in date only — what this list shows. Drafts were counted.
+            const count = contentType === 'documents' ? (f.published_doc_count ?? 0) : (f.published_faq_count ?? 0)
             return (
               <div key={f.id}
                 onClick={() => setSelectedFolderId(f.id)}
@@ -151,7 +162,9 @@ export default function BrowseSection({ token, types = ['documents', 'faqs'] }) 
               <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No bookmarks yet. Click ★ next to any item to bookmark it.</div>
             ) : bookmarks.map(b => (
               <div key={b.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
+                {/* A bookmark opens its item (it was a list that led nowhere). */}
+                <div style={{ cursor: b.entity_type === 'folder' ? 'default' : 'pointer' }}
+                  onClick={() => b.entity_type !== 'folder' && openItem({ id: b.entity_id }, b.entity_type === 'document' ? 'documents' : 'faqs')}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 8 }}>[{b.entity_type}]</span>
                   <span style={{ fontWeight: 500 }}>{b.entity_name || `ID ${b.entity_id}`}</span>
                 </div>
@@ -214,7 +227,7 @@ export default function BrowseSection({ token, types = ['documents', 'faqs'] }) 
               <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>
             ) : (
               <>
-                {contentType === 'documents' && (
+                {(selectedItem._type || contentType) === 'documents' && (
                   <>
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, fontSize: 13, color: 'var(--text-muted)' }}>
                       {selectedItem.doc_type && <span><strong>Type:</strong> {selectedItem.doc_type}</span>}
@@ -258,15 +271,15 @@ export default function BrowseSection({ token, types = ['documents', 'faqs'] }) 
                     )}
                     {(selectedItem.has_file || selectedItem.file_path) && (
                       <div style={{ marginTop: 20 }}>
-                        <a href={`/api/cm/documents/${selectedItem.id}/download`} target="_blank" rel="noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary)', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
+                        <button onClick={() => downloadFile(selectedItem)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary)', color: '#fff', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                           Download File
-                        </a>
+                        </button>
                       </div>
                     )}
                   </>
                 )}
-                {contentType === 'faqs' && (
+                {(selectedItem._type || contentType) === 'faqs' && (
                   <>
                     <div style={{ marginBottom: 16 }}>
                       <h4 style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Question</h4>

@@ -106,6 +106,13 @@ async function verifyScopedEntity(req, entityType, entityId) {
   return false;
 }
 
+// What Browse shows: published and in date. The counts above include drafts,
+// so a browser saw "3" against a folder that showed one item.
+const PUBLISHED_COUNTS = `
+                  (SELECT COUNT(*) FROM cm_documents WHERE folder_id = f.id AND status = 'Published' AND (expiry_date IS NULL OR expiry_date >= CURDATE())) AS published_doc_count,
+                  (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = f.id AND status = 'Published' AND (expiry_date IS NULL OR expiry_date >= CURDATE())) AS published_faq_count,
+                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status = 'Published' AND (expiry_date IS NULL OR expiry_date >= CURDATE())) AS published_module_count`;
+
 // GET /api/cm/folders — list active folders
 router.get('/folders', authenticate, async (req, res) => {
   try {
@@ -119,7 +126,8 @@ router.get('/folders', authenticate, async (req, res) => {
                   u.name AS created_by_name,
                   (SELECT COUNT(*) FROM cm_documents WHERE folder_id = f.id AND status != 'Archived') AS doc_count,
                   (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = f.id AND status != 'Archived') AS faq_count,
-                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count
+                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count,
+                  ${PUBLISHED_COUNTS}
            FROM cm_folders f
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id
@@ -132,7 +140,8 @@ router.get('/folders', authenticate, async (req, res) => {
                   u.name AS created_by_name,
                   (SELECT COUNT(*) FROM cm_documents WHERE folder_id = f.id AND status != 'Archived') AS doc_count,
                   (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = f.id AND status != 'Archived') AS faq_count,
-                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count
+                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count,
+                  ${PUBLISHED_COUNTS}
            FROM cm_folders f
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id
@@ -312,16 +321,21 @@ router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res
 // GET /api/cm/folders/bookmarks
 router.get('/folders/bookmarks', authenticate, async (req, res) => {
   try {
+    // Only what can still be opened: a bookmark to content since archived,
+    // expired or put in a folder the user cannot open stayed listed and led
+    // nowhere. The rows are kept, so it comes back if the item does.
+    const docFilter = await folderFilterSql(req.user, 'd.folder_id');
+    const faqFilter = await folderFilterSql(req.user, 'q.folder_id');
     const [bookmarks] = await pool.execute(
-      `SELECT b.*,
-        CASE b.entity_type
-          WHEN 'document' THEN (SELECT name FROM cm_documents WHERE id = b.entity_id)
-          WHEN 'folder'   THEN (SELECT name FROM cm_folders WHERE id = b.entity_id)
-          WHEN 'faq'      THEN (SELECT question FROM cm_faqs WHERE id = b.entity_id)
-        END AS entity_name
-       FROM cm_browse_bookmarks b
-       WHERE b.user_id = ?
-       ORDER BY b.created_at DESC`,
+      `SELECT b.*, COALESCE(d.name, q.question, fo.name) AS entity_name
+         FROM cm_browse_bookmarks b
+         LEFT JOIN cm_documents d ON b.entity_type = 'document' AND d.id = b.entity_id
+              AND d.status = 'Published' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())${docFilter}
+         LEFT JOIN cm_faqs q ON b.entity_type = 'faq' AND q.id = b.entity_id
+              AND q.status = 'Published' AND (q.expiry_date IS NULL OR q.expiry_date >= CURDATE())${faqFilter}
+         LEFT JOIN cm_folders fo ON b.entity_type = 'folder' AND fo.id = b.entity_id AND fo.status = 'Active'
+        WHERE b.user_id = ? AND COALESCE(d.id, q.id, fo.id) IS NOT NULL
+        ORDER BY b.created_at DESC`,
       [req.user.userId]
     );
     res.json({ bookmarks });

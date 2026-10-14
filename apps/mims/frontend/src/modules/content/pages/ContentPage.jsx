@@ -9,7 +9,6 @@ const DocumentsSection = lazy(() => import('../components/DocumentsSection'))
 const ModulesSection = lazy(() => import('../components/ModulesSection'))
 const FAQsSection = lazy(() => import('../components/FAQsSection'))
 const TemplatesSection = lazy(() => import('../components/TemplatesSection'))
-const BrowseSection = lazy(() => import('../components/BrowseSection'))
 const CMSettingsSection = lazy(() => import('../components/CMSettingsSection'))
 const ContentOperationsSection = lazy(() => import('../components/ContentOperationsSection'))
 
@@ -27,7 +26,9 @@ export default function ContentPage() {
   const standalone = searchParams.get('standalone') === '1'
   // ?view=reviews opens a reviewer's tasks — where a review notification lands (MIPM-176).
   const openReviews = searchParams.get('view') === 'reviews'
-  const [activeTab, setActiveTab] = useState(openReviews ? 'documents' : (['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents'))
+  // Browsing the approved library is the Browse Content page in the main menu;
+  // the copy that sat here as a tab is gone.
+  const [activeTab, setActiveTab] = useState('documents')
   const [showFolders, setShowFolders] = useState(false)
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
@@ -49,7 +50,6 @@ export default function ContentPage() {
       description: 'Publish, browse, and govern what users can trust.',
       items: [
         { key: 'operations', label: 'Operations Dashboard', description: 'Work queues, expiring content, and CM follow-up items.' },
-        { key: 'browse', label: 'Browse Content', description: 'The consumer-facing approved content library.' },
         { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
       ],
     },
@@ -104,7 +104,6 @@ export default function ContentPage() {
             {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
             {activeTab === 'templates' && <TemplatesSection token={token} />}
             {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
-            {activeTab === 'browse' && <BrowseSection token={token} />}
             {activeTab === 'settings' && <CMSettingsSection token={token} />}
             {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
           </Suspense>
