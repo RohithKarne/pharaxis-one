@@ -850,6 +850,19 @@
   font-weight: 600;
 }
 
+/* Someone who may read the case but not change it (access review). */
+.cf-readonly-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 9px;
+  font-weight: 700;
+}
+
+/* A plain box around fields that a read-only case locks together. */
+.cf-fieldset-plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+
 .cf-draft-save-chip {
   font-size: 12px;
   color: #0f766e;

@@ -37,6 +37,7 @@ export default function CaseWorkflowStep({
   caseType,
   routePane = '',
   onCommentCount, onCorrespondenceCount,
+  readOnly = false,
 }) {
   const ctx = useCaseFieldContext()
   const { hasCapability, user } = useAuth()
@@ -58,6 +59,7 @@ export default function CaseWorkflowStep({
 
   return (
     <div id="tab-workflow" className="cf-tab-pane">
+      <fieldset className="cf-fieldset-plain" disabled={readOnly}>
       <div className="cf-form-grid">
         {!fStatus.hidden && (
         <WiredSelect label={fStatus.label} section="case_meta" field="status_id"
@@ -116,6 +118,7 @@ export default function CaseWorkflowStep({
         placeholder="Internal notes (not visible externally)…"
         onChange={v => { setInfoForm(p => ({ ...p, internal_notes: v })); scheduleAutoSave() }} />
       )}
+      </fieldset>
 
       {hasCapability('case.assign') && (
         <div className="cf-reassign-panel">
@@ -157,6 +160,7 @@ export default function CaseWorkflowStep({
 
       {formConfig && Array.isArray(formConfig.sections) &&
         formConfig.sections.some(s => Array.isArray(s.fields) && s.fields.length > 0) && (
+        <fieldset className="cf-fieldset-plain" disabled={readOnly}>
         <DynamicFieldsSection
           sections={formConfig.sections}
           values={dynFieldValues}
@@ -173,6 +177,7 @@ export default function CaseWorkflowStep({
           caseType={caseType}
           displayTab="info"
         />
+        </fieldset>
       )}
 
       <div className="cf-workflow-communications">
@@ -186,6 +191,7 @@ export default function CaseWorkflowStep({
             routePane={routePane}
             onCommentCount={onCommentCount}
             onCorrespondenceCount={onCorrespondenceCount}
+            readOnly={readOnly}
           />
         </Suspense>
       </div>

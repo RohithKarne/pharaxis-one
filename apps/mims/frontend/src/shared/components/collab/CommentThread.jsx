@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { httpFetch } from '../../api/httpFetch.js'
 
-export default function CommentThread({ caseId, compact = false }) {
+export default function CommentThread({ caseId, compact = false, readOnly = false }) {
   const { token } = useAuth()
   const [items, setItems] = useState([])
   const [body, setBody]   = useState('')
@@ -86,7 +86,7 @@ export default function CommentThread({ caseId, compact = false }) {
           </div>
         </div>
       ))}
-      <div style={{ marginTop: 8 }}>
+      {!readOnly && <div style={{ marginTop: 8 }}>
         <textarea
           value={body} onChange={e => setBody(e.target.value)} rows={compact ? 2 : 3}
           placeholder="Write a comment…" maxLength={4000}
@@ -103,7 +103,7 @@ export default function CommentThread({ caseId, compact = false }) {
             {posting ? 'Posting…' : 'Post comment'}
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

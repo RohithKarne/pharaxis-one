@@ -65,7 +65,7 @@ export default function CaseMITab({
   id, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, coreField,
-  view = 'full',
+  view = 'full', readOnly = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings (Customize Forms) for this panel's own fields — label,
@@ -575,8 +575,8 @@ export default function CaseMITab({
   return (
     <div id="tab-mi" className="cf-tab-pane">
       <div className="cf-section-header-row">
-        {showCapture && <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>}
-        {showResponse && (
+        {showCapture && !readOnly && <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>}
+        {showResponse && !readOnly && (
           <button className="cf-open-btn" style={{ marginLeft: showCapture ? 8 : 0 }} onClick={openResponseBuilder}>
             Build MI Response
           </button>
@@ -584,7 +584,7 @@ export default function CaseMITab({
       </div>
 
       {!showCapture ? null : miTabs.length === 0 ? (
-        <div className="cf-empty-msg">No MI components yet. Click "+ Add MI" to start.</div>
+        <div className="cf-empty-msg">{readOnly ? 'No MI components yet.' : 'No MI components yet. Click "+ Add MI" to start.'}</div>
       ) : (
         <>
           <div className="cf-mi-tabs">
@@ -594,7 +594,7 @@ export default function CaseMITab({
               </button>
             ))}
           </div>
-          <div className="cf-mi-panel">
+          <fieldset className="cf-mi-panel cf-fieldset-plain" disabled={readOnly}>
             {/* Sprint 2 #16 — off-label / solicited classification + promo review request */}
             {miTabs[activeMiTab]?.id && (
               <div className="cf-mi-approval-block">
@@ -692,13 +692,15 @@ export default function CaseMITab({
               <label>Documents sent</label>
               <CaseAssociatedDocs miTab={miTabs[activeMiTab]} responses={miResponses} />
             </div>
-            <div className="cf-form-actions">
-              <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
-              <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
-              <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
-              <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
-            </div>
-          </div>
+            {!readOnly && (
+              <div className="cf-form-actions">
+                <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
+                <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
+                <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
+                <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
+              </div>
+            )}
+          </fieldset>
         </>
       )}
 
@@ -708,7 +710,7 @@ export default function CaseMITab({
         <div className="cf-response-history-title">Response History</div>
         {miRespLoading && <div className="cf-empty-msg">Loading responses...</div>}
         {!miRespLoading && miResponses.length === 0 && (
-          <div className="cf-empty-msg">No MI responses recorded yet. Click "Build MI Response" to create one.</div>
+          <div className="cf-empty-msg">{readOnly ? 'No MI responses recorded yet.' : 'No MI responses recorded yet. Click "Build MI Response" to create one.'}</div>
         )}
         {!miRespLoading && miResponses.map(r => {
           const st = r.response_status || 'DRAFT'
@@ -743,7 +745,7 @@ export default function CaseMITab({
               )}
               {!isVoided && !isSent && (
                 <div className="cf-mi-transition-row">
-                  {st === 'DRAFT' && <>
+                  {st === 'DRAFT' && !readOnly && <>
                     <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review</button>
                     <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
                   </>}
@@ -990,6 +992,7 @@ export default function CaseMITab({
         <div className="cf-overview-card">
           <div className="cf-overview-kicker">Additional Fields</div>
           <h3>MI Configured Fields</h3>
+          <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
             sections={formConfig.sections}
             values={dynFieldValues || {}}
@@ -1006,6 +1009,7 @@ export default function CaseMITab({
             caseType={caseType}
             displayTab="mi"
           />
+          </fieldset>
         </div>
       )}
     </div>

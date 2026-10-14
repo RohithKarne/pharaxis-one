@@ -140,6 +140,7 @@ export default function CasePCTab({
   id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
+  readOnly = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -171,7 +172,7 @@ export default function CasePCTab({
   useEffect(() => { loadPCVersions(); loadPcTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A closed case is read-only whatever its versions say (MIPM-208).
-  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
+  const isLocked = (ver) => !!caseClosed || readOnly || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestPcVersion = pcVersions.length > 0 ? pcVersions[pcVersions.length - 1] : null
   const canCreatePcVersion = !caseClosed && (!latestPcVersion || isClosed(latestPcVersion))
@@ -373,7 +374,7 @@ export default function CasePCTab({
 
   return (
     <div id="tab-pc" className="cf-tab-pane">
-      <div className="cf-section-header-row">
+      {!readOnly && <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={createPCVersion} disabled={!canCreatePcVersion}>
           + New Version
         </button>
@@ -387,8 +388,8 @@ export default function CasePCTab({
         <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
-      </div>
-      {!canCreatePcVersion && !caseClosed && (
+      </div>}
+      {!canCreatePcVersion && !caseClosed && !readOnly && (
         <div className="cf-inline-note">Close the current PC version before creating a new version.</div>
       )}
       {handoffCheck && Array.isArray(handoffCheck.items) && (
@@ -420,11 +421,11 @@ export default function CasePCTab({
             Each version is a sealed snapshot tied to a regulatory submission or
             quality milestone.
           </p>
-          <ul className="cf-empty-hints">
+          {!readOnly && <ul className="cf-empty-hints">
             <li>Click <strong>+ New Version</strong> above to start.</li>
             <li>Close a version when the investigation results are submitted to the quality system.</li>
             <li>Investigation updates create a new version — never overwrite prior data.</li>
-          </ul>
+          </ul>}
         </div>
       ) : (
         <>
@@ -443,7 +444,9 @@ export default function CasePCTab({
           </div>
 
           {isLocked(activePcVer) && (
-            <div className="cf-locked-notice">{caseClosed
+            <div className="cf-locked-notice">{readOnly
+              ? 'Read only: your access lets you read this case, not change it.'
+              : caseClosed
               ? 'This case is closed (read-only). Reopen the case to make changes.'
               : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
@@ -554,6 +557,7 @@ export default function CasePCTab({
         <div className="cf-overview-card">
           <div className="cf-overview-kicker">Additional Fields</div>
           <h3>PC Configured Fields</h3>
+          <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
             sections={formConfig.sections}
             values={dynFieldValues || {}}
@@ -570,6 +574,7 @@ export default function CasePCTab({
             caseType={caseType}
             displayTab="pc"
           />
+          </fieldset>
         </div>
       )}
     </div>

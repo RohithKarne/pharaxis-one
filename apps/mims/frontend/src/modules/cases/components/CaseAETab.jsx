@@ -187,6 +187,7 @@ export default function CaseAETab({
   id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
+  readOnly = false,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -229,7 +230,7 @@ export default function CaseAETab({
   useEffect(() => { loadAEVersions(); loadAeTransmissions(); loadValidity() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A closed case is read-only whatever its versions say (MIPM-208).
-  const isLocked = (ver) => !!caseClosed || (ver && ver.is_locked === 1)
+  const isLocked = (ver) => !!caseClosed || readOnly || (ver && ver.is_locked === 1)
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   // MIPM-213: "Drugs" (suspect / co-suspect / concomitant roles) is the opt-in
   // PV — Drug Roles feature, but it showed on every AE case beside Product Info,
@@ -490,7 +491,7 @@ export default function CaseAETab({
           )}
         </section>
       )}
-      <div className="cf-section-header-row">
+      {!readOnly && <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={createAEVersion} disabled={!canCreateAeVersion}>
           + New Version
         </button>
@@ -504,8 +505,8 @@ export default function CaseAETab({
         <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
-      </div>
-      {!canCreateAeVersion && !caseClosed && (
+      </div>}
+      {!canCreateAeVersion && !caseClosed && !readOnly && (
         <div className="cf-inline-note">Close the current AE version before creating a new version.</div>
       )}
 
@@ -517,11 +518,11 @@ export default function CaseAETab({
             Each version captures a snapshot of the case at a regulatory milestone
             (initial intake, follow-up, expedited submission).
           </p>
-          <ul className="cf-empty-hints">
+          {!readOnly && <ul className="cf-empty-hints">
             <li>Click <strong>+ New Version</strong> above to start.</li>
             <li>Close a version when you submit it — that locks it for audit.</li>
             <li>Follow-up info goes into a new version, never overwriting the prior one.</li>
-          </ul>
+          </ul>}
         </div>
       ) : (
         <>
@@ -540,7 +541,9 @@ export default function CaseAETab({
           </div>
 
           {isLocked(activeAeVer) && (
-            <div className="cf-locked-notice">{caseClosed
+            <div className="cf-locked-notice">{readOnly
+              ? 'Read only: your access lets you read this case, not change it.'
+              : caseClosed
               ? 'This case is closed (read-only). Reopen the case to make changes.'
               : 'This version is locked (read-only). Create a new version to continue editing.'}</div>
           )}
@@ -654,6 +657,7 @@ export default function CaseAETab({
         <div className="cf-overview-card">
           <div className="cf-overview-kicker">Additional Fields</div>
           <h3>AE Configured Fields</h3>
+          <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
             sections={formConfig.sections}
             values={dynFieldValues || {}}
@@ -670,6 +674,7 @@ export default function CaseAETab({
             caseType={caseType}
             displayTab="ae"
           />
+          </fieldset>
         </div>
       )}
     </div>

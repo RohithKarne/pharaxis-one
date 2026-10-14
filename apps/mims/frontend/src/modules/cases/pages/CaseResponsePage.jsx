@@ -15,7 +15,7 @@ const CaseMITab = lazy(() => import('../components/CaseMITab'))
 export default function CaseResponsePage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { token } = useAuth()
+  const { token, hasCapability } = useAuth()
 
   const [caseData, setCaseData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -66,6 +66,7 @@ export default function CaseResponsePage() {
           </div>
           <div className="cf-form-header-right">
             {savedMsg && <span className="cf-saved-msg">{savedMsg}</span>}
+            {!hasCapability('case.update') && <span className="cf-readonly-chip" title="Your access lets you read this case, not change it.">Read only</span>}
           </div>
         </div>
 
@@ -79,6 +80,7 @@ export default function CaseResponsePage() {
             <Suspense fallback={<div className="cf-tab-loading">Loading response builder…</div>}>
               <CaseMITab
                 view="response"
+                readOnly={!hasCapability('case.update')}
                 id={id}
                 token={token}
                 headers={headers}
