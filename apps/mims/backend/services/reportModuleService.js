@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-const { getDatasetByReportKey, BUILT_DATASETS, PERIODS, ROW_CAP } = require('./reportDatasetService');
+const { getDatasetByReportKey, BUILT_DATASETS, PERIODS, ROW_CAP, resolvePeriod } = require('./reportDatasetService');
 const { columnLabels } = require('./reportCsv');
 
 const DEFAULT_MODULE_CONFIG = Object.freeze({
@@ -710,6 +710,13 @@ async function runReportDefinition(definition, orgId, filters = {}, ctx = {}) {
   const saved = { ...(definition.default_filters || {}) };
   if (runtime.date_from || runtime.date_to || runtime.period) { delete saved.period; delete saved.date_from; delete saved.date_to; }
   const mergedFilters = { ...saved, ...runtime };
+  // A named period is turned into its dates here, so the run, its history row
+  // and an export all record the days the report covered.
+  if (mergedFilters.period && !mergedFilters.date_from) {
+    const { dateFrom, dateTo } = resolvePeriod(mergedFilters);
+    mergedFilters.date_from = dateFrom;
+    mergedFilters.date_to = dateTo;
+  }
   const rows = await getDatasetByReportKey(definition.dataset_key, orgId, mergedFilters, ctx);
   const visible = pickVisibleColumns(rows, definition.selected_columns);
   return {
@@ -937,59 +944,6 @@ async function duplicateDashboard(orgId, userId, id) {
   });
 }
 
-async function createDashboardTemplate(orgId, userId, dashboardId, payload = {}) {
-  const dashboard = await getDashboardById(orgId, dashboardId);
-  if (!dashboard) throw new Error('Dashboard not found.');
-  const name = sanitizeText(payload.name, `${dashboard.name} Template`);
-  const key = await ensureUniqueDashboardKey(slugify(`${orgId}-template-${name}`));
-  const [result] = await pool.execute(
-    `INSERT INTO report_dashboard_templates
-       (org_id, template_key, name, description, layout_json, widgets_json, is_system, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-    [orgId, key, name, sanitizeText(payload.description, dashboard.description), toJson(dashboard.layout || [], []), toJson(dashboard.widgets || [], []), userId || null]
-  );
-  return getDashboardTemplateById(orgId, result.insertId);
-}
-
-async function getDashboardTemplateById(orgId, templateId) {
-  const [rows] = await pool.execute(
-    'SELECT * FROM report_dashboard_templates WHERE id = ? AND (org_id = ? OR org_id IS NULL) LIMIT 1',
-    [templateId, orgId]
-  );
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    ...row,
-    layout: parseJson(row.layout_json, []),
-    widgets: parseJson(row.widgets_json, []),
-  };
-}
-
-async function listDashboardTemplates(orgId) {
-  const [rows] = await pool.execute(
-    'SELECT * FROM report_dashboard_templates WHERE org_id = ? OR org_id IS NULL ORDER BY is_system DESC, name ASC',
-    [orgId]
-  );
-  return rows.map((row) => ({
-    ...row,
-    layout: parseJson(row.layout_json, []),
-    widgets: parseJson(row.widgets_json, []),
-  }));
-}
-
-async function createDashboardFromTemplate(orgId, userId, templateId, payload = {}) {
-  const template = await getDashboardTemplateById(orgId, templateId);
-  if (!template) throw new Error('Dashboard template not found.');
-  return createDashboard(orgId, userId, {
-    name: sanitizeText(payload.name, template.name),
-    description: sanitizeText(payload.description, template.description),
-    layout: template.layout,
-    widgets: template.widgets,
-    visibility_scope: payload.visibility_scope || 'shared',
-    is_active: true,
-  });
-}
-
 async function listFavorites(orgId, userId) {
   const [rows] = await pool.execute(
     'SELECT id, target_type, target_id, created_at FROM report_favorites WHERE org_id = ? AND user_id = ? ORDER BY created_at DESC',
@@ -1015,123 +969,6 @@ async function deleteFavorite(orgId, userId, targetType, targetId) {
     [orgId, userId, String(targetType || '').toLowerCase(), Number(targetId)]
   );
   return listFavorites(orgId, userId);
-}
-
-async function listDashboardShares(orgId, dashboardId = null) {
-  const params = [orgId];
-  let where = 'org_id = ?';
-  if (dashboardId) {
-    where += ' AND dashboard_id = ?';
-    params.push(Number(dashboardId));
-  }
-  const [rows] = await pool.execute(
-    `SELECT * FROM report_dashboard_shares WHERE ${where} ORDER BY created_at DESC`,
-    params
-  );
-  return rows;
-}
-
-async function addDashboardShare(orgId, userId, payload = {}) {
-  const dashboard = await getDashboardById(orgId, Number(payload.dashboard_id));
-  if (!dashboard) throw new Error('Dashboard not found.');
-  const shareType = ['org', 'role', 'user'].includes(String(payload.share_type || '').toLowerCase())
-    ? String(payload.share_type).toLowerCase()
-    : 'role';
-  const shareValue = sanitizeText(payload.share_value);
-  if (!shareValue) throw new Error('share_value is required.');
-  await pool.execute(
-    `INSERT INTO report_dashboard_shares (org_id, dashboard_id, share_type, share_value, created_by)
-     VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE created_by = VALUES(created_by)`,
-    [orgId, dashboard.id, shareType, shareValue, userId || null]
-  );
-  return listDashboardShares(orgId, dashboard.id);
-}
-
-async function deleteDashboardShare(orgId, shareId) {
-  await pool.execute('DELETE FROM report_dashboard_shares WHERE id = ? AND org_id = ?', [shareId, orgId]);
-}
-
-async function setRoleDefaultDashboard(orgId, userId, roleKey, dashboardId) {
-  const dashboard = await getDashboardById(orgId, dashboardId);
-  if (!dashboard) throw new Error('Dashboard not found.');
-  await pool.execute(
-    `INSERT INTO report_role_default_dashboards (org_id, role_key, dashboard_id, updated_by)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE dashboard_id = VALUES(dashboard_id), updated_by = VALUES(updated_by), updated_at = NOW()`,
-    [orgId, sanitizeText(roleKey), dashboard.id, userId || null]
-  );
-  return getRoleDefaultDashboards(orgId);
-}
-
-async function getRoleDefaultDashboards(orgId) {
-  const [rows] = await pool.execute(
-    `SELECT rdd.*, rd.name AS dashboard_name
-     FROM report_role_default_dashboards rdd
-     LEFT JOIN report_dashboards rd ON rd.id = rdd.dashboard_id
-     WHERE rdd.org_id = ?
-     ORDER BY rdd.role_key`,
-    [orgId]
-  );
-  return rows;
-}
-
-async function recordUsageEvent(orgId, userId, eventType, targetType, targetId, metadata = {}) {
-  await pool.execute(
-    `INSERT INTO report_usage_events (org_id, user_id, event_type, target_type, target_id, metadata)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [orgId, userId || null, eventType, targetType, targetId || null, toJson(metadata, {})]
-  );
-}
-
-async function listUsageAnalytics(orgId) {
-  const [rows] = await pool.execute(
-    `SELECT event_type, target_type, target_id, COUNT(*) AS count, MAX(created_at) AS last_event_at
-     FROM report_usage_events
-     WHERE org_id = ?
-     GROUP BY event_type, target_type, target_id
-     ORDER BY count DESC, last_event_at DESC
-     LIMIT 50`,
-    [orgId]
-  );
-  return rows;
-}
-
-async function validateReportConfig(orgId) {
-  const issues = [];
-  const [brokenSchedules] = await pool.execute(
-    `SELECT sec.id, sec.export_name
-     FROM scheduled_export_configs sec
-     LEFT JOIN report_definitions rd ON sec.target_type = 'report' AND rd.id = sec.target_id
-     LEFT JOIN report_dashboards db ON sec.target_type = 'dashboard' AND db.id = sec.target_id
-     WHERE sec.org_id = ? AND sec.is_active = 1
-       AND ((sec.target_type = 'report' AND rd.id IS NULL) OR (sec.target_type = 'dashboard' AND db.id IS NULL))`,
-    [orgId]
-  );
-  brokenSchedules.forEach((row) => issues.push({ severity: 'critical', type: 'broken_schedule_target', message: `Schedule target missing: ${row.export_name}`, entity_id: row.id }));
-  const [emailSchedules] = await pool.execute(
-    "SELECT id, export_name FROM scheduled_export_configs WHERE org_id = ? AND is_active = 1 AND delivery_method = 'email' AND (delivery_target IS NULL OR delivery_target = '')",
-    [orgId]
-  );
-  emailSchedules.forEach((row) => issues.push({ severity: 'critical', type: 'missing_delivery_target', message: `Email schedule missing delivery target: ${row.export_name}`, entity_id: row.id }));
-  const templates = await listDashboardTemplates(orgId);
-  const defaults = await getRoleDefaultDashboards(orgId);
-  return { issues, templates_count: templates.length, role_defaults_count: defaults.length };
-}
-
-async function listRecommendations(orgId) {
-  const analytics = await listUsageAnalytics(orgId);
-  const recommendations = [];
-  const frequentlyUsed = analytics.find((row) => Number(row.count || 0) >= 3 && row.target_id);
-  if (frequentlyUsed) recommendations.push({ type: 'pin_candidate', message: `Frequently used ${frequentlyUsed.target_type} #${frequentlyUsed.target_id} can be pinned or favorited.` });
-  const [staleSchedules] = await pool.execute(
-    `SELECT id, export_name FROM scheduled_export_configs
-     WHERE org_id = ? AND is_active = 1 AND (last_run_at IS NULL OR last_run_at < DATE_SUB(NOW(), INTERVAL 30 DAY))
-     LIMIT 10`,
-    [orgId]
-  );
-  staleSchedules.forEach((row) => recommendations.push({ type: 'stale_schedule_review', message: `Review schedule "${row.export_name}" because it has not run recently.`, entity_id: row.id }));
-  return recommendations;
 }
 
 async function getModuleConfig(orgId) {
@@ -1212,37 +1049,6 @@ async function getFilterOptions(orgId) {
   };
 }
 
-async function getModuleSummary(orgId) {
-  await ensureReportModuleSeed();
-  const [[reportCount]] = await pool.execute(
-    'SELECT COUNT(*) AS total FROM report_definitions WHERE (org_id IS NULL OR org_id = ?) AND is_active = 1',
-    [orgId]
-  );
-  const [[dashboardCount]] = await pool.execute(
-    'SELECT COUNT(*) AS total FROM report_dashboards WHERE (org_id IS NULL OR org_id = ?) AND is_active = 1',
-    [orgId]
-  );
-  const [[scheduleCount]] = await pool.execute(
-    'SELECT COUNT(*) AS total FROM scheduled_export_configs WHERE org_id = ? AND is_active = 1',
-    [orgId]
-  );
-  const [[failedRuns]] = await pool.execute(
-    `SELECT COUNT(*) AS total
-     FROM report_run_ledger
-     WHERE org_id = ?
-       AND status = 'failed'
-       AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
-    [orgId]
-  );
-
-  return {
-    total_reports: Number(reportCount?.total || 0),
-    total_dashboards: Number(dashboardCount?.total || 0),
-    total_schedules: Number(scheduleCount?.total || 0),
-    failed_runs_last_7_days: Number(failedRuns?.total || 0),
-  };
-}
-
 module.exports = {
   DEFAULT_MODULE_CONFIG,
   AUDIENCES,
@@ -1266,24 +1072,11 @@ module.exports = {
   updateDashboard,
   deleteDashboard,
   duplicateDashboard,
-  createDashboardTemplate,
-  listDashboardTemplates,
-  createDashboardFromTemplate,
   listFavorites,
   addFavorite,
   deleteFavorite,
-  listDashboardShares,
-  addDashboardShare,
-  deleteDashboardShare,
-  setRoleDefaultDashboard,
-  getRoleDefaultDashboards,
-  recordUsageEvent,
-  listUsageAnalytics,
-  validateReportConfig,
-  listRecommendations,
   runDashboard,
   getModuleConfig,
   saveModuleConfig,
-  getModuleSummary,
   getFilterOptions,
 };

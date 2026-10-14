@@ -19,25 +19,12 @@ const {
   updateDashboard,
   deleteDashboard,
   duplicateDashboard,
-  createDashboardTemplate,
-  listDashboardTemplates,
-  createDashboardFromTemplate,
   listFavorites,
   addFavorite,
   deleteFavorite,
-  listDashboardShares,
-  addDashboardShare,
-  deleteDashboardShare,
-  setRoleDefaultDashboard,
-  getRoleDefaultDashboards,
-  recordUsageEvent,
-  listUsageAnalytics,
-  validateReportConfig,
-  listRecommendations,
   runDashboard,
   getModuleConfig,
   saveModuleConfig,
-  getModuleSummary,
   getFilterOptions,
   canSeeAudience,
 } = require('../services/reportModuleService');
@@ -125,33 +112,6 @@ async function requireReportManager(req, res, next) {
     return res.status(500).json({ error: 'Permission check failed.' });
   }
 }
-
-async function flagAnomaliesForRun({ orgId, runId, targetType, targetId, rowCount, status, errorMessage }) {
-  if (!orgId || !runId) return;
-  const flags = [];
-  if (status === 'failed') {
-    flags.push({ anomaly_type: 'run_failed', severity: 'critical', message: errorMessage || 'Report run failed.' });
-  }
-  if (Number(rowCount || 0) === 0) {
-    flags.push({ anomaly_type: 'empty_result', severity: 'warning', message: 'Report run returned no rows.' });
-  }
-  for (const flag of flags) {
-    await pool.execute(
-      `INSERT INTO report_anomaly_flags (org_id, run_id, target_type, target_id, anomaly_type, severity, message)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [orgId, runId, targetType || 'report', targetId || null, flag.anomaly_type, flag.severity, flag.message]
-    ).catch(() => {});
-  }
-}
-
-router.get('/reports/module/summary', authenticate, async (req, res) => {
-  try {
-    const summary = await getModuleSummary(req.user.orgId);
-    return res.json(summary);
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load report module summary.' });
-  }
-});
 
 router.get('/reports/module/filter-options', authenticate, async (req, res) => {
   try {
@@ -246,8 +206,7 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
     definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
     const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {}, { user: req.user });
-    await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'report', definition.id, { report_key: definition.report_key }).catch(() => {});
-    const runId = await recordReportRun({
+    await recordReportRun({
       orgId: req.user.orgId,
       reportKey: definition.report_key,
       reportName: definition.name,
@@ -261,7 +220,6 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
       durationMs: Date.now() - startedAt,
       status: 'success',
     }).catch(() => {});
-    await flagAnomaliesForRun({ orgId: req.user.orgId, runId, targetType: 'report', targetId: definition.id, rowCount: result.row_count, status: 'success' });
     return res.json(result);
   } catch (err) {
     if (definition) await recordFailedRun(req, definition, 'report', startedAt, err);
@@ -308,7 +266,6 @@ router.post('/reports/module/definitions/:id/duplicate', authenticate, requireRe
     if (!await visibleDefinition(req, req.params.id)) return res.status(404).json({ error: 'Report definition not found.' });
     const definition = await duplicateReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id));
     await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_definition', definition.id, { name: definition.name, copied_from: Number(req.params.id) }, null, definition);
-    await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'report', definition.id, { source_id: Number(req.params.id) }).catch(() => {});
     return res.status(201).json(definition);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
@@ -368,8 +325,7 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
     dashboard = await visibleDashboard(req, req.params.id);
     if (!dashboard) return res.status(404).json({ error: 'Dashboard not found.' });
     const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {}, await viewerOf(req), { user: req.user });
-    await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'dashboard', dashboard.id, { dashboard_key: dashboard.dashboard_key }).catch(() => {});
-    const runId = await recordReportRun({
+    await recordReportRun({
       orgId: req.user.orgId,
       reportKey: dashboard.dashboard_key,
       reportName: dashboard.name,
@@ -383,7 +339,6 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
       durationMs: Date.now() - startedAt,
       status: 'success',
     }).catch(() => {});
-    await flagAnomaliesForRun({ orgId: req.user.orgId, runId, targetType: 'dashboard', targetId: dashboard.id, rowCount: payload.csv_rows.length, status: 'success' });
     return res.json(payload);
   } catch (err) {
     if (dashboard) await recordFailedRun(req, dashboard, 'dashboard', startedAt, err);
@@ -396,40 +351,10 @@ router.post('/reports/module/dashboards/:id/duplicate', authenticate, requireRep
     if (!await visibleDashboard(req, req.params.id)) return res.status(404).json({ error: 'Dashboard not found.' });
     const dashboard = await duplicateDashboard(req.user.orgId, req.user.userId, Number(req.params.id));
     await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_dashboard', dashboard.id, { name: dashboard.name, copied_from: Number(req.params.id) }, null, dashboard);
-    await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'dashboard', dashboard.id, { source_id: Number(req.params.id) }).catch(() => {});
     return res.status(201).json(dashboard);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
     return res.status(status).json({ error: err.message || 'Failed to duplicate dashboard.' });
-  }
-});
-
-router.post('/reports/module/dashboards/:id/templates', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const template = await createDashboardTemplate(req.user.orgId, req.user.userId, Number(req.params.id), req.body || {});
-    return res.status(201).json(template);
-  } catch (err) {
-    const status = /not found/i.test(err.message) ? 404 : 400;
-    return res.status(status).json({ error: err.message || 'Failed to create dashboard template.' });
-  }
-});
-
-router.get('/reports/module/dashboard-templates', authenticate, async (req, res) => {
-  try {
-    const templates = await listDashboardTemplates(req.user.orgId);
-    return res.json({ templates });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load dashboard templates.' });
-  }
-});
-
-router.post('/reports/module/dashboard-templates/:id/create-dashboard', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const dashboard = await createDashboardFromTemplate(req.user.orgId, req.user.userId, Number(req.params.id), req.body || {});
-    return res.status(201).json(dashboard);
-  } catch (err) {
-    const status = /not found/i.test(err.message) ? 404 : 400;
-    return res.status(status).json({ error: err.message || 'Failed to create dashboard from template.' });
   }
 });
 
@@ -655,7 +580,6 @@ router.get('/reports/module/favorites', authenticate, async (req, res) => {
 router.post('/reports/module/favorites', authenticate, async (req, res) => {
   try {
     const favorites = await addFavorite(req.user.orgId, req.user.userId, req.body?.target_type, req.body?.target_id);
-    await recordUsageEvent(req.user.orgId, req.user.userId, 'favorite', req.body?.target_type || 'report', Number(req.body?.target_id || 0), {}).catch(() => {});
     return res.status(201).json({ favorites });
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Failed to save favorite.' });
@@ -668,139 +592,6 @@ router.delete('/reports/module/favorites', authenticate, async (req, res) => {
     return res.json({ favorites });
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Failed to remove favorite.' });
-  }
-});
-
-router.get('/reports/module/dashboard-shares', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const shares = await listDashboardShares(req.user.orgId, req.query.dashboard_id || null);
-    return res.json({ shares });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load dashboard shares.' });
-  }
-});
-
-router.post('/reports/module/dashboard-shares', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const shares = await addDashboardShare(req.user.orgId, req.user.userId, req.body || {});
-    return res.status(201).json({ shares });
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to save dashboard share.' });
-  }
-});
-
-router.delete('/reports/module/dashboard-shares/:id', authenticate, requireReportManager, async (req, res) => {
-  try {
-    await deleteDashboardShare(req.user.orgId, Number(req.params.id));
-    return res.json({ ok: true });
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to remove dashboard share.' });
-  }
-});
-
-router.get('/reports/module/role-default-dashboards', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const defaults = await getRoleDefaultDashboards(req.user.orgId);
-    return res.json({ defaults });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load role default dashboards.' });
-  }
-});
-
-router.post('/reports/module/role-default-dashboards', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const defaults = await setRoleDefaultDashboard(req.user.orgId, req.user.userId, req.body?.role_key, Number(req.body?.dashboard_id));
-    return res.status(201).json({ defaults });
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to save role default dashboard.' });
-  }
-});
-
-router.get('/reports/module/config/validate', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const result = await validateReportConfig(req.user.orgId);
-    return res.json(result);
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to validate report configuration.' });
-  }
-});
-
-router.get('/reports/module/usage-analytics', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const analytics = await listUsageAnalytics(req.user.orgId);
-    return res.json({ analytics });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load usage analytics.' });
-  }
-});
-
-router.get('/reports/module/recommendations', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const recommendations = await listRecommendations(req.user.orgId);
-    return res.json({ recommendations });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load report recommendations.' });
-  }
-});
-
-router.get('/reports/module/anomalies', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const [flags] = await pool.execute(
-      `SELECT * FROM report_anomaly_flags
-       WHERE org_id = ?
-       ORDER BY created_at DESC, id DESC
-       LIMIT 100`,
-      [req.user.orgId]
-    );
-    return res.json({ flags });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load anomaly flags.' });
-  }
-});
-
-router.get('/reports/module/delivery-rules', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const [rules] = await pool.execute(
-      'SELECT * FROM report_delivery_rules WHERE org_id = ? ORDER BY is_active DESC, rule_name ASC',
-      [req.user.orgId]
-    );
-    return res.json({ rules: rules.map((rule) => ({ ...rule, allowed_domains: parseMaybeJson(rule.allowed_domains, []), blocked_domains: parseMaybeJson(rule.blocked_domains, []) })) });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load delivery rules.' });
-  }
-});
-
-router.post('/reports/module/delivery-rules', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const ruleName = String(req.body?.rule_name || '').trim();
-    if (!ruleName) return res.status(400).json({ error: 'rule_name is required.' });
-    const [result] = await pool.execute(
-      `INSERT INTO report_delivery_rules
-         (org_id, rule_name, sensitivity_level, allowed_domains, blocked_domains, max_frequency, is_active, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.user.orgId,
-        ruleName,
-        String(req.body?.sensitivity_level || 'standard').toLowerCase(),
-        JSON.stringify(Array.isArray(req.body?.allowed_domains) ? req.body.allowed_domains : []),
-        JSON.stringify(Array.isArray(req.body?.blocked_domains) ? req.body.blocked_domains : []),
-        req.body?.max_frequency || null,
-        req.body?.is_active === false ? 0 : 1,
-        req.user.userId || null,
-      ]
-    );
-    return res.status(201).json({ id: result.insertId });
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to save delivery rule.' });
-  }
-});
-
-router.delete('/reports/module/delivery-rules/:id', authenticate, requireReportManager, async (req, res) => {
-  try {
-    await pool.execute('DELETE FROM report_delivery_rules WHERE id = ? AND org_id = ?', [req.params.id, req.user.orgId]);
-    return res.json({ ok: true });
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to delete delivery rule.' });
   }
 });
 

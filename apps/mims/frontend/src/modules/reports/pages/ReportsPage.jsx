@@ -10,14 +10,16 @@ import { Button } from '../../../shared/ui'
 import ReportFilterBar from '../components/ReportFilterBar'
 import ReportTableViewer from '../components/ReportTableViewer'
 
+// The Overview (library counts and a table of links) and Governance (anomaly
+// flags on every empty run, recommendations, usage counts, templates, shares,
+// role defaults and delivery rules that changed nothing) are gone; Reports is
+// the first screen (reports review, RD2, RD5).
 const SECTION_LABELS = {
-  overview: 'Overview',
   reports: 'Reports',
   dashboards: 'Dashboards',
-  schedules: 'Schedulers',
+  schedules: 'Schedules',
   history: 'Run History',
-  configuration: 'Configuration',
-  governance: 'Governance',
+  configuration: 'Settings',
 }
 
 const BLANK_REPORT_FORM = {
@@ -39,14 +41,10 @@ const BLANK_DASHBOARD_FORM = {
 }
 
 const BLANK_CONFIG_FORM = {
-  default_timezone: 'America/New_York',
-  default_delivery_method: 'email',
-  default_delivery_target: '',
   email_from_name: 'MIMS Reports',
   reply_to_email: '',
   scheduler_enabled: true,
   digest_subject_prefix: '[MIMS Reports]',
-  run_log_retention_days: 90,
 }
 
 function formatDateTime(value) {
@@ -68,6 +66,8 @@ const LOCAL_TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptio
 const TIMEZONES = (() => { try { return Intl.supportedValuesOf('timeZone') } catch { return [LOCAL_TIMEZONE, 'UTC'] } })()
 const FREQUENCY_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly, on the 1st' }
 const DELIVERY_LABELS = { email: 'Email', in_app: 'Notification in MIMS' }
+
+const RUN_MODE_LABELS = { manual: 'Run on screen', scheduled: 'Schedule', export: 'Exported', retry: 'Run again' }
 
 function blankSchedule() {
   return {
@@ -161,22 +161,13 @@ export default function ReportsPage() {
     [token]
   )
 
-  const [section, setSection] = useState('overview')
-  const [summary, setSummary] = useState({ total_reports: 0, total_dashboards: 0, total_schedules: 0, failed_runs_last_7_days: 0 })
+  const [section, setSection] = useState('reports')
   const [datasets, setDatasets] = useState([])
   const [definitions, setDefinitions] = useState([])
   const [dashboards, setDashboards] = useState([])
   const [schedules, setSchedules] = useState([])
   const [historyRuns, setHistoryRuns] = useState([])
   const [favorites, setFavorites] = useState([])
-  const [dashboardTemplates, setDashboardTemplates] = useState([])
-  const [dashboardShares, setDashboardShares] = useState([])
-  const [roleDefaults, setRoleDefaults] = useState([])
-  const [validationResult, setValidationResult] = useState({ issues: [] })
-  const [usageAnalytics, setUsageAnalytics] = useState([])
-  const [recommendations, setRecommendations] = useState([])
-  const [anomalyFlags, setAnomalyFlags] = useState([])
-  const [deliveryRules, setDeliveryRules] = useState([])
   const [runDetail, setRunDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -232,74 +223,29 @@ export default function ReportsPage() {
     setLoading(true)
     setError('')
     try {
-      const requests = [
-        apiJson('/api/reports/module/summary'),
+      const [datasetsPayload, definitionsPayload, dashboardsPayload, schedulesPayload, historyPayload, favoritesPayload, configPayload] = await Promise.all([
         apiJson('/api/reports/module/datasets'),
         apiJson('/api/reports/module/definitions'),
         apiJson('/api/reports/module/dashboards'),
         canScheduleReports ? apiJson('/api/reports/module/schedules') : Promise.resolve({ schedules: [] }),
         apiJson('/api/reports/module/history?limit=20'),
         apiJson('/api/reports/module/favorites'),
-        apiJson('/api/reports/module/dashboard-templates'),
-      ]
-      if (canManageReports) {
-        requests.push(apiJson('/api/reports/module/config'))
-        requests.push(apiJson('/api/reports/module/config/validate'))
-        requests.push(apiJson('/api/reports/module/dashboard-shares'))
-        requests.push(apiJson('/api/reports/module/role-default-dashboards'))
-        requests.push(apiJson('/api/reports/module/usage-analytics'))
-        requests.push(apiJson('/api/reports/module/recommendations'))
-        requests.push(apiJson('/api/reports/module/anomalies'))
-        requests.push(apiJson('/api/reports/module/delivery-rules'))
-      }
-
-      const results = await Promise.all(requests)
-      const [
-        summaryPayload,
-        datasetsPayload,
-        definitionsPayload,
-        dashboardsPayload,
-        schedulesPayload,
-        historyPayload,
-        favoritesPayload,
-        templatesPayload,
-        configPayload,
-        validationPayload,
-        sharesPayload,
-        roleDefaultsPayload,
-        analyticsPayload,
-        recommendationsPayload,
-        anomalyPayload,
-        deliveryRulesPayload,
-      ] = results
-      setSummary(summaryPayload)
+        canManageReports ? apiJson('/api/reports/module/config') : Promise.resolve(null),
+      ])
       setDatasets(Array.isArray(datasetsPayload.datasets) ? datasetsPayload.datasets : [])
       const nextDefinitions = Array.isArray(definitionsPayload.definitions) ? definitionsPayload.definitions : []
       setDefinitions(nextDefinitions)
       setDashboards(Array.isArray(dashboardsPayload.dashboards) ? dashboardsPayload.dashboards : [])
-      const nextSchedules = Array.isArray(schedulesPayload.schedules) ? schedulesPayload.schedules : []
-      setSchedules(nextSchedules)
+      setSchedules(Array.isArray(schedulesPayload.schedules) ? schedulesPayload.schedules : [])
       setHistoryRuns(Array.isArray(historyPayload.runs) ? historyPayload.runs : [])
       setFavorites(Array.isArray(favoritesPayload?.favorites) ? favoritesPayload.favorites : [])
-      setDashboardTemplates(Array.isArray(templatesPayload?.templates) ? templatesPayload.templates : [])
-      setValidationResult(validationPayload || { issues: [] })
-      setDashboardShares(Array.isArray(sharesPayload?.shares) ? sharesPayload.shares : [])
-      setRoleDefaults(Array.isArray(roleDefaultsPayload?.defaults) ? roleDefaultsPayload.defaults : [])
-      setUsageAnalytics(Array.isArray(analyticsPayload?.analytics) ? analyticsPayload.analytics : [])
-      setRecommendations(Array.isArray(recommendationsPayload?.recommendations) ? recommendationsPayload.recommendations : [])
-      setAnomalyFlags(Array.isArray(anomalyPayload?.flags) ? anomalyPayload.flags : [])
-      setDeliveryRules(Array.isArray(deliveryRulesPayload?.rules) ? deliveryRulesPayload.rules : [])
 
       if (canManageReports && configPayload) {
         const normalizedConfig = {
-          default_timezone: configPayload.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-          default_delivery_method: configPayload.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-          default_delivery_target: configPayload.default_delivery_target || '',
           email_from_name: configPayload.email_from_name || BLANK_CONFIG_FORM.email_from_name,
           reply_to_email: configPayload.reply_to_email || '',
           scheduler_enabled: !!Number(configPayload.scheduler_enabled ?? 1),
           digest_subject_prefix: configPayload.digest_subject_prefix || BLANK_CONFIG_FORM.digest_subject_prefix,
-          run_log_retention_days: Number(configPayload.run_log_retention_days || 90),
         }
         setConfigForm(normalizedConfig)
       }
@@ -372,8 +318,8 @@ export default function ReportsPage() {
   }, [location.search])
 
   useEffect(() => {
-    if ((!canScheduleReports && section === 'schedules') || (!canManageReports && (section === 'configuration' || section === 'governance'))) {
-      pushSection('overview')
+    if ((!canScheduleReports && section === 'schedules') || (!canManageReports && section === 'configuration')) {
+      pushSection('reports')
     }
   }, [canManageReports, canScheduleReports, pushSection, section])
 
@@ -479,29 +425,15 @@ export default function ReportsPage() {
   const selectedDashboard = dashboards.find((item) => Number(item.id) === Number(selectedDashboardId)) || null
   const sectionGroups = [
     {
-      label: 'Operate',
-      items: [
-        { key: 'overview', label: 'Overview' },
-        { key: 'history', label: 'Run History' },
-        ...(canScheduleReports ? [{ key: 'schedules', label: 'Schedulers' }] : []),
-      ],
-    },
-    {
-      label: 'Build',
+      label: 'Reports',
       items: [
         { key: 'reports', label: 'Reports' },
         { key: 'dashboards', label: 'Dashboards' },
+        ...(canScheduleReports ? [{ key: 'schedules', label: 'Schedules' }] : []),
+        { key: 'history', label: 'Run History' },
+        ...(canManageReports ? [{ key: 'configuration', label: 'Settings' }] : []),
       ],
     },
-    ...(canManageReports
-      ? [{
-          label: 'Govern',
-          items: [
-            { key: 'governance', label: 'Governance' },
-            { key: 'configuration', label: 'Configuration' },
-          ],
-        }]
-      : []),
   ]
 
   function isFavorite(targetType, targetId) {
@@ -542,17 +474,6 @@ export default function ReportsPage() {
       pushSection('dashboards', { dashboardKey: payload.dashboard_key })
     } catch (err) {
       setError(err.message || 'Failed to duplicate dashboard.')
-    }
-  }
-
-  async function saveDashboardTemplate(dashboardId = selectedDashboardId) {
-    if (!dashboardId) return
-    try {
-      await apiJson(`/api/reports/module/dashboards/${dashboardId}/templates`, { method: 'POST' })
-      await loadModuleData()
-      pushSection('governance')
-    } catch (err) {
-      setError(err.message || 'Failed to create dashboard template.')
     }
   }
 
@@ -811,18 +732,13 @@ export default function ReportsPage() {
         body: JSON.stringify({
           ...configForm,
           scheduler_enabled: !!configForm.scheduler_enabled,
-          run_log_retention_days: Number(configForm.run_log_retention_days || 90),
         }),
       })
       const normalized = {
-        default_timezone: payload.default_timezone,
-        default_delivery_method: payload.default_delivery_method,
-        default_delivery_target: payload.default_delivery_target || '',
         email_from_name: payload.email_from_name || '',
         reply_to_email: payload.reply_to_email || '',
         scheduler_enabled: !!Number(payload.scheduler_enabled ?? 1),
         digest_subject_prefix: payload.digest_subject_prefix || '',
-        run_log_retention_days: Number(payload.run_log_retention_days || 90),
       }
       setConfigForm(normalized)
       await loadModuleData()
@@ -834,82 +750,6 @@ export default function ReportsPage() {
   }
 
 
-
-  function renderOverview() {
-    const links = [
-      { title: 'Report Library', desc: 'Discover approved reports and run trusted outputs.', section: 'reports' },
-      { title: 'Dashboard Library', desc: 'Saved operational and leadership surfaces.', section: 'dashboards' },
-      { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !canScheduleReports },
-      { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !canManageReports },
-    ].filter((item) => !item.hidden)
-    return (
-      <div style={{ display: 'grid', gap: 12 }}>
-        <div className="card">
-          <div className="card-header"><h3>Summary</h3></div>
-          <table className="admin-table mims-queue-table">
-            <tbody>
-              {[
-                { label: 'Active reports', value: summary.total_reports, hint: 'Approved library and custom definitions' },
-                { label: 'Dashboards', value: summary.total_dashboards, hint: 'Saved decision surfaces' },
-                { label: 'Schedulers', value: summary.total_schedules, hint: 'Active delivery jobs' },
-                { label: 'Failed runs (7 days)', value: summary.failed_runs_last_7_days, hint: 'Recent runs needing attention' },
-              ].map((item) => (
-                <tr key={item.label}>
-                  <td><strong>{item.label}</strong><div className="text-muted">{item.hint}</div></td>
-                  <td className="num">{item.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, alignItems: 'start' }}>
-          <div className="card">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>Reporting Workspace</h3>
-              <button className="btn btn-outline" onClick={() => pushSection('reports')}>Open Report Library</button>
-            </div>
-            <table className="admin-table mims-module-list">
-              <tbody>
-                {links.map((item) => (
-                  <tr key={item.title}>
-                    <td><a href="#" onClick={(e) => { e.preventDefault(); pushSection(item.section) }}>{item.title}</a></td>
-                    <td>{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><h3>Recent Run Activity</h3></div>
-            <table className="admin-table">
-              <thead>
-                <tr><th>Report</th><th>Type</th><th>Rows</th><th>Run</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {historyRuns.slice(0, 6).map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      {run.report_name}
-                      {run.error_message && <div style={{ fontSize: 12, color: '#b91c1c' }}>{run.error_message}</div>}
-                    </td>
-                    <td>{run.target_type || 'report'}, {run.run_mode}</td>
-                    <td>{run.row_count}</td>
-                    <td>{formatDateTime(run.created_at)}</td>
-                    <td style={{ color: badgeStyle(run.status).color, fontWeight: 700 }}>{String(run.status || 'unknown')}</td>
-                  </tr>
-                ))}
-                {!historyRuns.length && (
-                  <tr><td colSpan={5} className="text-muted">No runs recorded yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   function renderReportsSection() {
     return (
@@ -1227,7 +1067,6 @@ export default function ReportsPage() {
                   <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(true)}>Run Dashboard</button>
                   <button onClick={() => toggleFavorite('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>{isFavorite('dashboard', selectedDashboard.id) ? 'Unfavorite' : 'Favorite'}</button>
                   {canManageReports && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {canManageReports && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
@@ -1625,7 +1464,7 @@ export default function ReportsPage() {
                 <tr key={run.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 12px' }}>{run.report_name}</td>
                   <td style={{ padding: '10px 12px' }}>{run.target_type || 'report'}</td>
-                  <td style={{ padding: '10px 12px' }}>{run.run_mode}</td>
+                  <td style={{ padding: '10px 12px' }}>{RUN_MODE_LABELS[run.run_mode] || run.run_mode}</td>
                   <td style={{ padding: '10px 12px' }}>{run.row_count}</td>
                   <td style={{ padding: '10px 12px' }}>{run.delivery_method || 'manual'}</td>
                   <td style={{ padding: '10px 12px' }}>
@@ -1660,198 +1499,60 @@ export default function ReportsPage() {
               </div>
               <button onClick={() => setRunDetail(null)} style={pillButtonStyle(false)}>Close</button>
             </div>
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div><strong>Target</strong><div>{runDetail.target_type} #{runDetail.target_id || '-'}</div></div>
-              <div><strong>Triggered By</strong><div>{runDetail.triggered_by_name || runDetail.triggered_by || '-'}</div></div>
-              <div><strong>Duration</strong><div>{runDetail.duration_ms == null ? '-' : `${runDetail.duration_ms}ms`}</div></div>
-              <div><strong>Retry Of</strong><div>{runDetail.retry_of_run_id || '-'}</div></div>
+            {/* Readable, not the raw JSON it showed before. */}
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontSize: 13 }}>
+              <div><strong>How</strong><div>{RUN_MODE_LABELS[runDetail.run_mode] || runDetail.run_mode}</div></div>
+              <div><strong>By</strong><div>{runDetail.triggered_by_name || '—'}</div></div>
+              <div><strong>Period</strong><div>{runDetail.filters?.date_from ? `${runDetail.filters.date_from} to ${runDetail.filters.date_to}` : ((filterOptions.periods || []).find((p) => p.value === runDetail.filters?.period)?.label || 'Report default')}</div></div>
+              <div><strong>Rows</strong><div>{runDetail.row_count}</div></div>
+              {runDetail.delivery_target && <div><strong>Sent to</strong><div>{runDetail.delivery_target}</div></div>}
+              {Object.entries(runDetail.filters || {}).filter(([key]) => !['period', 'date_from', 'date_to'].includes(key)).map(([key, value]) => (
+                <div key={key}><strong>{key.replace(/_/g, ' ')}</strong><div>{String(value)}</div></div>
+              ))}
+              {runDetail.diagnostics?.recipients_skipped && <div><strong>Not sent to</strong><div>{runDetail.diagnostics.recipients_skipped.join(', ')}</div></div>}
+              {runDetail.error_message && <div style={{ color: '#b91c1c' }}><strong>Why it failed</strong><div>{runDetail.error_message}</div></div>}
             </div>
-            <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', background: '#f8fafc', borderRadius: 10, padding: 12, fontSize: 12 }}>{JSON.stringify({ filters: runDetail.filters || {}, diagnostics: runDetail.diagnostics || {}, error: runDetail.error_message || null }, null, 2)}</pre>
           </div>
         )}
       </div>
     )
   }
 
+  // Settings that change what happens. Default delivery method and address,
+  // run-log retention (nothing deleted anything), the default time zone (each
+  // schedule has its own) and four "governance notes" are gone (RD4, RD8).
   function renderConfigurationSection() {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.9fr', gap: 18 }}>
-        <div style={cardStyle()}>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>Module Configuration</div>
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-            Scheduler defaults, report delivery identity, timezone behavior, and retention.
-          </div>
+      <div style={{ ...cardStyle(), maxWidth: 760 }}>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>Settings</div>
+        <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
+          How scheduled reports are emailed for this organisation.
+        </div>
 
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Timezone</span>
-              <input value={configForm.default_timezone} onChange={(event) => setConfigForm((current) => ({ ...current, default_timezone: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Delivery Method</span>
-              <select value={configForm.default_delivery_method} onChange={(event) => setConfigForm((current) => ({ ...current, default_delivery_method: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="email">Email</option>
-                <option value="in_app">In App</option>
-              </select>
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Delivery Target</span>
-              <input value={configForm.default_delivery_target} onChange={(event) => setConfigForm((current) => ({ ...current, default_delivery_target: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email From Name</span>
-              <input value={configForm.email_from_name} onChange={(event) => setConfigForm((current) => ({ ...current, email_from_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reply-To Email</span>
-              <input value={configForm.reply_to_email} onChange={(event) => setConfigForm((current) => ({ ...current, reply_to_email: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Subject Prefix</span>
-              <input value={configForm.digest_subject_prefix} onChange={(event) => setConfigForm((current) => ({ ...current, digest_subject_prefix: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Run Log Retention Days</span>
-              <input type="number" min="7" max="365" value={configForm.run_log_retention_days} onChange={(event) => setConfigForm((current) => ({ ...current, run_log_retention_days: Number(event.target.value || 90) }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
-            </label>
-          </div>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-            <input type="checkbox" checked={!!configForm.scheduler_enabled} onChange={(event) => setConfigForm((current) => ({ ...current, scheduler_enabled: event.target.checked }))} />
-            <span style={{ fontSize: 13 }}>Scheduler enabled for this organisation</span>
+        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email from name</span>
+            <input value={configForm.email_from_name} onChange={(event) => setConfigForm((current) => ({ ...current, email_from_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
           </label>
-
-          <div style={{ marginTop: 18 }}>
-            <button onClick={saveConfiguration} style={pillButtonStyle(true)} disabled={configSaving}>
-              {configSaving ? 'Saving…' : 'Save Configuration'}
-            </button>
-          </div>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reply-to email</span>
+            <input value={configForm.reply_to_email} onChange={(event) => setConfigForm((current) => ({ ...current, reply_to_email: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Subject starts with</span>
+            <input value={configForm.digest_subject_prefix} onChange={(event) => setConfigForm((current) => ({ ...current, digest_subject_prefix: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+          </label>
         </div>
 
-        <div style={cardStyle()}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>Governance Notes</div>
-          <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
-            {[
-              'Reports are metadata-driven and tied to approved datasets only.',
-              'Dashboards can only consume saved report definitions.',
-              'Schedulers now handle report and dashboard targets from one control surface.',
-              'Module delivery identity is separated from raw SMTP credentials.',
-            ].map((note) => (
-              <div key={note} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: '#fafafa', fontSize: 13, color: 'var(--text-primary)' }}>
-                {note}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+          <input type="checkbox" checked={!!configForm.scheduler_enabled} onChange={(event) => setConfigForm((current) => ({ ...current, scheduler_enabled: event.target.checked }))} />
+          <span style={{ fontSize: 13 }}>Send scheduled reports (untick to pause every schedule in this organisation)</span>
+        </label>
 
-  function renderGovernanceSection() {
-    return (
-      <div style={{ display: 'grid', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Config Validation</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{validationResult.issues?.length || 0}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Open validation issue{validationResult.issues?.length === 1 ? '' : 's'}</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Templates</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardTemplates.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Reusable dashboard templates</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Shares</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardShares.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Role/org/user share rules</div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Role Defaults</div>
-            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{roleDefaults.length}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Mapped default dashboards</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18 }}>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Validation Issues</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {(validationResult.issues || []).map((issue, index) => (
-                <div key={`${issue.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: issue.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
-                  <strong>{issue.type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{issue.message}</div>
-                </div>
-              ))}
-              {!validationResult.issues?.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No report configuration issues found.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Anomaly Flags</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {anomalyFlags.slice(0, 10).map((flag) => (
-                <div key={flag.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: flag.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
-                  <strong>{flag.anomaly_type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{flag.message}</div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{formatDateTime(flag.created_at)}</div>
-                </div>
-              ))}
-              {!anomalyFlags.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No anomalies flagged yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Recommendations</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {recommendations.map((item, index) => (
-                <div key={`${item.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{item.type}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13 }}>{item.message}</div>
-                </div>
-              ))}
-              {!recommendations.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Recommendations will appear after more report usage data is collected.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Usage Analytics</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              {usageAnalytics.slice(0, 12).map((item, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                  <span>{item.event_type} / {item.target_type} #{item.target_id || '-'}</span>
-                  <strong>{item.count}</strong>
-                </div>
-              ))}
-              {!usageAnalytics.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No usage events captured yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Templates</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {dashboardTemplates.map((template) => (
-                <div key={template.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{template.name}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>{template.description || 'No description'}</div>
-                </div>
-              ))}
-              {!dashboardTemplates.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No dashboard templates saved yet.</div>}
-            </div>
-          </div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Enterprise Delivery Rules</div>
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {deliveryRules.map((rule) => (
-                <div key={rule.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
-                  <strong>{rule.rule_name}</strong>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Sensitivity: {rule.sensitivity_level} • Active: {Number(rule.is_active) ? 'Yes' : 'No'}</div>
-                </div>
-              ))}
-              {!deliveryRules.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No enterprise delivery rules configured yet.</div>}
-            </div>
-          </div>
+        <div style={{ marginTop: 18 }}>
+          <button onClick={saveConfiguration} style={pillButtonStyle(true)} disabled={configSaving}>
+            {configSaving ? 'Saving…' : 'Save Settings'}
+          </button>
         </div>
       </div>
     )
@@ -1902,12 +1603,10 @@ export default function ReportsPage() {
       )}
 
       <div className="workspace-content-stage">
-        {section === 'overview' && renderOverview()}
         {section === 'reports' && renderReportsSection()}
         {section === 'dashboards' && renderDashboardsSection()}
         {section === 'schedules' && canScheduleReports && renderSchedulesSection()}
         {section === 'history' && renderHistorySection()}
-        {section === 'governance' && canManageReports && renderGovernanceSection()}
         {section === 'configuration' && canManageReports && renderConfigurationSection()}
       </div>
     </div>
