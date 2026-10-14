@@ -36,7 +36,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     mi_category_id: doc?.mi_category_id || '',
     document_category: doc?.document_category || '',
     version_notes: doc?.version_notes || '',
-    review_cycle_days: doc?.review_cycle_days || '',
+    // A new document is reviewed yearly unless changed — the cycle most medical
+    // information teams use for standard responses. Existing ones keep theirs.
+    review_cycle_days: doc?.id ? (doc.review_cycle_days || '') : 365,
     regulatory_ref: doc?.regulatory_ref || '',
     bump_type: 'minor',
     is_product_specific: doc?.is_product_specific ? true : false,
