@@ -112,7 +112,9 @@ async function check(req, res, next) {
   if (!target.id) return deny(res, 404, 'Not found.');
   const key = read || VIEWER_ACTIONS.test(path) ? 'case.view' : 'case.update';
   if (await verifyCaseOrg(target.id, req, key)) return next();
-  const [[exists]] = await pool.execute('SELECT id FROM cases WHERE id = ? LIMIT 1', [target.id]);
+  // A case in another organisation reads as not found, as it did before this
+  // check: "not allowed" would confirm that the case number exists elsewhere.
+  const [[exists]] = await pool.execute('SELECT id FROM cases WHERE id = ? AND org_id = ? LIMIT 1', [target.id, req.user.orgId]);
   if (!exists) return deny(res, 404, 'Case not found.');
   return deny(res, 403, key === 'case.view' ? 'You do not have permission to view this case.' : 'You do not have permission to change this case.');
 }
