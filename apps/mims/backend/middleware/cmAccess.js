@@ -12,7 +12,7 @@
  *   reviews                       content.review or content.author
  *   approve                       content.approve
  *   publish, archive, bulk        content.publish
- *   folders and their permissions content.folder.configure
+ *   folders, settings, lists      content.folder.configure (Configure content)
  *   anything else                 Content Management module and content.author
  */
 
@@ -36,9 +36,10 @@ async function allowed(req) {
   }
   if (/^\/reviews\//.test(path)) return (await has('content.review')) || (await has('content.author'));
   if (/\/approve$/.test(path)) return has('content.approve');
-  // Setting up folders and who may use them: Configure folders (admins by
-  // default). The privilege existed but nothing checked it.
-  if (/^\/folders(\/\d+(\/.*)?)?$/.test(path)) {
+  // Setting up folders and who may use them, Content Settings (publishing
+  // checks, alert defaults) and the content lists: Configure content (admins
+  // by default). Every author could change the publishing checks.
+  if (/^\/folders(\/\d+(\/.*)?)?$/.test(path) || /^\/(settings|picklists)(\/\d+)?$/.test(path)) {
     const modules = await getUserModules(req.user.userId);
     return modules.includes('content_mgmt') && (await has('content.folder.configure'));
   }

@@ -21,7 +21,9 @@ function ContentSectionLoader() {
 }
 
 export default function ContentPage() {
-  const { user, token } = useAuth()
+  const { user, token, hasCapability } = useAuth()
+  // Settings (publishing checks, alert defaults, content lists) need Configure content.
+  const canConfigure = hasCapability('content.folder.configure')
   const [searchParams] = useSearchParams()
   const standalone = searchParams.get('standalone') === '1'
   // ?view=reviews opens a reviewer's tasks — where a review notification lands (MIPM-176).
@@ -50,7 +52,7 @@ export default function ContentPage() {
       description: 'Publish, browse, and govern what users can trust.',
       items: [
         { key: 'operations', label: 'Operations Dashboard', description: 'Work queues, expiring content, and CM follow-up items.' },
-        { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
+        ...(canConfigure ? [{ key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' }] : []),
       ],
     },
     {
@@ -104,7 +106,7 @@ export default function ContentPage() {
             {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
             {activeTab === 'templates' && <TemplatesSection token={token} />}
             {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
-            {activeTab === 'settings' && <CMSettingsSection token={token} />}
+            {activeTab === 'settings' && canConfigure && <CMSettingsSection token={token} />}
             {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
           </Suspense>
         </div>
