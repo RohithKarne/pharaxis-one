@@ -9,11 +9,9 @@ import { Button } from '../../../shared/ui'
 
 import ReportFilterBar from '../components/ReportFilterBar'
 import ReportTableViewer from '../components/ReportTableViewer'
-import CustomReportBuilderPanel from '../components/CustomReportBuilderPanel'
 
 const SECTION_LABELS = {
   overview: 'Overview',
-  builder: 'Custom Builder',
   reports: 'Reports',
   dashboards: 'Dashboards',
   schedules: 'Schedulers',

@@ -398,7 +398,6 @@ function mountRoutes(r, prefix = '') {
     r.use(prefix || '/', require('./routes/chat'));
   }
   r.use(prefix || '/', require('./routes/reportModule'));
-  r.use(prefix || '/', require('./routes/reports'));
   r.use(prefix || '/', require('./routes/help'));
   r.use(prefix || '/', require('./routes/integrations/integrationsAdmin'));
   r.use(prefix || '/', require('./routes/integrations/emirRules'));
