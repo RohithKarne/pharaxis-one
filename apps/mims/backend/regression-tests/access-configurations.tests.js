@@ -98,9 +98,23 @@ module.exports = [
         ? await makeRequest('PUT', `/api/admin/access-config/requests/${request.body.id}/review`, { org_id: org.id, status: 'approved', note: 'Regression approved' }, token)
         : { status: 0 };
       const snapshot = await makeRequest('POST', '/api/admin/access-config/review-snapshots', { org_id: org.id, snapshot_name: 'Regression Access Review' }, token);
-      const pass = [siteAccess.status, getPolicy.status, putPolicy.status, request.status, review.status, snapshot.status]
+      // Put the sign-in policy back as it was. Left on, two-step sign-in was
+      // switched on for everyone in the organisation the suite ran against.
+      const was = getPolicy.body?.org || {};
+      const restore = getPolicy.status === 200
+        ? await makeRequest('PUT', '/api/admin/access-config/auth-policy', {
+          org_id: org.id,
+          session_timeout_minutes: was.session_timeout_minutes,
+          two_factor_enabled: !!was.two_factor_enabled,
+          two_factor_methods: was.two_factor_methods,
+          two_factor_remember_days: was.two_factor_remember_days,
+          sso: { provider_type: 'oidc', local_login_allowed: was.local_login_allowed !== false, is_active: !!was.sso_login_allowed },
+          reason: 'Regression auth policy restored',
+        }, token)
+        : { status: 0 };
+      const pass = [siteAccess.status, getPolicy.status, putPolicy.status, request.status, review.status, snapshot.status, restore.status]
         .every((status) => [200, 201].includes(status));
-      return { pass, details: `siteAccess=${siteAccess.status}, policy=${getPolicy.status}/${putPolicy.status}, request=${request.status}, review=${review.status}, snapshot=${snapshot.status}` };
+      return { pass, details: `siteAccess=${siteAccess.status}, policy=${getPolicy.status}/${putPolicy.status}, request=${request.status}, review=${review.status}, snapshot=${snapshot.status}, restore=${restore.status}` };
     },
   },
 ];
