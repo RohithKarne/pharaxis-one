@@ -1004,7 +1004,7 @@ export default function ReportsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Library</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Saved decision views for operations, compliance, and observability.</div>
+              <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Several reports run together on one screen.</div>
             </div>
             <Button variant="primary" size="sm" disabled={!canManageReports}
               title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
@@ -1036,9 +1036,7 @@ export default function ReportsPage() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                   <div style={{ fontWeight: 800 }}>{dashboard.name}</div>
-                  <span style={{ fontSize: 11, color: dashboard.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
-                    {dashboard.is_system ? 'SYSTEM' : 'CUSTOM'}
-                  </span>
+                  {!dashboard.is_system && <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 800 }}>CUSTOM</span>}
                 </div>
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{dashboard.description}</div>
               </button>
@@ -1193,8 +1191,8 @@ export default function ReportsPage() {
             <div style={cardStyle()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Preview</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Widget outputs rendered from the current report definitions.</div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>Results</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Each panel runs its report with the report's own period.</div>
                 </div>
                 <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>
                   {dashboardPreviewLoading ? 'Running…' : 'Refresh Preview'}
@@ -1210,7 +1208,7 @@ export default function ReportsPage() {
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 800 }}>{widget.title}</div>
                           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                            {widget.display_mode} • {widget.row_count} row{widget.row_count !== 1 ? 's' : ''}
+                            {widget.rows?.length < widget.row_count ? `First ${widget.rows.length} of ${widget.row_count} rows` : `${widget.row_count} row${widget.row_count !== 1 ? 's' : ''}`}
                           </div>
                         </div>
                         {canExportReports && !widget.not_built && !widget.not_available && <button onClick={() => exportReport(widget.definition_id, {}, widget.report_key)} style={pillButtonStyle(false)}>Export Widget</button>}
@@ -1232,8 +1230,8 @@ export default function ReportsPage() {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 18 }}>
         <div style={cardStyle()}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>Scheduler Management</div>
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Automated delivery for report definitions and dashboards.</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>Schedules</div>
+          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Reports and dashboards sent on a timetable.</div>
           <div style={{ marginTop: 14, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -1284,7 +1282,7 @@ export default function ReportsPage() {
             <div>
               <div style={{ fontSize: 18, fontWeight: 800 }}>{editingScheduleId ? 'Edit Schedule' : 'Create Schedule'}</div>
               <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-                Scheduler defaults follow the reporting configuration unless you override them here.
+                Emailed only to people in this organisation who can see the report.
               </div>
             </div>
             {editingScheduleId && (
@@ -1308,7 +1306,7 @@ export default function ReportsPage() {
                 <option value="dashboard">Dashboard</option>
               </select>
             </label>
-            <label style={{ display: 'grid', gap: 6 }}>
+            <label style={{ display: 'grid', gap: 6, minWidth: 0 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target</span>
               <select value={scheduleForm.target_id} onChange={(event) => {
                 const targetId = event.target.value
@@ -1318,7 +1316,7 @@ export default function ReportsPage() {
                   target_id: targetId,
                   export_name: current.export_name || source?.name || '',
                 }))
-              }} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+              }} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', width: '100%' }}>
                 <option value="">Select target</option>
                 {targetOptions.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
@@ -1355,9 +1353,9 @@ export default function ReportsPage() {
                 {(TIMEZONES.includes(scheduleForm.timezone_name) ? TIMEZONES : [scheduleForm.timezone_name, ...TIMEZONES]).map((zone) => <option key={zone} value={zone}>{zone}</option>)}
               </select>
             </label>
-            <label style={{ display: 'grid', gap: 6 }}>
+            <label style={{ display: 'grid', gap: 6, minWidth: 0 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Period each send covers</span>
-              <select aria-label="Period each send covers" value={scheduleForm.filters?.period || ''} onChange={(event) => setScheduleForm((current) => ({ ...current, filters: { ...(current.filters || {}), period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+              <select aria-label="Period each send covers" value={scheduleForm.filters?.period || ''} onChange={(event) => setScheduleForm((current) => ({ ...current, filters: { ...(current.filters || {}), period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', width: '100%' }}>
                 <option value="">{`Matches how often it runs (${scheduleForm.schedule_frequency === 'monthly' ? 'last month' : scheduleForm.schedule_frequency === 'weekly' ? 'last 7 days' : 'yesterday'})`}</option>
                 {(filterOptions.periods || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
