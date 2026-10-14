@@ -25,7 +25,7 @@ router.get('/field-actions/status-flow', authenticate, (_req, res) => {
   res.json({ flow: fieldActions.STATUS_FLOW });
 });
 
-router.get('/field-actions', authenticate, async (req, res) => {
+router.get('/field-actions', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     res.json({
       records: await fieldActions.list({
@@ -38,7 +38,7 @@ router.get('/field-actions', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/field-actions/:id', authenticate, async (req, res) => {
+router.get('/field-actions/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const r = await fieldActions.get({ orgId: req.user.orgId, id: req.params.id });
     if (!r) return res.status(404).json({ error: 'Not found' });
