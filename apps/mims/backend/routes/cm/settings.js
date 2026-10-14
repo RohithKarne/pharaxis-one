@@ -8,6 +8,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
 
 function orgId(req) { return Number(req.user?.orgId || 0); }
 function hasPlatformAdminScope(req) { return hasGlobalAdminScope(req.user); }
@@ -114,6 +115,39 @@ router.get('/overview', authenticate, async (req, res) => {
       scoped.params
     );
 
+    // Documents whose periodic review falls due within 30 days, or is past due:
+    // the review cycle counted from the last closed review, else from when this
+    // version was made — the same rule as the weekly reminder.
+    const readable = await folderFilterSql(req.user, 'd.folder_id');
+    const [dueForReview] = await pool.execute(
+      `SELECT * FROM (
+         SELECT d.id, d.doc_id, d.name, d.review_cycle_days, f.name AS folder_name,
+                DATE(DATE_ADD(COALESCE((SELECT MAX(r.updated_at) FROM cm_reviews r
+                                         WHERE r.doc_type = 'document' AND r.doc_id = d.id AND r.status = 'Closed'), d.created_at),
+                              INTERVAL d.review_cycle_days DAY)) AS review_due
+           FROM cm_documents d JOIN cm_folders f ON f.id = d.folder_id
+          WHERE d.status = 'Published' AND d.review_cycle_days > 0${scoped.clause}${readable}) due
+        WHERE review_due <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+        ORDER BY review_due ASC LIMIT 8`,
+      scoped.params
+    );
+
+    // Review tasks past their planned end date, with who is still deciding.
+    const [overdueReviews] = await pool.execute(
+      `SELECT r.id, r.title, DATE_FORMAT(r.planned_end_date, '%Y-%m-%d') AS planned_end_date, u.name AS owner_name,
+              COALESCE(d.name, q.question) AS document_name,
+              (SELECT GROUP_CONCAT(ru.name ORDER BY cr.sort_order SEPARATOR ', ') FROM cm_reviewers cr JOIN users ru ON ru.id = cr.user_id
+                WHERE cr.review_id = r.id AND cr.status = 'Ongoing') AS waiting_on
+         FROM cm_reviews r
+         LEFT JOIN users u ON u.id = r.created_by
+         LEFT JOIN cm_documents d ON r.doc_type = 'document' AND d.id = r.doc_id
+         LEFT JOIN cm_faqs q ON r.doc_type = 'faq' AND q.id = r.doc_id
+         JOIN cm_folders f ON f.id = COALESCE(d.folder_id, q.folder_id)
+        WHERE r.status = 'Open' AND r.planned_end_date < CURDATE()${scoped.clause}${readable.replace(/d\.folder_id/g, 'COALESCE(d.folder_id, q.folder_id)')}
+        ORDER BY r.planned_end_date ASC LIMIT 8`,
+      scoped.params
+    );
+
     res.json({
       counts: {
         documents: Object.fromEntries(documentStatusRows.map((row) => [row.status, Number(row.total || 0)])),
@@ -123,6 +157,8 @@ router.get('/overview', authenticate, async (req, res) => {
       queues: {
         expiring_documents: expiringDocuments,
         checked_out_documents: checkedOutDocuments,
+        due_for_review: dueForReview,
+        overdue_reviews: overdueReviews,
       },
     });
   } catch (err) {
