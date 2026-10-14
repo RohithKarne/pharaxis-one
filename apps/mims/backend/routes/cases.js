@@ -2349,6 +2349,18 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
 
+    // Documents linked to an offered document (Associated Documents on the
+    // document screen), so the builder can suggest them when it is ticked.
+    let related = [];
+    if (documents.length) {
+      const ids = documents.map((d) => d.id);
+      const [rows] = await pool.execute(
+        `SELECT r.doc_id, r.related_doc_id, r.relation_type FROM cm_document_relations r
+          WHERE r.doc_id IN (${ids.map(() => '?').join(',')}) AND r.related_doc_id IN (${ids.map(() => '?').join(',')})`,
+        [...ids, ...ids]);
+      related = rows;
+    }
+
     // What the builder needs to say about this answer (MI Response Settings):
     // an off-label MI must enclose the prescribing information when required.
     const settings = await getMiResponseSettings(scopedCase.org_id);
@@ -2370,7 +2382,11 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       recipients,
       response_product_groups: responseGroups,
       templates,
-      documents: documents.map((doc) => ({ ...doc, selected_modules: parseJsonSafe(doc.selected_modules, []) })),
+      documents: documents.map((doc) => ({
+        ...doc,
+        selected_modules: parseJsonSafe(doc.selected_modules, []),
+        related: related.filter((r) => r.doc_id === doc.id).map((r) => ({ id: r.related_doc_id, relation_type: r.relation_type })),
+      })),
       modules,
     });
   } catch (err) {
@@ -2423,6 +2439,7 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          COALESCE(r.cm_document_name, d.name) AS cm_document_name,
          r.selected_documents,
          r.selected_modules,
+         r.source_document_snapshot,
          r.language,
          r.is_customized,
          r.customization_notes,

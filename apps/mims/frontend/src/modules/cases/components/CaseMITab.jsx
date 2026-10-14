@@ -62,7 +62,7 @@ function emptyMiRespForm(tab = null) {
 }
 
 export default function CaseMITab({
-  id, token, headers, setSavedMsg, onCountChange,
+  id, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, coreField,
   view = 'full',
@@ -687,8 +687,8 @@ export default function CaseMITab({
               )
             })()}
             <div className="cf-form-field cf-form-field--full">
-              <label>Linked Documents</label>
-              <CaseAssociatedDocs miTab={miTabs[activeMiTab]} token={token} />
+              <label>Documents sent</label>
+              <CaseAssociatedDocs miTab={miTabs[activeMiTab]} responses={miResponses} />
             </div>
             <div className="cf-form-actions">
               <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
@@ -865,6 +865,20 @@ export default function CaseMITab({
                             </label>
                           ))}
                           {documents.length === 0 && <div className="cf-empty-msg">No published documents in this language for this product.</div>}
+                          {(() => {
+                            // Documents linked to a ticked one (Associated Documents), not yet ticked.
+                            const picked = miRespForm.selected_document_ids.map(Number)
+                            const suggest = [...new Set(allDocuments.filter(d => picked.includes(Number(d.id))).flatMap(d => (d.related || []).map(r => Number(r.id))))]
+                              .filter(id => !picked.includes(id)).map(id => allDocuments.find(d => Number(d.id) === id)).filter(Boolean)
+                            return suggest.length > 0 && (
+                              <div className="cf-builder-note" data-testid="related-suggestions">
+                                Often sent with what you chose:
+                                {suggest.map(d => (
+                                  <button key={d.id} type="button" className="cf-link-btn" style={{ display: 'block' }} onClick={() => toggleSelection('selected_document_ids', d.id)}>Add {d.name}</button>
+                                ))}
+                              </div>
+                            )
+                          })()}
                           {otherProductDocs.length > 0 && (
                             <button type="button" className="cf-link-btn" onClick={() => setShowOtherProductDocs(v => !v)}>
                               {showOtherProductDocs ? 'Hide other products\' documents' : `Show other products' documents (${otherProductDocs.length})`}
