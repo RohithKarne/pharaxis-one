@@ -168,7 +168,6 @@ export default function ReportsPage() {
   const [recommendations, setRecommendations] = useState([])
   const [anomalyFlags, setAnomalyFlags] = useState([])
   const [deliveryRules, setDeliveryRules] = useState([])
-  const [entityVersions, setEntityVersions] = useState([])
   const [runDetail, setRunDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -510,41 +509,6 @@ export default function ReportsPage() {
     }
   }
 
-  async function publishReport(definitionId = selectedReportId) {
-    if (!definitionId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/publish`, { method: 'POST' })
-      await loadModuleData()
-      setSelectedReportId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to publish report.')
-    }
-  }
-
-  async function certifyReport(definitionId = selectedReportId) {
-    if (!definitionId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/certify`, {
-        method: 'POST',
-        body: JSON.stringify({ sensitivity_level: 'restricted' }),
-      })
-      await loadModuleData()
-      setSelectedReportId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to certify report.')
-    }
-  }
-
-  async function loadVersions(targetType, targetId) {
-    try {
-      const base = targetType === 'dashboard' ? 'dashboards' : 'definitions'
-      const payload = await apiJson(`/api/reports/module/${base}/${targetId}/versions`)
-      setEntityVersions(Array.isArray(payload.versions) ? payload.versions : [])
-    } catch (err) {
-      setError(err.message || 'Failed to load versions.')
-    }
-  }
-
   async function duplicateDashboard(dashboardId = selectedDashboardId) {
     if (!dashboardId) return
     try {
@@ -554,17 +518,6 @@ export default function ReportsPage() {
       pushSection('dashboards', { dashboardKey: payload.dashboard_key })
     } catch (err) {
       setError(err.message || 'Failed to duplicate dashboard.')
-    }
-  }
-
-  async function publishDashboard(dashboardId = selectedDashboardId) {
-    if (!dashboardId) return
-    try {
-      const payload = await apiJson(`/api/reports/module/dashboards/${dashboardId}/publish`, { method: 'POST' })
-      await loadModuleData()
-      setSelectedDashboardId(payload.id)
-    } catch (err) {
-      setError(err.message || 'Failed to publish dashboard.')
     }
   }
 
@@ -988,18 +941,12 @@ export default function ReportsPage() {
                     <span>Dataset: {selectedReport.dataset_key}</span>
                     <span>Group: {selectedReport.group_label}</span>
                     <span>Scope: {selectedReport.visibility_scope}</span>
-                    <span>Status: {selectedReport.lifecycle_status || 'published'}</span>
-                    <span>Sensitivity: {selectedReport.sensitivity_level || 'standard'}</span>
-                    {selectedReport.certified_at && <span>Certified: {formatDateTime(selectedReport.certified_at)}</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {selectedReport.is_built !== false && <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>}
                   <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
-                  <button onClick={() => loadVersions('report', selectedReport.id)} style={pillButtonStyle(false)}>Versions</button>
                   {canManageReports && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {canManageReports && selectedReport.lifecycle_status === 'draft' && <button onClick={() => publishReport(selectedReport.id)} style={pillButtonStyle(false)}>Publish</button>}
-                  {canManageReports && !selectedReport.is_system && <button onClick={() => certifyReport(selectedReport.id)} style={pillButtonStyle(false)}>Certify</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
@@ -1017,27 +964,6 @@ export default function ReportsPage() {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Last Updated</div>
                   <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{formatDateTime(selectedReport.updated_at)}</div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {entityVersions.length > 0 && selectedReport && (
-            <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this report.</div>
-                </div>
-                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
-              </div>
-              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                {entityVersions.slice(0, 8).map((version) => (
-                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                    <strong>Version {version.version_number}</strong>
-                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
-                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -1279,42 +1205,17 @@ export default function ReportsPage() {
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>Widgets: {selectedDashboard.widgets?.length || 0}</span>
                     <span>Scope: {selectedDashboard.visibility_scope}</span>
-                    <span>Status: {selectedDashboard.lifecycle_status || 'published'}</span>
-                    <span>Sensitivity: {selectedDashboard.sensitivity_level || 'standard'}</span>
                     <span>Last Updated: {formatDateTime(selectedDashboard.updated_at)}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(true)}>Run Dashboard</button>
                   <button onClick={() => toggleFavorite('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>{isFavorite('dashboard', selectedDashboard.id) ? 'Unfavorite' : 'Favorite'}</button>
-                  <button onClick={() => loadVersions('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>Versions</button>
                   {canManageReports && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {canManageReports && selectedDashboard.lifecycle_status === 'draft' && <button onClick={() => publishDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Publish</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
                   {canManageReports && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {entityVersions.length > 0 && selectedDashboard && (
-            <div style={cardStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this dashboard.</div>
-                </div>
-                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
-              </div>
-              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                {entityVersions.slice(0, 8).map((version) => (
-                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                    <strong>Version {version.version_number}</strong>
-                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
-                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}

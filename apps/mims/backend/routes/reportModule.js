@@ -11,9 +11,6 @@ const {
   updateReportDefinition,
   deleteReportDefinition,
   duplicateReportDefinition,
-  publishReportDefinition,
-  certifyReportDefinition,
-  listEntityVersions,
   previewDataset,
   runReportDefinition,
   listDashboards,
@@ -22,7 +19,6 @@ const {
   updateDashboard,
   deleteDashboard,
   duplicateDashboard,
-  publishDashboard,
   createDashboardTemplate,
   listDashboardTemplates,
   createDashboardFromTemplate,
@@ -54,6 +50,7 @@ const {
 const { recordReportRun } = require('../services/reportOpsService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
+const { logAudit } = require('../utils/auditLog');
 
 const router = express.Router();
 // Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
@@ -140,6 +137,7 @@ router.get('/reports/module/definitions', authenticate, async (req, res) => {
 router.post('/reports/module/definitions', authenticate, requireReportManager, async (req, res) => {
   try {
     const definition = await createReportDefinition(req.user.orgId, req.user.userId, req.body || {});
+    await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_definition', definition.id, { name: definition.name }, null, definition);
     return res.status(201).json(definition);
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Failed to create report definition.' });
@@ -148,7 +146,9 @@ router.post('/reports/module/definitions', authenticate, requireReportManager, a
 
 router.put('/reports/module/definitions/:id', authenticate, requireReportManager, async (req, res) => {
   try {
+    const before = await getReportDefinitionById(req.user.orgId, Number(req.params.id));
     const definition = await updateReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id), req.body || {});
+    await logAudit(req.user.userId, req.user.email, 'UPDATE', 'report_definition', definition.id, { name: definition.name }, before, definition);
     return res.json(definition);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
@@ -159,6 +159,7 @@ router.put('/reports/module/definitions/:id', authenticate, requireReportManager
 router.delete('/reports/module/definitions/:id', authenticate, requireReportManager, async (req, res) => {
   try {
     const deleted = await deleteReportDefinition(req.user.orgId, Number(req.params.id));
+    await logAudit(req.user.userId, req.user.email, 'DELETE', 'report_definition', deleted.id, { name: deleted.name }, deleted, null);
     return res.json({ ok: true, deleted });
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
@@ -197,40 +198,12 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
 router.post('/reports/module/definitions/:id/duplicate', authenticate, requireReportManager, async (req, res) => {
   try {
     const definition = await duplicateReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id));
+    await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_definition', definition.id, { name: definition.name, copied_from: Number(req.params.id) }, null, definition);
     await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'report', definition.id, { source_id: Number(req.params.id) }).catch(() => {});
     return res.status(201).json(definition);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
     return res.status(status).json({ error: err.message || 'Failed to duplicate report definition.' });
-  }
-});
-
-router.get('/reports/module/definitions/:id/versions', authenticate, async (req, res) => {
-  try {
-    const versions = await listEntityVersions(req.user.orgId, 'report', Number(req.params.id));
-    return res.json({ versions });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load report versions.' });
-  }
-});
-
-router.post('/reports/module/definitions/:id/publish', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const definition = await publishReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id));
-    return res.json(definition);
-  } catch (err) {
-    const status = /not found/i.test(err.message) ? 404 : 400;
-    return res.status(status).json({ error: err.message || 'Failed to publish report definition.' });
-  }
-});
-
-router.post('/reports/module/definitions/:id/certify', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const definition = await certifyReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id), req.body || {});
-    return res.json(definition);
-  } catch (err) {
-    const status = /not found/i.test(err.message) ? 404 : 400;
-    return res.status(status).json({ error: err.message || 'Failed to certify report definition.' });
   }
 });
 
@@ -248,6 +221,7 @@ router.get('/reports/module/dashboards', authenticate, async (req, res) => {
 router.post('/reports/module/dashboards', authenticate, requireReportManager, async (req, res) => {
   try {
     const dashboard = await createDashboard(req.user.orgId, req.user.userId, req.body || {});
+    await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_dashboard', dashboard.id, { name: dashboard.name }, null, dashboard);
     return res.status(201).json(dashboard);
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Failed to create dashboard.' });
@@ -256,7 +230,9 @@ router.post('/reports/module/dashboards', authenticate, requireReportManager, as
 
 router.put('/reports/module/dashboards/:id', authenticate, requireReportManager, async (req, res) => {
   try {
+    const before = await getDashboardById(req.user.orgId, Number(req.params.id));
     const dashboard = await updateDashboard(req.user.orgId, req.user.userId, Number(req.params.id), req.body || {});
+    await logAudit(req.user.userId, req.user.email, 'UPDATE', 'report_dashboard', dashboard.id, { name: dashboard.name }, before, dashboard);
     return res.json(dashboard);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
@@ -267,6 +243,7 @@ router.put('/reports/module/dashboards/:id', authenticate, requireReportManager,
 router.delete('/reports/module/dashboards/:id', authenticate, requireReportManager, async (req, res) => {
   try {
     const deleted = await deleteDashboard(req.user.orgId, Number(req.params.id));
+    await logAudit(req.user.userId, req.user.email, 'DELETE', 'report_dashboard', deleted.id, { name: deleted.name }, deleted, null);
     return res.json({ ok: true, deleted });
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
@@ -305,30 +282,12 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
 router.post('/reports/module/dashboards/:id/duplicate', authenticate, requireReportManager, async (req, res) => {
   try {
     const dashboard = await duplicateDashboard(req.user.orgId, req.user.userId, Number(req.params.id));
+    await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_dashboard', dashboard.id, { name: dashboard.name, copied_from: Number(req.params.id) }, null, dashboard);
     await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'dashboard', dashboard.id, { source_id: Number(req.params.id) }).catch(() => {});
     return res.status(201).json(dashboard);
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
     return res.status(status).json({ error: err.message || 'Failed to duplicate dashboard.' });
-  }
-});
-
-router.get('/reports/module/dashboards/:id/versions', authenticate, async (req, res) => {
-  try {
-    const versions = await listEntityVersions(req.user.orgId, 'dashboard', Number(req.params.id));
-    return res.json({ versions });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to load dashboard versions.' });
-  }
-});
-
-router.post('/reports/module/dashboards/:id/publish', authenticate, requireReportManager, async (req, res) => {
-  try {
-    const dashboard = await publishDashboard(req.user.orgId, req.user.userId, Number(req.params.id));
-    return res.json(dashboard);
-  } catch (err) {
-    const status = /not found/i.test(err.message) ? 404 : 400;
-    return res.status(status).json({ error: err.message || 'Failed to publish dashboard.' });
   }
 });
 

@@ -305,52 +305,6 @@ function toJson(value, fallback = null) {
   }
 }
 
-function normalizeSensitivity(value) {
-  const next = sanitizeText(value, 'standard').toLowerCase();
-  return ['standard', 'restricted', 'sensitive'].includes(next) ? next : 'standard';
-}
-
-function normalizeLifecycle(value) {
-  const next = sanitizeText(value, 'published').toLowerCase();
-  return ['draft', 'published', 'certified', 'archived'].includes(next) ? next : 'published';
-}
-
-function parseFormulaFields(value) {
-  const parsed = parseJson(value, []);
-  if (!Array.isArray(parsed)) return [];
-  return parsed
-    .map((field) => ({
-      key: slugify(field.key || field.label || ''),
-      label: sanitizeText(field.label || field.key || ''),
-      expression: sanitizeText(field.expression || ''),
-    }))
-    .filter((field) => field.key && field.expression);
-}
-
-function validateFormulaFields(fields = []) {
-  const unsafe = fields.find((field) => !/^[a-zA-Z0-9_\s.+\-*/()%<>=!&|?:'"]+$/.test(field.expression || ''));
-  if (unsafe) throw new Error(`Unsafe formula expression for ${unsafe.key}.`);
-}
-
-function applyFormulaFields(rows = [], fields = []) {
-  if (!Array.isArray(fields) || fields.length === 0) return rows;
-  validateFormulaFields(fields);
-  return rows.map((row) => {
-    const next = { ...row };
-    for (const field of fields) {
-      try {
-        const args = Object.keys(row || {});
-        const values = args.map((key) => row[key]);
-        // Expressions are regex-limited above and executed only against row values.
-        next[field.key] = Function(...args, `"use strict"; return (${field.expression});`)(...values);
-      } catch (_) {
-        next[field.key] = null;
-      }
-    }
-    return next;
-  });
-}
-
 function normalizeDefinition(row) {
   if (!row) return null;
   return {
@@ -366,15 +320,8 @@ function normalizeDefinition(row) {
     allowed_filters: parseJson(row.allowed_filters, []),
     default_filters: parseJson(row.default_filters, {}),
     selected_columns: parseJson(row.selected_columns, []),
-    formula_fields: parseFormulaFields(row.formula_fields),
     visibility_scope: row.visibility_scope || 'shared',
-    lifecycle_status: normalizeLifecycle(row.lifecycle_status),
-    draft: parseJson(row.draft_json, null),
-    sensitivity_level: normalizeSensitivity(row.sensitivity_level),
     owner_id: row.owner_id || row.created_by || null,
-    certified_by: row.certified_by || null,
-    certified_at: row.certified_at || null,
-    certification_expires_at: row.certification_expires_at || null,
     is_system: !!row.is_system,
     is_active: !!row.is_active,
     created_by: row.created_by || null,
@@ -395,11 +342,7 @@ function normalizeDashboard(row) {
     layout: parseJson(row.layout_json, []),
     widgets: parseJson(row.widgets_json, []),
     visibility_scope: row.visibility_scope || 'shared',
-    lifecycle_status: normalizeLifecycle(row.lifecycle_status),
-    draft: parseJson(row.draft_json, null),
-    sensitivity_level: normalizeSensitivity(row.sensitivity_level),
     owner_id: row.owner_id || row.created_by || null,
-    is_template: !!row.is_template,
     is_system: !!row.is_system,
     is_active: !!row.is_active,
     created_by: row.created_by || null,
@@ -633,33 +576,6 @@ async function ensureUniqueDefinitionKey(orgId, baseKey) {
   }
 }
 
-async function recordEntityVersion(orgId, entityType, entityId, snapshot, userId, changeSummary) {
-  if (!orgId || !entityType || !entityId || !snapshot) return null;
-  const [[row]] = await pool.execute(
-    'SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM report_entity_versions WHERE org_id = ? AND entity_type = ? AND entity_id = ?',
-    [orgId, entityType, entityId]
-  );
-  const versionNumber = Number(row?.next_version || 1);
-  await pool.execute(
-    `INSERT INTO report_entity_versions
-       (org_id, entity_type, entity_id, version_number, snapshot_json, change_summary, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [orgId, entityType, entityId, versionNumber, JSON.stringify(snapshot), sanitizeText(changeSummary), userId || null]
-  );
-  return versionNumber;
-}
-
-async function listEntityVersions(orgId, entityType, entityId) {
-  const [rows] = await pool.execute(
-    `SELECT id, entity_type, entity_id, version_number, snapshot_json, change_summary, created_by, created_at
-     FROM report_entity_versions
-     WHERE org_id = ? AND entity_type = ? AND entity_id = ?
-     ORDER BY version_number DESC`,
-    [orgId, entityType, entityId]
-  );
-  return rows.map((row) => ({ ...row, snapshot: parseJson(row.snapshot_json, {}) }));
-}
-
 async function validateReportPayload(orgId, payload = {}, existing = null) {
   const datasetKey = sanitizeText(payload.dataset_key || existing?.dataset_key);
   if (!datasetKey) throw new Error('dataset_key is required.');
@@ -668,16 +584,14 @@ async function validateReportPayload(orgId, payload = {}, existing = null) {
   if (!catalogItem.is_built) throw new Error('This dataset is not built yet, so no report can be made from it.');
   const name = sanitizeText(payload.name || existing?.name || catalogItem.name);
   if (!name) throw new Error('Report name is required.');
-  const formulaFields = parseFormulaFields(payload.formula_fields || existing?.formula_fields || []);
-  validateFormulaFields(formulaFields);
   const selectedColumns = Array.isArray(payload.selected_columns) ? payload.selected_columns : existing?.selected_columns || [];
   if (selectedColumns.length) {
     const preview = await previewDataset(datasetKey, orgId, payload.default_filters || existing?.default_filters || {});
-    const available = new Set([...(preview.columns || []), ...formulaFields.map((field) => field.key)]);
+    const available = new Set(preview.columns || []);
     const invalid = selectedColumns.filter((column) => !available.has(column));
     if (invalid.length) throw new Error(`Invalid selected columns: ${invalid.join(', ')}`);
   }
-  return { catalogItem, formulaFields };
+  return { catalogItem };
 }
 
 async function validateDashboardPayload(orgId, payload = {}, existing = null) {
@@ -707,8 +621,8 @@ async function createReportDefinition(orgId, userId, payload = {}) {
   const [result] = await pool.execute(
     `INSERT INTO report_definitions
        (org_id, report_key, dataset_key, name, description, group_key, allowed_filters, default_filters,
-        selected_columns, formula_fields, visibility_scope, lifecycle_status, sensitivity_level, is_system, is_active, created_by, updated_by, owner_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, 0, ?, ?, ?, ?)`,
+        selected_columns, visibility_scope, is_system, is_active, created_by, updated_by, owner_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     [
       orgId,
       reportKey,
@@ -719,18 +633,14 @@ async function createReportDefinition(orgId, userId, payload = {}) {
       JSON.stringify(Array.isArray(payload.allowed_filters) ? payload.allowed_filters : catalogItem.allowed_filters || []),
       JSON.stringify(payload.default_filters || {}),
       JSON.stringify(Array.isArray(payload.selected_columns) ? payload.selected_columns : []),
-      toJson(parseFormulaFields(payload.formula_fields || []), []),
       sanitizeText(payload.visibility_scope, 'shared'),
-      normalizeSensitivity(payload.sensitivity_level),
       toBoolInt(payload.is_active, 1),
       userId || null,
       userId || null,
       userId || null,
     ]
   );
-  const created = await getReportDefinitionById(orgId, result.insertId);
-  await recordEntityVersion(orgId, 'report', created.id, created, userId, 'created');
-  return created;
+  return getReportDefinitionById(orgId, result.insertId);
 }
 
 async function updateReportDefinition(orgId, userId, id, payload = {}) {
@@ -739,28 +649,6 @@ async function updateReportDefinition(orgId, userId, id, payload = {}) {
   if (existing.is_system) throw new Error('System report definitions cannot be edited.');
   await validateReportPayload(orgId, payload, existing);
 
-  if (existing.lifecycle_status === 'certified' || existing.certified_at) {
-    const draft = {
-      ...existing,
-      ...payload,
-      id: existing.id,
-      report_key: existing.report_key,
-      dataset_key: sanitizeText(payload.dataset_key, existing.dataset_key),
-      formula_fields: parseFormulaFields(payload.formula_fields || existing.formula_fields || []),
-      default_filters: payload.default_filters || existing.default_filters || {},
-      selected_columns: Array.isArray(payload.selected_columns) ? payload.selected_columns : existing.selected_columns || [],
-    };
-    await pool.execute(
-      `UPDATE report_definitions
-       SET draft_json = ?, lifecycle_status = 'draft', updated_by = ?, updated_at = NOW()
-       WHERE id = ? AND org_id = ?`,
-      [JSON.stringify(draft), userId || null, id, orgId]
-    );
-    const updated = await getReportDefinitionById(orgId, id);
-    await recordEntityVersion(orgId, 'report', id, updated, userId, 'draft updated');
-    return updated;
-  }
-
   await pool.execute(
     `UPDATE report_definitions
      SET name = ?,
@@ -768,10 +656,7 @@ async function updateReportDefinition(orgId, userId, id, payload = {}) {
          group_key = ?,
          default_filters = ?,
          selected_columns = ?,
-         formula_fields = ?,
          visibility_scope = ?,
-         lifecycle_status = ?,
-         sensitivity_level = ?,
          owner_id = ?,
          is_active = ?,
          updated_by = ?,
@@ -783,10 +668,7 @@ async function updateReportDefinition(orgId, userId, id, payload = {}) {
       sanitizeText(payload.group_key, existing.group_key),
       JSON.stringify(payload.default_filters || existing.default_filters || {}),
       JSON.stringify(Array.isArray(payload.selected_columns) ? payload.selected_columns : existing.selected_columns || []),
-      toJson(parseFormulaFields(payload.formula_fields || existing.formula_fields || []), []),
       sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
-      normalizeLifecycle(payload.lifecycle_status || existing.lifecycle_status),
-      normalizeSensitivity(payload.sensitivity_level || existing.sensitivity_level),
       payload.owner_id || existing.owner_id || userId || null,
       toBoolInt(payload.is_active, existing.is_active ? 1 : 0),
       userId || null,
@@ -794,9 +676,7 @@ async function updateReportDefinition(orgId, userId, id, payload = {}) {
       orgId,
     ]
   );
-  const updated = await getReportDefinitionById(orgId, id);
-  await recordEntityVersion(orgId, 'report', id, updated, userId, 'updated');
-  return updated;
+  return getReportDefinitionById(orgId, id);
 }
 
 async function deleteReportDefinition(orgId, id) {
@@ -816,8 +696,7 @@ async function runReportDefinition(definition, orgId, filters = {}) {
     ...(definition.default_filters || {}),
     ...(filters || {}),
   };
-  const sourceRows = await getDatasetByReportKey(definition.dataset_key, orgId, mergedFilters);
-  const rows = applyFormulaFields(sourceRows, definition.formula_fields || []);
+  const rows = await getDatasetByReportKey(definition.dataset_key, orgId, mergedFilters);
   const visible = pickVisibleColumns(rows, definition.selected_columns);
   return {
     definition,
@@ -887,9 +766,9 @@ async function createDashboard(orgId, userId, payload = {}) {
   const dashboardKey = await ensureUniqueDashboardKey(slugify(`${orgId}-${name}`));
   const [result] = await pool.execute(
     `INSERT INTO report_dashboards
-       (org_id, dashboard_key, name, description, layout_json, widgets_json, visibility_scope, lifecycle_status,
-        sensitivity_level, is_system, is_active, created_by, updated_by, owner_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'published', ?, 0, ?, ?, ?, ?)`,
+       (org_id, dashboard_key, name, description, layout_json, widgets_json, visibility_scope,
+        is_system, is_active, created_by, updated_by, owner_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     [
       orgId,
       dashboardKey,
@@ -898,16 +777,13 @@ async function createDashboard(orgId, userId, payload = {}) {
       JSON.stringify(Array.isArray(payload.layout) ? payload.layout : []),
       JSON.stringify(Array.isArray(payload.widgets) ? payload.widgets : []),
       sanitizeText(payload.visibility_scope, 'shared'),
-      normalizeSensitivity(payload.sensitivity_level),
       toBoolInt(payload.is_active, 1),
       userId || null,
       userId || null,
       userId || null,
     ]
   );
-  const created = await getDashboardById(orgId, result.insertId);
-  await recordEntityVersion(orgId, 'dashboard', created.id, created, userId, 'created');
-  return created;
+  return getDashboardById(orgId, result.insertId);
 }
 
 async function updateDashboard(orgId, userId, id, payload = {}) {
@@ -916,26 +792,6 @@ async function updateDashboard(orgId, userId, id, payload = {}) {
   if (existing.is_system) throw new Error('System dashboards cannot be edited.');
   await validateDashboardPayload(orgId, payload, existing);
 
-  if (existing.lifecycle_status === 'certified') {
-    const draft = {
-      ...existing,
-      ...payload,
-      id: existing.id,
-      dashboard_key: existing.dashboard_key,
-      widgets: Array.isArray(payload.widgets) ? payload.widgets : existing.widgets || [],
-      layout: Array.isArray(payload.layout) ? payload.layout : existing.layout || [],
-    };
-    await pool.execute(
-      `UPDATE report_dashboards
-       SET draft_json = ?, lifecycle_status = 'draft', updated_by = ?, updated_at = NOW()
-       WHERE id = ? AND org_id = ?`,
-      [JSON.stringify(draft), userId || null, id, orgId]
-    );
-    const updated = await getDashboardById(orgId, id);
-    await recordEntityVersion(orgId, 'dashboard', id, updated, userId, 'draft updated');
-    return updated;
-  }
-
   await pool.execute(
     `UPDATE report_dashboards
      SET name = ?,
@@ -943,8 +799,6 @@ async function updateDashboard(orgId, userId, id, payload = {}) {
          layout_json = ?,
          widgets_json = ?,
          visibility_scope = ?,
-         lifecycle_status = ?,
-         sensitivity_level = ?,
          owner_id = ?,
          is_active = ?,
          updated_by = ?,
@@ -956,8 +810,6 @@ async function updateDashboard(orgId, userId, id, payload = {}) {
       JSON.stringify(Array.isArray(payload.layout) ? payload.layout : existing.layout || []),
       JSON.stringify(Array.isArray(payload.widgets) ? payload.widgets : existing.widgets || []),
       sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
-      normalizeLifecycle(payload.lifecycle_status || existing.lifecycle_status),
-      normalizeSensitivity(payload.sensitivity_level || existing.sensitivity_level),
       payload.owner_id || existing.owner_id || userId || null,
       toBoolInt(payload.is_active, existing.is_active ? 1 : 0),
       userId || null,
@@ -965,9 +817,7 @@ async function updateDashboard(orgId, userId, id, payload = {}) {
       orgId,
     ]
   );
-  const updated = await getDashboardById(orgId, id);
-  await recordEntityVersion(orgId, 'dashboard', id, updated, userId, 'updated');
-  return updated;
+  return getDashboardById(orgId, id);
 }
 
 async function deleteDashboard(orgId, id) {
@@ -1036,9 +886,7 @@ async function duplicateReportDefinition(orgId, userId, id) {
     allowed_filters: existing.allowed_filters,
     default_filters: existing.default_filters,
     selected_columns: existing.selected_columns,
-    formula_fields: existing.formula_fields,
     visibility_scope: existing.visibility_scope,
-    sensitivity_level: existing.sensitivity_level,
     is_active: true,
   });
 }
@@ -1052,99 +900,8 @@ async function duplicateDashboard(orgId, userId, id) {
     layout: existing.layout,
     widgets: existing.widgets,
     visibility_scope: existing.visibility_scope,
-    sensitivity_level: existing.sensitivity_level,
     is_active: true,
   });
-}
-
-async function publishReportDefinition(orgId, userId, id) {
-  const existing = await getReportDefinitionById(orgId, id);
-  if (!existing) throw new Error('Report definition not found.');
-  if (existing.is_system) throw new Error('System report definitions cannot be published.');
-  const draft = existing.draft || {};
-  const payload = Object.keys(draft).length ? draft : existing;
-  await validateReportPayload(orgId, payload, existing);
-  await pool.execute(
-    `UPDATE report_definitions
-     SET name = ?, description = ?, dataset_key = ?, group_key = ?, default_filters = ?, selected_columns = ?,
-         formula_fields = ?, visibility_scope = ?, lifecycle_status = 'published', draft_json = NULL,
-         sensitivity_level = ?, updated_by = ?, updated_at = NOW()
-     WHERE id = ? AND org_id = ?`,
-    [
-      sanitizeText(payload.name, existing.name),
-      sanitizeText(payload.description, existing.description),
-      sanitizeText(payload.dataset_key, existing.dataset_key),
-      sanitizeText(payload.group_key, existing.group_key),
-      toJson(payload.default_filters || existing.default_filters || {}, {}),
-      toJson(Array.isArray(payload.selected_columns) ? payload.selected_columns : existing.selected_columns || [], []),
-      toJson(parseFormulaFields(payload.formula_fields || existing.formula_fields || []), []),
-      sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
-      normalizeSensitivity(payload.sensitivity_level || existing.sensitivity_level),
-      userId || null,
-      id,
-      orgId,
-    ]
-  );
-  const updated = await getReportDefinitionById(orgId, id);
-  await recordEntityVersion(orgId, 'report', id, updated, userId, 'published');
-  return updated;
-}
-
-async function certifyReportDefinition(orgId, userId, id, payload = {}) {
-  const existing = await getReportDefinitionById(orgId, id);
-  if (!existing) throw new Error('Report definition not found.');
-  if (existing.lifecycle_status === 'draft') throw new Error('Publish draft before certification.');
-  await pool.execute(
-    `UPDATE report_definitions
-     SET lifecycle_status = 'certified',
-         certified_by = ?,
-         certified_at = NOW(),
-         certification_expires_at = ?,
-         sensitivity_level = ?,
-         updated_by = ?,
-         updated_at = NOW()
-     WHERE id = ? AND (org_id = ? OR org_id IS NULL)`,
-    [
-      userId || null,
-      payload.certification_expires_at || null,
-      normalizeSensitivity(payload.sensitivity_level || existing.sensitivity_level || 'restricted'),
-      userId || null,
-      id,
-      orgId,
-    ]
-  );
-  const updated = await getReportDefinitionById(orgId, id);
-  await recordEntityVersion(orgId, 'report', id, updated, userId, 'certified');
-  return updated;
-}
-
-async function publishDashboard(orgId, userId, id) {
-  const existing = await getDashboardById(orgId, id);
-  if (!existing) throw new Error('Dashboard not found.');
-  if (existing.is_system) throw new Error('System dashboards cannot be published.');
-  const draft = existing.draft || {};
-  const payload = Object.keys(draft).length ? draft : existing;
-  await validateDashboardPayload(orgId, payload, existing);
-  await pool.execute(
-    `UPDATE report_dashboards
-     SET name = ?, description = ?, layout_json = ?, widgets_json = ?, visibility_scope = ?,
-         lifecycle_status = 'published', draft_json = NULL, sensitivity_level = ?, updated_by = ?, updated_at = NOW()
-     WHERE id = ? AND org_id = ?`,
-    [
-      sanitizeText(payload.name, existing.name),
-      sanitizeText(payload.description, existing.description),
-      toJson(Array.isArray(payload.layout) ? payload.layout : existing.layout || [], []),
-      toJson(Array.isArray(payload.widgets) ? payload.widgets : existing.widgets || [], []),
-      sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
-      normalizeSensitivity(payload.sensitivity_level || existing.sensitivity_level),
-      userId || null,
-      id,
-      orgId,
-    ]
-  );
-  const updated = await getDashboardById(orgId, id);
-  await recordEntityVersion(orgId, 'dashboard', id, updated, userId, 'published');
-  return updated;
 }
 
 async function createDashboardTemplate(orgId, userId, dashboardId, payload = {}) {
@@ -1196,7 +953,6 @@ async function createDashboardFromTemplate(orgId, userId, templateId, payload = 
     layout: template.layout,
     widgets: template.widgets,
     visibility_scope: payload.visibility_scope || 'shared',
-    sensitivity_level: payload.sensitivity_level || 'standard',
     is_active: true,
   });
 }
@@ -1449,9 +1205,6 @@ module.exports = {
   updateReportDefinition,
   deleteReportDefinition,
   duplicateReportDefinition,
-  publishReportDefinition,
-  certifyReportDefinition,
-  listEntityVersions,
   previewDataset,
   runReportDefinition,
   listDashboards,
@@ -1460,7 +1213,6 @@ module.exports = {
   updateDashboard,
   deleteDashboard,
   duplicateDashboard,
-  publishDashboard,
   createDashboardTemplate,
   listDashboardTemplates,
   createDashboardFromTemplate,

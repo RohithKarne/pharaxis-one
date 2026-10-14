@@ -621,14 +621,11 @@ module.exports = [
     },
   },
   {
-    name: 'Report roadmap operations cover duplicate favorites versions publish certify and run detail',
+    name: 'Report roadmap operations cover duplicate favorites and run detail',
     module: 'Reports',
     covers: [
       'POST /api/reports/module/definitions/:id/duplicate',
       'GET/POST/DELETE /api/reports/module/favorites',
-      'GET /api/reports/module/definitions/:id/versions',
-      'POST /api/reports/module/definitions/:id/publish',
-      'POST /api/reports/module/definitions/:id/certify',
       'GET /api/reports/module/history/:id',
       'POST /api/reports/module/history/:id/retry',
     ],
@@ -642,9 +639,7 @@ module.exports = [
           description: 'Regression roadmap report',
           default_filters: {},
           selected_columns: [],
-          formula_fields: [{ key: 'double_total', expression: 'total_cases * 2' }],
           visibility_scope: 'shared',
-          sensitivity_level: 'standard',
           is_active: true,
         }, token);
         createdId = Number(create.body?.id || 0);
@@ -654,9 +649,6 @@ module.exports = [
         duplicateId = Number(duplicate.body?.id || 0);
         const addFavorite = await makeRequest('POST', '/api/reports/module/favorites', { target_type: 'report', target_id: createdId }, token);
         const listFavorites = await makeRequest('GET', '/api/reports/module/favorites', null, token);
-        const versions = await makeRequest('GET', `/api/reports/module/definitions/${createdId}/versions`, null, token);
-        const publish = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/publish`, {}, token);
-        const certify = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/certify`, { sensitivity_level: 'restricted' }, token);
         const run = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/run`, { filters: {}, timezone_name: 'UTC' }, token);
         const history = await makeRequest('GET', '/api/reports/module/history?target_type=report&limit=10', null, token);
         const runId = Number((history.body?.runs || []).find((item) => Number(item.target_id) === createdId)?.id || 0);
@@ -669,14 +661,11 @@ module.exports = [
             !!duplicateId &&
             addFavorite.status === 201 &&
             listFavorites.status === 200 &&
-            versions.status === 200 &&
-            publish.status === 200 &&
-            certify.status === 200 &&
             run.status === 200 &&
             detail.status === 200 &&
             retry.status === 200 &&
             removeFavorite.status === 200,
-          details: `duplicate=${duplicate.status}, favorite=${addFavorite.status}/${removeFavorite.status}, versions=${versions.status}, publish=${publish.status}, certify=${certify.status}, run=${run.status}, detail=${detail.status}, retry=${retry.status}`,
+          details: `duplicate=${duplicate.status}, favorite=${addFavorite.status}/${removeFavorite.status}, run=${run.status}, detail=${detail.status}, retry=${retry.status}`,
         };
       } finally {
         await cleanupReportDefinition(duplicateId);
@@ -685,12 +674,10 @@ module.exports = [
     },
   },
   {
-    name: 'Dashboard roadmap operations cover duplicate shares templates defaults and versions',
+    name: 'Dashboard roadmap operations cover duplicate shares templates and defaults',
     module: 'Reports',
     covers: [
       'POST /api/reports/module/dashboards/:id/duplicate',
-      'GET /api/reports/module/dashboards/:id/versions',
-      'POST /api/reports/module/dashboards/:id/publish',
       'POST /api/reports/module/dashboards/:id/templates',
       'GET /api/reports/module/dashboard-templates',
       'POST /api/reports/module/dashboard-templates/:id/create-dashboard',
@@ -719,8 +706,6 @@ module.exports = [
 
         const duplicate = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/duplicate`, {}, token);
         duplicateId = Number(duplicate.body?.id || 0);
-        const versions = await makeRequest('GET', `/api/reports/module/dashboards/${dashboardId}/versions`, null, token);
-        const publish = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/publish`, {}, token);
         const template = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/templates`, {}, token);
         templateId = Number(template.body?.id || 0);
         const listTemplates = await makeRequest('GET', '/api/reports/module/dashboard-templates', null, token);
@@ -736,8 +721,6 @@ module.exports = [
         return {
           pass: duplicate.status === 201 &&
             !!duplicateId &&
-            versions.status === 200 &&
-            publish.status === 200 &&
             template.status === 201 &&
             !!templateId &&
             listTemplates.status === 200 &&
@@ -748,7 +731,7 @@ module.exports = [
             defaults.status === 201 &&
             listDefaults.status === 200 &&
             deleteShare.status === 200,
-          details: `duplicate=${duplicate.status}, versions=${versions.status}, publish=${publish.status}, template=${template.status}, fromTemplate=${fromTemplate.status}, share=${share.status}/${deleteShare.status}, defaults=${defaults.status}/${listDefaults.status}`,
+          details: `duplicate=${duplicate.status}, template=${template.status}, fromTemplate=${fromTemplate.status}, share=${share.status}/${deleteShare.status}, defaults=${defaults.status}/${listDefaults.status}`,
         };
       } finally {
         await cleanupDashboard(fromTemplateId);
