@@ -5,7 +5,6 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
-import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import { Button } from '../../../shared/ui'
 
 import ReportFilterBar from '../components/ReportFilterBar'
@@ -60,27 +59,14 @@ function formatDateTime(value) {
   return dt.toLocaleString()
 }
 
-function exportRowsAsCsv(rows, filename) {
-  if (!rows || rows.length === 0) return
-  const headers = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row || {}).forEach((key) => {
-        if (!key.startsWith('__')) set.add(key)
-      })
-      return set
-    }, new Set())
-  )
-  const lines = [
-    headers.join(','),
-    ...rows.map((row) => headers.map((header) => {
-      const value = row?.[header] ?? ''
-      const text = String(value)
-      return text.includes(',') || text.includes('"') || text.includes('\n')
-        ? `"${text.replace(/"/g, '""')}"`
-        : text
-    }).join(',')),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+// Who may see a report or dashboard; checked on the server.
+const AUDIENCE_OPTIONS = [
+  { value: 'shared', label: 'Everyone with Reports' },
+  { value: 'managers', label: 'Report managers' },
+  { value: 'admin_only', label: 'Administrators' },
+]
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -139,13 +125,14 @@ function widgetRowsToList(rows) {
 export default function ReportsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { token, user, hasCapability } = useAuth()
+  const { token, hasCapability } = useAuth()
   const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
-  const isManager = isAdminUser(user)
-  // Capability is the authority for report actions (hasCapability returns true for
-  // superadmin / unrestricted / unresolved). Replaces the role-only isManager gate.
+  // Capabilities decide what shows; the server checks the same privileges.
+  // Schedules and Configuration were gated by the admin role here and by
+  // Manage Reports on the server, so a manager with Schedule reports saw nothing.
   const canManageReports = hasCapability('reports.manage')
   const canExportReports = hasCapability('reports.export')
+  const canScheduleReports = hasCapability('reports.schedule')
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -237,12 +224,12 @@ export default function ReportsPage() {
         apiJson('/api/reports/module/datasets'),
         apiJson('/api/reports/module/definitions'),
         apiJson('/api/reports/module/dashboards'),
-        apiJson('/api/reports/module/schedules'),
+        canScheduleReports ? apiJson('/api/reports/module/schedules') : Promise.resolve({ schedules: [] }),
         apiJson('/api/reports/module/history?limit=20'),
         apiJson('/api/reports/module/favorites'),
         apiJson('/api/reports/module/dashboard-templates'),
       ]
-      if (isManager) {
+      if (canManageReports) {
         requests.push(apiJson('/api/reports/module/config'))
         requests.push(apiJson('/api/reports/module/config/validate'))
         requests.push(apiJson('/api/reports/module/dashboard-shares'))
@@ -290,7 +277,7 @@ export default function ReportsPage() {
       setAnomalyFlags(Array.isArray(anomalyPayload?.flags) ? anomalyPayload.flags : [])
       setDeliveryRules(Array.isArray(deliveryRulesPayload?.rules) ? deliveryRulesPayload.rules : [])
 
-      if (isManager && configPayload) {
+      if (canManageReports && configPayload) {
         const normalizedConfig = {
           default_timezone: configPayload.default_timezone || BLANK_CONFIG_FORM.default_timezone,
           default_delivery_method: configPayload.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
@@ -322,7 +309,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [apiJson, editingScheduleId, isManager, selectedDashboardId, selectedReportId, token])
+  }, [apiJson, canManageReports, canScheduleReports, editingScheduleId, selectedDashboardId, selectedReportId, token])
 
   async function loadHistory() {
     if (!token) return
@@ -365,10 +352,10 @@ export default function ReportsPage() {
   }, [location.search])
 
   useEffect(() => {
-    if (!isManager && (section === 'schedules' || section === 'configuration' || section === 'governance')) {
+    if ((!canScheduleReports && section === 'schedules') || (!canManageReports && (section === 'configuration' || section === 'governance'))) {
       pushSection('overview')
     }
-  }, [isManager, pushSection, section])
+  }, [canManageReports, canScheduleReports, pushSection, section])
 
   useEffect(() => {
     if (!definitions.length) return
@@ -459,7 +446,7 @@ export default function ReportsPage() {
       items: [
         { key: 'overview', label: 'Overview' },
         { key: 'history', label: 'Run History' },
-        ...(isManager ? [{ key: 'schedules', label: 'Schedulers' }] : []),
+        ...(canScheduleReports ? [{ key: 'schedules', label: 'Schedulers' }] : []),
       ],
     },
     {
@@ -469,7 +456,7 @@ export default function ReportsPage() {
         { key: 'dashboards', label: 'Dashboards' },
       ],
     },
-    ...(isManager
+    ...(canManageReports
       ? [{
           label: 'Govern',
           items: [
@@ -598,6 +585,25 @@ export default function ReportsPage() {
     }
   }
 
+  // Export runs on the server, which checks Export Reports and records it.
+  async function exportReport(definitionId, filters, fileBase = 'report') {
+    try {
+      const response = await httpFetch(`/api/reports/module/definitions/${definitionId}/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filters: filters || {} }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Export failed.')
+      }
+      // The file name is made here: a cross-origin response hides Content-Disposition.
+      downloadBlob(await response.blob(), `${fileBase}-${new Date().toISOString().slice(0, 10)}.csv`)
+    } catch (err) {
+      setError(err.message || 'Failed to export report.')
+    }
+  }
+
   async function saveReportDefinition() {
     try {
       const url = editingReportId
@@ -688,7 +694,7 @@ export default function ReportsPage() {
   // filled in. It used to open the old Scheduled Reports window, which posted to a
   // legacy service that never worked (Postgres SQL against a missing table — T16).
   function scheduleSelectedReport() {
-    if (!isManager) { setError('Only report managers can schedule reports.'); return }
+    if (!canScheduleReports) { setError('You do not have permission to schedule reports.'); return }
     setEditingScheduleId(null)
     setScheduleForm((current) => ({
       ...current,
@@ -802,8 +808,8 @@ export default function ReportsPage() {
     const links = [
       { title: 'Report Library', desc: 'Discover approved reports and run trusted outputs.', section: 'reports' },
       { title: 'Dashboard Library', desc: 'Saved operational and leadership surfaces.', section: 'dashboards' },
-      { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !isManager },
-      { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !isManager },
+      { title: 'Schedulers', desc: 'Automate report and dashboard delivery.', section: 'schedules', hidden: !canScheduleReports },
+      { title: 'Configuration', desc: 'Timezone, delivery defaults, and governance settings.', section: 'configuration', hidden: !canManageReports },
     ].filter((item) => !item.hidden)
     return (
       <div style={{ display: 'grid', gap: 12 }}>
@@ -940,7 +946,7 @@ export default function ReportsPage() {
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>Dataset: {selectedReport.dataset_key}</span>
                     <span>Group: {selectedReport.group_label}</span>
-                    <span>Scope: {selectedReport.visibility_scope}</span>
+                    <span>Audience: {selectedReport.audience_label}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -999,11 +1005,9 @@ export default function ReportsPage() {
                   <input value={reportForm.group_key} onChange={(event) => setReportForm((current) => ({ ...current, group_key: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Visibility</span>
-                  <select value={reportForm.visibility_scope} onChange={(event) => setReportForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <option value="shared">Shared</option>
-                    <option value="admin_only">Admin Only</option>
-                    <option value="leadership">Leadership</option>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Who can see it</span>
+                  <select aria-label="Who can see it" value={reportForm.visibility_scope} onChange={(event) => setReportForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
               </div>
@@ -1059,7 +1063,7 @@ export default function ReportsPage() {
                       </label>
                     ))}
                   </div>
-                  <ReportTableViewer columns={reportBuilderPreview.columns} rows={reportBuilderPreview.rows.slice(0, 12)} />
+                  <ReportTableViewer columns={reportBuilderPreview.columns} labels={reportBuilderPreview.column_labels} rows={reportBuilderPreview.rows.slice(0, 12)} />
                 </div>
               )}
             </div>
@@ -1087,11 +1091,11 @@ export default function ReportsPage() {
                   {/* The made-up figures (turnaround 2.5h, conversion 94%), the filters
                       wired to nothing and the placeholder chart are gone (M-90). */}
                   <ReportFilterBar
-                    onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)}
+                    onExport={canExportReports ? () => exportReport(selectedReport.id, reportPreview.filters, selectedReport.report_key) : null}
                     disableExport={!reportPreview.rows.length}
-                    onSchedule={scheduleSelectedReport}
+                    onSchedule={canScheduleReports ? scheduleSelectedReport : null}
                   />
-                  <ReportTableViewer columns={reportPreview.columns} rows={reportPreview.rows} />
+                  <ReportTableViewer columns={reportPreview.columns} labels={reportPreview.column_labels} rows={reportPreview.rows} />
                 </div>
               ) : (
                 <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
@@ -1108,6 +1112,9 @@ export default function ReportsPage() {
   function renderDashboardWidgetPreview(widget) {
     if (widget.not_built) {
       return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>This report is not built yet.</div>
+    }
+    if (widget.not_available) {
+      return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>This report is not available to you.</div>
     }
     if (widget.display_mode === 'kpi-grid') {
       return (
@@ -1137,7 +1144,7 @@ export default function ReportsPage() {
       )
     }
 
-    return <ReportTableViewer columns={widget.columns || []} rows={widget.rows || []} />
+    return <ReportTableViewer columns={widget.columns || []} labels={widget.column_labels} rows={widget.rows || []} />
   }
 
   function renderDashboardsSection() {
@@ -1204,7 +1211,7 @@ export default function ReportsPage() {
                   <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>{selectedDashboard.description}</div>
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>Widgets: {selectedDashboard.widgets?.length || 0}</span>
-                    <span>Scope: {selectedDashboard.visibility_scope}</span>
+                    <span>Audience: {selectedDashboard.audience_label}</span>
                     <span>Last Updated: {formatDateTime(selectedDashboard.updated_at)}</span>
                   </div>
                 </div>
@@ -1238,11 +1245,9 @@ export default function ReportsPage() {
                   <input value={dashboardForm.name} onChange={(event) => setDashboardForm((current) => ({ ...current, name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Visibility</span>
-                  <select value={dashboardForm.visibility_scope} onChange={(event) => setDashboardForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <option value="shared">Shared</option>
-                    <option value="leadership">Leadership</option>
-                    <option value="admin_only">Admin Only</option>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Who can see it</span>
+                  <select aria-label="Who can see it" value={dashboardForm.visibility_scope} onChange={(event) => setDashboardForm((current) => ({ ...current, visibility_scope: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 25 }}>
@@ -1361,7 +1366,7 @@ export default function ReportsPage() {
                             {widget.display_mode} • {widget.row_count} row{widget.row_count !== 1 ? 's' : ''}
                           </div>
                         </div>
-                        {canExportReports && <button onClick={() => exportRowsAsCsv(widget.rows || [], `${widget.report_key || widget.id}.csv`)} style={pillButtonStyle(false)}>Export Widget</button>}
+                        {canExportReports && !widget.not_built && !widget.not_available && <button onClick={() => exportReport(widget.definition_id, {}, widget.report_key)} style={pillButtonStyle(false)}>Export Widget</button>}
                       </div>
                       <div style={{ marginTop: 14 }}>{renderDashboardWidgetPreview(widget)}</div>
                     </div>
@@ -1872,10 +1877,10 @@ export default function ReportsPage() {
         {section === 'overview' && renderOverview()}
         {section === 'reports' && renderReportsSection()}
         {section === 'dashboards' && renderDashboardsSection()}
-        {section === 'schedules' && isManager && renderSchedulesSection()}
+        {section === 'schedules' && canScheduleReports && renderSchedulesSection()}
         {section === 'history' && renderHistorySection()}
-        {section === 'governance' && isManager && renderGovernanceSection()}
-        {section === 'configuration' && isManager && renderConfigurationSection()}
+        {section === 'governance' && canManageReports && renderGovernanceSection()}
+        {section === 'configuration' && canManageReports && renderConfigurationSection()}
       </div>
     </div>
   )

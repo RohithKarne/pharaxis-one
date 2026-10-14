@@ -2,12 +2,13 @@ import React from 'react'
 
 // Schedule and Export CSV. The date, category and preset controls that sat
 // here were wired to nothing — Last 7 Days still showed every row (M-90).
+// Each button shows only to someone allowed to use it (null hides it).
 export default function ReportFilterBar({ onExport, disableExport, onSchedule }) {
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
       <div style={{ flex: 1 }} />
 
-      <button
+      {onSchedule && <button
         onClick={onSchedule}
         style={{
           padding: '8px 12px',
@@ -21,9 +22,9 @@ export default function ReportFilterBar({ onExport, disableExport, onSchedule })
         }}
       >
         Schedule Report
-      </button>
+      </button>}
 
-      <button
+      {onExport && <button
         onClick={onExport}
         disabled={disableExport}
         style={{
@@ -37,7 +38,7 @@ export default function ReportFilterBar({ onExport, disableExport, onSchedule })
         }}
       >
         Export CSV
-      </button>
+      </button>}
     </div>
   )
 }

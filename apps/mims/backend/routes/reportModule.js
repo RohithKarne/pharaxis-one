@@ -38,7 +38,9 @@ const {
   getModuleConfig,
   saveModuleConfig,
   getModuleSummary,
+  canSeeAudience,
 } = require('../services/reportModuleService');
+const { buildReportCsv } = require('../services/reportCsv');
 const {
   getExportConfigs,
   createExportConfig,
@@ -48,7 +50,7 @@ const {
   deleteExportConfig,
 } = require('../services/scheduledExportService');
 const { recordReportRun } = require('../services/reportOpsService');
-const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const { logAudit } = require('../utils/auditLog');
 
@@ -56,14 +58,54 @@ const router = express.Router();
 // Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
 router.use('/reports', authenticate, requireModule('reports'));
 
-// Capability-based: mirrors the frontend hasCapability('reports.manage') gate and
-// the presets routes' requireCapability('reports.manage'). Role-only here would
-// reject non-admins who were explicitly granted reports.manage while the UI still
-// shows them the management buttons. userHasActivityPrivilege handles global admin,
-// explicit grants, and role-default fallback.
-async function canManageReports(req) {
-  if (hasGlobalAdminScope(req.user)) return true;
-  return userHasActivityPrivilege(req.user, 'reports.manage');
+// What this user may do in Reports, worked out once per request. Export and
+// Schedule were privileges nobody checked: export ran in the browser for anyone,
+// and Schedules was gated by the admin role on screen and by Manage Reports on
+// the server (reports review RS5, RS8).
+async function viewerOf(req) {
+  if (!req.reportViewer) {
+    const global = hasGlobalAdminScope(req.user);
+    req.reportViewer = {
+      admin: global || isAdminUser(req.user),
+      manage: global || await userHasActivityPrivilege(req.user, 'reports.manage'),
+      export: global || await userHasActivityPrivilege(req.user, 'reports.export'),
+      schedule: global || await userHasActivityPrivilege(req.user, 'reports.schedule'),
+    };
+  }
+  return req.reportViewer;
+}
+
+// A report or dashboard outside the user's audience reads as not found.
+async function visibleDefinition(req, id) {
+  const definition = await getReportDefinitionById(req.user.orgId, Number(id));
+  if (!definition || !canSeeAudience(await viewerOf(req), definition.visibility_scope)) return null;
+  return definition;
+}
+
+async function visibleDashboard(req, id) {
+  const dashboard = await getDashboardById(req.user.orgId, Number(id));
+  if (!dashboard || !canSeeAudience(await viewerOf(req), dashboard.visibility_scope)) return null;
+  return dashboard;
+}
+
+async function requireReportScheduler(req, res, next) {
+  try {
+    if ((await viewerOf(req)).schedule) return next();
+    return res.status(403).json({ error: 'You do not have permission to schedule reports.' });
+  } catch (err) {
+    console.error('requireReportScheduler failed:', err);
+    return res.status(500).json({ error: 'Permission check failed.' });
+  }
+}
+
+// A schedule may only deliver a report or dashboard its author can see.
+async function checkScheduleTarget(req) {
+  const body = req.body || {};
+  if (!body.target_id) return null;
+  const visible = String(body.target_type || 'report') === 'dashboard'
+    ? await visibleDashboard(req, body.target_id)
+    : await visibleDefinition(req, body.target_id);
+  return visible ? null : 'Choose a report you can see.';
 }
 
 function parseMaybeJson(value, fallback = {}) {
@@ -74,7 +116,7 @@ function parseMaybeJson(value, fallback = {}) {
 
 async function requireReportManager(req, res, next) {
   try {
-    if (await canManageReports(req)) return next();
+    if ((await viewerOf(req)).manage) return next();
     return res.status(403).json({ error: 'You do not have permission to manage reports.' });
   } catch (err) {
     console.error('requireReportManager failed:', err);
@@ -113,7 +155,7 @@ router.get('/reports/module/datasets', authenticate, (_req, res) => {
   return res.json({ datasets: getDatasetCatalog() });
 });
 
-router.post('/reports/module/datasets/:datasetKey/preview', authenticate, async (req, res) => {
+router.post('/reports/module/datasets/:datasetKey/preview', authenticate, requireReportManager, async (req, res) => {
   try {
     const result = await previewDataset(req.params.datasetKey, req.user.orgId, req.body?.filters || {});
     return res.json(result);
@@ -124,11 +166,12 @@ router.post('/reports/module/datasets/:datasetKey/preview', authenticate, async 
 
 router.get('/reports/module/definitions', authenticate, async (req, res) => {
   try {
+    const viewer = await viewerOf(req);
     const definitions = await listReportDefinitions(req.user.orgId, {
-      includeInactive: await canManageReports(req),
+      includeInactive: viewer.manage,
       productGroupId: req.query.product_group_id || null,
     });
-    return res.json({ definitions });
+    return res.json({ definitions: definitions.filter((item) => canSeeAudience(viewer, item.visibility_scope)) });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to load report definitions.' });
   }
@@ -170,7 +213,7 @@ router.delete('/reports/module/definitions/:id', authenticate, requireReportMana
 router.post('/reports/module/definitions/:id/run', authenticate, async (req, res) => {
   const startedAt = Date.now();
   try {
-    const definition = await getReportDefinitionById(req.user.orgId, Number(req.params.id));
+    const definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
     const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {});
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'report', definition.id, { report_key: definition.report_key }).catch(() => {});
@@ -195,8 +238,43 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
   }
 });
 
+// Export runs on the server: it checks Export Reports, writes a CSV with
+// readable headers and no formula cells, and leaves an audit row and a run.
+router.post('/reports/module/definitions/:id/export', authenticate, async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    if (!(await viewerOf(req)).export) return res.status(403).json({ error: 'You do not have permission to export reports.' });
+    const definition = await visibleDefinition(req, req.params.id);
+    if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
+    const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {});
+    const csv = buildReportCsv(result.columns, result.rows);
+    await logAudit(req.user.userId, req.user.email, 'EXPORT', 'report_definition', definition.id, { name: definition.name, filters: result.filters, row_count: result.row_count });
+    await recordReportRun({
+      orgId: req.user.orgId,
+      reportKey: definition.report_key,
+      reportName: definition.name,
+      targetType: 'report',
+      targetId: definition.id,
+      runMode: 'export',
+      triggeredBy: req.user.userId || null,
+      filters: result.filters,
+      rowCount: result.row_count,
+      durationMs: Date.now() - startedAt,
+      deliveryMethod: 'download',
+      status: 'success',
+    }).catch(() => {});
+    const fileName = `${definition.report_key}-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.send(`\uFEFF${csv}`);
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'Failed to export report.' });
+  }
+});
+
 router.post('/reports/module/definitions/:id/duplicate', authenticate, requireReportManager, async (req, res) => {
   try {
+    if (!await visibleDefinition(req, req.params.id)) return res.status(404).json({ error: 'Report definition not found.' });
     const definition = await duplicateReportDefinition(req.user.orgId, req.user.userId, Number(req.params.id));
     await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_definition', definition.id, { name: definition.name, copied_from: Number(req.params.id) }, null, definition);
     await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'report', definition.id, { source_id: Number(req.params.id) }).catch(() => {});
@@ -209,10 +287,11 @@ router.post('/reports/module/definitions/:id/duplicate', authenticate, requireRe
 
 router.get('/reports/module/dashboards', authenticate, async (req, res) => {
   try {
+    const viewer = await viewerOf(req);
     const dashboards = await listDashboards(req.user.orgId, {
-      includeInactive: await canManageReports(req),
+      includeInactive: viewer.manage,
     });
-    return res.json({ dashboards });
+    return res.json({ dashboards: dashboards.filter((item) => canSeeAudience(viewer, item.visibility_scope)) });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to load dashboards.' });
   }
@@ -254,9 +333,9 @@ router.delete('/reports/module/dashboards/:id', authenticate, requireReportManag
 router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res) => {
   const startedAt = Date.now();
   try {
-    const dashboard = await getDashboardById(req.user.orgId, Number(req.params.id));
+    const dashboard = await visibleDashboard(req, req.params.id);
     if (!dashboard) return res.status(404).json({ error: 'Dashboard not found.' });
-    const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {});
+    const payload = await runDashboard(dashboard, req.user.orgId, req.body?.filters || {}, await viewerOf(req));
     await recordUsageEvent(req.user.orgId, req.user.userId, 'run', 'dashboard', dashboard.id, { dashboard_key: dashboard.dashboard_key }).catch(() => {});
     const runId = await recordReportRun({
       orgId: req.user.orgId,
@@ -281,6 +360,7 @@ router.post('/reports/module/dashboards/:id/run', authenticate, async (req, res)
 
 router.post('/reports/module/dashboards/:id/duplicate', authenticate, requireReportManager, async (req, res) => {
   try {
+    if (!await visibleDashboard(req, req.params.id)) return res.status(404).json({ error: 'Dashboard not found.' });
     const dashboard = await duplicateDashboard(req.user.orgId, req.user.userId, Number(req.params.id));
     await logAudit(req.user.userId, req.user.email, 'CREATE', 'report_dashboard', dashboard.id, { name: dashboard.name, copied_from: Number(req.params.id) }, null, dashboard);
     await recordUsageEvent(req.user.orgId, req.user.userId, 'duplicate', 'dashboard', dashboard.id, { source_id: Number(req.params.id) }).catch(() => {});
@@ -320,7 +400,7 @@ router.post('/reports/module/dashboard-templates/:id/create-dashboard', authenti
   }
 });
 
-router.get('/reports/module/schedules', authenticate, async (req, res) => {
+router.get('/reports/module/schedules', authenticate, requireReportScheduler, async (req, res) => {
   try {
     const schedules = await getExportConfigs(req.user.orgId);
     return res.json({ schedules });
@@ -329,8 +409,10 @@ router.get('/reports/module/schedules', authenticate, async (req, res) => {
   }
 });
 
-router.post('/reports/module/schedules', authenticate, requireReportManager, async (req, res) => {
+router.post('/reports/module/schedules', authenticate, requireReportScheduler, async (req, res) => {
   try {
+    const targetError = await checkScheduleTarget(req);
+    if (targetError) return res.status(400).json({ error: targetError });
     const id = await createExportConfig(req.user.orgId, req.user.userId, req.body || {});
     const schedules = await getExportConfigs(req.user.orgId);
     return res.status(201).json({ id, schedule: schedules.find((item) => Number(item.id) === Number(id)) || null });
@@ -339,8 +421,10 @@ router.post('/reports/module/schedules', authenticate, requireReportManager, asy
   }
 });
 
-router.put('/reports/module/schedules/:id', authenticate, requireReportManager, async (req, res) => {
+router.put('/reports/module/schedules/:id', authenticate, requireReportScheduler, async (req, res) => {
   try {
+    const targetError = await checkScheduleTarget(req);
+    if (targetError) return res.status(400).json({ error: targetError });
     await updateExportConfig(Number(req.params.id), req.user.orgId, req.body || {});
     const schedules = await getExportConfigs(req.user.orgId);
     return res.json({ ok: true, schedule: schedules.find((item) => Number(item.id) === Number(req.params.id)) || null });
@@ -349,7 +433,7 @@ router.put('/reports/module/schedules/:id', authenticate, requireReportManager, 
   }
 });
 
-router.delete('/reports/module/schedules/:id', authenticate, requireReportManager, async (req, res) => {
+router.delete('/reports/module/schedules/:id', authenticate, requireReportScheduler, async (req, res) => {
   try {
     await deleteExportConfig(Number(req.params.id), req.user.orgId);
     return res.json({ ok: true });
@@ -358,7 +442,7 @@ router.delete('/reports/module/schedules/:id', authenticate, requireReportManage
   }
 });
 
-router.post('/reports/module/schedules/:id/pause', authenticate, requireReportManager, async (req, res) => {
+router.post('/reports/module/schedules/:id/pause', authenticate, requireReportScheduler, async (req, res) => {
   try {
     await pauseExportConfig(Number(req.params.id), req.user.orgId, req.user.userId);
     const schedules = await getExportConfigs(req.user.orgId);
@@ -368,7 +452,7 @@ router.post('/reports/module/schedules/:id/pause', authenticate, requireReportMa
   }
 });
 
-router.post('/reports/module/schedules/:id/resume', authenticate, requireReportManager, async (req, res) => {
+router.post('/reports/module/schedules/:id/resume', authenticate, requireReportScheduler, async (req, res) => {
   try {
     await resumeExportConfig(Number(req.params.id), req.user.orgId);
     const schedules = await getExportConfigs(req.user.orgId);
@@ -413,9 +497,9 @@ router.post('/reports/module/history/:id/retry', authenticate, requireReportMana
     const filters = parseMaybeJson(run.filters_json, {});
     let result;
     if (run.target_type === 'dashboard') {
-      const dashboard = await getDashboardById(req.user.orgId, Number(run.target_id));
+      const dashboard = await visibleDashboard(req, run.target_id);
       if (!dashboard) throw new Error('Dashboard target no longer exists.');
-      result = await runDashboard(dashboard, req.user.orgId, filters);
+      result = await runDashboard(dashboard, req.user.orgId, filters, await viewerOf(req));
       await recordReportRun({
         orgId: req.user.orgId,
         reportKey: dashboard.dashboard_key,
@@ -432,7 +516,7 @@ router.post('/reports/module/history/:id/retry', authenticate, requireReportMana
       });
       return res.json({ ok: true, result });
     }
-    const definition = await getReportDefinitionById(req.user.orgId, Number(run.target_id));
+    const definition = await visibleDefinition(req, run.target_id);
     if (!definition) throw new Error('Report target no longer exists.');
     result = await runReportDefinition(definition, req.user.orgId, filters);
     await recordReportRun({
@@ -499,7 +583,15 @@ router.get('/reports/module/history', authenticate, async (req, res) => {
        LIMIT ${limit}`,
       values
     );
-    return res.json({ runs: rows });
+    const viewer = await viewerOf(req);
+    const hidden = new Set();
+    for (const item of await listReportDefinitions(req.user.orgId, { includeInactive: true })) {
+      if (!canSeeAudience(viewer, item.visibility_scope)) hidden.add(`report:${item.id}`);
+    }
+    for (const item of await listDashboards(req.user.orgId, { includeInactive: true })) {
+      if (!canSeeAudience(viewer, item.visibility_scope)) hidden.add(`dashboard:${item.id}`);
+    }
+    return res.json({ runs: rows.filter((run) => !hidden.has(`${run.target_type || 'report'}:${run.target_id}`)) });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to load run history.' });
   }

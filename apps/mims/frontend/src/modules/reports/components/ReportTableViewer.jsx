@@ -16,7 +16,7 @@ function formatCell(value) {
   return value
 }
 
-export default function ReportTableViewer({ columns, rows }) {
+export default function ReportTableViewer({ columns, rows, labels }) {
   const [sortCol, setSortCol] = useState(null)
   const [sortAsc, setSortAsc] = useState(true)
   const [page, setPage] = useState(1)
@@ -61,7 +61,7 @@ export default function ReportTableViewer({ columns, rows }) {
                 onClick={() => handleSort(column)}
                 style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)', cursor: 'pointer' }}
               >
-                {column.replace(/_/g, ' ')}
+                {labels?.[column] || column.replace(/_/g, ' ')}
                 {sortCol === column ? (sortAsc ? ' ↑' : ' ↓') : ''}
               </th>
             ))}

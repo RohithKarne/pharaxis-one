@@ -2,6 +2,7 @@
 
 const pool = require('../database/db');
 const { getDatasetByReportKey, BUILT_DATASETS } = require('./reportDatasetService');
+const { columnLabels } = require('./reportCsv');
 
 const DEFAULT_MODULE_CONFIG = Object.freeze({
   default_timezone: 'America/New_York',
@@ -267,6 +268,30 @@ const BUILTIN_DASHBOARDS = Object.freeze([
   },
 ]);
 
+// Who may see a report or dashboard. It was stored as Shared / Admin only /
+// Leadership and never checked, so everyone with Reports saw and ran
+// everything (reports review RS3). "Leadership" had no meaning anywhere and
+// reads as report managers.
+const AUDIENCES = Object.freeze({
+  shared: 'Everyone with Reports',
+  managers: 'Report managers',
+  admin_only: 'Administrators',
+});
+
+function normalizeAudience(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (key === 'leadership') return 'managers';
+  return AUDIENCES[key] ? key : 'shared';
+}
+
+// viewer: { admin, manage } — see routes/reportModule.js viewerOf().
+function canSeeAudience(viewer, audience) {
+  const scope = normalizeAudience(audience);
+  if (scope === 'shared') return true;
+  if (scope === 'managers') return !!(viewer?.admin || viewer?.manage);
+  return !!viewer?.admin;
+}
+
 let reportModuleSeedPromise = null;
 let reportModuleSeedDone = false;
 
@@ -320,7 +345,8 @@ function normalizeDefinition(row) {
     allowed_filters: parseJson(row.allowed_filters, []),
     default_filters: parseJson(row.default_filters, {}),
     selected_columns: parseJson(row.selected_columns, []),
-    visibility_scope: row.visibility_scope || 'shared',
+    visibility_scope: normalizeAudience(row.visibility_scope),
+    audience_label: AUDIENCES[normalizeAudience(row.visibility_scope)],
     owner_id: row.owner_id || row.created_by || null,
     is_system: !!row.is_system,
     is_active: !!row.is_active,
@@ -341,7 +367,8 @@ function normalizeDashboard(row) {
     description: row.description || '',
     layout: parseJson(row.layout_json, []),
     widgets: parseJson(row.widgets_json, []),
-    visibility_scope: row.visibility_scope || 'shared',
+    visibility_scope: normalizeAudience(row.visibility_scope),
+    audience_label: AUDIENCES[normalizeAudience(row.visibility_scope)],
     owner_id: row.owner_id || row.created_by || null,
     is_system: !!row.is_system,
     is_active: !!row.is_active,
@@ -633,7 +660,7 @@ async function createReportDefinition(orgId, userId, payload = {}) {
       JSON.stringify(Array.isArray(payload.allowed_filters) ? payload.allowed_filters : catalogItem.allowed_filters || []),
       JSON.stringify(payload.default_filters || {}),
       JSON.stringify(Array.isArray(payload.selected_columns) ? payload.selected_columns : []),
-      sanitizeText(payload.visibility_scope, 'shared'),
+      normalizeAudience(payload.visibility_scope),
       toBoolInt(payload.is_active, 1),
       userId || null,
       userId || null,
@@ -668,7 +695,7 @@ async function updateReportDefinition(orgId, userId, id, payload = {}) {
       sanitizeText(payload.group_key, existing.group_key),
       JSON.stringify(payload.default_filters || existing.default_filters || {}),
       JSON.stringify(Array.isArray(payload.selected_columns) ? payload.selected_columns : existing.selected_columns || []),
-      sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
+      normalizeAudience(payload.visibility_scope || existing.visibility_scope),
       payload.owner_id || existing.owner_id || userId || null,
       toBoolInt(payload.is_active, existing.is_active ? 1 : 0),
       userId || null,
@@ -702,6 +729,7 @@ async function runReportDefinition(definition, orgId, filters = {}) {
     definition,
     filters: mergedFilters,
     columns: visible.columns,
+    column_labels: columnLabels(visible.columns),
     rows: visible.rows,
     row_count: visible.rows.length,
   };
@@ -776,7 +804,7 @@ async function createDashboard(orgId, userId, payload = {}) {
       sanitizeText(payload.description),
       JSON.stringify(Array.isArray(payload.layout) ? payload.layout : []),
       JSON.stringify(Array.isArray(payload.widgets) ? payload.widgets : []),
-      sanitizeText(payload.visibility_scope, 'shared'),
+      normalizeAudience(payload.visibility_scope),
       toBoolInt(payload.is_active, 1),
       userId || null,
       userId || null,
@@ -809,7 +837,7 @@ async function updateDashboard(orgId, userId, id, payload = {}) {
       sanitizeText(payload.description, existing.description),
       JSON.stringify(Array.isArray(payload.layout) ? payload.layout : existing.layout || []),
       JSON.stringify(Array.isArray(payload.widgets) ? payload.widgets : existing.widgets || []),
-      sanitizeText(payload.visibility_scope, existing.visibility_scope || 'shared'),
+      normalizeAudience(payload.visibility_scope || existing.visibility_scope),
       payload.owner_id || existing.owner_id || userId || null,
       toBoolInt(payload.is_active, existing.is_active ? 1 : 0),
       userId || null,
@@ -831,13 +859,29 @@ async function deleteDashboard(orgId, id) {
   return existing;
 }
 
-async function runDashboard(dashboard, orgId, filters = {}) {
+async function runDashboard(dashboard, orgId, filters = {}, viewer = null) {
   const widgets = [];
   for (const widget of dashboard.widgets || []) {
     const definition = widget.report_definition_id
       ? await getReportDefinitionById(orgId, widget.report_definition_id)
       : await getReportDefinitionByKey(orgId, widget.report_key);
     if (!definition) continue;
+    // A widget on a report the viewer may not see shows that, not the data.
+    if (viewer && !canSeeAudience(viewer, definition.visibility_scope)) {
+      widgets.push({
+        id: widget.id || `${definition.report_key}-${widgets.length + 1}`,
+        title: widget.title || definition.name,
+        display_mode: widget.display_mode || 'table',
+        report_key: definition.report_key,
+        definition_id: definition.id,
+        not_available: true,
+        rows: [],
+        columns: [],
+        row_count: 0,
+        kpis: [],
+      });
+      continue;
+    }
     // A widget on an unbuilt report shows that, instead of failing the dashboard.
     if (!definition.is_built) {
       widgets.push({
@@ -863,6 +907,7 @@ async function runDashboard(dashboard, orgId, filters = {}) {
       definition_id: definition.id,
       rows: result.rows.slice(0, Number(widget.limit || 6)),
       columns: result.columns,
+      column_labels: result.column_labels,
       row_count: result.row_count,
       kpis: makeKpisFromRows(result.rows),
     });
@@ -1195,6 +1240,9 @@ async function getModuleSummary(orgId) {
 
 module.exports = {
   DEFAULT_MODULE_CONFIG,
+  AUDIENCES,
+  normalizeAudience,
+  canSeeAudience,
   REPORT_GROUP_LABELS,
   ensureReportModuleSeed,
   getDatasetCatalog,
