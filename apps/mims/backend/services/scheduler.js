@@ -97,6 +97,10 @@ const HANDLERS = {
     const { runCmReviewReminders } = require('./cmReviewReminderService')
     await runCmReviewReminders()
   },
+  'cm-review-overdue': async () => {
+    const { runCmReviewOverdue } = require('./cmReviewReminderService')
+    await runCmReviewOverdue()
+  },
   'emir-poller': async () => {
     logger.info({ job: 'emir-poller' }, 'EMIR email poll tick')
   },

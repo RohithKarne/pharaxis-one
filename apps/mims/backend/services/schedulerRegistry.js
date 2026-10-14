@@ -73,6 +73,14 @@ module.exports = [
     configRoute:    '/browse-content',
   },
   {
+    name:           'cm-review-overdue',
+    source:         'Content Management',
+    cronExpression: '0 7 * * *',
+    description:    'Reminds reviewers, and the review owner, of review tasks past their planned end date',
+    type:           'cron',
+    configRoute:    '/browse-content',
+  },
+  {
     name:           'emir-poller',
     source:         'Email Import',
     cronExpression: '*/5 * * * *',

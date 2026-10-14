@@ -944,7 +944,7 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
 // MIPM-174: the people in an organisation who may review content. The review
 // dialog read the admin user list, which a content manager is refused, so the
 // content team could never start a review.
-async function contentReviewers(orgId) {
+async function contentReviewers(orgId, privilege = 'content.review') {
   const [rows] = await pool.execute(
     `SELECT u.id, u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role
        FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id
@@ -952,7 +952,7 @@ async function contentReviewers(orgId) {
       ORDER BY u.name`, [orgId]);
   const out = [];
   for (const u of rows) {
-    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, 'content.review')) out.push({ id: u.id, name: u.name, email: u.email });
+    if (await userHasActivityPrivilege({ userId: u.id, orgId, role: u.role }, privilege)) out.push({ id: u.id, name: u.name, email: u.email });
   }
   return out;
 }
@@ -962,7 +962,8 @@ router.get('/reviewers', authenticate, async (req, res) => {
   try {
     const orgId = hasGlobalAdminScope(req.user) ? (Number(req.query.org_id) || req.user.orgId) : req.user.orgId;
     if (!orgId) return res.json({ users: [] });
-    res.json({ users: await contentReviewers(orgId) });
+    // ?can=author lists who may author content — who can take over a review.
+    res.json({ users: await contentReviewers(orgId, req.query.can === 'author' ? 'content.author' : 'content.review') });
   } catch (err) {
     logger.error({ err, route: '/api/cm/reviewers' }, 'Failed to list content reviewers');
     res.status(500).json({ error: 'Server error.' });
@@ -973,9 +974,12 @@ router.get('/reviewers', authenticate, async (req, res) => {
 router.post('/documents/:id/initiate-review', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, planned_end_date, reviewer_ids, is_non_amendable, description } = req.body;
+    const { title, planned_end_date, reviewer_ids, description } = req.body;
     if (!title || !planned_end_date) {
       return res.status(400).json({ error: 'title and planned_end_date are required.' });
+    }
+    if (String(planned_end_date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+      return res.status(400).json({ error: 'The planned end date is in the past.' });
     }
     // MIPM-204: parallel (everyone at once) or sequential (one after another, in
     // the order chosen; the next reviewer is told once the one before decides).
@@ -1014,9 +1018,9 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
       await conn.beginTransaction();
 
       const [reviewResult] = await conn.execute(
-        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, is_non_amendable, description, status, created_by, review_mode)
-         VALUES (?, 'document', ?, ?, ?, ?, 'Open', ?, ?)`,
-        [id, title, planned_end_date, is_non_amendable ? 1 : 0, description || null, req.user.userId, reviewMode]
+        `INSERT INTO cm_reviews (doc_id, doc_type, title, planned_end_date, description, status, created_by, review_mode)
+         VALUES (?, 'document', ?, ?, ?, 'Open', ?, ?)`,
+        [id, title, planned_end_date, description || null, req.user.userId, reviewMode]
       );
 
       if (Array.isArray(reviewer_ids) && reviewer_ids.length > 0) {
@@ -1056,6 +1060,29 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
     }
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/initiate-review', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to initiate CM review');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/documents/:id/reviews — the document's reviews and each reviewer's
+// decision, newest first, so the approver sees what the reviewers said.
+router.get('/documents/:id/reviews', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const [reviews] = await pool.execute(
+      `SELECT r.id, r.title, r.status, r.review_mode, r.planned_end_date, r.created_at, r.updated_at, u.name AS owner_name
+         FROM cm_reviews r LEFT JOIN users u ON u.id = r.created_by
+        WHERE r.doc_type = 'document' AND r.doc_id = ? ORDER BY r.id DESC`, [doc.id]);
+    for (const r of reviews) {
+      const [rows] = await pool.execute(
+        `SELECT cr.status, cr.reason, cr.reviewed_at, u.name FROM cm_reviewers cr JOIN users u ON u.id = cr.user_id
+          WHERE cr.review_id = ? ORDER BY cr.sort_order, cr.id`, [r.id]);
+      r.reviewers = rows;
+    }
+    res.json({ reviews });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/reviews' }, 'Failed to list document reviews');
     res.status(500).json({ error: 'Server error.' });
   }
 });

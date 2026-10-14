@@ -30,7 +30,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   const [usersLoaded, setUsersLoaded] = useState(false)
   // MIPM-204: review_mode — parallel (everyone at once) or sequential (one after
   // another, in the order the reviewers are listed).
-  const [form, setForm] = useState({ title: '', planned_end_date: '', non_amendable: false, reviewers: [], description: '', review_mode: 'parallel' })
+  const [form, setForm] = useState({ title: '', planned_end_date: '', reviewers: [], description: '', review_mode: 'parallel' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -66,11 +66,12 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/documents/${doc.id}/initiate-review`, {
-        // The server reads reviewer_ids and is_non_amendable; sending the form as-is
-        // attached no reviewer and dropped Non-Amendable (MIPM-174).
+        // The server reads reviewer_ids; sending the form as-is attached no reviewer (MIPM-174).
+        // Non-Amendable was removed: it was stored and never enforced, and a
+        // document under review cannot be edited anyway.
         method: 'POST', headers: authHeaders, body: JSON.stringify({
           title: form.title, planned_end_date: form.planned_end_date, description: form.description,
-          reviewer_ids: form.reviewers, is_non_amendable: form.non_amendable, review_mode: form.review_mode,
+          reviewer_ids: form.reviewers, review_mode: form.review_mode,
         })
       })
       if (res.ok) { onDone(); onClose() }
@@ -89,13 +90,8 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Planned End Date <span className="required">*</span></label>
-          <input type="date" className="cm-form-input" value={form.planned_end_date} onChange={e => setForm(p => ({ ...p, planned_end_date: e.target.value }))} />
-        </div>
-        <div className="cm-form-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-            <input type="checkbox" checked={form.non_amendable} onChange={e => setForm(p => ({ ...p, non_amendable: e.target.checked }))} />
-            Non-Amendable
-          </label>
+          <input type="date" aria-label="Planned End Date" className="cm-form-input" min={new Date().toISOString().slice(0, 10)} value={form.planned_end_date} onChange={e => setForm(p => ({ ...p, planned_end_date: e.target.value }))} />
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>Reviewers still deciding after this date are reminded each day, and so are you.</p>
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">How reviewers decide</label>
@@ -155,10 +151,22 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   )
 }
 
+const ACCEPTED_DECISIONS = ['Accepted', 'Accepted with Changes', 'Approved']
+
 export function ApproveModal({ doc, user, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [form, setForm] = useState({ password: '', reason: '' })
   const [loading, setLoading] = useState(false)
+  // What the reviewers said, so the approver signs knowing it (the dialog showed
+  // nothing of the review).
+  const [review, setReview] = useState(undefined)
+
+  useEffect(() => {
+    httpFetch(`/api/cm/documents/${doc.id}/reviews`, { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { reviews: [] })
+      .then(d => setReview((d.reviews || [])[0] || null))
+      .catch(() => setReview(null))
+  }, [doc.id]) // eslint-disable-line
 
   async function handleSubmit() {
     if (!form.password) return toast.warn('Password is required.')
@@ -179,6 +187,22 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
       <div className="cm-modal">
         <h3 className="cm-modal-title">Approve Document</h3>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Approving: <strong>{doc.name}</strong></p>
+        <div className="cm-form-group" data-testid="approve-review-outcome">
+          <label className="cm-form-label">Review</label>
+          {review === undefined ? <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+            : !review ? <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No review was held for this document.</p>
+            : (
+              <div style={{ fontSize: 13 }}>
+                <div style={{ marginBottom: 4 }}><strong>{review.title}</strong> · {review.status} · started by {review.owner_name || '—'}</div>
+                {review.reviewers.map((r, i) => (
+                  <div key={i} style={{ padding: '3px 0', borderTop: '1px solid var(--border)' }}>
+                    {r.name} — <strong style={{ color: r.status === 'Rejected' ? 'var(--danger)' : ACCEPTED_DECISIONS.includes(r.status) ? 'var(--success, #2e7d32)' : 'var(--text-secondary)' }}>{r.status === 'Ongoing' ? 'not decided' : r.status}</strong>
+                    {r.reason ? <span style={{ color: 'var(--text-secondary)' }}>: {r.reason}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
         <div className="cm-form-group">
           <label className="cm-form-label">User ID</label>
           <input aria-label="User ID" className="cm-form-input" value={user?.email || user?.username || ''} readOnly style={{ background: 'var(--bg)' }} />
@@ -202,7 +226,10 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
 
 export function PublishModal({ doc, user, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [form, setForm] = useState({ password: '', org_version: '', reason: '' })
+  const [form, setForm] = useState({ password: '', reason: '' })
+  // Publishing makes the next major version (1.0, 2.0, …). The dialog read a
+  // field that is never sent, so it always said 1.0; Org Version was ignored.
+  const nextVersion = `${(Number(doc.version_major) || 0) + 1}.0`
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
@@ -233,12 +260,8 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
           <input type="password" className="cm-form-input" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Enter your password" />
         </div>
         <div className="cm-form-group">
-          <label className="cm-form-label">System Version</label>
-          <input aria-label="System Version" className="cm-form-input" value={doc.version || '1.0'} readOnly style={{ background: 'var(--bg)' }} />
-        </div>
-        <div className="cm-form-group">
-          <label className="cm-form-label">Org Version</label>
-          <input aria-label="Org Version" className="cm-form-input" value={form.org_version} onChange={e => setForm(p => ({ ...p, org_version: e.target.value }))} placeholder="Optional (e.g. v2.1-CORP)" />
+          <label className="cm-form-label">Version</label>
+          <input aria-label="Version" className="cm-form-input" value={`Will be published as version ${nextVersion}`} readOnly style={{ background: 'var(--bg)' }} />
         </div>
         <div className="cm-form-group">
           <label className="cm-form-label">Reason for Publishing <span className="required">*</span></label>
@@ -255,18 +278,22 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
 
 export function ReviewStatusModal({ review, token, onClose, onDone }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [form, setForm] = useState({ status: 'Ongoing', reason: '' })
+  const [form, setForm] = useState({ status: '', reason: '' })
   const [loading, setLoading] = useState(false)
+  // A plain acceptance needs no reason; anything else says why.
+  const reasonNeeded = form.status && form.status !== 'Accepted'
 
   async function handleSubmit() {
-    if (!form.reason.trim()) return toast.warn('Reason is required.')
+    if (!form.status) return toast.warn('Choose a decision.')
+    if (reasonNeeded && !form.reason.trim()) return toast.warn('Say why — a reason is needed for this decision.')
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/reviews/${review.id}/reviewer-status`, {
         method: 'PUT', headers: authHeaders, body: JSON.stringify(form)
       })
-      if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { if (d.message) toast.success(d.message); onDone(); onClose() }
+      else toast.error(d.error || 'Failed to update status.')
     } catch { toast.error('Network error.') }
     setLoading(false)
   }
@@ -274,12 +301,12 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
   return (
     <div className="cm-modal-overlay">
       <div className="cm-modal">
-        <h3 className="cm-modal-title">Update Review Status</h3>
+        <h3 className="cm-modal-title">Your Review Decision</h3>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>{review.document_name} — {review.title}</p>
         <div className="cm-form-group">
-          <label className="cm-form-label">Status <span className="required">*</span></label>
-          <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
-            <option>Ongoing</option>
+          <label className="cm-form-label">Decision <span className="required">*</span></label>
+          <select aria-label="Decision" className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+            <option value="">— Choose —</option>
             <option>Accepted</option>
             <option>Accepted with Changes</option>
             <option>Declined</option>
@@ -287,8 +314,8 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
           </select>
         </div>
         <div className="cm-form-group">
-          <label className="cm-form-label">Reason <span className="required">*</span></label>
-          <textarea className="cm-form-textarea" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} rows={3} placeholder="Provide your reason…" />
+          <label className="cm-form-label">Reason {reasonNeeded && <span className="required">*</span>}</label>
+          <textarea aria-label="Reason" className="cm-form-textarea" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} rows={3} placeholder={reasonNeeded ? 'Say why…' : 'Optional'} />
         </div>
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
