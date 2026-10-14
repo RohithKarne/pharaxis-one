@@ -61,15 +61,6 @@ function invalidateAssembledCache(docId) {
   }
 }
 
-async function logDocumentActivity(docId, userId, userName, action, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO cm_document_activity_log (doc_id, user_id, user_name, action, details) VALUES (?,?,?,?,?)`,
-      [docId, userId || null, userName || null, action, details ? JSON.stringify(details) : null]
-    );
-  } catch (_) {}
-}
-
 async function audit(userId, userName, action, entity, entityId, details) {
   await logAudit(userId, userName, action, entity, entityId, details);
 }
@@ -1697,26 +1688,6 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
     console.error('GET /cm/documents/:id/file error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
-});
-
-// GET /api/cm/documents/:id/activity — paginated activity log
-router.get('/documents/:id/activity', authenticate, async (req, res) => {
-  try {
-    const doc = await getScopedDocument(req, req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
-    const offset = (page - 1) * limit;
-    const [logs] = await pool.execute(
-      `SELECT * FROM cm_document_activity_log WHERE doc_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      [req.params.id]
-    );
-    const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) as total FROM cm_document_activity_log WHERE doc_id = ?`,
-      [req.params.id]
-    );
-    res.json({ logs, total, page, limit });
-  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /api/cm/documents/:id/view — log document view to cm_content_view_log (#11)

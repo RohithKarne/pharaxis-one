@@ -3,9 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
-const AdminContentIntelligenceSection = lazy(() => import('../../admin/components/AdminContentIntelligenceSection'))
 const AdminMICategoriesSection = lazy(() => import('../../admin/components/AdminMICategoriesSection'))
-const AdminPolicyGraphSection = lazy(() => import('../../admin/components/AdminPolicyGraphSection'))
 const FolderManager = lazy(() => import('../components/FolderManager'))
 const DocumentsSection = lazy(() => import('../components/DocumentsSection'))
 const ModulesSection = lazy(() => import('../components/ModulesSection'))
@@ -32,7 +30,6 @@ export default function ContentPage() {
   const [activeTab, setActiveTab] = useState(openReviews ? 'documents' : (['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents'))
   const [showFolders, setShowFolders] = useState(false)
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-  const flash = () => {}
 
   const tabGroups = [
     {
@@ -110,11 +107,6 @@ export default function ContentPage() {
             {activeTab === 'browse' && <BrowseSection token={token} />}
             {activeTab === 'settings' && <CMSettingsSection token={token} />}
             {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-            {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-            {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-            {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-            {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-            {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
           </Suspense>
         </div>
       </section>

@@ -550,7 +550,6 @@ module.exports = [
       'DELETE /api/cm/documents/:id/alert-subs/:sub_id',
       'GET /api/cm/documents/:id/versions',
       'GET /api/cm/documents/:id/compare',
-      'GET /api/cm/documents/:id/activity',
       'POST /api/cm/documents/release-stale-checkouts',
       'POST /api/cm/documents/bulk',
       'POST /api/cm/content-usage',
@@ -697,7 +696,6 @@ module.exports = [
         }, token);
         const versions = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/versions?page=1&limit=10`, null, token);
         const versionDiff = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/compare`, null, token);
-        const activity = await makeRequest('GET', `/api/cm/documents/${primaryDocId}/activity?page=1&limit=10`, null, token);
         const release = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/release`, {}, token);
         const archive = await makeRequest('POST', `/api/cm/documents/${primaryDocId}/archive`, {
           reason: 'Regression archive',
@@ -749,7 +747,6 @@ module.exports = [
             publish.status === 200 &&
             versions.status === 200 &&
             versionDiff.status === 200 &&
-            activity.status === 200 &&
             release.status === 200 &&
             archive.status === 200 &&
             releaseStale.status === 200 &&
@@ -760,7 +757,7 @@ module.exports = [
             moduleUsage.status === 200 &&
             download.status === 404 &&
             file.status === 404,
-          details: `get=${getOne.status}, update=${update.status}, search=${search.status}, relationCreate=${relationCreate.status}, relationGet=${relationGet.status}, relationDelete=${relationDelete.status}, alertGet=${alertConfigGet.status}, alertPut=${alertConfigPut.status}, subAdd=${subscriber.status}, subDelete=${subscriberDelete.status}, checkout=${checkout.status}, checkin=${checkin.status}, initiateReview=${initiateReview.status}, approve=${approve.status}, publish=${publish.status}, versions=${versions.status}, versionDiff=${versionDiff.status}, activity=${activity.status}, release=${release.status}, archive=${archive.status}, releaseStale=${releaseStale.status}, bulk=${bulk.status}, usagePost=${contentUsagePost.status}, usageGet=${contentUsageGet.status}, moduleUsage=${moduleUsage.status}, download=${download.status}, file=${file.status}`,
+          details: `get=${getOne.status}, update=${update.status}, search=${search.status}, relationCreate=${relationCreate.status}, relationGet=${relationGet.status}, relationDelete=${relationDelete.status}, alertGet=${alertConfigGet.status}, alertPut=${alertConfigPut.status}, subAdd=${subscriber.status}, subDelete=${subscriberDelete.status}, checkout=${checkout.status}, checkin=${checkin.status}, initiateReview=${initiateReview.status}, approve=${approve.status}, publish=${publish.status}, versions=${versions.status}, versionDiff=${versionDiff.status}, release=${release.status}, archive=${archive.status}, releaseStale=${releaseStale.status}, bulk=${bulk.status}, usagePost=${contentUsagePost.status}, usageGet=${contentUsageGet.status}, moduleUsage=${moduleUsage.status}, download=${download.status}, file=${file.status}`,
         };
       } finally {
         if (alertSubId) await pool.execute('DELETE FROM cm_document_alert_subs WHERE id = ?', [alertSubId]).catch(() => {});
@@ -1055,43 +1052,25 @@ module.exports = [
     },
   },
   {
-    name: 'Content module and merge report routes cover lifecycle generation and scheduling',
+    // Merge reports were retired (letters are made from templates), so this
+    // covers the module lifecycle only.
+    name: 'Content module routes cover the lifecycle',
     module: 'Content Management',
     covers: [
-      'GET /api/cm/merge-reports',
       'POST /api/cm/modules',
       'GET /api/cm/modules/:id',
       'PUT /api/cm/modules/:id',
       'POST /api/cm/modules/:id/archive',
-      'POST /api/cm/merge-reports',
-      'GET /api/cm/merge-reports/:id',
-      'PUT /api/cm/merge-reports/:id',
-      'POST /api/cm/merge-reports/:id/checkout',
-      'POST /api/cm/merge-reports/:id/checkin',
-      'POST /api/cm/merge-reports/:id/generate',
-      'GET /api/cm/merge-reports/:id/schedule',
-      'POST /api/cm/merge-reports/:id/schedule',
-      'POST /api/cm/merge-reports/:id/archive',
     ],
     run: async ({ makeRequest, token }) => {
       let folderId = null;
       let moduleId = null;
-      let reportId = null;
-      let scheduledJobNames = [];
       try {
-        const auth = decodeJwtPayload(token);
-        const orgId = Number(auth.orgId || auth.org_id || 0);
-        if (!orgId) {
-          return { pass: false, details: 'Missing orgId on token.' };
-        }
-
         const folder = await createContentFolder(makeRequest, token, 'Regression Module Folder');
         folderId = folder.folderId;
         if (folder.status !== 201 || !folderId) {
           return { pass: false, details: `folderCreate=${folder.status}` };
         }
-
-        const reportList = await makeRequest('GET', '/api/cm/merge-reports?limit=5', null, token);
 
         const moduleCreate = await makeRequest('POST', '/api/cm/modules', {
           folder_id: folderId,
@@ -1114,68 +1093,13 @@ module.exports = [
           reason: 'Regression archive',
         }, token);
 
-        const reportCreate = await makeRequest('POST', '/api/cm/merge-reports', {
-          folder_id: folderId,
-          name: uniqueName('Regression Merge Report'),
-          content_html: '<p>Merge report for {{report_name}} on {{date}}</p>',
-        }, token);
-        reportId = Number(reportCreate.body?.id || reportCreate.body?.report?.id || 0);
-        if (reportCreate.status !== 201 || !reportId) {
-          return { pass: false, details: `reportCreate=${reportCreate.status}` };
-        }
-
-        const reportGet = await makeRequest('GET', `/api/cm/merge-reports/${reportId}`, null, token);
-        const reportUpdate = await makeRequest('PUT', `/api/cm/merge-reports/${reportId}`, {
-          name: `${reportCreate.body?.report?.name || 'Regression Merge'} Updated`,
-          content_html: '<p>Updated merge content for {{report_name}}</p>',
-        }, token);
-        const checkout = await makeRequest('POST', `/api/cm/merge-reports/${reportId}/checkout`, {}, token);
-        const checkin = await makeRequest('POST', `/api/cm/merge-reports/${reportId}/checkin`, {
-          notes: 'Regression merge report checkin',
-        }, token);
-        const generate = await makeRequest('POST', `/api/cm/merge-reports/${reportId}/generate`, {}, token);
-        const schedulePost = await makeRequest('POST', `/api/cm/merge-reports/${reportId}/schedule`, {
-          cron_expression: '0 8 * * *',
-          email_recipients: ['regression@example.com'],
-          is_active: true,
-        }, token);
-        const scheduleGet = await makeRequest('GET', `/api/cm/merge-reports/${reportId}/schedule`, null, token);
-        const archive = await makeRequest('POST', `/api/cm/merge-reports/${reportId}/archive`, {
-          reason: 'Regression archive',
-        }, token);
-
-        const [jobRows] = await pool.execute(
-          `SELECT job_name FROM scheduled_jobs
-           WHERE job_type = 'cm_merge_report'
-             AND JSON_UNQUOTE(JSON_EXTRACT(job_config, '$.merge_report_id')) = ?
-             AND org_id = ?`,
-          [String(reportId), orgId]
-        ).catch(() => [ [] ]);
-        scheduledJobNames = Array.isArray(jobRows) ? jobRows.map((row) => row.job_name).filter(Boolean) : [];
-
         return {
-          pass: reportList.status === 200 &&
-            moduleGet.status === 200 &&
+          pass: moduleGet.status === 200 &&
             moduleUpdate.status === 200 &&
-            moduleArchive.status === 200 &&
-            reportGet.status === 200 &&
-            reportUpdate.status === 200 &&
-            checkout.status === 200 &&
-            checkin.status === 200 &&
-            generate.status === 200 &&
-            schedulePost.status === 200 &&
-            scheduleGet.status === 200 &&
-            archive.status === 200,
-          details: `reportList=${reportList.status}, moduleCreate=${moduleCreate.status}, moduleGet=${moduleGet.status}, moduleUpdate=${moduleUpdate.status}, moduleArchive=${moduleArchive.status}, reportCreate=${reportCreate.status}, reportGet=${reportGet.status}, reportUpdate=${reportUpdate.status}, checkout=${checkout.status}, checkin=${checkin.status}, generate=${generate.status}, schedulePost=${schedulePost.status}, scheduleGet=${scheduleGet.status}, archive=${archive.status}`,
+            moduleArchive.status === 200,
+          details: `moduleCreate=${moduleCreate.status}, moduleGet=${moduleGet.status}, moduleUpdate=${moduleUpdate.status}, moduleArchive=${moduleArchive.status}`,
         };
       } finally {
-        if (scheduledJobNames.length) {
-          await pool.execute(`DELETE FROM scheduled_jobs WHERE job_name IN (${scheduledJobNames.map(() => '?').join(',')})`, scheduledJobNames).catch(() => {});
-        }
-        if (reportId) {
-          await pool.execute('DELETE FROM cm_version_history WHERE entity_type = ? AND entity_id = ?', ['merge_report', reportId]).catch(() => {});
-          await pool.execute('DELETE FROM cm_merge_reports WHERE id = ?', [reportId]).catch(() => {});
-        }
         if (moduleId) {
           await pool.execute('DELETE FROM cm_version_history WHERE entity_type = ? AND entity_id = ?', ['module', moduleId]).catch(() => {});
           await pool.execute('DELETE FROM cm_modules WHERE id = ?', [moduleId]).catch(() => {});
