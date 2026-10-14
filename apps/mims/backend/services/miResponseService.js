@@ -13,6 +13,9 @@
  */
 
 const pool = require('../database/db');
+const { getSettings } = require('./miResponseSettings');
+
+const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   uniquePositiveInts,
@@ -157,10 +160,11 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     const [rows] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.content_html,
               d.standard_response_text, d.file_path, d.file_name, d.file_mime, d.language,
-              d.send_as_pdf, d.selected_modules
+              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor
          FROM cm_documents d INNER JOIN cm_folders f ON f.id = d.folder_id
         WHERE d.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)
           AND d.status = 'Published'
+          AND COALESCE(d.doc_type, '') <> 'Internal Document'
           AND (d.expiry_date     IS NULL OR d.expiry_date     >= CURDATE())
           AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())`,
       [...selectedDocumentIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
@@ -175,7 +179,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       const found   = new Set(rows.map((d) => d.id));
       const blocked = selectedDocumentIds.filter((id) => !found.has(id));
       const error = new Error(
-        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date and not expired.`
+        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date, not expired and not an internal document.`
       );
       error.statusCode = 400;
       throw error;
@@ -247,8 +251,22 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${customText.replace(/\n/g, '<br/>')}</p></section>`
     : templateBody;
 
+  // The organisation's statements (MI Response Settings): the off-label
+  // statement on an answer about an unapproved use, and the closing statement on
+  // every answer. Plain text from the settings screen, merge fields allowed.
+  const settings = await getSettings(scopedCase.org_id);
+  const statementData = { ...mergeData, product_name: mergeData.product_name || 'This product' };
+  const asHtml = (text) => escapeHtml(applyMergeFields(String(text), statementData)).replace(/\n/g, '<br/>');
+  const statementBlocks = [];
+  if (miTab?.is_off_label && String(settings.offlabel_statement || '').trim()) {
+    statementBlocks.push(`<section data-offlabel-statement="true"><p>${asHtml(settings.offlabel_statement)}</p></section>`);
+  }
+  if (String(settings.closing_statement || '').trim()) {
+    statementBlocks.push(`<section data-closing-statement="true"><p>${asHtml(settings.closing_statement)}</p></section>`);
+  }
+
   const renderedSubject = applyMergeFields(templateSubject, mergeData);
-  const renderedBody    = applyMergeFields(bodyWithCustomText || '{{selected_content}}', mergeData);
+  const renderedBody    = applyMergeFields(bodyWithCustomText || '{{selected_content}}', mergeData) + statementBlocks.join('');
   const previewHtml     = `<article class="mi-response-preview"><h2>${renderedSubject}</h2>${renderedBody}</article>`;
 
   return {
@@ -280,6 +298,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       version: `${doc.version_major || 1}.${doc.version_minor || 0}`,
     })),
     merge_data: mergeData,
+    off_label: !!miTab?.is_off_label,
     language:     payload.language || template?.language || selectedDocuments[0]?.language || 'en',
     is_customized: payload.is_customized !== undefined
       ? !!payload.is_customized

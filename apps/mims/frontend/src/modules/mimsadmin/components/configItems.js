@@ -70,6 +70,12 @@ export const SYSTEM_NAV = [
         ],
       },
       {
+        // MI response review (Rohith, 14 Oct 2026): answers and hand-offs.
+        label: 'Medical Information', value: 'sys-setup-grp-mi', children: [
+          { label: 'MI Response Settings',     value: 'sys-setup-mi-response' },
+        ],
+      },
+      {
         label: 'Safety Reference Data', value: 'sys-setup-grp-safety', children: [
           { label: 'Document Types',          value: 'sys-setup-document-types' },
           { label: 'Complaint Codes',         value: 'sys-setup-complaint-codes'},

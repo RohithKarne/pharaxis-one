@@ -65,6 +65,7 @@ export const SYSTEM_OPTION_SECTIONS = [
       },
       { key: 'table_names_definitions', label: 'Table Names Definitions', navValues: ['sys-setup-table-names'] },
       { key: 'managed_translations', label: 'Managed Translations', navValues: ['sys-setup-lang-mapping'] },
+      { key: 'mi_response_settings', label: 'MI Response Settings', navValues: ['sys-setup-mi-response'] },
       { key: 'email_accounts', label: 'Email Accounts', navValues: ['sys-setup-email-accounts'] },
       { key: 'developer_api', label: 'Developer API Clients', navValues: ['sys-setup-developer-api'] },
     ],

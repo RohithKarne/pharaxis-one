@@ -33,6 +33,7 @@ async function caseClosed(caseId) {
 }
 const { MI_CORE_FIELDS, missingRequiredCore } = require('../services/requiredFields');
 const { miSendCheck } = require('../services/miSendCheck');
+const { defaultResponseDue } = require('../services/miResponseSettings');
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -121,6 +122,9 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
       [req.params.id]
     );
     const tabIndex = maxTab + 1;
+    // No answer-by date given: Date Received plus the routine or urgent working
+    // days from MI Response Settings (MI response review, 14 Oct 2026).
+    const responseDue = response_required_by || await defaultResponseDue(req.params.id).catch(() => null);
 
     const [result] = await pool.execute(
       `INSERT INTO case_mi
@@ -132,7 +136,7 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
         req.params.id, tabIndex,
         mi_category || null, subcategory || null, product_id || null,
         question_summary || null, detailed_question || null,
-        response_required_by || null, response_provided || null,
+        responseDue || null, response_provided || null,
         response_date || null, response_channel || null, status, literature_reference || null
       ]
     );

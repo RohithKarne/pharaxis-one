@@ -19,16 +19,7 @@
 
 const pool = require('../database/db');
 
-function addWorkingDays(date, days) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  let left = days;
-  while (left > 0) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const wd = d.getUTCDay();
-    if (wd !== 0 && wd !== 6) left -= 1;
-  }
-  return d.toISOString().slice(0, 10);
-}
+const { addWorkingDays } = require('../utils/workingDays');
 
 async function pcHandoffCheck(caseId, db = pool) {
   const [[c]] = await db.execute('SELECT id, date_received FROM cases WHERE id = ?', [caseId]);

@@ -50,7 +50,7 @@ function emptyMiRespForm(tab = null) {
     response_subject: '',
     body_html: '',
     custom_text: '',
-    channel: 'email',
+    channel: 'Email',
     responded_at: '',
     follow_up_required: false,
     selected_document_ids: [],
@@ -369,24 +369,6 @@ export default function CaseMITab({
     setBuilderPreview(null)
   }
 
-  function applyBundle(bundleId) {
-    const bundle = builderContext?.bundles?.find(b => Number(b.id) === Number(bundleId))
-    if (!bundle) return
-    const tmpl = builderContext?.templates?.find(t => Number(t.id) === Number(bundle.template_id))
-    setMiRespForm(prev => ({
-      ...prev,
-      template_id: bundle.template_id || prev.template_id,
-      response_subject: tmpl?.subject || prev.response_subject,
-      body_html: tmpl?.body_html || prev.body_html,
-      selected_document_ids: parseJsonList(bundle.document_ids),
-      selected_module_ids: parseJsonList(bundle.module_ids),
-      language: bundle.language || prev.language,
-      is_customized: true,
-      customization_notes: bundle.name,
-    }))
-    setBuilderPreview(null)
-  }
-
   function toggleSelection(key, value) {
     const idNum = Number(value)
     setMiRespForm(prev => {
@@ -529,7 +511,12 @@ export default function CaseMITab({
   const documents = builderContext?.documents || []
   const modules = builderContext?.modules || []
   const templates = builderContext?.templates || []
-  const bundles = builderContext?.bundles || []
+  // Languages: English plus every language the published content is written in.
+  const languages = [...new Set(['en', ...[...templates, ...documents, ...modules].map(x => x.language).filter(Boolean)])]
+  const LANGUAGE_NAMES = { en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', ja: 'Japanese', zh: 'Chinese', pt: 'Portuguese', nl: 'Dutch' }
+  const channels = builderContext?.channels?.length ? builderContext.channels : ['Email', 'Phone Call', 'Written Letter', 'Portal', 'Fax', 'In-Person Meeting']
+  const verbalChannel = !/^(email|portal)$/i.test(String(miRespForm.channel || ''))
+  const rules = builderContext?.response_rules || {}
   const chosenTemplate = selectedTemplate()
   const miCategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Category') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
   // Subcategories follow the chosen category (T19 / M-19, migration 119): a linked
@@ -814,31 +801,24 @@ export default function CaseMITab({
                         <div className="cf-form-field">
                           <label>Language</label>
                           <select aria-label="Language" value={miRespForm.language} onChange={e => setMiRespForm(p => ({ ...p, language: e.target.value, is_customized: true }))} disabled={miRespSaving}>
-                            <option value="en">English</option>
-                            <option value="fr">French</option>
+                            {languages.map(l => <option key={l} value={l}>{LANGUAGE_NAMES[l] || l}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field">
                           <label>Response Channel</label>
                           <select aria-label="Response Channel" value={miRespForm.channel} onChange={e => setMiRespForm(p => ({ ...p, channel: e.target.value }))} disabled={miRespSaving}>
-                            {['email', 'phone', 'letter', 'portal', 'fax', 'in-person'].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                            {!channels.some(c => c.toLowerCase() === String(miRespForm.channel).toLowerCase()) && <option value={miRespForm.channel}>{miRespForm.channel}</option>}
+                            {channels.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                       </div>
 
                       <div className="cf-form-grid">
                         <div className="cf-form-field cf-form-field--full">
-                          <label>French / Scenario Bundle</label>
-                          <select aria-label="French / Scenario Bundle" value="" onChange={e => applyBundle(e.target.value)} disabled={miRespSaving || bundles.length === 0}>
-                            <option value="">Select optional bundle...</option>
-                            {bundles.map(bundle => <option key={bundle.id} value={bundle.id}>{bundle.name} ({bundle.language})</option>)}
-                          </select>
-                        </div>
-                        <div className="cf-form-field cf-form-field--full">
-                          <label>Email / Response Template</label>
+                          <label>Letter template</label>
                           <select aria-label="Email / Response Template" value={miRespForm.template_id} onChange={e => setTemplate(e.target.value)} disabled={miRespSaving}>
                             <option value="">Select template...</option>
-                            {templates.map(t => <option key={t.id} value={t.id}>{t.product_group_match ? '[Product Match] ' : ''}{t.name} - {t.type}</option>)}
+                            {templates.map(t => <option key={t.id} value={t.id}>{t.product_group_match ? '[Product Match] ' : ''}{t.name} - {t.type} v{t.version_major || 1}.{t.version_minor || 0}</option>)}
                           </select>
                         </div>
                         <div className="cf-form-field cf-form-field--full">
@@ -847,26 +827,32 @@ export default function CaseMITab({
                         </div>
                       </div>
 
+                      {rules.off_label && (
+                        <div className="cf-builder-note cf-builder-note--warn" data-testid="offlabel-rule">
+                          Off-label question. The off-label statement is added to this letter{rules.require_pi ? ', and the letter cannot be sent until it encloses a Prescribing Information document' : ''}.
+                          {rules.offlabel_statement && <div className="cf-builder-statement">{rules.offlabel_statement}</div>}
+                        </div>
+                      )}
                       {chosenTemplate && <div className="cf-builder-note">Template source: {chosenTemplate.name}. Editing below customizes this response only and does not update the original template.</div>}
 
                       <div className="cf-form-field cf-form-field--full">
-                        <label>Online Edit / Letter Body</label>
+                        <label>Letter</label>
                         <RichTextEditor value={miRespForm.body_html} onChange={v => { setMiRespForm(p => ({ ...p, body_html: v, is_customized: true })); setBuilderPreview(null) }} />
                       </div>
                       <div className="cf-form-field cf-form-field--full">
-                        <label>Additional Custom Text</label>
+                        <label>Text for this answer only</label>
                         <textarea aria-label="Additional Custom Text" rows={3} value={miRespForm.custom_text} onChange={e => { setMiRespForm(p => ({ ...p, custom_text: e.target.value, is_customized: true })); setBuilderPreview(null) }} placeholder="Optional response-specific text. This will be stored only on this response." disabled={miRespSaving} />
                       </div>
                     </div>
 
                     <div className="cf-builder-side">
                       <div className="cf-builder-card">
-                        <div className="cf-builder-card-title">Document Selection / SRL</div>
+                        <div className="cf-builder-card-title">Enclosures (published documents)</div>
                         <div className="cf-builder-list">
                           {documents.map(doc => (
                             <label key={doc.id} className="cf-builder-check">
                               <input type="checkbox" checked={miRespForm.selected_document_ids.map(Number).includes(Number(doc.id))} onChange={() => toggleSelection('selected_document_ids', doc.id)} />
-                              <span>{doc.name}<small>{doc.doc_type || 'Document'} {doc.language ? `- ${doc.language}` : ''}</small></span>
+                              <span>{doc.name}<small>{doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}{doc.language ? ` - ${doc.language}` : ''}{rules.require_pi && doc.doc_type === 'Prescribing Information' ? ' - needed for this off-label answer' : ''}</small></span>
                             </label>
                           ))}
                           {documents.length === 0 && <div className="cf-empty-msg">No published documents available.</div>}
@@ -888,10 +874,14 @@ export default function CaseMITab({
                         <div className="cf-builder-card-title">Response Controls</div>
                         {/* Follow-up is ticked once, on the MI (Follow-up Required and its
                             due date); the letter's own tick went in the MI field review. */}
-                        <div className="cf-form-field">
-                          <label>Response Date</label>
-                          <input aria-label="Response Date" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
-                        </div>
+                        {/* The sent date is recorded when the letter is sent; a date is asked
+                            only for an answer already given by phone, letter or in person. */}
+                        {verbalChannel ? (
+                          <div className="cf-form-field">
+                            <label>Date answered</label>
+                            <input aria-label="Date answered" type="date" value={miRespForm.responded_at} onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))} disabled={miRespSaving} />
+                          </div>
+                        ) : <div className="cf-builder-customized">The sent date is recorded when the letter is sent.</div>}
                         {miRespForm.is_customized && <div className="cf-builder-customized">Customized response flag will be saved.</div>}
                       </div>
                     </div>

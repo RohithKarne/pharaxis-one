@@ -311,6 +311,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
             <label className="cm-form-label">Document Type <span style={{ color: 'var(--danger)' }}>*</span></label>
             <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
               <option>SRD</option>
+              {/* Enclosed with an off-label answer (MI Response Settings, 14 Oct 2026). */}
+              <option>Prescribing Information</option>
               <option>Enclosure</option>
               <option>Information Document</option>
               <option>Internal Document</option>

@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { defaultResponseDue } = require('../services/miResponseSettings');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('../database/db');
@@ -734,9 +735,11 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
         if (p) { productId = p.id; matchedProduct = productName; } else unmatchedProduct = productName;
       }
       await conn.execute(
-        `INSERT INTO case_mi (case_id, tab_index, mi_category, product_id, question_summary, detailed_question, status)
-         VALUES (?, 1, ?, ?, ?, ?, 'Open')`,
-        [caseId, mi.mi_category || null, productId, mi.question_summary || null, mi.detailed_question || null]
+        `INSERT INTO case_mi (case_id, tab_index, mi_category, product_id, question_summary, detailed_question, status, response_required_by)
+         VALUES (?, 1, ?, ?, ?, ?, 'Open', ?)`,
+        // Answer-by date from MI Response Settings (MI response review, 14 Oct 2026).
+        [caseId, mi.mi_category || null, productId, mi.question_summary || null, mi.detailed_question || null,
+         await defaultResponseDue(caseId, conn).catch(() => null)]
       );
     }
 

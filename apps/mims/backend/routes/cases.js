@@ -12,6 +12,7 @@
 const express = require('express');
 const router  = express.Router();
 const { miSendCheck } = require('../services/miSendCheck');
+const { getSettings: getMiResponseSettings } = require('../services/miResponseSettings');
 const { pcHandoffCheck } = require('../services/pcHandoffCheck');
 let bcrypt;
 try {
@@ -2321,12 +2322,13 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
     const [documents] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
               d.language, d.document_category, d.standard_response_text, d.content_html,
-              d.send_as_pdf, d.selected_modules
+              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor
          FROM cm_documents d
          INNER JOIN cm_folders f ON f.id = d.folder_id
         WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
+          AND COALESCE(d.doc_type, '') <> 'Internal Document'
         ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
       [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
@@ -2350,9 +2352,24 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       [scopedCase.org_id]
     ).catch(() => [[]]);
 
+    // What the builder needs to say about this answer (MI Response Settings):
+    // an off-label MI must enclose the prescribing information when required.
+    const settings = await getMiResponseSettings(scopedCase.org_id);
+    // Response channels come from the organisation's Response Channel list, as
+    // the MI screen's own channel does; the builder had its own fixed list.
+    const [channelRows] = await pool.execute(
+      `SELECT value FROM picklists WHERE org_id = ? AND field_type = 'response_channel' AND status = 'Active' ORDER BY sort_order, value`,
+      [scopedCase.org_id]).catch(() => [[]]);
     res.json({
+      channels: channelRows.map(r => r.value),
       case: scopedCase,
       mi_tab: miTab,
+      response_rules: {
+        off_label: !!miTab?.is_off_label,
+        require_pi: !!miTab?.is_off_label && !!settings.require_pi_offlabel,
+        offlabel_statement: miTab?.is_off_label ? settings.offlabel_statement : null,
+        closing_statement: settings.closing_statement || null,
+      },
       recipients,
       response_product_groups: responseGroups,
       templates,
@@ -2590,7 +2607,7 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     // 2026): who asked, the product, the question, and the adverse event /
     // product complaint screening — with the AE or PC case when it found one.
     if (responseStatus === 'SENT') {
-      const check = await miSendCheck(req.params.id, existing.mi_tab_id || null);
+      const check = await miSendCheck(req.params.id, existing.mi_tab_id || null, undefined, { responseId: Number(req.params.responseId) });
       if (!check.ready) {
         return res.status(400).json({ error: `Before this response can be sent: ${check.missing.join('; ')}.`, missing: check.missing });
       }
