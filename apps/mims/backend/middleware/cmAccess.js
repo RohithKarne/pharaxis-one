@@ -6,7 +6,7 @@
  * Every Content Management change checked only that the caller was signed in,
  * so an agent — who cannot open Content Management — could create folders,
  * check documents out or start reviews by calling the API. Changes now follow
- * the screen's rules. Reads are unchanged.
+ * the screen's rules. Reads follow cmReadAccess below.
  *
  *   view / usage / bookmarks      Browse Content or Content Management module
  *   reviews                       content.review or content.author
@@ -60,6 +60,36 @@ function cmWriteAccess(req, res, next) {
     try {
       if (await allowed(req)) return next();
       return res.status(403).json({ error: 'You do not have permission to change content.' });
+    } catch (err) {
+      return next(err);
+    }
+  });
+}
+
+// Reading (access review, 2026-10-14). Reads checked only sign-in, so someone
+// who may only browse published content read draft versions, reviews, the
+// dashboard counts, sites and mailboxes. Content Management can read it all;
+// Browse Content reads only what the Browse screen shows (published items are
+// filtered in each route); anyone else reads nothing.
+const BROWSE_READS = [
+  /^\/(documents|modules|faqs)$/,
+  /^\/(documents|modules|faqs)\/\d+$/,
+  /^\/documents\/\d+\/(file|download)$/,
+  /^\/folders$/,
+  /^\/folders\/bookmarks$/,
+  /^\/picklists$/,
+  /^\/products$/,
+];
+
+function cmReadAccess(req, res, next) {
+  if (!['GET', 'HEAD'].includes(req.method)) return next();
+  return authenticate(req, res, async () => {
+    try {
+      if (hasGlobalAdminScope(req.user)) return next();
+      const modules = await getUserModules(req.user.userId);
+      if (modules.includes('content_mgmt')) return next();
+      if (modules.includes('browse_content') && BROWSE_READS.some((re) => re.test(req.path))) return next();
+      return res.status(403).json({ error: 'You do not have access to Content Management.', error_code: 'MODULE_FORBIDDEN', should_logout: false });
     } catch (err) {
       return next(err);
     }
@@ -124,4 +154,4 @@ function cmFolderAccess(req, res, next) {
   });
 }
 
-module.exports = { cmWriteAccess, cmFolderAccess, publishedOnly };
+module.exports = { cmReadAccess, cmWriteAccess, cmFolderAccess, publishedOnly };
