@@ -56,6 +56,8 @@ export default function DynamicFieldsSection({
   // for callers that haven't been wired yet.
   caseType      = null,    // 'ae' | 'mi' | 'pc' — keep only fields where case_type_scope IN (caseType, 'shared')
   displayTab    = null,    // 'info' | 'contacts' | 'ae' | … — keep only fields whose field.display_tab === this
+  // Someone who may not change the case sees the values locked and no Save.
+  readOnly      = false,
 }) {
   const lcType = caseType ? String(caseType).toLowerCase() : null
 
@@ -371,18 +373,22 @@ export default function DynamicFieldsSection({
       {activeSections.map(section => (
         <div key={section.section_name} className="cf-dyn-section">
           <div className="cf-dyn-section-label">{section.section_label || section.section_name}</div>
-          <div className="cf-form-grid">
-            {[...section.fields]
-              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-              .map(f => renderField(f))}
-          </div>
+          <fieldset className="cf-fieldset-plain" disabled={readOnly}>
+            <div className="cf-form-grid">
+              {[...section.fields]
+                .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+                .map(f => renderField(f))}
+            </div>
+          </fieldset>
         </div>
       ))}
-      <div className="cf-form-actions">
-        <button className="cf-save-btn" onClick={onSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save Additional Fields'}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="cf-form-actions">
+          <button className="cf-save-btn" onClick={onSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Additional Fields'}
+          </button>
+        </div>
+      )}
 
       <ReasonForChangeModal
         open={!!pendingReason}

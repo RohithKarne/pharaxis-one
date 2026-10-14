@@ -162,6 +162,7 @@ export default function CaseWorkflowStep({
         formConfig.sections.some(s => Array.isArray(s.fields) && s.fields.length > 0) && (
         <fieldset className="cf-fieldset-plain" disabled={readOnly}>
         <DynamicFieldsSection
+          readOnly={readOnly}
           sections={formConfig.sections}
           values={dynFieldValues}
           onChange={updater => { setDynFieldValues(updater); scheduleAutoSave() }}

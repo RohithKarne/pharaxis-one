@@ -29,7 +29,12 @@ const DESTINATIONS = [
   { label: 'MIMS Admin', to: '/mims-admin', icon: 'admin', module: 'admin_console', adminOnly: true },
 ]
 
+// Mounted afresh each time it opens, so it always starts empty.
 export default function CommandPalette({ open, onClose }) {
+  return open ? <PaletteBody onClose={onClose} /> : null
+}
+
+function PaletteBody({ onClose }) {
   const navigate = useNavigate()
   const { hasModuleAccess, user, token } = useAuth()
   const [query, setQuery] = useState('')
@@ -51,21 +56,17 @@ export default function CommandPalette({ open, onClose }) {
     return destinations.filter((d) => d.label.toLowerCase().includes(q))
   }, [destinations, query])
 
-  // Reset state each time it opens, and focus the input.
+  // Focus the input once it is on screen.
   useEffect(() => {
-    if (!open) return
-    setQuery('')
-    setActive(0)
-    setCases([])
     const id = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [open])
+  }, [])
 
-  // Debounced case lookup.
+  // Debounced case lookup; under two letters no cases are shown.
+  const lookup = query.trim().length >= 2
   useEffect(() => {
-    if (!open) return
     const q = query.trim()
-    if (q.length < 2) { setCases([]); return }
+    if (q.length < 2) return
     let cancelled = false
     const t = setTimeout(async () => {
       try {
@@ -74,25 +75,25 @@ export default function CommandPalette({ open, onClose }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setCases(Array.isArray(data?.cases) ? data.cases : [])
+        // The case list answers with the cases themselves (an object only with include_meta),
+        // so reading data.cases found nothing and no case was ever offered.
+        if (!cancelled) setCases(Array.isArray(data) ? data : Array.isArray(data?.cases) ? data.cases : [])
       } catch { /* lookup is best-effort */ }
     }, 220)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [query, open, token])
+  }, [query, token])
 
   const items = useMemo(() => ([
     ...filteredDestinations.map((d) => ({ kind: 'nav', label: d.label, icon: d.icon, to: d.to })),
-    ...cases.map((c) => ({
+    ...(lookup ? cases : []).map((c) => ({
       kind: 'case',
       label: `${c.case_number || `Case #${c.id}`}${c.title ? ` — ${c.title}` : ''}`,
       icon: 'folder',
       to: `/cases/${c.id}`,
     })),
-  ]), [filteredDestinations, cases])
-
-  useEffect(() => { setActive(0) }, [items.length])
-
-  if (!open) return null
+  ]), [filteredDestinations, cases, lookup])
+  // Typing starts the highlight at the top again; a shorter list keeps it on a row.
+  const current = Math.min(active, Math.max(items.length - 1, 0))
 
   function go(item) {
     if (!item) return
@@ -104,7 +105,7 @@ export default function CommandPalette({ open, onClose }) {
     if (e.key === 'Escape') { e.preventDefault(); onClose?.() }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, items.length - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); go(items[active]) }
+    else if (e.key === 'Enter') { e.preventDefault(); go(items[current]) }
   }
 
   return (
@@ -123,7 +124,7 @@ export default function CommandPalette({ open, onClose }) {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setActive(0) }}
             onKeyDown={onKeyDown}
             placeholder="Jump to a page or search cases…"
             style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontFamily: 'var(--font)', background: 'transparent', color: 'var(--text-primary)' }}
@@ -141,7 +142,7 @@ export default function CommandPalette({ open, onClose }) {
               onClick={() => go(item)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                background: i === active ? 'var(--bg)' : 'transparent', color: 'var(--text-primary)', fontSize: 14,
+                background: i === current ? 'var(--bg)' : 'transparent', color: 'var(--text-primary)', fontSize: 14,
               }}
             >
               <Icon name={item.icon} size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />

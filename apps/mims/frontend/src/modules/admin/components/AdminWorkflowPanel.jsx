@@ -12,33 +12,14 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
   const H_canvas = 480
   const PADDING = 80
 
+  // Where a state was dragged to; one never dragged sits evenly round a circle.
   const [nodePositions, setNodePositions] = useState({})
-  
-  useEffect(() => {
-    if (!activeStates.length) return
-    const cx = W / 2
-    const cy = H_canvas / 2
-    const r = Math.min(W, H_canvas) / 2 - PADDING
-    
-    setNodePositions(prev => {
-      const newPos = { ...prev }
-      let changed = false
-      activeStates.forEach((s, i) => {
-        if (!newPos[s.id]) {
-          const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
-          newPos[s.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
-          changed = true
-        }
-      })
-      return changed ? newPos : prev
-    })
-  }, [activeStates])
-
-  const nodes = activeStates.map(s => ({
-    ...s,
-    x: nodePositions[s.id]?.x || W/2,
-    y: nodePositions[s.id]?.y || H_canvas/2
-  }))
+  const r = Math.min(W, H_canvas) / 2 - PADDING
+  const nodes = activeStates.map((s, i) => {
+    const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
+    const at = nodePositions[s.id] || { x: W / 2 + r * Math.cos(angle), y: H_canvas / 2 + r * Math.sin(angle) }
+    return { ...s, x: at.x, y: at.y }
+  })
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
 
   const [draggedNode, setDraggedNode] = useState(null)
@@ -102,7 +83,7 @@ function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, fl
       flash('Transition saved.')
       setEditingRule(null)
       if (onRefreshRules) onRefreshRules()
-    } catch (err) {
+    } catch {
       flash('Error saving rule.', 'error')
     }
   }

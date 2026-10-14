@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch'
 
@@ -24,7 +24,8 @@ export default function DeveloperApiAdmin() {
     if (!res.ok) { setError(d.error || 'Could not load API connections.'); return }
     setError(''); setData(d)
   }
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const loadOnOpen = useEffectEvent(() => { load() })
+  useEffect(() => { loadOnOpen() }, [])
 
   async function createClient(e) {
     e.preventDefault()

@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const pool = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireModule } = require('../../middleware/auth');
 const { saveProviderConfig, getProvider } = require('../../services/ai/providerAbstraction');
 const { classifyText } = require('../../services/ai/classifier');
 const { extractFields } = require('../../services/ai/extractor');
@@ -180,7 +180,9 @@ router.post('/cases/:id/ai/suggestions/:sid/reject', authenticate, async (req, r
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/inquiries/:id/ai/classify', authenticate, async (req, res) => {
+// An Inbox email: the Inbox screen is needed, as for every Inbox route (the
+// path is not under /inbox, so the Inbox check did not cover it).
+router.post('/inquiries/:id/ai/classify', authenticate, requireModule('inbox'), async (req, res) => {
   try {
     if (!hasGlobalAdminScope(req.user)) {
       const [[own]] = await pool.execute('SELECT id FROM inquiries WHERE id = ? AND org_id = ? LIMIT 1', [req.params.id, req.user.orgId]);

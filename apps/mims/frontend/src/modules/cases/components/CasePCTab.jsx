@@ -559,6 +559,7 @@ export default function CasePCTab({
           <h3>PC Configured Fields</h3>
           <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
+            readOnly={readOnly}
             sections={formConfig.sections}
             values={dynFieldValues || {}}
             onChange={setDynFieldValues || (() => {})}

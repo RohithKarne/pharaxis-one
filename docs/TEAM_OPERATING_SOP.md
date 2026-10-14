@@ -3926,14 +3926,20 @@ if (req.user.role !== 'platform_admin') {
 - An administrator sets a person's screens on Add / Edit Users › Screens (`PUT /api/admin/users/:id/modules`); only differences from the role are stored (`setUserModules`). MIMS Admin is not set there: it needs the administrator role as well as the module, in the menu and at the address (`ModuleAccessGuard adminOnly`).
 - The server enforces each screen: cases (`middleware/caseAccess.js`), Inbox (`routes/inbox.js`), content (`middleware/cmAccess.js` `cmReadAccess`), Reports and Transmissions (`requireModule`). The frontend hides what a person cannot open (`ModuleAccessGuard`, `MIMSNavbar`).
 - Platform Admin bypasses all module checks
+- The User Access Review report lists each person's screens as the server gives them and, under Differs from role, every screen added or taken away for them personally. It is where a screen given by mistake (e.g. Cases on a content manager) is found; it is removed on Edit User (2026-10-14).
 
 ##### Case access (access review, 2026-10-14)
 - Every request about a case — the case, its AE / PC versions and rows, MI tabs, letters, comments, contacts, attachments, field history, rich text, emails filed on it — needs Cases and View cases for that case (own or all); a change needs Update case. Pinning, following and presence need only View. Route checks (close, assign, escalate, letters, transmissions) apply after it.
 - Without Update case the case page opens read only: a Read only label instead of Save Case, no version, transmit, add or delete buttons, fields locked.
+- Reports follow the same rule (2026-10-14): every case report and the operations summary count all cases, only those the viewer owns or created, or none without Cases. A schedule uses its owner's access. The scope is set on the server; a filter cannot widen it (`services/reportDatasetService.js` `caseScopeOf`).
+- The path a check compares is decoded and lower-cased first (`utils/gatePath.js`), as the server routes it.
 
 ##### Permissions (Group Security)
 - 32 permissions, each checked by the server (`access_activity_privileges`, migration 184 removed 46 that nothing checked). A group adds rights to its members' role and never removes them (MIPM-192): the role's rights show ticked and locked.
 - Platform Admin hidden from User Management + Module Access screens — `WHERE role != 'platform_admin'` on both `/api/admin/platform/users` and `/api/admin/platform/all-users`
+
+##### In-app regression suite
+- Off unless the server sets `ENABLE_INAPP_REGRESSION=true`; run by an administrator from MIMS Admin or `POST /api/admin/regression/run`, signed in as `REGRESSION_EMAIL`. Run it on a local or test copy only: it creates and deletes records. Its access-configuration check puts the organisation's sign-in policy back after it runs (2026-10-14). On 14 Oct: 178 checks, 150 pass; the 28 that fail expect behaviour later rounds changed on purpose.
 
 ##### Session Timeout
 - Per-org idle timeout set by platform admin. Stored as `session_timeout_minutes` in `organisations` table.

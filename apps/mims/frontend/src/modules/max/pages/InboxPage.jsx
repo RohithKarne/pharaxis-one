@@ -14,7 +14,8 @@ import { parseServerTime } from '../../../shared/utils/serverTime.js'
 import toast from '../../../shared/utils/toast'
 import useRememberedFilters, { hasRememberedFilters } from '../../../shared/hooks/useRememberedFilters.js'
 
-import EmailBody, { compactEmailBodyText } from '../components/EmailBody'
+import EmailBody from '../components/EmailBody'
+import { compactEmailBodyText } from '../components/emailBodyText'
 import InboxFilterBar from '../components/InboxFilterBar'
 import InboxBulkBar from '../components/InboxBulkBar'
 

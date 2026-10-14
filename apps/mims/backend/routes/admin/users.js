@@ -792,7 +792,7 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const scope = orgScopeForUsers(req);
     const [[user]] = await conn.execute(
-      `SELECT u.id, u.security_group_id, u.is_active, u.is_disabled FROM users u WHERE u.id = ? AND ${scope.sql} LIMIT 1`,
+      `SELECT u.id, u.role, u.security_group_id, u.is_active, u.is_disabled FROM users u WHERE u.id = ? AND ${scope.sql} LIMIT 1`,
       [req.params.id, ...scope.params]
     );
     if (!user) {
@@ -806,8 +806,11 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
       return res.status(400).json({ error: 'User must have a Security Group assigned before tenant assignment.' });
     }
 
-    // Derive role from security group
-    let roleAtOrg = 'agent';
+    // The group's role, or the person's own when the group sets none. It fell
+    // back to 'agent', so every Edit User save (it always saves organisations)
+    // turned a content manager in such a group into an agent in the organisation
+    // while their user record still said content manager (P6 walk, 2026-10-14).
+    let roleAtOrg = user.role || 'agent';
     const [[sg]] = await conn.execute(
       'SELECT privileges FROM security_groups WHERE id = ? LIMIT 1', [user.security_group_id]
     );

@@ -994,6 +994,7 @@ export default function CaseMITab({
           <h3>MI Configured Fields</h3>
           <fieldset className="cf-fieldset-plain" disabled={readOnly}>
           <DynamicFieldsSection
+            readOnly={readOnly}
             sections={formConfig.sections}
             values={dynFieldValues || {}}
             onChange={setDynFieldValues || (() => {})}

@@ -28,6 +28,9 @@ const { addWorkingDays, workingDaysBetween } = require('../utils/workingDays');
 const { getSettings: getMiSettings } = require('./miResponseSettings');
 const { handoffDays } = require('./transmissionTargets');
 const { folderFilterSql } = require('./cmFolderAccess');
+const { resolveActivityScope } = require('./accessConfigurationService');
+const { getUserModules } = require('../utils/userModules');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 const ROW_CAP = 10000;
 
@@ -97,8 +100,22 @@ const caseRoute = (id) => (id ? `/cases/${id}` : null);
 
 // ── Case filters ────────────────────────────────────────────────────────────
 
-// Type, owner, channel and product, as chosen on the filter bar.
+// The cases the viewer may see, by the case list's rule (access review P4,
+// Saad 2026-10-14): everything, only those they own or created, or none when
+// they have no Cases access. Set by getDatasetByReportKey, never by the caller.
+function caseScopeSql(filters = {}) {
+  const scope = filters.__case_scope;
+  if (scope === undefined) return { sql: '', params: [] };
+  if (!scope) return { sql: ' AND 1 = 0', params: [] };
+  return { sql: ' AND (c.case_owner_id = ? OR c.created_by = ?)', params: [scope, scope] };
+}
+
+const scopeOnly = (filters = {}) => ({ __case_scope: filters.__case_scope });
+
+// Type, owner, channel and product, as chosen on the filter bar, within the
+// viewer's case scope.
 function caseFilterSql(filters = {}, { productSql = `(${CASE_PRODUCT_SQL})` } = {}) {
+  const scope = caseScopeSql(filters);
   const parts = [];
   const params = [];
   const type = String(filters.case_type || '').toUpperCase();
@@ -107,7 +124,7 @@ function caseFilterSql(filters = {}, { productSql = `(${CASE_PRODUCT_SQL})` } = 
   else if (Number(filters.owner_id)) { parts.push('c.case_owner_id = ?'); params.push(Number(filters.owner_id)); }
   if (filters.intake_channel) { parts.push('LOWER(c.intake_channel) = LOWER(?)'); params.push(String(filters.intake_channel)); }
   if (filters.product) { parts.push(`${productSql} = ?`); params.push(String(filters.product)); }
-  return { sql: parts.map((p) => ` AND ${p}`).join(''), params };
+  return { sql: scope.sql + parts.map((p) => ` AND ${p}`).join(''), params: [...scope.params, ...params] };
 }
 
 const OPEN_CASE_SQL = 'COALESCE(ws.is_closed, 0) = 0 AND c.merged_into_case_id IS NULL';
@@ -481,6 +498,7 @@ async function getHandoffTimeliness(orgId, filters = {}) {
 
 async function getTransmissionSlaReport(orgId, filters = {}) {
   const type = String(filters.case_type || '').toUpperCase();
+  const scope = caseScopeSql(filters);
   const [rows] = await pool.execute(
     `SELECT transmission_type, case_id, case_number, assigned_name, priority, due_date, status, sla_status, escalation_level
        FROM (
@@ -490,7 +508,7 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
            FROM case_ae_transmissions t
            JOIN cases c ON c.id = t.case_id
            LEFT JOIN users u ON u.id = t.assigned_to
-          WHERE c.org_id = ? AND c.is_deleted = 0
+          WHERE c.org_id = ? AND c.is_deleted = 0${scope.sql}
             -- Open means what the SLA engine tracks (caseGovernanceService, MIPM-206).
             AND t.status IN ('Pending', 'In Review', 'Accepted')
          UNION ALL
@@ -500,18 +518,19 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
            FROM case_pc_transmissions t
            JOIN cases c ON c.id = t.case_id
            LEFT JOIN users u ON u.id = t.assigned_to
-          WHERE c.org_id = ? AND c.is_deleted = 0
+          WHERE c.org_id = ? AND c.is_deleted = 0${scope.sql}
             AND t.status IN ('Pending', 'Under Investigation')
        ) tx
       ${['AE', 'PC'].includes(type) ? 'WHERE transmission_type = ?' : ''}
       ORDER BY FIELD(sla_status, 'breached', 'at_risk', 'on_track', 'closed', 'untracked'), due_date ASC, updated_at DESC`,
-    ['AE', 'PC'].includes(type) ? [orgId, orgId, type] : [orgId, orgId]
+    [orgId, ...scope.params, orgId, ...scope.params, ...(['AE', 'PC'].includes(type) ? [type] : [])]
   );
   return rows.map(({ case_id: caseId, ...row }) => ({ ...row, __drill_route: caseRoute(caseId) }));
 }
 
 async function getIcsrSubmissions(orgId, filters = {}) {
   const range = resolvePeriod(filters, 'last_90_days');
+  const scope = caseScopeSql(filters);
   const [rows] = await pool.execute(
     `SELECT c.id AS case_id, c.case_number, DATE_FORMAT(r.receive_date, '%Y-%m-%d') AS receive_date, r.report_type,
             r.seriousness_classification AS seriousness, r.follow_up_number, r.status AS icsr_status, r.submission_count,
@@ -519,10 +538,10 @@ async function getIcsrSubmissions(orgId, filters = {}) {
             r.ack_error_summary AS acknowledgement_errors
        FROM icsr_reports r
        JOIN cases c ON c.id = r.case_id
-      WHERE r.org_id = ? AND c.is_deleted = 0 AND ${inRange('r.receive_date')}
+      WHERE r.org_id = ? AND c.is_deleted = 0 AND ${inRange('r.receive_date')}${scope.sql}
       ORDER BY r.receive_date DESC, r.id DESC
       LIMIT ${ROW_CAP}`,
-    [orgId, range.dateFrom, range.dateTo]
+    [orgId, range.dateFrom, range.dateTo, ...scope.params]
   );
   return rows.map(({ case_id: caseId, ...row }) => ({ ...row, __drill_route: caseRoute(caseId) }));
 }
@@ -531,26 +550,27 @@ async function getIcsrSubmissions(orgId, filters = {}) {
 
 async function getTeamWorkload(orgId, filters = {}) {
   const range = resolvePeriod(filters, 'last_30_days');
+  const scope = caseScopeSql(filters);
   const [open] = await pool.execute(
     `SELECT c.case_owner_id AS owner_id, u.name AS owner, c.case_type, COUNT(*) AS n
        FROM cases c
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
        LEFT JOIN users u ON u.id = c.case_owner_id
-      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${OPEN_CASE_SQL}
+      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${OPEN_CASE_SQL}${scope.sql}
       GROUP BY c.case_owner_id, u.name, c.case_type`,
-    [orgId]
+    [orgId, ...scope.params]
   );
   const [received] = await pool.execute(
     `SELECT c.case_owner_id AS owner_id, COUNT(*) AS n FROM cases c
-      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${inRange('c.date_received')}
+      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${inRange('c.date_received')}${scope.sql}
       GROUP BY c.case_owner_id`,
-    [orgId, range.dateFrom, range.dateTo]
+    [orgId, range.dateFrom, range.dateTo, ...scope.params]
   );
-  const closures = await loadClosures(orgId, range, {});
+  const closures = await loadClosures(orgId, range, scopeOnly(filters));
   const [ownersOfClosed] = closures.length
     ? await pool.query('SELECT id, case_owner_id FROM cases WHERE id IN (?)', [closures.map((r) => r.case_id)])
     : [[]];
-  const overdue = (await loadMiRows(orgId, null, {})).filter((row) => row.result === 'Overdue');
+  const overdue = (await loadMiRows(orgId, null, scopeOnly(filters))).filter((row) => row.result === 'Overdue');
 
   const rows = new Map();
   const row = (ownerId, name) => {
@@ -661,26 +681,28 @@ async function getInboxSlaReport(orgId, filters = {}) {
 
 async function getOperationsSummary(orgId, filters = {}) {
   const range = resolvePeriod(filters, 'today');
-  const scoped = { ...filters, date_from: range.dateFrom, date_to: range.dateTo };
+  const { __case_scope: _scope, ...chosen } = filters;
+  const scoped = { ...chosen, date_from: range.dateFrom, date_to: range.dateTo };
+  const scope = caseScopeSql(filters);
   const [received] = await pool.execute(
     `SELECT c.case_type, COUNT(*) AS n FROM cases c
-      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${inRange('c.date_received')} GROUP BY c.case_type`,
-    [orgId, range.dateFrom, range.dateTo]
+      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${inRange('c.date_received')}${scope.sql} GROUP BY c.case_type`,
+    [orgId, range.dateFrom, range.dateTo, ...scope.params]
   );
   const byType = Object.fromEntries(received.map((r) => [r.case_type, Number(r.n)]));
   const receivedTotal = received.reduce((sum, r) => sum + Number(r.n), 0);
-  const closures = await loadClosures(orgId, range, {});
+  const closures = await loadClosures(orgId, range, scopeOnly(filters));
   const [[backlog]] = await pool.execute(
     `SELECT COUNT(*) AS n, SUM(DATEDIFF(CURDATE(), c.date_received) > 30) AS old
        FROM cases c LEFT JOIN workflow_states ws ON ws.id = c.status_id
-      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${OPEN_CASE_SQL}`,
-    [orgId]
+      WHERE c.org_id = ? AND c.is_deleted = 0 AND ${OPEN_CASE_SQL}${scope.sql}`,
+    [orgId, ...scope.params]
   );
-  const mi = await loadMiRows(orgId, null, {});
+  const mi = await loadMiRows(orgId, null, scopeOnly(filters));
   const miOverdue = mi.filter((r) => r.result === 'Overdue').length;
   const miAnsweredInPeriod = mi.filter((r) => r.sent && r.sent >= range.dateFrom && r.sent <= range.dateTo);
   const miLate = miAnsweredInPeriod.filter((r) => r.result === 'Late').length;
-  const handoffs = await getHandoffTimeliness(orgId, { date_from: '2000-01-01', date_to: range.dateTo });
+  const handoffs = await getHandoffTimeliness(orgId, { ...scopeOnly(filters), date_from: '2000-01-01', date_to: range.dateTo });
   const handoffOverdue = handoffs.filter((r) => r.result === 'Overdue').length;
   const inbox = (await loadInboxRows(orgId, scoped)).filter((row) => row.status !== 'outbox');
   const report = (key) => ({ __drill_route: '/reports', __drill_state: { activeReport: key, appliedFilters: scoped } });
@@ -771,14 +793,22 @@ async function getContentReviewDue(orgId, filters = {}, ctx = {}) {
 
 // Who can use the organisation and what they can open — the periodic access
 // review (21 CFR 11.10(d), EU GMP Annex 11 §12).
+// The screens a person has, as the server decides them (getUserModules): their
+// role's screens, plus or minus what was changed for them personally. The column
+// listed only the personal changes, so a role's screens never showed (P6,
+// Saad 2026-10-14). "Differs from role" is what to check in an access review.
+const SCREEN_NAMES = {
+  mims_core: 'Cases', inbox: 'Inbox', transmissions: 'Transmissions', browse_content: 'Browse Content',
+  content_mgmt: 'Content Management', reports: 'Reports', admin_console: 'MIMS Admin',
+};
+const screenName = (key) => SCREEN_NAMES[key] || key;
+
 async function getUserAccessReview(orgId) {
   const [rows] = await pool.execute(
-    `SELECT u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role,
+    `SELECT u.id, u.role AS user_role, u.name, u.email, COALESCE(uoa.role_at_org, u.role) AS role,
             CASE WHEN u.is_active = 0 OR u.is_disabled = 1 THEN 'Disabled'
                  WHEN u.locked_until IS NOT NULL AND u.locked_until > NOW() THEN 'Locked'
                  ELSE 'Active' END AS account_status,
-            (SELECT GROUP_CONCAT(mp.module ORDER BY mp.module SEPARATOR ', ') FROM user_module_permissions mp
-              WHERE mp.user_id = u.id AND mp.can_access = 1) AS modules,
             (SELECT DATE_FORMAT(MAX(la.login_time), '%Y-%m-%d %H:%i') FROM login_audit la
               WHERE la.user_id = u.id AND la.auth_event = 'login_success') AS last_sign_in,
             u.failed_login_attempts, DATE_FORMAT(u.password_expires_at, '%Y-%m-%d') AS password_expires,
@@ -789,7 +819,31 @@ async function getUserAccessReview(orgId) {
       ORDER BY u.name`,
     [orgId]
   );
-  return rows.map((row) => ({ ...row, last_sign_in: row.last_sign_in || 'Never' }));
+  const [roleRows] = await pool.execute(
+    "SELECT role, module FROM role_permissions WHERE can_access = 1 AND module <> 'platform_admin_console'"
+  );
+  const [personal] = rows.length
+    ? await pool.query('SELECT user_id, module, can_access FROM user_module_permissions WHERE user_id IN (?)', [rows.map((r) => r.id)])
+    : [[]];
+  return rows.map(({ id, user_role: userRole, ...row }) => {
+    const byRole = new Set(roleRows.filter((r) => r.role === userRole).map((r) => r.module));
+    const screens = new Set(byRole);
+    personal.filter((p) => p.user_id === id).forEach((p) => (p.can_access ? screens.add(p.module) : screens.delete(p.module)));
+    const added = [...screens].filter((m) => !byRole.has(m) && SCREEN_NAMES[m]).map((m) => `+ ${screenName(m)}`);
+    const removed = [...byRole].filter((m) => !screens.has(m) && SCREEN_NAMES[m]).map((m) => `− ${screenName(m)}`);
+    return {
+      name: row.name,
+      email: row.email,
+      role: row.role,
+      account_status: row.account_status,
+      modules: [...screens].filter((m) => SCREEN_NAMES[m]).map(screenName).sort().join(', '),
+      differs_from_role: [...added, ...removed].join(', '),
+      last_sign_in: row.last_sign_in || 'Never',
+      failed_login_attempts: row.failed_login_attempts,
+      password_expires: row.password_expires,
+      created: row.created,
+    };
+  });
 }
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
@@ -819,7 +873,16 @@ const DATASETS = Object.freeze({
 
 const BUILT_DATASETS = new Set(Object.keys(DATASETS));
 
-// ctx.user, when given, hides content in folders that user may not read.
+// Whose cases ctx.user may see: undefined for all, their id for their own, 0 for none.
+async function caseScopeOf(user) {
+  if (!user || hasGlobalAdminScope(user)) return undefined;
+  if (!(await getUserModules(user.userId)).includes('mims_core')) return 0;
+  const scope = await resolveActivityScope(user, 'case.view');
+  return scope === 'all' ? undefined : scope === 'own' ? Number(user.userId) : 0;
+}
+
+// ctx.user, when given, hides content in folders that user may not read and
+// cases that user may not see.
 async function getDatasetByReportKey(reportKey, orgId, filters = {}, ctx = {}) {
   const dataset = DATASETS[reportKey];
   if (!dataset) {
@@ -828,7 +891,8 @@ async function getDatasetByReportKey(reportKey, orgId, filters = {}, ctx = {}) {
     err.code = 'REPORT_NOT_BUILT';
     throw err;
   }
-  return dataset(orgId, filters || {}, ctx);
+  const { __case_scope: _ignored, ...chosen } = filters || {};
+  return dataset(orgId, { ...chosen, __case_scope: await caseScopeOf(ctx.user) }, ctx);
 }
 
 module.exports = {

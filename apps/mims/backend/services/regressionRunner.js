@@ -120,16 +120,25 @@ async function ensureRegressionUserOrgAccess() {
   }
 }
 
+// Sign-in no longer puts the session in the reply body (T15): it comes only as
+// the mims_token cookie, so the suite never found one and ran no test.
+function sessionCookie(res) {
+  const cookies = [].concat(res.headers?.['set-cookie'] || []);
+  const hit = cookies.map((c) => c.split(';')[0]).find((c) => c.startsWith('mims_token='));
+  return hit ? hit.slice('mims_token='.length) : null;
+}
+
 async function resolveAuthToken(email, password) {
   const res = await makeRequest('POST', '/api/auth/login', { email, password }, null);
   if (res.status !== 200) return null;
   if (res.body?.token) return res.body.token;
+  if (sessionCookie(res)) return sessionCookie(res);
 
   if (res.body?.challengeToken) {
     const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
       challengeToken: res.body.challengeToken,
     }, null);
-    if (skip.status === 200 && skip.body?.token) return skip.body.token;
+    if (skip.status === 200 && (skip.body?.token || sessionCookie(skip))) return skip.body?.token || sessionCookie(skip);
   }
 
   return null;
