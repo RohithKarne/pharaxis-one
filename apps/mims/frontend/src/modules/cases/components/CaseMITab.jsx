@@ -113,7 +113,9 @@ export default function CaseMITab({
   async function loadSendCheck(tabId = sendCheckTabId) {
     if (!tabId) { setSendCheck(null); return }
     try {
-      const res = await httpFetch(`${API}/cases/${id}/mi/${tabId}/send-check`, { headers })
+      // The response page checks every MI on the case; the MI tab, the open one.
+      const url = view === 'response' ? `${API}/cases/${id}/mi-send-check` : `${API}/cases/${id}/mi/${tabId}/send-check`
+      const res = await httpFetch(url, { headers })
       setSendCheck(res.ok ? await res.json() : null)
     } catch { setSendCheck(null) }
   }

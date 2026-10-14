@@ -58,6 +58,17 @@ async function verifyMiOrg(miId, req) {
 }
 
 // GET /api/cases/:id/mi — list all MI tabs for a case
+// What every MI on the case still needs before a response can be sent — the
+// response page, where a letter may answer any of the case's MIs.
+router.get('/cases/:id/mi-send-check', authenticate, async (req, res) => {
+  try {
+    if (!await verifyCaseOrg(req.params.id, req)) return res.status(403).json({ error: 'Access denied' });
+    res.json(await miSendCheck(req.params.id, null));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // What this MI still needs before its response can be sent (MI field review).
 router.get('/cases/:id/mi/:miId/send-check', authenticate, async (req, res) => {
   try {
