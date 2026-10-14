@@ -73,6 +73,7 @@ export const SYSTEM_NAV = [
         // MI response review (Rohith, 14 Oct 2026): answers and hand-offs.
         label: 'Medical Information', value: 'sys-setup-grp-mi', children: [
           { label: 'MI Response Settings',     value: 'sys-setup-mi-response' },
+          { label: 'Transmission Setup',       value: 'sys-setup-int-transmission' },
         ],
       },
       {
@@ -100,7 +101,6 @@ export const SYSTEM_NAV = [
           { label: 'Case Import',                   value: 'sys-setup-int-case-import'  },
           { label: 'Inbox Routing Rules',           value: 'sys-setup-int-routing'      },
           { label: 'Integration Health Monitor',    value: 'sys-setup-int-health'       },
-          { label: 'Transmission Setup',            value: 'sys-setup-int-transmission' },
           { label: 'Developer API Clients',         value: 'sys-setup-developer-api'    },
           { label: 'Email Accounts',                value: 'sys-setup-email-accounts'   },
           { label: 'AI Configuration',              value: 'sys-setup-ai-config'        },

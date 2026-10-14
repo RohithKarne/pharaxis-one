@@ -320,6 +320,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/emailCaseImport'));
   r.use(`${prefix}/admin`, require('./routes/admin/caseFields'));
   r.use(`${prefix}/admin`, require('./routes/admin/miResponseSettings'));
+  r.use(`${prefix}/admin`, require('./routes/admin/transmissionSetup'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
   r.use(`${prefix}/admin`, require('./routes/admin/reportsAccess'));

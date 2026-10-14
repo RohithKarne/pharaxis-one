@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { outboundKey } = require('./transmissionTargets');
 const https = require('https');
 const http = require('http');
 
@@ -115,7 +116,7 @@ async function sendWithRetry(endpointUrl, apiKey, eventType, payload, orgId, int
 
 async function fireIntegrationEvent(orgId, eventType, payload) {
   const [rows] = await pool.query(
-    `SELECT id, endpoint_url, api_key, event_triggers
+    `SELECT id, endpoint_url, api_key, event_triggers, config
      FROM org_integrations
      WHERE org_id = ? AND enabled = 1`,
     [orgId]
@@ -130,7 +131,8 @@ async function fireIntegrationEvent(orgId, eventType, payload) {
     jobs.push(
       sendWithRetry(
         row.endpoint_url,
-        row.api_key,
+        // An outbound key set on Transmission Setup is stored encrypted (14 Oct 2026).
+        outboundKey(row),
         eventType,
         payload,
         orgId,

@@ -5,8 +5,10 @@
  * Quality (PC field review, Rohith 2026-10-13). One check, read by the PC
  * tab's card and by the server when a hand-off is started.
  *
- * Blocking (21 CFR 211.198(b)(1) — the complaint record names the product and
- * the nature of the complaint):
+ * Blocking (21 CFR 211.198(b)(1) — the complaint record names the complainant,
+ * the product and the nature of the complaint):
+ * - the complainant: a contact with a name, an email or a phone (14 Oct 2026,
+ *   so Route to Quality and the Transmission screen ask the same);
  * - the product;
  * - the description of the complaint;
  * - when the patient was injured, a linked AE case: a complaint with an
@@ -37,9 +39,14 @@ async function pcHandoffCheck(caseId, db = pool) {
     `SELECT v.field_value FROM case_dynamic_field_values v JOIN field_setup f ON f.id = v.field_id
       WHERE v.case_id = ? AND f.field_name = 'Reportability Determination' LIMIT 1`, [caseId]);
 
+  const [[complainant]] = await db.execute(
+    `SELECT COUNT(*) AS n FROM case_contacts
+      WHERE case_id = ? AND (TRIM(COALESCE(first_name, '')) <> '' OR TRIM(COALESCE(last_name, '')) <> ''
+        OR TRIM(COALESCE(email, '')) <> '' OR TRIM(COALESCE(phone, '')) <> '')`, [caseId]);
   const product = String(p?.product_name || '').trim() || (p?.product_id ? `product ${p.product_id}` : '');
   const injured = /^y/i.test(String(pt?.injury_experienced || ''));
   const items = [
+    { key: 'complainant', label: 'Complainant', level: 'block', ok: Number(complainant.n) > 0, detail: Number(complainant.n) > 0 ? '' : 'add who complained (a name, email or phone)' },
     { key: 'product', label: 'Product', level: 'block', ok: !!product, detail: product || 'not entered' },
     { key: 'description', label: 'Description of the complaint', level: 'block', ok: !!String(g?.complaint_description || '').trim() },
     { key: 'lot', label: 'Lot', level: 'warn', ok: !!String(p?.lot_number || '').trim(), detail: p?.lot_number || 'not known — say so in the description if the complainant does not have it' },

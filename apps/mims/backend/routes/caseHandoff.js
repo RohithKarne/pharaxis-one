@@ -39,17 +39,21 @@ router.get('/cases/:caseId/handoff', authenticate, async (req, res) => {
     const [built, readiness, targets, history] = await Promise.all([
       handoff.buildPayload({ orgId, caseId }),
       handoff.assessReadiness({ orgId, caseId, caseType: owner.case_type }),
-      handoff.listTargets({ orgId }),
+      handoff.listTargets({ orgId, caseType: owner.case_type }),
       handoff.listTransmissions({ caseId }),
     ]);
 
     if (!built) return res.status(404).json({ error: 'Case not found.' });
+    const deadline = await handoff.handoffDeadline({
+      orgId, caseId, caseType: owner.case_type, awarenessDate: built.payload?.case?.awareness_date, history,
+    });
 
     res.json({
       case_type: owner.case_type,
       eligible: ['AE', 'PC'].includes(owner.case_type),
       payload_version: handoff.PAYLOAD_VERSION,
       readiness,
+      deadline,
       payload: built.payload,
       targets: targets.map(t => ({ id: t.id, type: t.integration_type, endpoint: t.endpoint_url })),
       history,

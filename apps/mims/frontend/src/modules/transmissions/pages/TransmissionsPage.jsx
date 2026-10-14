@@ -79,6 +79,12 @@ export default function TransmissionsPage() {
     logScreenEvent(token, 'PAGE_VIEW', {})
   }, [token])
 
+  const [recon, setRecon] = useState(null)
+  useEffect(() => {
+    httpFetch(`${API}/admin/transmission-reconciliation`, { headers })
+      .then(r => (r.ok ? r.json() : null)).then(setRecon).catch(() => setRecon(null))
+  }, [headers])
+
   // The search runs on the server; wait for a pause in typing before asking.
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), 300)
@@ -130,6 +136,26 @@ export default function TransmissionsPage() {
         </div>
 
         {/* ── Filters ─────────────────────────────────────────────────── */}
+        {/* Reconciliation (14 Oct 2026): AE and PC cases that have not left MIMS. */}
+        {recon && (
+          <details className="tx-recon" data-testid="tx-recon" open={recon.late > 0}>
+            <summary>
+              Not yet handed off: <strong>{recon.total}</strong> case{recon.total === 1 ? '' : 's'}
+              {recon.late > 0 && <span className="tx-recon-late"> · {recon.late} overdue</span>}
+            </summary>
+            {recon.rows.length === 0 ? <p className="tx-recon-empty">Every AE and PC case has been handed off.</p> : (
+              <table className="tx-recon-table">
+                <thead><tr><th>Case</th><th>Type</th><th>Aware / received</th><th>Due</th><th></th></tr></thead>
+                <tbody>{recon.rows.slice(0, 50).map(r => (
+                  <tr key={r.case_id} className={r.late ? 'is-late' : ''}>
+                    <td><button type="button" className="tx-link" onClick={() => navigate(`/cases/${r.case_id}/transmission`)}>{r.case_number || `Case ${r.case_id}`}</button></td>
+                    <td>{r.case_type}</td><td>{r.aware_on || '—'}</td><td>{r.due || '—'}</td><td>{r.late ? 'Overdue' : ''}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+          </details>
+        )}
         <div className="tx-filters">
           <input aria-label="Search transmissions"
             className="tx-search"

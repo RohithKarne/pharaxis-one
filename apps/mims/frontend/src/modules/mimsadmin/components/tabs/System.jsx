@@ -31,6 +31,7 @@ const SetupEmailAccounts = lazy(() => import('./SetupEmailAccounts'))
 const SetupCaseNumbering = lazy(() => import('./SetupCaseNumbering'))
 const SetupIntegrations = lazy(() => import('./SetupIntegrations'))
 const MiResponseSettings = lazy(() => import('./MiResponseSettings'))
+const TransmissionSetup = lazy(() => import('./TransmissionSetup'))
 const SetupWorkflowEngine = lazy(() => import('./SetupWorkflowEngine'))
 const SetupTwoFactor = lazy(() => import('./SetupTwoFactor'))
 const SetupWorkflow = lazy(() => import('./SetupWorkflow'))
@@ -88,6 +89,7 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-pii-redaction' ? <PiiRedactionRules />
     : selectedItem === 'sys-setup-data-protect' ? <DPPRPage embedded />
     : selectedItem === 'sys-setup-mi-response' ? <MiResponseSettings />
+    : selectedItem === 'sys-setup-int-transmission' ? <TransmissionSetup />
     : selectedItem?.startsWith('sys-setup-int-') ? <SetupIntegrations selectedItem={selectedItem} />
     : selectedItem === 'sys-system-params' ? <SystemParameters />
     : selectedItem === 'sys-reports-access' ? <ReportsAccess />

@@ -10,6 +10,8 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireModule } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { handoffDays } = require('../../services/transmissionTargets');
+const { addWorkingDays } = require('../../utils/workingDays');
 
 function hasPlatformAdminScope(req) {
   return hasGlobalAdminScope(req.user);
@@ -41,6 +43,37 @@ async function hasCaseAccess(req, caseId) {
 // GET /api/admin/transmission-audit-trail/cases-summary — cases with outbound transmissions
 // The Transmissions page is for everyone with the Transmissions module, agents
 // included; rows stay limited to the caller's organisation (MIPM-150).
+// Reconciliation (MI response and hand-off review, 14 Oct 2026): AE and PC cases
+// that have not left MIMS — no successful transmission to a safety or quality
+// system and no hand-off to a person — with the date they were due. The list
+// MI and safety teams compare each month so no adverse event or complaint is
+// lost between them.
+router.get('/transmission-reconciliation', authenticate, requireModule('transmissions'), async (req, res) => {
+  try {
+    const params = [];
+    let where = `c.is_deleted = 0 AND c.case_type IN ('AE', 'PC')
+      AND NOT EXISTS (SELECT 1 FROM transmission_audit_trail t WHERE t.case_id = c.id AND UPPER(t.status) = 'SENT')
+      AND NOT EXISTS (SELECT 1 FROM case_ae_transmissions a WHERE a.case_id = c.id)
+      AND NOT EXISTS (SELECT 1 FROM case_pc_transmissions p WHERE p.case_id = c.id)`;
+    if (!hasPlatformAdminScope(req)) { where += ' AND c.org_id = ?'; params.push(req.user.orgId); }
+    const [rows] = await pool.execute(
+      `SELECT c.id, c.case_number, c.case_type, c.org_id, COALESCE(c.awareness_date, c.date_received, DATE(c.created_at)) AS aware_on
+         FROM cases c WHERE ${where}
+        ORDER BY aware_on ASC, c.id ASC LIMIT 500`, params);
+    const today = new Date().toISOString().slice(0, 10);
+    const daysCache = new Map();
+    const out = [];
+    for (const r of rows) {
+      const key = `${r.org_id}:${r.case_type}`;
+      if (!daysCache.has(key)) daysCache.set(key, await handoffDays(r.org_id, r.case_type));
+      const aware = r.aware_on instanceof Date ? r.aware_on.toISOString().slice(0, 10) : String(r.aware_on || '').slice(0, 10);
+      const due = aware ? addWorkingDays(aware, daysCache.get(key)) : null;
+      out.push({ case_id: r.id, case_number: r.case_number, case_type: r.case_type, aware_on: aware || null, due, late: !!due && today > due });
+    }
+    res.json({ rows: out, total: out.length, late: out.filter(r => r.late).length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/transmission-audit-trail/cases-summary', authenticate, requireModule('transmissions'), async (req, res) => {
   try {
     const { search, page = 1, limit = 50 } = req.query;
