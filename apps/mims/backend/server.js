@@ -288,6 +288,8 @@ app.get('/api/users', authenticate, async (req, res) => {
 function mountRoutes(r, prefix = '') {
   // Auth
   r.use(`${prefix}/auth`, authRateLimiter, require('./routes/auth'));
+  // Every case screen's data: the Cases module and View (or Update) for that case.
+  r.use(prefix || '/', require('./middleware/caseAccess').caseAccess);
   r.use(`${prefix}/inbox`, require('./routes/inbox'));
 
   // Admin
