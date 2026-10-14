@@ -181,14 +181,6 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
   useEffect(() => { if (subTab === 'checkedin') loadCheckedIn() }, [loadCheckedIn, subTab])
   useEffect(() => { if (subTab === 'checkedout') loadCheckedOut() }, [loadCheckedOut, subTab])
 
-  async function handleCheckOut(doc) {
-    try {
-      const res = await httpFetch(`/api/cm/documents/${doc.id}/checkout`, { method: 'POST', headers: authHeaders })
-      if (res.ok) loadDocs()
-      else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
-    } catch { toast.error('Network error.') }
-  }
-
   async function handleCheckIn(notes) {
     setCheckInLoading(true)
     try {
@@ -197,6 +189,14 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
     setCheckInLoading(false)
+  }
+
+  async function handleRevise(doc) {
+    try {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); loadDocs() } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
   }
 
   async function handleArchive(doc) {
@@ -253,7 +253,9 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
       if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setPublishDoc(doc)}>Publish</button>)
     } else if (s === 'Published') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
+      // Revise keeps this version in use while the next one is drafted (Check Out took it out of Published).
+      if (doc.open_revision_id) btns.push(<span key="rev" style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>Revision in progress</span>)
+      else if (hasCapability('content.author')) btns.push(<button key="rev" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(doc)}>Revise</button>)
       btns.push(<button key="usage" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageDoc(doc)}>Usage</button>)
       if (hasCapability('content.publish')) btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
     } else if (s === 'Archived') {
@@ -432,7 +434,10 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
                         />
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
-                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>{d.name}</td>
+                      <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>
+                        {d.name}
+                        {d.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{d.revises_version}</div>}
+                      </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span>{d.doc_type}</span>

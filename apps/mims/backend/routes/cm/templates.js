@@ -107,7 +107,7 @@ const TEMPLATE_TRANSITIONS = {
   approve: { from: ['Draft'], to: 'Approved' },
   publish: { from: ['Approved'], to: 'Published' },
   archive: { from: ['Draft', 'Approved', 'Published'], to: 'Archived' },
-  revert:  { from: ['Approved', 'Published', 'Archived'], to: 'Draft' },
+  revert:  { from: ['Approved', 'Archived'], to: 'Draft' }, // a published one changes through Revise
 };
 
 async function transitionTemplate(req, res, action) {
@@ -167,6 +167,17 @@ async function transitionTemplate(req, res, action) {
     await pool.execute(`UPDATE cm_templates SET ${sets.join(', ')} WHERE id = ?`, params);
     const [[after]] = await pool.execute('SELECT version_major, version_minor FROM cm_templates WHERE id = ?', [req.params.id]);
     const version = `${after.version_major || 1}.${after.version_minor || 0}`;
+    // Publishing a revision retires the version it replaces.
+    if (action === 'publish' && tmpl.revision_of) {
+      const [[old]] = await pool.execute("SELECT id, version_major, version_minor FROM cm_templates WHERE id = ? AND status = 'Published'", [tmpl.revision_of]);
+      if (old) {
+        await pool.execute("UPDATE cm_templates SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?", [req.user.userId, old.id]);
+        await pool.execute(
+          `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id) VALUES ('template', ?, ?, 'Archived', ?, ?)`,
+          [old.id, `${old.version_major || 1}.${old.version_minor || 0}`, `Superseded by version ${version}.`, req.user.userId]);
+        await audit(req.user.userId, req.user.email, 'SUPERSEDE', 'cm_template', old.id, { superseded_by: Number(req.params.id), new_version: version });
+      }
+    }
     await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to, version, reason: reason || null, esigned: signing });
     try {
       await pool.execute(
@@ -190,7 +201,9 @@ router.get('/templates', authenticate, async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
-      SELECT t.*, u.name AS created_by_name
+      SELECT t.*, u.name AS created_by_name,
+             (SELECT r.id FROM cm_templates r WHERE r.revision_of = t.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
+             (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_templates o WHERE o.id = t.revision_of) AS revises_version
       FROM cm_templates t
       LEFT JOIN users u ON t.created_by = u.id
       WHERE 1=1
@@ -230,7 +243,7 @@ router.get('/templates', authenticate, async (req, res) => {
       query += ' AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())';
     }
 
-    const countQuery = query.replace('SELECT t.*, u.name AS created_by_name', 'SELECT COUNT(*) AS total');
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) counted`;
     const [[{ total }]] = await pool.execute(countQuery, params);
 
     query += ` ORDER BY t.name LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
@@ -339,10 +352,14 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     if (!resolvedName) return res.status(400).json({ error: 'name is required.' });
     const resolvedSubject = subject !== undefined ? (subject || null) : existing.subject;
 
-    // Editing reviewed content invalidates its approval: an Approved/Published
-    // template is sent back to Draft so the new wording must be re-approved
-    // before it can reach a doctor again.
-    const wasGoverned = existing.status === 'Approved' || existing.status === 'Published';
+    // A published template stays in use while it changes: its next version is
+    // drafted through Revise. Editing it here sent it back to Draft at once and
+    // letters lost it until it was approved and published again.
+    if (existing.status === 'Published') {
+      return res.status(409).json({ error: 'A published template stays in use while it changes: use Revise to draft its next version.' });
+    }
+    // Editing approved wording invalidates the approval: back to Draft.
+    const wasGoverned = existing.status === 'Approved';
     const newStatus = wasGoverned ? 'Draft' : existing.status;
     // A change of wording adds to the minor version, so a letter records which
     // wording it used (the version never moved, so every letter read 1.0).
@@ -368,6 +385,37 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     res.json({ message: 'Template updated.', reverted_to_draft: wasGoverned, status: newStatus });
   } catch (err) {
     console.error('PUT /cm/templates/:id error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/templates/:id/revise — draft the next version of a published
+// template. The published one stays in letters until the revision is published.
+router.post('/templates/:id/revise', authenticate, async (req, res) => {
+  try {
+    const src = await getScopedTemplate(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'Template not found.' });
+    if (src.status !== 'Published') return res.status(400).json({ error: 'Only a published template is revised. Edit a draft directly.' });
+    const [[open]] = await pool.execute(
+      "SELECT id FROM cm_templates WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
+    if (open) return res.status(409).json({ error: 'This template already has a revision in progress.', id: open.id });
+    const [result] = await pool.execute(
+      `INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, version_major, version_minor, revision_of, created_by)
+       SELECT type, name, subject, body_html, 'Draft', folder_id, expiry_date, version_major, version_minor, id, ? FROM cm_templates WHERE id = ?`,
+      [req.user.userId, src.id]);
+    // Its product groups carry over, so the builder still ranks it for the product.
+    await pool.execute(
+      `INSERT INTO product_group_assignments (group_id, target_type, target_id, metadata, created_by)
+       SELECT group_id, target_type, ?, metadata, ? FROM product_group_assignments WHERE target_type = 'cm_template' AND target_id = ?`,
+      [result.insertId, req.user.userId, src.id]).catch(() => {});
+    const version = `${src.version_major || 1}.${src.version_minor || 0}`;
+    await pool.execute(
+      `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id) VALUES ('template', ?, ?, 'Draft', ?, ?)`,
+      [result.insertId, version, `Revision of published version ${version} started.`, req.user.userId]).catch(() => {});
+    await audit(req.user.userId, req.user.email, 'REVISE', 'cm_template', result.insertId, { revision_of: src.id, from_version: version });
+    res.status(201).json({ message: 'Revision started. The published version stays in use until this one is published.', id: result.insertId });
+  } catch (err) {
+    console.error('POST /cm/templates/:id/revise error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

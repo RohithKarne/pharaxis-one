@@ -130,7 +130,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
               <label className="cm-form-label">Lifecycle Status</label>
               <div><StatusBadge status={template.status || 'Draft'} /></div>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                Status changes via Approve / Publish / Archive on the list. Editing approved or published content returns it to Draft for re-approval.
+                Status changes via Approve / Publish / Archive on the list. Editing approved wording returns it to Draft; a published template changes through Revise.
               </p>
             </div>
           )}
@@ -254,6 +254,15 @@ export default function TemplatesSection({ token }) {
     return false
   }
 
+  // The published version stays in letters while its next version is drafted.
+  async function revise(t) {
+    try {
+      const res = await httpFetch(`/api/cm/templates/${t.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
+
   function openEsign(t, action) { setEsign({ t, action }); setEsignPw(''); setEsignReason('') }
   async function submitEsign() {
     if (!esignPw || !esignReason.trim()) return toast.warn('Your password and a reason are required.')
@@ -311,7 +320,10 @@ export default function TemplatesSection({ token }) {
           <tbody>
             {templates.map(t => (
               <tr key={t.id}>
-                <td style={{ fontWeight: 500 }}>{t.name}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {t.name}
+                  {t.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{t.revises_version}</div>}
+                </td>
                 <td>{t.type}</td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{folders.find(f => f.id === t.folder_id)?.name || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '—'}</td>
@@ -327,12 +339,14 @@ export default function TemplatesSection({ token }) {
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
+                    {t.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>}
+                    {t.status === 'Published' && !t.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => revise(t)}>Revise</button>}
+                    {t.status === 'Published' && t.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
                     {t.status === 'Draft' && hasCapability('content.approve') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'approve')}>Approve</button>}
                     {t.status === 'Approved' && hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => openEsign(t, 'publish')}>Publish</button>}
                     {t.status === 'Published' && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
-                    {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
+                    {(t.status === 'Approved' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
                   </div>
                 </td>
               </tr>

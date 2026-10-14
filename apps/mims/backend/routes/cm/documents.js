@@ -272,7 +272,9 @@ router.get('/documents', authenticate, async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
-      SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
+      SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name,
+             (SELECT r.id FROM cm_documents r WHERE r.revision_of = d.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
+             (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_documents o WHERE o.id = d.revision_of) AS revises_version
       FROM cm_documents d
       LEFT JOIN cm_folders f ON d.folder_id = f.id
       LEFT JOIN users u ON d.created_by = u.id
@@ -317,10 +319,7 @@ router.get('/documents', authenticate, async (req, res) => {
       query += ' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())';
     }
 
-    const countQuery = query.replace(
-      'SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name',
-      'SELECT COUNT(*) AS total'
-    );
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) counted`;
     const [[{ total }]] = await pool.execute(countQuery, params);
 
     query += ` ORDER BY d.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
@@ -756,13 +755,94 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
   }
 });
 
-// POST /api/cm/documents/:id/checkout — check out document (Draft or Published)
+// When a revision is published, the version it replaces leaves use: archived,
+// with the reason in its history. Runs inside the publish transaction.
+async function supersedeRevised(conn, doc, newVersion, user) {
+  if (!doc.revision_of) return;
+  const [[old]] = await conn.execute(
+    "SELECT id, doc_id, version_major, version_minor, status FROM cm_documents WHERE id = ? AND status = 'Published'", [doc.revision_of]);
+  if (!old) return;
+  await conn.execute("UPDATE cm_documents SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?", [user.userId, old.id]);
+  // Documents that link to the old version now link to the new one.
+  await conn.execute('UPDATE IGNORE cm_document_relations SET related_doc_id = ? WHERE related_doc_id = ?', [doc.id, old.id]);
+  await conn.execute(
+    'INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id) VALUES (?, ?, ?, ?, ?, ?)',
+    ['document', old.id, `${old.version_major}.${old.version_minor}`, 'Archived', `Superseded by version ${newVersion}.`, user.userId]);
+  await logAudit(user.userId, user.email, 'SUPERSEDE', 'cm_document', old.id, { doc_id: old.doc_id, superseded_by: doc.id, new_version: newVersion });
+}
+
+// POST /api/cm/documents/:id/revise — start the next version of a published
+// document. The published version stays in letters and Browse Content until
+// this draft is published, which archives it as superseded.
+router.post('/documents/:id/revise', authenticate, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const src = await getScopedDocument(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'Document not found.' });
+    if (src.status !== 'Published') return res.status(400).json({ error: 'Only a published document is revised. Edit a draft directly.' });
+    const [[open]] = await pool.execute(
+      "SELECT id FROM cm_documents WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
+    if (open) return res.status(409).json({ error: 'This document already has a revision in progress.', id: open.id });
+
+    await conn.beginTransaction();
+    const [result] = await conn.execute(
+      `INSERT INTO cm_documents
+         (doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
+          status, version_major, version_minor, expiry_date, activation_date, language,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
+          revision_of, created_by)
+       SELECT doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
+          'Draft', version_major, version_minor, expiry_date, activation_date, language,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
+          id, ?
+         FROM cm_documents WHERE id = ?`,
+      [req.user.userId, src.id]
+    );
+    const newId = result.insertId;
+    // The links and alert subscribers carry over to the new version.
+    await conn.execute(
+      `INSERT INTO cm_document_relations (doc_id, related_doc_id, relation_type, created_by)
+       SELECT ?, related_doc_id, relation_type, ? FROM cm_document_relations WHERE doc_id = ?`, [newId, req.user.userId, src.id]);
+    await conn.execute(
+      `INSERT IGNORE INTO cm_document_alert_subs (document_id, user_id, created_by)
+       SELECT ?, user_id, ? FROM cm_document_alert_subs WHERE document_id = ?`, [newId, req.user.userId, src.id]);
+    await conn.execute(
+      `INSERT INTO cm_document_attachments (document_id, file_path, file_name, file_size, file_mime, uploaded_by)
+       SELECT ?, file_path, file_name, file_size, file_mime, uploaded_by FROM cm_document_attachments WHERE document_id = ?`, [newId, src.id]);
+    await conn.commit();
+    const version = `${src.version_major}.${src.version_minor}`;
+    await addVersionHistory('document', newId, version, 'Draft', `Revision of published version ${version} started.`, req.user.userId);
+    await audit(req.user.userId, req.user.email, 'REVISE', 'cm_document', newId, { doc_id: src.doc_id, revision_of: src.id, from_version: version });
+    res.status(201).json({ message: 'Revision started. The published version stays in use until this one is published.', id: newId });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    logger.error({ err, route: '/api/cm/documents/:id/revise', document_id: req.params?.id }, 'Failed to revise CM document');
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /api/cm/documents/:id/checkout — check out a Draft document
 router.post('/documents/:id/checkout', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    if (!['Draft', 'Published'].includes(doc.status)) return res.status(400).json({ error: 'Only Draft or Published documents can be checked out.' });
+    // A published document is changed through Revise, so it stays in use while
+    // the new version is written; checking it out took it out of Published.
+    if (doc.status === 'Published') return res.status(400).json({ error: 'A published document stays in use while it changes: use Revise to draft its next version.' });
+    if (doc.status !== 'Draft') return res.status(400).json({ error: 'Only Draft documents can be checked out.' });
     if (doc.checked_out_by) return res.status(400).json({ error: 'Document is already checked out.' });
 
     await pool.execute(
@@ -1036,6 +1116,7 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
 
       const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
       versionStr = `${after.version_major}.${after.version_minor}`;
+      await supersedeRevised(conn, doc, versionStr, req.user);
 
       await conn.commit();
     } catch (err) {
@@ -1085,7 +1166,9 @@ router.post('/documents/:id/release', authenticate, async (req, res) => {
     if (doc.owner_user_id !== req.user.userId) {
       return res.status(403).json({ error: 'Only the document owner can release this document.' });
     }
-    const allowedStatuses = ['Published', 'Approved', 'Pending', 'CheckedOut'];
+    // Releasing a published or approved document pulled it out of use; those
+    // change through Revise. Release returns work in progress to Draft.
+    const allowedStatuses = ['Pending', 'CheckedOut'];
     if (!allowedStatuses.includes(doc.status)) {
       return res.status(400).json({ error: 'Document cannot be released from its current status.' });
     }
@@ -1341,15 +1424,17 @@ router.post('/documents/bulk', authenticate, requireCapability('content.publish'
           continue;
         }
 
-        const newMajor = Number(doc.version_major || 0) + 1;
-        const versionStr = `${newMajor}.0`;
+        let versionStr;
         const conn = await pool.getConnection();
         try {
           await conn.beginTransaction();
           await conn.execute(
-            "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-            [newMajor, req.user.userId, req.user.userId, docId]
+            "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+            [req.user.userId, req.user.userId, docId]
           );
+          const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [docId]);
+          versionStr = `${after.version_major}.${after.version_minor}`;
+          await supersedeRevised(conn, doc, versionStr, req.user);
           await conn.commit();
         } catch (err) {
           await conn.rollback();
