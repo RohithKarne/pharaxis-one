@@ -75,7 +75,9 @@ function PaletteBody({ onClose }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setCases(Array.isArray(data?.cases) ? data.cases : [])
+        // The case list answers with the cases themselves (an object only with include_meta),
+        // so reading data.cases found nothing and no case was ever offered.
+        if (!cancelled) setCases(Array.isArray(data) ? data : Array.isArray(data?.cases) ? data.cases : [])
       } catch { /* lookup is best-effort */ }
     }, 220)
     return () => { cancelled = true; clearTimeout(t) }
