@@ -314,15 +314,15 @@ export function VersionAlertsPanel({ docId, token }) {
     try {
       const [cfgRes, emailRes, usersRes] = await Promise.all([
         httpFetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
-        httpFetch('/api/admin/email-accounts', { headers: H }),
+        httpFetch('/api/cm/mailboxes', { headers: H }),
         httpFetch('/api/users', { headers: H }),
       ])
       if (cfgRes.ok) {
         const d = await cfgRes.json()
-        setConfig({ alert_days: d.alert_days || [], alert_email_account_id: d.alert_email_account_id || '' })
+        setConfig({ alert_days: Array.isArray(d.alert_days) ? d.alert_days : [], alert_email_account_id: d.alert_email_account_id || '' })
         setSubscribers(d.subscribers || [])
       }
-      if (emailRes.ok) setEmailAccounts((await emailRes.json()).accounts || [])
+      if (emailRes.ok) setEmailAccounts((await emailRes.json()).mailboxes || [])
       // WP7: normalize shape — /api/users may return a bare array or { users: [...] };
       // storing the wrong shape crashed the tab on users.filter(...).
       if (usersRes.ok) { const d = await usersRes.json(); setUsers(Array.isArray(d) ? d : (d.users || [])) }
@@ -337,17 +337,18 @@ export function VersionAlertsPanel({ docId, token }) {
       try {
         const [cfgRes, emailRes, usersRes] = await Promise.all([
           httpFetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
-          httpFetch('/api/admin/email-accounts', { headers: H }),
+          // The admin mailbox list refused content managers, so this was always empty.
+          httpFetch('/api/cm/mailboxes', { headers: H }),
           httpFetch('/api/users', { headers: H }),
         ])
         if (cancelled) return
         if (cfgRes.ok) {
           const d = await cfgRes.json()
           if (cancelled) return
-          setConfig({ alert_days: d.alert_days || [], alert_email_account_id: d.alert_email_account_id || '' })
+          setConfig({ alert_days: Array.isArray(d.alert_days) ? d.alert_days : [], alert_email_account_id: d.alert_email_account_id || '' })
           setSubscribers(d.subscribers || [])
         }
-        if (emailRes.ok && !cancelled) setEmailAccounts((await emailRes.json()).accounts || [])
+        if (emailRes.ok && !cancelled) setEmailAccounts((await emailRes.json()).mailboxes || [])
         if (usersRes.ok && !cancelled) { const d = await usersRes.json(); setUsers(Array.isArray(d) ? d : (d.users || [])) }  /* WP7: normalize array/{users} shape */
       } catch {
         /* silent */
@@ -377,7 +378,9 @@ export function VersionAlertsPanel({ docId, token }) {
         method: 'PUT', headers: H,
         body: JSON.stringify({ alert_days: config.alert_days, alert_email_account_id: config.alert_email_account_id || null }),
       })
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) toast.success('Alert settings saved.')
+      else toast.error(d.error || 'Save failed.')
     } catch { toast.error('Network error.') }
     setSaving(false)
   }
@@ -397,7 +400,8 @@ export function VersionAlertsPanel({ docId, token }) {
 
   async function removeSub(subId) {
     try {
-      await httpFetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
+      if (!res.ok) toast.error('Could not remove the subscriber.')
       refreshAlertData()
     } catch { toast.error('Network error.') }
   }
@@ -442,7 +446,7 @@ export function VersionAlertsPanel({ docId, token }) {
         <select aria-label="Alert Email Account (SMTP)" className="cm-form-select" value={config.alert_email_account_id || ''} onChange={e => setConfig(p => ({ ...p, alert_email_account_id: e.target.value }))}>
           <option value="">— Use org default —</option>
           {emailAccounts.map(ea => (
-            <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>
+            <option key={ea.id} value={ea.id}>{ea.name}{ea.address ? ` — ${ea.address}` : ''}</option>
           ))}
         </select>
         <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>If not set, the org-level default SMTP account will be used (configured in CM Settings → Alerts).</p>

@@ -26,16 +26,16 @@ function CMOrgAlertsSettings({ token }) {
       try {
         const [sRes, eRes] = await Promise.all([
           httpFetch('/api/cm/settings', { headers: H }),
-          httpFetch('/api/admin/email-accounts', { headers: H }),
+          httpFetch('/api/cm/mailboxes', { headers: H }),
         ])
         if (sRes.ok) {
           const d = await sRes.json()
           const s = d.settings || {}
           setAlertDays(Array.isArray(s.default_alert_days) ? s.default_alert_days : [])
-          setDefaultEmail(s.default_alert_email_account_id || '')
+          setDefaultEmail(s.default_alert_email_account_id ? String(s.default_alert_email_account_id) : '')
           setDefaultRoles(Array.isArray(s.default_alert_roles) ? s.default_alert_roles : [])
         }
-        if (eRes.ok) setEmailAccounts((await eRes.json()).accounts || [])
+        if (eRes.ok) setEmailAccounts((await eRes.json()).mailboxes || [])
       } catch { /* silent */ }
       setLoading(false)
     }
@@ -45,7 +45,10 @@ function CMOrgAlertsSettings({ token }) {
   async function saveSetting(key, value) {
     setSaving(p => ({ ...p, [key]: true }))
     try {
-      await httpFetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+      const res = await httpFetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) toast.success('Saved.')
+      else toast.error(d.error || 'Could not save.')
     } catch { toast.error('Network error.') }
     setSaving(p => ({ ...p, [key]: false }))
   }
@@ -65,7 +68,7 @@ function CMOrgAlertsSettings({ token }) {
     saveSetting('default_alert_days', updated)
   }
 
-  const ALL_ROLES = ['admin', 'manager', 'agent', 'reviewer']
+  const ALL_ROLES = ['admin', 'manager', 'content_manager', 'agent', 'reviewer']
 
   if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
 
@@ -106,7 +109,7 @@ function CMOrgAlertsSettings({ token }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <select className="cm-form-select" style={{ margin: 0, flex: 1 }} value={defaultEmail} onChange={e => setDefaultEmail(e.target.value)}>
             <option value="">— None —</option>
-            {emailAccounts.map(ea => <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>)}
+            {emailAccounts.map(ea => <option key={ea.id} value={ea.id}>{ea.name}{ea.address ? ` — ${ea.address}` : ''}</option>)}
           </select>
           <button onClick={() => saveSetting('default_alert_email_account_id', defaultEmail || null)} disabled={saving.default_alert_email_account_id}
             style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -127,7 +130,7 @@ function CMOrgAlertsSettings({ token }) {
                   setDefaultRoles(updated)
                 }}
               />
-              {role.charAt(0).toUpperCase() + role.slice(1)}
+              {role === 'content_manager' ? 'Content manager' : role.charAt(0).toUpperCase() + role.slice(1)}
             </label>
           ))}
         </div>

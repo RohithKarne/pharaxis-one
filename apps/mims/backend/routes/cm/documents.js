@@ -1326,8 +1326,12 @@ router.get('/documents/:id/alert-config', authenticate, async (req, res) => {
        JOIN users u ON u.id = s.user_id WHERE s.document_id = ?`,
       [req.params.id]
     );
+    // alert_days is stored as JSON text; it was sent as text and the screen
+    // failed on it once days had been saved.
+    let days = doc.alert_days;
+    if (typeof days === 'string') { try { days = JSON.parse(days); } catch (_) { days = []; } }
     res.json({
-      alert_days: doc.alert_days || null,
+      alert_days: Array.isArray(days) ? days : [],
       alert_email_account_id: doc.alert_email_account_id || null,
       subscribers: subs,
     });
@@ -1342,9 +1346,14 @@ router.put('/documents/:id/alert-config', authenticate, async (req, res) => {
     const { alert_days, alert_email_account_id } = req.body;
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const { orgMailbox, cleanDays } = require('./settings');
+    const days = alert_days === null || alert_days === undefined ? [] : cleanDays(alert_days);
+    if (!days) return res.status(400).json({ error: 'Alert days must be a list of whole days.' });
+    const box = await orgMailbox(alert_email_account_id, doc.folder_org_id || req.user.orgId);
+    if (!box.ok) return res.status(400).json({ error: 'That mailbox is not an active sending mailbox of this organisation.' });
     await pool.execute(
       'UPDATE cm_documents SET alert_days = ?, alert_email_account_id = ?, updated_at = NOW() WHERE id = ?',
-      [alert_days ? JSON.stringify(alert_days) : null, alert_email_account_id || null, req.params.id]
+      [days.length ? JSON.stringify(days) : null, box.value, req.params.id]
     );
     res.json({ message: 'Alert config saved.' });
   } catch (err) {
