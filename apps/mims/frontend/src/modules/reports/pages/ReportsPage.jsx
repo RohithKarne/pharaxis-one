@@ -63,6 +63,29 @@ const AUDIENCE_OPTIONS = [
   { value: 'admin_only', label: 'Administrators' },
 ]
 
+const LOCAL_TIMEZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+// The time zone was free text; a typo saved and the schedule ran in UTC.
+const TIMEZONES = (() => { try { return Intl.supportedValuesOf('timeZone') } catch { return [LOCAL_TIMEZONE, 'UTC'] } })()
+const FREQUENCY_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly, on the 1st' }
+const DELIVERY_LABELS = { email: 'Email', in_app: 'Notification in MIMS' }
+
+function blankSchedule() {
+  return {
+    target_type: 'report',
+    target_id: '',
+    export_name: '',
+    schedule_frequency: 'daily',
+    schedule_time_local: '08:00',
+    schedule_weekday: 1,
+    timezone_name: LOCAL_TIMEZONE,
+    delivery_method: 'email',
+    recipients: [],
+    filters: {},
+    email_subject: '',
+    is_active: true,
+  }
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -79,6 +102,9 @@ function badgeStyle(status) {
   }
   if (normalized === 'success') {
     return { background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }
+  }
+  if (normalized === 'paused') {
+    return { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }
   }
   return { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }
 }
@@ -142,7 +168,6 @@ export default function ReportsPage() {
   const [dashboards, setDashboards] = useState([])
   const [schedules, setSchedules] = useState([])
   const [historyRuns, setHistoryRuns] = useState([])
-  const [moduleConfig, setModuleConfig] = useState(BLANK_CONFIG_FORM)
   const [favorites, setFavorites] = useState([])
   const [dashboardTemplates, setDashboardTemplates] = useState([])
   const [dashboardShares, setDashboardShares] = useState([])
@@ -177,19 +202,8 @@ export default function ReportsPage() {
   const [dashboardPreviewLoading, setDashboardPreviewLoading] = useState(false)
 
   const [editingScheduleId, setEditingScheduleId] = useState(null)
-  const [scheduleForm, setScheduleForm] = useState({
-    target_type: 'report',
-    target_id: '',
-    export_name: '',
-    schedule_frequency: 'daily',
-    schedule_time_local: '08:00',
-    schedule_weekday: 1,
-    timezone_name: BLANK_CONFIG_FORM.default_timezone,
-    delivery_method: BLANK_CONFIG_FORM.default_delivery_method,
-    delivery_target: '',
-    email_subject: '',
-    is_active: true,
-  })
+  const [scheduleForm, setScheduleForm] = useState(blankSchedule)
+  const [recipientOptions, setRecipientOptions] = useState([])
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
   const [historyFilters, setHistoryFilters] = useState({ target_type: '', status: '' })
@@ -287,14 +301,7 @@ export default function ReportsPage() {
           digest_subject_prefix: configPayload.digest_subject_prefix || BLANK_CONFIG_FORM.digest_subject_prefix,
           run_log_retention_days: Number(configPayload.run_log_retention_days || 90),
         }
-        setModuleConfig(normalizedConfig)
         setConfigForm(normalizedConfig)
-        setScheduleForm((current) => ({
-          ...current,
-          timezone_name: editingScheduleId ? current.timezone_name : normalizedConfig.default_timezone,
-          delivery_method: editingScheduleId ? current.delivery_method : normalizedConfig.default_delivery_method,
-          delivery_target: editingScheduleId ? current.delivery_target : normalizedConfig.default_delivery_target,
-        }))
       }
 
       if (!selectedReportId && nextDefinitions.length > 0) {
@@ -308,7 +315,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [apiJson, canManageReports, canScheduleReports, editingScheduleId, selectedDashboardId, selectedReportId, token])
+  }, [apiJson, canManageReports, canScheduleReports, selectedDashboardId, selectedReportId, token])
 
   async function loadHistory() {
     if (!token) return
@@ -341,6 +348,15 @@ export default function ReportsPage() {
   useEffect(() => {
     loadModuleData()
   }, [loadModuleData])
+
+  // Who this schedule may be emailed to: people in the organisation who can
+  // see the chosen report or dashboard.
+  useEffect(() => {
+    if (section !== 'schedules' || !scheduleForm.target_id || !canScheduleReports) { setRecipientOptions([]); return }
+    apiJson(`/api/reports/module/recipients?target_type=${scheduleForm.target_type}&target_id=${scheduleForm.target_id}`)
+      .then((payload) => setRecipientOptions(Array.isArray(payload.recipients) ? payload.recipients : []))
+      .catch(() => setRecipientOptions([]))
+  }, [apiJson, canScheduleReports, scheduleForm.target_id, scheduleForm.target_type, section])
 
   useEffect(() => {
     if (!token) return
@@ -717,12 +733,16 @@ export default function ReportsPage() {
   function scheduleSelectedReport() {
     if (!canScheduleReports) { setError('You do not have permission to schedule reports.'); return }
     setEditingScheduleId(null)
-    setScheduleForm((current) => ({
-      ...current,
+    // The schedule keeps the filters on screen; typed dates become the period,
+    // because fixed dates would send the same days for ever.
+    const { date_from: _from, date_to: _to, ...kept } = reportFilters
+    setScheduleForm({
+      ...blankSchedule(),
       target_type: 'report',
       target_id: String(selectedReport.id),
-      export_name: selectedReport.name || current.export_name,
-    }))
+      export_name: selectedReport.name,
+      filters: kept,
+    })
     pushSection('schedules')
   }
 
@@ -733,29 +753,19 @@ export default function ReportsPage() {
         ? `/api/reports/module/schedules/${editingScheduleId}`
         : '/api/reports/module/schedules'
       const method = editingScheduleId ? 'PUT' : 'POST'
+      const { recipients, ...form } = scheduleForm
       await apiJson(url, {
         method,
         body: JSON.stringify({
-          ...scheduleForm,
-          target_id: scheduleForm.target_id ? Number(scheduleForm.target_id) : null,
-          schedule_weekday: Number(scheduleForm.schedule_weekday || 1),
-          is_active: !!scheduleForm.is_active,
+          ...form,
+          delivery_target: form.delivery_method === 'email' ? recipients.join(', ') : '',
+          target_id: form.target_id ? Number(form.target_id) : null,
+          schedule_weekday: Number(form.schedule_weekday || 1),
+          is_active: !!form.is_active,
         }),
       })
       setEditingScheduleId(null)
-      setScheduleForm({
-        target_type: 'report',
-        target_id: '',
-        export_name: '',
-        schedule_frequency: 'daily',
-        schedule_time_local: '08:00',
-        schedule_weekday: 1,
-        timezone_name: moduleConfig.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-        delivery_method: moduleConfig.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-        delivery_target: moduleConfig.default_delivery_target || '',
-        email_subject: '',
-        is_active: true,
-      })
+      setScheduleForm(blankSchedule())
       await loadModuleData()
     } catch (err) {
       setError(err.message || 'Failed to save schedule.')
@@ -773,9 +783,10 @@ export default function ReportsPage() {
       schedule_frequency: schedule.schedule_frequency || 'daily',
       schedule_time_local: schedule.schedule_time_local || '08:00',
       schedule_weekday: Number(schedule.schedule_weekday || 1),
-      timezone_name: schedule.timezone_name || BLANK_CONFIG_FORM.default_timezone,
-      delivery_method: schedule.delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-      delivery_target: schedule.delivery_target || '',
+      timezone_name: schedule.timezone_name || LOCAL_TIMEZONE,
+      delivery_method: schedule.delivery_method === 'in_app' ? 'in_app' : 'email',
+      recipients: String(schedule.delivery_target || '').split(/[\s,;]+/).filter(Boolean),
+      filters: schedule.filters || {},
       email_subject: schedule.email_subject || '',
       is_active: !!Number(schedule.is_active ?? 1),
     })
@@ -813,7 +824,6 @@ export default function ReportsPage() {
         digest_subject_prefix: payload.digest_subject_prefix || '',
         run_log_retention_days: Number(payload.run_log_retention_days || 90),
       }
-      setModuleConfig(normalized)
       setConfigForm(normalized)
       await loadModuleData()
     } catch (err) {
@@ -1399,15 +1409,16 @@ export default function ReportsPage() {
                   <tr key={schedule.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ fontWeight: 700 }}>{schedule.export_name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.target_type || 'report'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.target_type === 'dashboard' ? 'Dashboard' : 'Report'}{schedule.filters?.period ? ` · ${(filterOptions.periods || []).find((p) => p.value === schedule.filters.period)?.label || schedule.filters.period}` : ''}</div>
                     </td>
-                    <td style={{ padding: '10px 12px' }}>{schedule.schedule_frequency}</td>
+                    <td style={{ padding: '10px 12px' }}>{FREQUENCY_LABELS[schedule.schedule_frequency] || schedule.schedule_frequency}</td>
                     <td style={{ padding: '10px 12px' }}>{schedule.schedule_time_local}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.timezone_name}</div></td>
-                    <td style={{ padding: '10px 12px' }}>{schedule.delivery_method}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.delivery_target || '—'}</div></td>
+                    <td style={{ padding: '10px 12px' }}>{DELIVERY_LABELS[schedule.delivery_method] || schedule.delivery_method}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schedule.delivery_method === 'email' ? (schedule.delivery_target || '—') : 'To whoever set it up'}</div></td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ ...badgeStyle(schedule.last_run_status || (schedule.is_active ? 'success' : 'failed')), borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>
-                        {String(schedule.last_run_status || (schedule.is_active ? 'active' : 'inactive')).toUpperCase()}
+                      <span style={{ ...badgeStyle(!Number(schedule.is_active) ? 'paused' : (schedule.last_run_status || 'waiting')), borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>
+                        {!Number(schedule.is_active) ? 'PAUSED' : schedule.last_run_status === 'failed' ? 'LAST RUN FAILED' : schedule.last_run_status === 'success' ? 'LAST RUN SENT' : 'NOT RUN YET'}
                       </span>
+                      {schedule.last_run_status === 'failed' && schedule.last_error && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{schedule.last_error}</div>}
                     </td>
                     <td style={{ padding: '10px 12px' }}>{formatDateTime(schedule.next_run_at_utc)}</td>
                     <td style={{ padding: '10px 12px' }}>
@@ -1441,19 +1452,7 @@ export default function ReportsPage() {
               <button
                 onClick={() => {
                   setEditingScheduleId(null)
-                  setScheduleForm({
-                    target_type: 'report',
-                    target_id: '',
-                    export_name: '',
-                    schedule_frequency: 'daily',
-                    schedule_time_local: '08:00',
-                    schedule_weekday: 1,
-                    timezone_name: moduleConfig.default_timezone || BLANK_CONFIG_FORM.default_timezone,
-                    delivery_method: moduleConfig.default_delivery_method || BLANK_CONFIG_FORM.default_delivery_method,
-                    delivery_target: moduleConfig.default_delivery_target || '',
-                    email_subject: '',
-                    is_active: true,
-                  })
+                  setScheduleForm(blankSchedule())
                 }}
                 style={pillButtonStyle(false)}
               >
@@ -1494,8 +1493,7 @@ export default function ReportsPage() {
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Frequency</span>
               <select value={scheduleForm.schedule_frequency} onChange={(event) => setScheduleForm((current) => ({ ...current, schedule_frequency: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
+                {Object.entries(FREQUENCY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
@@ -1513,19 +1511,23 @@ export default function ReportsPage() {
               </label>
             )}
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Timezone</span>
-              <input value={scheduleForm.timezone_name} onChange={(event) => setScheduleForm((current) => ({ ...current, timezone_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Time zone</span>
+              <select aria-label="Time zone" value={scheduleForm.timezone_name} onChange={(event) => setScheduleForm((current) => ({ ...current, timezone_name: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                {(TIMEZONES.includes(scheduleForm.timezone_name) ? TIMEZONES : [scheduleForm.timezone_name, ...TIMEZONES]).map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Period each send covers</span>
+              <select aria-label="Period each send covers" value={scheduleForm.filters?.period || ''} onChange={(event) => setScheduleForm((current) => ({ ...current, filters: { ...(current.filters || {}), period: event.target.value } }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <option value="">{`Matches how often it runs (${scheduleForm.schedule_frequency === 'monthly' ? 'last month' : scheduleForm.schedule_frequency === 'weekly' ? 'last 7 days' : 'yesterday'})`}</option>
+                {(filterOptions.periods || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delivery Method</span>
               <select value={scheduleForm.delivery_method} onChange={(event) => setScheduleForm((current) => ({ ...current, delivery_method: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <option value="email">Email</option>
-                <option value="in_app">In App</option>
+                {Object.entries(DELIVERY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delivery Target</span>
-              <input value={scheduleForm.delivery_target} onChange={(event) => setScheduleForm((current) => ({ ...current, delivery_target: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }} />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email Subject</span>
@@ -1533,13 +1535,41 @@ export default function ReportsPage() {
             </label>
           </div>
 
+          {scheduleForm.delivery_method === 'email' && (
+            <div style={{ marginTop: 14 }} data-testid="schedule-recipients">
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email to — people in this organisation who can see this report</div>
+              {!scheduleForm.target_id ? (
+                <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>Choose the report first.</div>
+              ) : (
+                <div style={{ marginTop: 6, display: 'grid', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 10, padding: 8 }}>
+                  {recipientOptions.map((person) => (
+                    <label key={person.email} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.recipients.includes(person.email)}
+                        onChange={(event) => setScheduleForm((current) => ({
+                          ...current,
+                          recipients: event.target.checked
+                            ? [...current.recipients, person.email]
+                            : current.recipients.filter((email) => email !== person.email),
+                        }))}
+                      />
+                      {person.name} <span style={{ color: 'var(--text-muted)' }}>{person.email}</span>
+                    </label>
+                  ))}
+                  {!recipientOptions.length && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nobody in this organisation can receive this report.</div>}
+                </div>
+              )}
+            </div>
+          )}
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
             <input type="checkbox" checked={!!scheduleForm.is_active} onChange={(event) => setScheduleForm((current) => ({ ...current, is_active: event.target.checked }))} />
             <span style={{ fontSize: 13 }}>Active schedule</span>
           </label>
 
           <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button onClick={saveSchedule} style={pillButtonStyle(true)} disabled={!scheduleForm.target_id || !scheduleForm.export_name.trim() || scheduleSaving}>
+            <button onClick={saveSchedule} style={pillButtonStyle(true)} disabled={!scheduleForm.target_id || !scheduleForm.export_name.trim() || scheduleSaving || (scheduleForm.delivery_method === 'email' && !scheduleForm.recipients.length)}>
               {scheduleSaving ? 'Saving…' : editingScheduleId ? 'Update Schedule' : 'Create Schedule'}
             </button>
           </div>

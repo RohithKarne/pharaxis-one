@@ -42,6 +42,7 @@ const {
   canSeeAudience,
 } = require('../services/reportModuleService');
 const { buildReportCsv } = require('../services/reportCsv');
+const { recipientsFor } = require('../services/reportRecipients');
 const {
   getExportConfigs,
   createExportConfig,
@@ -429,6 +430,19 @@ router.post('/reports/module/dashboard-templates/:id/create-dashboard', authenti
   } catch (err) {
     const status = /not found/i.test(err.message) ? 404 : 400;
     return res.status(status).json({ error: err.message || 'Failed to create dashboard from template.' });
+  }
+});
+
+// Who a schedule for this report or dashboard may be emailed to.
+router.get('/reports/module/recipients', authenticate, requireReportScheduler, async (req, res) => {
+  try {
+    const target = String(req.query.target_type || 'report') === 'dashboard'
+      ? await visibleDashboard(req, req.query.target_id)
+      : await visibleDefinition(req, req.query.target_id);
+    if (!target) return res.json({ recipients: [] });
+    return res.json({ recipients: await recipientsFor(req.user.orgId, target.visibility_scope) });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to load recipients.' });
   }
 });
 
