@@ -20,6 +20,7 @@ const { validateUpload } = require('../middleware/uploadValidation');
 const { emitPlatformAdminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 const { LAST_PLATFORM_ADMIN_ERROR, PLATFORM_ADMIN_CONSOLE_SQL, leavesNoActivePlatformAdmin } = require('../utils/adminScope');
 const { logAudit } = require('../utils/auditLog');
+const { setUserModules, SCREEN_MODULES } = require('../utils/userModules');
 const {
   bootstrapOrg,
   getOrgReadiness,
@@ -27,7 +28,7 @@ const {
   repairOrgData,
 } = require('../services/orgBootstrapService');
 
-const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization', 'reports'];
+const ALLOWED_MODULES = SCREEN_MODULES;
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager', 'auditor'];
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 const PLATFORM_ADMIN_EXCLUSION_SQL =
@@ -195,21 +196,11 @@ router.put('/users/:id/modules', authenticate, requireRole('platform_admin'), as
     if (invalid.length) {
       return res.status(400).json({ error: `Invalid module(s): ${invalid.join(', ')}` });
     }
-    // The replace below drops the platform-admin console permission (not an allowed module).
-    if (await leavesNoActivePlatformAdmin(pool, { dropConsole: [id] })) {
-      return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
-    }
-
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
-      await conn.execute('DELETE FROM user_module_permissions WHERE user_id = ?', [id]);
-      for (const mod of modules) {
-        await conn.execute(
-          'INSERT INTO user_module_permissions (user_id, module, can_access) VALUES (?, ?, 1)',
-          [id, mod]
-        );
-      }
+      // Exactly these screens; the platform console row is left alone.
+      await setUserModules(conn, Number(id), modules);
       await conn.commit();
     } catch (err) {
       await conn.rollback();
@@ -623,21 +614,9 @@ router.post('/users/create', authenticate, requireRole('platform_admin'), accoun
     );
     const userId = result.insertId;
 
-    // Auto-assign default modules by role so user can access the app on first login
-    const defaultModules = {
-      admin:           ['mims_core', 'admin_console', 'data_visualization', 'reports'],
-      agent:           ['mims_core'],
-      reviewer:        ['mims_core', 'data_visualization', 'reports'],
-      content_manager: ['mims_core', 'content_mgmt'],
-      auditor:         ['mims_core', 'reports'],
-    };
-    const modules = defaultModules[userRole] || ['mims_core'];
-    for (const mod of modules) {
-      await pool.execute(
-        'INSERT INTO user_module_permissions (user_id, module, can_access) VALUES (?, ?, 1)',
-        [userId, mod]
-      );
-    }
+    // No personal module rows: the role's defaults apply (getUserModules).
+    // The rows written here gave a content manager Cases, which the role does
+    // not open (access review).
 
     await audit(req.user.userId, req.user.email, 'CREATE', 'user', userId, {
       name,

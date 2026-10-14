@@ -13,16 +13,10 @@ const {
 const MODULE_CATALOG = [
   ['mims_core', 'MIMS Core'],
   ['inbox', 'Inbox'],
-  ['case_mgmt', 'Case Management'],
-  ['case_query', 'Case Query'],
-  ['utilities', 'Utilities'],
   ['transmissions', 'Transmissions'],
   ['browse_content', 'Browse Content'],
-  ['analytics', 'Analytics'],
-  ['user_mgmt', 'User Management'],
   ['admin_console', 'Admin Console'],
   ['content_mgmt', 'Content Management'],
-  ['data_visualization', 'Data Visualization'],
   ['reports', 'Reports'],
 ];
 
