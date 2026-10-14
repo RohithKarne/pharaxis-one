@@ -62,20 +62,24 @@ async function columnType(db, table, column, cache) {
   return r.t || null;
 }
 
-// Cases of this organisation with a non-empty value in table.column. null when the column does not exist.
-async function countColumn(db, table, column, orgId, versionType, cache) {
-  const type = await columnType(db, table, column, cache);
-  if (!type) return null;
-  // MySQL 8 refuses to compare a date with '' ("Incorrect DATE value"), so a date only needs to be set.
-  const notEmpty = /^(date|datetime|timestamp|time|year)$/i.test(type)
-    ? `t.\`${column}\` IS NOT NULL`
-    : `t.\`${column}\` IS NOT NULL AND t.\`${column}\` <> '' AND t.\`${column}\` <> '0'`;
+// Cases of this organisation with a non-empty value, for each of the given columns of one table.
+// One pass over the table, however many columns: the screen asks for ~300 fields at once.
+async function countColumns(db, table, columns, orgId, versionType) {
+  const counts = columns.map(({ column, type }, i) => {
+    // MySQL 8 refuses to compare a date with '' ("Incorrect DATE value"), so a date only needs to be set.
+    const notEmpty = /^(date|datetime|timestamp|time|year)$/i.test(type)
+      ? `t.\`${column}\` IS NOT NULL`
+      : `t.\`${column}\` IS NOT NULL AND t.\`${column}\` <> '' AND t.\`${column}\` <> '0'`;
+    return table === 'cases'
+      ? `SUM(CASE WHEN ${notEmpty} THEN 1 ELSE 0 END) AS c${i}`
+      : `COUNT(DISTINCT CASE WHEN ${notEmpty} THEN ${versionType ? 'v' : 't'}.case_id END) AS c${i}`;
+  }).join(', ');
   let sql;
-  if (table === 'cases') sql = `SELECT COUNT(*) AS n FROM cases t WHERE t.is_deleted = 0 AND t.org_id = ? AND ${notEmpty}`;
-  else if (versionType) sql = `SELECT COUNT(DISTINCT v.case_id) AS n FROM ${table} t JOIN ${versionType === 'ae' ? 'case_ae_versions' : 'case_pc_versions'} v ON v.id = t.version_id JOIN cases c ON c.id = v.case_id WHERE c.is_deleted = 0 AND c.org_id = ? AND ${notEmpty}`;
-  else sql = `SELECT COUNT(DISTINCT t.case_id) AS n FROM ${table} t JOIN cases c ON c.id = t.case_id WHERE c.is_deleted = 0 AND c.org_id = ? AND ${notEmpty}`;
+  if (table === 'cases') sql = `SELECT ${counts} FROM cases t WHERE t.is_deleted = 0 AND t.org_id = ?`;
+  else if (versionType) sql = `SELECT ${counts} FROM ${table} t JOIN ${versionType === 'ae' ? 'case_ae_versions' : 'case_pc_versions'} v ON v.id = t.version_id JOIN cases c ON c.id = v.case_id WHERE c.is_deleted = 0 AND c.org_id = ?`;
+  else sql = `SELECT ${counts} FROM ${table} t JOIN cases c ON c.id = t.case_id WHERE c.is_deleted = 0 AND c.org_id = ?`;
   const [[r]] = await db.execute(sql, [orgId]);
-  return r.n;
+  return columns.map((_, i) => Number(r[`c${i}`] || 0));
 }
 
 /**
@@ -105,26 +109,40 @@ async function resolvedFields(orgId, db = defaultDb()) {
 async function usageForFields(orgId, fields, db = defaultDb()) {
   const cache = new Map();
   const out = {};
+  const byTable = new Map(); // table → { versionType, columns: [{ column, type, ids }] }
+  const want = (f, table, column, versionType, type) => {
+    if (!byTable.has(table)) byTable.set(table, { versionType, columns: [] });
+    const cols = byTable.get(table).columns;
+    let entry = cols.find(c => c.column === column);
+    if (!entry) cols.push(entry = { column, type, ids: [] });
+    entry.ids.push(f.id);
+    out[f.id] = { source: `${table}.${column}`, cases: null };
+  };
   for (const f of fields) {
-    let source = 'not stored', n = null;
+    out[f.id] = { source: 'not stored', cases: null };
     if (!f.core_key) {
       const [[dyn]] = await db.execute(
         `SELECT COUNT(DISTINCT v.case_id) AS n FROM case_dynamic_field_values v JOIN cases c ON c.id = v.case_id WHERE v.field_id = ? AND c.is_deleted = 0 AND c.org_id = ? AND v.field_value IS NOT NULL AND v.field_value <> ''`, [f.id, orgId]);
-      source = 'configured values'; n = dyn.n;
+      out[f.id] = { source: 'configured values', cases: dyn.n };
     }
-    if (f.core_key && CASE_COLUMNS[f.core_key]) { source = `cases.${CASE_COLUMNS[f.core_key]}`; n = await countColumn(db, 'cases', CASE_COLUMNS[f.core_key], orgId, null, cache); }
-    else if (f.core_key) {
+    if (f.core_key && CASE_COLUMNS[f.core_key]) {
+      const col = CASE_COLUMNS[f.core_key]; const type = await columnType(db, 'cases', col, cache);
+      if (type) want(f, 'cases', col, null, type); else out[f.id] = { source: `cases.${col}`, cases: null };
+    } else if (f.core_key) {
       for (const [prefix, table, vt] of CORE_TABLES) {
         if (!f.core_key.startsWith(prefix)) continue;
-        const col = CORE_OVERRIDES[f.core_key] || CATALOG_COLUMN[f.core_key] || f.core_key.slice(prefix.length); const c = await countColumn(db, table, col, orgId, vt, cache);
-        if (c !== null) { source = `${table}.${col}`; n = c; }
+        const col = CORE_OVERRIDES[f.core_key] || CATALOG_COLUMN[f.core_key] || f.core_key.slice(prefix.length); const type = await columnType(db, table, col, cache);
+        if (type) want(f, table, col, vt, type);
         break;
       }
     } else if (f.section_name === 'Contact / Requestor') {
-      const col = snake(f.field_name); const c = await countColumn(db, 'case_contacts', col, orgId, null, cache);
-      if (c !== null) { source = `case_contacts.${col}`; n = c; }
+      const col = snake(f.field_name); const type = await columnType(db, 'case_contacts', col, cache);
+      if (type) want(f, 'case_contacts', col, null, type);
     }
-    out[f.id] = { source, cases: n };
+  }
+  for (const [table, { versionType, columns }] of byTable) {
+    const counts = await countColumns(db, table, columns, orgId, versionType);
+    columns.forEach((c, i) => { for (const id of c.ids) out[id].cases = counts[i]; });
   }
   return out;
 }
