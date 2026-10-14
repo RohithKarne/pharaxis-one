@@ -511,9 +511,9 @@ export default function CaseMITab({
 
   const allDocuments = builderContext?.documents || []
   const allModules = builderContext?.modules || []
-  const templates = builderContext?.templates || []
+  const allTemplates = builderContext?.templates || []
   // Languages: English plus every language the published content is written in.
-  const languages = [...new Set(['en', ...[...templates, ...allDocuments, ...allModules].map(x => x.language).filter(Boolean)])]
+  const languages = [...new Set(['en', ...[...allTemplates, ...allDocuments, ...allModules].map(x => x.language).filter(Boolean)])]
   // Content in the letter's language, and documents for this question's product
   // or for any product. Another product's documents stay one click away.
   const inLanguage = (x) => !x.language || x.language === miRespForm.language
@@ -522,6 +522,8 @@ export default function CaseMITab({
   const ticked = (list, id) => (list || []).map(Number).includes(Number(id))
   const documents = allDocuments.filter(d => ticked(miRespForm.selected_document_ids, d.id) || (inLanguage(d) && (d.product_match !== 'other' || showOtherProductDocs)))
   const modules = allModules.filter(m => ticked(miRespForm.selected_module_ids, m.id) || inLanguage(m))
+  // Templates in the letter's language; the chosen one stays listed.
+  const templates = allTemplates.filter(t => String(t.id) === String(miRespForm.template_id) || inLanguage(t))
   const LANGUAGE_NAMES = { en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', ja: 'Japanese', zh: 'Chinese', pt: 'Portuguese', nl: 'Dutch' }
   const channels = builderContext?.channels?.length ? builderContext.channels : ['Email', 'Phone Call', 'Written Letter', 'Portal', 'Fax', 'In-Person Meeting']
   const verbalChannel = !/^(email|portal)$/i.test(String(miRespForm.channel || ''))

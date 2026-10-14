@@ -2304,7 +2304,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       ? `EXISTS (SELECT 1 FROM product_group_assignments pga WHERE pga.target_type = 'cm_template' AND pga.target_id = t.id AND pga.group_id IN (${responseGroupIds.map(() => '?').join(',')}))`
       : '0';
     const [templates] = await pool.execute(
-      `SELECT t.id, t.type, t.name, t.subject, t.body_html, t.status,
+      `SELECT t.id, t.type, t.name, t.subject, t.body_html, t.status, t.language,
               t.version_major, t.version_minor,
               ${groupSelect} AS product_group_match
          FROM cm_templates t

@@ -6,6 +6,7 @@ import RichTextEditor from './RichTextEditor'
 import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { DEFAULT_LANGUAGES } from './ContentUtils'
 
 // The kinds of template the letter builder uses ("Transmission" was never read).
 const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email']
@@ -23,6 +24,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     body_html: template?.body_html || template?.body || '',
     expiry_date: template?.expiry_date ? String(template.expiry_date).slice(0, 10) : '',
     folder_id: template?.folder_id || '',
+    language: template?.language || 'en',
   })
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -31,6 +33,14 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const [caseResults, setCaseResults] = useState([])
   const [selectedCase, setSelectedCase] = useState(null)
   const [caseSearching, setCaseSearching] = useState(false)
+  // The organisation's languages (Settings > Language), else the defaults.
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
+  useEffect(() => {
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : { picklists: [] }))
+      .then(d => { if ((d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
+  }, [authHeaders])
   // The fields a template can use, from the server's one list.
   const [mergeFields, setMergeFields] = useState([])
   useEffect(() => {
@@ -112,6 +122,13 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
             <select aria-label="Folder" className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
               <option value="">— Select Folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div className="cm-form-group">
+            <label className="cm-form-label">Language</label>
+            <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+              {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {!languages.some(l => l.value === form.language) && <option value={form.language}>{form.language}</option>}
             </select>
           </div>
           <div className="cm-form-group">
@@ -346,7 +363,7 @@ export default function TemplatesSection({ token }) {
                   {t.name}
                   {t.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{t.revises_version}</div>}
                 </td>
-                <td>{t.type}</td>
+                <td>{t.type}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.language || 'en'}</div></td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{folders.find(f => f.id === t.folder_id)?.name || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '—'}</td>
                 <td style={{ textAlign: 'center' }}>{t.version}</td>

@@ -20,6 +20,12 @@ const bcrypt = require('bcrypt');
 // the screen but nothing ever read a template of that type.
 const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email'];
 
+// A language code as stored on content (en, fr, de …); English when not given.
+function languageCode(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/.test(v) ? v : 'en';
+}
+
 async function passwordMatches(userId, password) {
   if (!password) return false;
   const [[u]] = await pool.execute('SELECT password FROM users WHERE id = ?', [userId]);
@@ -259,7 +265,7 @@ router.get('/templates', authenticate, async (req, res) => {
 // POST /api/cm/templates — create template
 router.post('/templates', authenticate, async (req, res) => {
   try {
-    const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
+    const { type, name, subject, body_html, body, folder_id, expiry_date, language } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
     if (type && !TEMPLATE_TYPES.includes(type)) return res.status(400).json({ error: `Template type must be one of: ${TEMPLATE_TYPES.join(', ')}.` });
     // A template belongs to its organisation through its folder; one with no
@@ -274,8 +280,8 @@ router.post('/templates', authenticate, async (req, res) => {
     // New templates always start as Draft — they must pass through approve →
     // publish before they can be used in a response. Status is never client-set.
     const [result] = await pool.execute(
-      'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, 'Draft', folder_id, expiry_date || null, req.user.userId]
+      'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, language, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, 'Draft', folder_id, expiry_date || null, languageCode(language), req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
     const created = await getScopedTemplate(req, result.insertId);
@@ -336,7 +342,7 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
-    const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
+    const { type, name, subject, body_html, body, folder_id, expiry_date, language } = req.body;
     if (type && !TEMPLATE_TYPES.includes(type)) return res.status(400).json({ error: `Template type must be one of: ${TEMPLATE_TYPES.join(', ')}.` });
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : existing.body_html);
     const resolvedFolderId = folder_id !== undefined ? (folder_id || null) : existing.folder_id;
@@ -368,7 +374,7 @@ router.put('/templates/:id', authenticate, async (req, res) => {
 
     await pool.execute(
       `UPDATE cm_templates
-          SET type = ?, name = ?, subject = ?, body_html = ?, folder_id = ?, expiry_date = ?,
+          SET type = ?, name = ?, subject = ?, body_html = ?, folder_id = ?, expiry_date = ?, language = ?,
               version_minor = version_minor + ?,
               status = ?,
               approved_by  = CASE WHEN ? = 'Draft' THEN NULL ELSE approved_by  END,
@@ -378,6 +384,7 @@ router.put('/templates/:id', authenticate, async (req, res) => {
               updated_by = ?, updated_at = NOW()
         WHERE id = ?`,
       [type || existing.type || 'Response', resolvedName, resolvedSubject, resolvedBodyHtml || null, resolvedFolderId, resolvedExpiry,
+       language !== undefined ? languageCode(language) : (existing.language || 'en'),
        wordingChanged ? 1 : 0,
        newStatus, newStatus, newStatus, newStatus, newStatus, req.user.userId, id]
     );
@@ -400,8 +407,8 @@ router.post('/templates/:id/revise', authenticate, async (req, res) => {
       "SELECT id FROM cm_templates WHERE revision_of = ? AND status NOT IN ('Published','Archived') LIMIT 1", [src.id]);
     if (open) return res.status(409).json({ error: 'This template already has a revision in progress.', id: open.id });
     const [result] = await pool.execute(
-      `INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, version_major, version_minor, revision_of, created_by)
-       SELECT type, name, subject, body_html, 'Draft', folder_id, expiry_date, version_major, version_minor, id, ? FROM cm_templates WHERE id = ?`,
+      `INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, language, version_major, version_minor, revision_of, created_by)
+       SELECT type, name, subject, body_html, 'Draft', folder_id, expiry_date, language, version_major, version_minor, id, ? FROM cm_templates WHERE id = ?`,
       [req.user.userId, src.id]);
     // Its product groups carry over, so the builder still ranks it for the product.
     await pool.execute(
