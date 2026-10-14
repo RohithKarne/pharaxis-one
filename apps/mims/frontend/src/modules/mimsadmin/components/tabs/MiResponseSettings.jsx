@@ -36,7 +36,11 @@ export default function MiResponseSettings() {
         body: JSON.stringify({
           offlabel_statement: s.offlabel_statement, closing_statement: s.closing_statement,
           require_pi_offlabel: s.require_pi_offlabel, routine_days: s.routine_days, urgent_days: s.urgent_days,
-          two_signers: { off_label: s.two_signers?.off_label?.on, always: s.two_signers?.always?.on },
+          // A rule the platform sets is shown, not written back as the organisation's own.
+          two_signers: {
+            off_label: s.two_signers?.off_label?.platform ? undefined : s.two_signers?.off_label?.on,
+            always: s.two_signers?.always?.platform ? undefined : s.two_signers?.always?.on,
+          },
         }),
       })
       const data = await res.json()
