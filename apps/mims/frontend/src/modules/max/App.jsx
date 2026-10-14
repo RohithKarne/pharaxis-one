@@ -158,6 +158,10 @@ function AppRoutes() {
   const [warnSeconds, setWarnSeconds]     = useState(120)
   const [authIssue, setAuthIssue]         = useState(null)
   const onPublicAuthRoute = isPublicAuthPath(location.pathname)
+  const authIssueHidden = onPublicAuthRoute || location.pathname === '/reset-password'
+  // A warning belongs to the visit it came from. Kept through sign-in and the new
+  // password, "Set a new password first" came back after both were done.
+  if (authIssueHidden && authIssue) setAuthIssue(null)
 
   useEffect(() => {
     setSessionExpiryHandler(async (detail) => {
@@ -205,7 +209,7 @@ function AppRoutes() {
       <ConfirmModal />
       <ExceptionToast />
       <AuthIssueBanner
-        issue={onPublicAuthRoute || location.pathname === '/reset-password' ? null : authIssue}
+        issue={authIssueHidden ? null : authIssue}
         onDismiss={() => setAuthIssue(null)}
         onAction={authIssue?.actionTo ? () => {
           navigate(authIssue.actionTo)
