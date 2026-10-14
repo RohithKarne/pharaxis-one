@@ -3770,6 +3770,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-13 | Saad | Case form clean-up (#769, #770, #771): Case Form Fields is the one admin screen for the case form; Customize Forms and Validation Rules retired; Required is the Required tick only, on every save path; the cut list hides about 95 fields and 11 sections, never deletes; Latest Information Date, verbatim reaction, hospital dates, product Role and Pregnancy Trimester added; the ICSR now takes its reaction text, labs, history and dechallenge from the AE tab; new organisations get the target form only. Migrations 170–175. Sections 7, 8, 9, 9b and 13 updated. |
 | 2026-10-13 | Saad | Case form pending items closed: E2B dates written CCYYMMDD; one-sided lab ranges split; long verbatim kept whole in the narrative; ICSR builder readable; Customize Forms and Validation Rules files and endpoints removed; Case Form Fields shows show-only-when rules. Sections 8 and 9 updated. |
 | 2026-10-13 | Saad | MI and PC field review (Rohith, "go with all 6"): MI answer is the signed letter (MI answer boxes hidden, "Answer sent" shown), AE/PC screening answer required before a response is sent (`miSendCheck.js`); PC strength, reply to complainant, counterfeit (makes the case Urgent), device part, patient initials, Investigation & CAPA cut to what the complaint record needs, check before Route to Quality (`pcHandoffCheck.js`). Migrations 176–177. Section 9b updated. |
+| 2026-10-14 | Saad | MI response and hand-off review: MI Response Settings (off-label and closing statements, prescribing information required on off-label letters, routine/urgent working days, second-signer rules; migration 178); Transmission Setup screen (safety and quality targets, encrypted key, hand-off days, test); hand-off due date and reconciliation list. Sections 8 and 9b updated. |
 
 ---
 
@@ -4209,7 +4210,7 @@ All under `/admin-console/*` (requires `admin_console` module).
 - `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for app operations
 - `Platform Admin -> 2FA Configuration` = platform SMTP for user 2FA email delivery + org-level 2FA controls
 
-**Case form screens (2026-10-13).** Customize Forms (`sys-setup-customize-forms`) and Validation Rules (`sys-setup-validation`) are retired and their files and server endpoints removed; an old link opens Case Form Fields (`RETIRED_SYSTEM_ITEMS` in `configItems.js`). A show-only-when rule appears under its field on Case Form Fields, read-only. Smart Field Rules, Grid Section Templates and Case Actions are hidden from the menu unless the **Advanced form tools** switch on Case Form Fields is on (a per-browser preference, not a permission).
+**Case form screens (2026-10-13).** Customize Forms (`sys-setup-customize-forms`) and Validation Rules (`sys-setup-validation`) are retired and their files and server endpoints removed; Setup › Medical Information holds **MI Response Settings** (`sys-setup-mi-response`) and **Transmission Setup** (`sys-setup-int-transmission`, the safety and quality hand-off targets — it was an empty page); an old link opens Case Form Fields (`RETIRED_SYSTEM_ITEMS` in `configItems.js`). A show-only-when rule appears under its field on Case Form Fields, read-only. Smart Field Rules, Grid Section Templates and Case Actions are hidden from the menu unless the **Advanced form tools** switch on Case Form Fields is on (a per-browser preference, not a permission).
 
 ##### Platform Admin Console Pages
 
@@ -4415,6 +4416,9 @@ All 3 run in single MySQL transaction — any failure rolls back all.
 | `mims/backend/catalogs/panelCoreFields.js` | Core key → stored column for every field a panel draws itself. |
 | `mims/backend/catalogs/e2bFieldTags.js` | Which fields reach the E2B file MIMS writes (the E2B badge). |
 | `mims/backend/services/miSendCheck.js` | What an MI needs before its response is sent: who asked, the question, the AE/PC screening answer and, on Yes, a converted or linked AE/PC case (product a warning). Read by the MI card and the SENT transition. |
+| `mims/backend/services/miResponseSettings.js` | An organisation's MI response settings (migration 178) with defaults; `defaultResponseDue` fills Response Required By on a new MI. The off-label and closing statements are added by `miResponseService.buildResponsePackage`. |
+| `mims/backend/services/transmissionTargets.js` | The safety (AE) and quality (PC) hand-off targets as `org_integrations` rows; the outbound key encrypted in `config.outbound_key_enc`, never in `api_key`; working days to hand off. |
+| `mims/backend/utils/workingDays.js` | Working days (Mon–Fri, no holidays) for due dates: MI answer-by, Field Alert Report, hand-off. |
 | `mims/backend/services/pcHandoffCheck.js` | What a complaint needs before Route to Quality: product, description, and a linked AE case for an injury (lot a warning); shows the counterfeit flag and the Field Alert Report due date. Read by the PC card and the hand-off route. |
 
 ##### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
