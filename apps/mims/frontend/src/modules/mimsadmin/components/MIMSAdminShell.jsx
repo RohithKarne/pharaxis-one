@@ -1,11 +1,4 @@
-/* The address-to-screen syncing below sets state in effects and memoises
-   activateTab by hand. The React Compiler lint could not analyse this file
-   while it also fetched the security-group permissions; with that fetch gone
-   (access review, 2026-10-14) it reports these older patterns. The compiler is
-   not part of the build, so behaviour is unchanged; rewriting the syncing is
-   its own piece of work. */
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/preserve-manual-memoization */
-import { lazy, Suspense, useState, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
@@ -267,62 +260,23 @@ export default function MIMSAdminShell() {
   )
 }
 
+// The address key that holds each tab's chosen item.
+const ITEM_KEY_BY_TAB = {
+  'service-log':     'service',
+  'system-activity': 'activity',
+  configuration:     'config',
+  escalation:        'escalation',
+  documents:         'documents',
+  tables:            'tables',
+  system:            'system',
+  help:              'help',
+}
+
 function MIMSAdminShellInner() {
   const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const initialParams = new URLSearchParams(location.search)
-  const initialServiceItem = initialParams.get('service') || ''
-  const initialActivityItem = initialParams.get('activity') || ''
-  const initialTablesItem = initialParams.get('tables') || ''
-  const initialSystemItem = RETIRED_SYSTEM_ITEMS[initialParams.get('system')] || initialParams.get('system') || ''
-  const initialAuditItem = initialParams.get('audit') || 'admin'
-  const [activeTab,      setActiveTab]      = useState(
-    initialParams.get('tab')
-      || (initialSystemItem ? 'system' : initialTablesItem ? 'tables' : initialServiceItem ? 'service-log' : initialActivityItem ? 'system-activity' : 'dashboard')
-  )
-  const [configItem,     setConfigItem]     = useState(initialParams.get('config') || '')
-  const [escalationItem, setEscalationItem] = useState(initialParams.get('escalation') || '')
-  const [documentsItem,  setDocumentsItem]  = useState(initialParams.get('documents') || '')
-  const [serviceItem,    setServiceItem]    = useState(initialServiceItem)
-  const [activityItem,   setActivityItem]   = useState(initialActivityItem)
-  const [tablesItem,     setTablesItem]     = useState(initialTablesItem)
-  const [systemItem,     setSystemItem]     = useState(initialSystemItem)
-  const [auditItem,      setAuditItem]      = useState(initialAuditItem)
-  const [helpItem,       setHelpItem]       = useState(initialParams.get('help') || '')
   const [narrowNavOpen,  setNarrowNavOpen]  = useState(false)
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const nextServiceItem = params.get('service') || ''
-    const nextActivityItem = params.get('activity') || ''
-    const nextTab = params.get('tab')
-      || (params.get('system') ? 'system' : params.get('tables') ? 'tables' : nextServiceItem ? 'service-log' : nextActivityItem ? 'system-activity' : 'dashboard')
-    const nextConfigItem = params.get('config') || ''
-    const nextEscalationItem = params.get('escalation') || ''
-    const nextDocumentsItem = params.get('documents') || ''
-    const nextHelpItem = params.get('help') || ''
-    // A retired screen's address is replaced by the screen that took its place.
-    const retiredTo = RETIRED_SYSTEM_ITEMS[params.get('system')]
-    if (retiredTo) {
-      params.set('system', retiredTo)
-      navigate(`${location.pathname}?${params.toString()}`, { replace: true })
-      return
-    }
-    const nextSystemItem = params.get('system') || ''
-    const nextTablesItem = params.get('tables') || ''
-    const nextAuditItem = params.get('audit') || 'admin'
-    setActiveTab(nextTab)
-    setConfigItem(nextConfigItem)
-    setEscalationItem(nextEscalationItem)
-    setDocumentsItem(nextDocumentsItem)
-    setServiceItem(nextServiceItem)
-    setActivityItem(nextActivityItem)
-    setHelpItem(nextHelpItem)
-    setSystemItem(nextSystemItem)
-    setTablesItem(nextTablesItem)
-    setAuditItem(nextAuditItem)
-  }, [location.search, location.pathname, navigate])
 
   // "Advanced form tools" switch on Case Form Fields (case form clean-up PR 5).
   const readAdvancedForms = () => { try { return localStorage.getItem(ADVANCED_FORMS_KEY) === '1' } catch { return false } }
@@ -333,191 +287,77 @@ function MIMSAdminShellInner() {
     return () => window.removeEventListener('mims-advanced-forms', onChange)
   }, [])
 
+  // The address is the only record of which screen is open: a click writes it,
+  // and the screen is read back from it here, with a default for a blank item.
+  const params = new URLSearchParams(location.search)
+  // A retired screen's address is replaced by the screen that took its place.
+  const retiredTo = RETIRED_SYSTEM_ITEMS[params.get('system')]
+  useEffect(() => {
+    if (!retiredTo) return
+    const next = new URLSearchParams(location.search)
+    next.set('system', retiredTo)
+    navigate(`${location.pathname}?${next.toString()}`, { replace: true })
+  }, [retiredTo, location.search, location.pathname, navigate])
+
   const scopedNav = hasGlobalAdminScope(user) ? SYSTEM_NAV : withoutPlatformOnly(SYSTEM_NAV)
   const systemNav = advancedForms ? scopedNav : withoutAdvanced(scopedNav)
-  const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
-  const defaultEscalationItem = findFirstLeafValue(ESCALATION_NAV)
-  const defaultDocumentsItem = findFirstLeafValue(DOCUMENTS_NAV)
-  const defaultServiceItem = 'service-log-overview'
-  const defaultActivityItem = 'system-activity-overview'
-  const defaultTablesItem = findFirstLeafValue(TABLES_NAV)
-  const defaultSystemItem = findFirstLeafValue(systemNav)
-  const defaultHelpItem = findFirstLeafValue(HELP_NAV)
-
-  const syncAdminState = useCallback((nextState) => {
-    const params = new URLSearchParams(location.search)
-    const {
-      tab = activeTab,
-      config = configItem,
-      escalation = escalationItem,
-      documents = documentsItem,
-      service = serviceItem,
-      activity = activityItem,
-      tables = tablesItem,
-      system = systemItem,
-      audit = auditItem,
-      help = helpItem,
-    } = nextState
-
-    const values = { tab, config, escalation, documents, service, activity, tables, system, audit, help }
-    Object.entries(values).forEach(([key, value]) => {
-      if (key === 'audit' && system !== 'sys-view-data') {
-        params.delete(key)
-      } else if (value) params.set(key, value)
-      else params.delete(key)
-    })
-    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true })
-  }, [
-    activeTab,
-    configItem,
-    documentsItem,
-    escalationItem,
-    helpItem,
-    location.pathname,
-    location.search,
-    navigate,
-    serviceItem,
-    activityItem,
-    systemItem,
-    auditItem,
-    tablesItem,
-  ])
-
-  const activateTab = useCallback((nextTab, nextItemKey = null, nextItemValue = '') => {
-    if (nextTab === 'service-log') {
-      const value = nextItemKey === 'service' ? nextItemValue : (serviceItem || defaultServiceItem)
-      setServiceItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, service: value })
-      return
-    }
-    if (nextTab === 'system-activity') {
-      const value = nextItemKey === 'activity' ? nextItemValue : (activityItem || defaultActivityItem)
-      setActivityItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, activity: value })
-      return
-    }
-    if (nextTab === 'configuration') {
-      const value = nextItemKey === 'config' ? nextItemValue : (configItem || defaultConfigItem)
-      setConfigItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, config: value })
-      return
-    }
-    if (nextTab === 'escalation') {
-      const value = nextItemKey === 'escalation' ? nextItemValue : (escalationItem || defaultEscalationItem)
-      setEscalationItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, escalation: value })
-      return
-    }
-    if (nextTab === 'documents') {
-      const value = nextItemKey === 'documents' ? nextItemValue : (documentsItem || defaultDocumentsItem)
-      setDocumentsItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, documents: value })
-      return
-    }
-    if (nextTab === 'tables') {
-      const value = nextItemKey === 'tables' ? nextItemValue : (tablesItem || defaultTablesItem)
-      setTablesItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, tables: value })
-      return
-    }
-    if (nextTab === 'system') {
-      const value = nextItemKey === 'system' ? nextItemValue : (systemItem || defaultSystemItem)
-      setSystemItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, system: value })
-      return
-    }
-    if (nextTab === 'help') {
-      const value = nextItemKey === 'help' ? nextItemValue : (helpItem || defaultHelpItem)
-      setHelpItem(value)
-      setActiveTab(nextTab)
-      syncAdminState({ tab: nextTab, help: value })
-      return
-    }
-    setActiveTab(nextTab)
-    syncAdminState({ tab: nextTab })
-  }, [
-    activityItem,
-    configItem,
-    defaultActivityItem,
-    defaultConfigItem,
-    defaultDocumentsItem,
-    defaultEscalationItem,
-    defaultHelpItem,
-    defaultServiceItem,
-    defaultSystemItem,
-    defaultTablesItem,
-    documentsItem,
-    escalationItem,
-    helpItem,
-    serviceItem,
-    syncAdminState,
-    systemItem,
-    tablesItem,
-  ])
-
-  function handleAuditSelect(value) {
-    setAuditItem(value)
-    setSystemItem('sys-view-data')
-    setActiveTab('system')
-    syncAdminState({ tab: 'system', system: 'sys-view-data', audit: value })
+  const defaultItems = {
+    service:    'service-log-overview',
+    activity:   'system-activity-overview',
+    config:     findFirstLeafValue(CONFIG_NAV),
+    escalation: findFirstLeafValue(ESCALATION_NAV),
+    documents:  findFirstLeafValue(DOCUMENTS_NAV),
+    tables:     findFirstLeafValue(TABLES_NAV),
+    system:     findFirstLeafValue(systemNav),
+    help:       findFirstLeafValue(HELP_NAV),
   }
+  const items = Object.fromEntries(Object.entries(defaultItems).map(([key, fallback]) => [key, params.get(key) || fallback]))
+  if (retiredTo) items.system = retiredTo
+  const { service: serviceItem, activity: activityItem, config: configItem, escalation: escalationItem,
+    documents: documentsItem, tables: tablesItem, system: systemItem, help: helpItem } = items
+  const auditItem = params.get('audit') || 'admin'
 
-  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
   const visibleTabs = TABS.filter(t => {
     if (t.key === 'system') return systemNav.length > 0
     // Creating and running organisations is the platform admin's job alone (MIPM-132).
     if (t.key === 'organizations') return hasGlobalAdminScope(user)
     return true
   })
-  useEffect(() => {
-    if (activeTab === 'system' && systemNav.length === 0) activateTab('dashboard')
-  }, [activeTab, activateTab, systemNav.length])
+  const requestedTab = params.get('tab')
+    || (params.get('system') ? 'system' : params.get('tables') ? 'tables' : params.get('service') ? 'service-log' : params.get('activity') ? 'system-activity' : 'dashboard')
+  // A tab this administrator cannot see opens the admin home instead.
+  const activeTab = visibleTabs.some(t => t.key === requestedTab) ? requestedTab : 'dashboard'
+  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
 
-  useEffect(() => {
-    if (!visibleTabs.some(t => t.key === activeTab)) activateTab('dashboard')
-  }, [activeTab, activateTab, visibleTabs])
+  function writeAddress(next, audit = auditItem) {
+    if (next.get('system') === 'sys-view-data') next.set('audit', audit)
+    else next.delete('audit')
+    navigate({ pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : '' }, { replace: true })
+  }
 
-  useEffect(() => {
-    if (activeTab === 'service-log' && !serviceItem) activateTab('service-log', 'service', defaultServiceItem)
-    if (activeTab === 'system-activity' && !activityItem) activateTab('system-activity', 'activity', defaultActivityItem)
-    if (activeTab === 'configuration' && !configItem && defaultConfigItem) activateTab('configuration', 'config', defaultConfigItem)
-    if (activeTab === 'escalation' && !escalationItem && defaultEscalationItem) activateTab('escalation', 'escalation', defaultEscalationItem)
-    if (activeTab === 'documents' && !documentsItem && defaultDocumentsItem) activateTab('documents', 'documents', defaultDocumentsItem)
-    if (activeTab === 'tables' && !tablesItem && defaultTablesItem) activateTab('tables', 'tables', defaultTablesItem)
-    if (activeTab === 'system' && !systemItem && defaultSystemItem) activateTab('system', 'system', defaultSystemItem)
-    if (activeTab === 'help' && !helpItem && defaultHelpItem) activateTab('help', 'help', defaultHelpItem)
-  }, [
-    activeTab,
-    activityItem,
-    activateTab,
-    configItem,
-    defaultConfigItem,
-    defaultDocumentsItem,
-    defaultEscalationItem,
-    defaultHelpItem,
-    defaultActivityItem,
-    defaultServiceItem,
-    defaultSystemItem,
-    defaultTablesItem,
-    documentsItem,
-    escalationItem,
-    helpItem,
-    serviceItem,
-    systemItem,
-    tablesItem,
-  ])
+  // Opens a tab, and the item given or the one it last showed.
+  function activateTab(nextTab, nextItemKey = null, nextItemValue = '') {
+    const next = new URLSearchParams(location.search)
+    next.set('tab', nextTab)
+    const key = ITEM_KEY_BY_TAB[nextTab]
+    if (key) {
+      const value = nextItemKey === key ? nextItemValue : items[key]
+      if (value) next.set(key, value)
+      else next.delete(key)
+    }
+    writeAddress(next)
+  }
+
+  function handleAuditSelect(value) {
+    const next = new URLSearchParams(location.search)
+    next.set('tab', 'system')
+    next.set('system', 'sys-view-data')
+    writeAddress(next, value)
+  }
 
   const adminTree = buildAdminTree(visibleTabs, systemNav)
   const adminLeaves = flattenLeaves(adminTree)
-  const currentItems = { service: serviceItem, activity: activityItem, config: configItem, escalation: escalationItem, documents: documentsItem, tables: tablesItem, system: systemItem, help: helpItem }
-  const currentLeaf = adminLeaves.find(l => l.tab === activeTab && (!l.key || l.value === currentItems[l.key]))
+  const currentLeaf = adminLeaves.find(l => l.tab === activeTab && (!l.key || l.value === items[l.key]))
     || adminLeaves.find(l => l.tab === activeTab)
 
   return (
