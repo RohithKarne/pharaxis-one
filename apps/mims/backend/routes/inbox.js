@@ -20,6 +20,38 @@ const {
   getInquiryRecommendations,
   toMySqlDateTime,
 } = require('../services/inboxGovernanceService');
+const { getUserModules } = require('../utils/userModules');
+const { verifyCaseOrg } = require('../services/caseHelpers');
+
+// The Inbox needs the Inbox module (access review, 2026-10-14). Its menu
+// followed the module but the routes checked only sign-in, so a content
+// author or an auditor could read every email. A case shows its own emails to
+// anyone who may view the case: its correspondence list (checked by
+// caseAccess), the attachments of an email filed on it, and the people list
+// the case form loads stay open to Cases users.
+const CASE_EMAIL_LOOKUP = [
+  [/^\/(\d+)\/attachments$/, 'SELECT case_id FROM inquiries WHERE id = ?'],
+  [/^\/attachments\/(\d+)\/download$/, 'SELECT i.case_id FROM inquiry_attachments a JOIN inquiries i ON i.id = a.inquiry_id WHERE a.id = ?'],
+];
+router.use(authenticate, async (req, res, next) => {
+  try {
+    if (hasGlobalAdminScope(req.user)) return next();
+    const modules = await getUserModules(req.user.userId);
+    if (modules.includes('inbox')) return next();
+    if (req.method === 'GET' && modules.includes('mims_core')) {
+      if (/^\/case\/\d+\/correspondence$/.test(req.path) || req.path === '/users') return next();
+      for (const [re, sql] of CASE_EMAIL_LOOKUP) {
+        const m = req.path.match(re);
+        if (!m) continue;
+        const [[row]] = await pool.execute(sql, [m[1]]);
+        if (row?.case_id && await verifyCaseOrg(row.case_id, req, 'case.view')) return next();
+      }
+    }
+    return res.status(403).json({ error: 'You do not have access to the Inbox.', error_code: 'MODULE_FORBIDDEN', should_logout: false });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
