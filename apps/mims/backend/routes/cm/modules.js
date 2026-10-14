@@ -64,11 +64,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
+// Modules have no review step (approval is signed directly); "Under Review"
+// was offered on screen and led nowhere.
 const MODULE_STATUSES = new Set([
   'Draft',
   'CheckedOut',
   'Pending',
-  'Under Review',
   'Approved',
   'Published',
   'Archived',
@@ -390,6 +391,7 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
       return res.status(404).json({ error: 'Folder not found for active organisation.' });
     }
 
+    if (status && !MODULE_STATUSES.has(String(status).trim())) return res.status(400).json({ error: `A module cannot be saved as ${status}.` });
     const resolvedStatus = isPastDate(expiry_date) ? 'Archived' : normalizeStatus(status, 'Draft');
     // MIPM-220: a module could be created already Approved or Published, by its
     // author, with no approval at all. New modules start as Draft or Pending.
@@ -503,6 +505,11 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       }
     }
 
+    // A status modules do not have is refused, not quietly ignored.
+    if (status && !MODULE_STATUSES.has(String(status).trim())) {
+      await conn.rollback();
+      return res.status(400).json({ error: `A module cannot be saved as ${status}.` });
+    }
     const nextStatus = isPastDate(expiry_date || existing.expiry_date)
       ? 'Archived'
       : normalizeStatus(status, existing.status || 'Draft');

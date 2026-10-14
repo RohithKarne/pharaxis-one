@@ -5,6 +5,12 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { ModuleUsageModal, VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { DEFAULT_LANGUAGES } from './ContentUtils'
+
+// What a module is. The list offered document types (SRD, Enclosure…), not the
+// module types content is seeded with, so opening a Guidance module and saving
+// it silently made it an SRD. A module's own type is always kept as a choice.
+const MODULE_TYPES = ['Standard Text', 'Guidance', 'Checklist', 'Disclaimer', 'Reference']
 
 function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const isEdit = !!moduleDoc?.id
@@ -14,9 +20,20 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   // MIPM-220: approving or publishing is an electronic signature, as for documents.
   const [esign, setEsign] = useState({ password: '', reason: '' })
+  // The letter builder picks modules by the letter's language, but the form had
+  // no language field, so every module was English.
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
+  useEffect(() => {
+    let cancelled = false
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { picklists: [] })
+      .then(d => { if (!cancelled && (d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [token])
   const [form, setForm] = useState({
     folder_id: moduleDoc?.folder_id || '',
-    module_type: moduleDoc?.module_type || 'SRD',
+    module_type: moduleDoc?.module_type || 'Standard Text',
     name: moduleDoc?.name || '',
     status: moduleDoc?.status || 'Draft',
     content_html: moduleDoc?.content_html || '',
@@ -83,10 +100,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
             <div className="cm-form-group">
               <label className="cm-form-label">Module Type</label>
               <select aria-label="Module Type" className="cm-form-select" value={form.module_type} onChange={e => setForm(p => ({ ...p, module_type: e.target.value }))}>
-                <option>SRD</option>
-                <option>Enclosure</option>
-                <option>Information Document</option>
-                <option>Internal Document</option>
+                {[...new Set([...MODULE_TYPES, form.module_type].filter(Boolean))].map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div className="cm-form-group">
@@ -96,7 +110,6 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
                 <option>Pending</option>
                 {/* A new module starts as Draft or Pending (MIPM-220). */}
                 {isEdit && <>
-                  <option>Under Review</option>
                   <option>Approved</option>
                   <option>Published</option>
                   <option>Archived</option>
@@ -150,6 +163,13 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
               <label className="cm-form-label">Expiry Date</label>
               <input aria-label="Expiry Date" type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
             </div>
+          </div>
+
+          <div className="cm-form-group">
+            <label className="cm-form-label">Language</label>
+            <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+              {[...languages, ...(languages.some(l => l.value === form.language) ? [] : [{ value: form.language, label: form.language }])].map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
           </div>
 
           <div className="cm-form-group">
@@ -294,7 +314,7 @@ export default function ModulesSection({ token }) {
                   {m.name}
                   {m.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{m.revises_version}</div>}
                 </td>
-                <td>{m.module_type || 'SRD'}</td>
+                <td>{m.module_type || '—'}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.language || 'en'}</div></td>
                 <td>{m.folder_name || '—'}</td>
                 <td style={{ textAlign: 'center' }}>{m.version_major || 1}.{m.version_minor || 0}</td>
                 <td><StatusBadge status={m.status} /></td>
