@@ -224,6 +224,14 @@ export default function ModulesSection({ token }) {
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
 
+  async function handleRevise(moduleDoc) {
+    try {
+      const res = await httpFetch(`/api/cm/modules/${moduleDoc.id}/revise`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message); setRefreshKey(key => key + 1) } else toast.error(d.error || 'Could not start a revision.')
+    } catch { toast.error('Network error.') }
+  }
+
   async function handleArchive(moduleDoc) {
     if (!await confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
     try {
@@ -291,7 +299,10 @@ export default function ModulesSection({ token }) {
             {modules.map(m => (
               <tr key={m.id}>
                 <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{m.module_id || `MOD-${m.id}`}</td>
-                <td style={{ fontWeight: 500 }}>{m.name}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {m.name}
+                  {m.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{m.revises_version}</div>}
+                </td>
                 <td>{m.module_type || 'SRD'}</td>
                 <td>{m.folder_name || '—'}</td>
                 <td style={{ textAlign: 'center' }}>{m.version_major || 1}.{m.version_minor || 0}</td>
@@ -300,7 +311,10 @@ export default function ModulesSection({ token }) {
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.updated_at ? new Date(m.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>{m.status === 'Archived' ? 'View' : 'Edit'}</button>
+                    {m.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>{m.status === 'Archived' ? 'View' : 'Edit'}</button>}
+                    {/* A published module stays in use while its next version is drafted. */}
+                    {m.status === 'Published' && !m.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(m)}>Revise</button>}
+                    {m.status === 'Published' && m.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageModule(m)}>Usage</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>

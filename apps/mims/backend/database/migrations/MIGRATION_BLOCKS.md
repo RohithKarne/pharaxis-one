@@ -32,6 +32,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 178 | **MI response review (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `mi_response_settings`, one row per organisation: off-label statement, closing statement, prescribing information required on off-label answers, routine and urgent working days. |
 | 179 | **Content management review (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `revision_of` on `cm_documents` and `cm_templates`: a draft revision of published content, which stays in use until the revision is published and supersedes it. |
 | 180 | **Content management review (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `cm_documents.product_id`: the product a document is about (NULL = any product), so the letter builder offers the question's product's documents and the send check notices another product's enclosure. |
+| 181 | **Content management review follow-up (Rohith, 2026-10-14)** | **DONE** | Within the 100+ block. `revision_of` on `cm_modules` and `cm_faqs`: a draft revision of a published module or FAQ, which stays in use until the revision is published. |
 | 167 | **MIMS role walk (2026-10-10)** | **DONE** | Within the 100+ block. An "auditor" role that can only view cases and reports, given by the Read-only Auditor template; template groups still giving "reviewer" move to it with their members. |
 
 ## Rules
