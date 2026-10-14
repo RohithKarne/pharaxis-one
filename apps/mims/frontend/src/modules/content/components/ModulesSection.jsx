@@ -3,7 +3,7 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
-import { ModuleUsageModal } from './ContentModals'
+import { ModuleUsageModal, VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
@@ -182,6 +182,7 @@ export default function ModulesSection({ token }) {
   const [showDrawer, setShowDrawer] = useState(false)
   const [editModule, setEditModule] = useState(null)
   const [usageModule, setUsageModule] = useState(null)
+  const [historyModule, setHistoryModule] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -306,6 +307,7 @@ export default function ModulesSection({ token }) {
                     {m.status === 'Published' && !m.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleRevise(m)}>Revise</button>}
                     {m.status === 'Published' && m.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageModule(m)}>Usage</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryModule(m)}>History</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>
                     )}
@@ -328,6 +330,9 @@ export default function ModulesSection({ token }) {
       )}
       {usageModule && (
         <ModuleUsageModal module={usageModule} token={token} onClose={() => setUsageModule(null)} />
+      )}
+      {historyModule && (
+        <VersionHistoryModal entityType="module" entityId={historyModule.id} entityName={historyModule.name} token={token} onClose={() => setHistoryModule(null)} />
       )}
     </div>
   )

@@ -21,6 +21,7 @@ const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory } = require('../../services/cmLineage');
 const bcrypt = require('bcrypt');
 
 // MIPM-191: a module's status came straight from the request, so an author could
@@ -326,6 +327,20 @@ router.get('/modules', authenticate, async (req, res) => {
   } catch (err) {
     console.error('GET /cm/modules error:', err);
     res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
+  }
+});
+
+// GET /api/cm/modules/:id/versions — the version history of the whole line of
+// versions. The screen had no history for modules although it was recorded.
+router.get('/modules/:id/versions', authenticate, async (req, res) => {
+  try {
+    const row = await getScopedModule(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Module not found.' });
+    if (await publishedOnly(req)) return res.status(404).json({ error: 'Module not found.' });
+    res.json({ versions: await lineageHistory('module', row.id) });
+  } catch (err) {
+    console.error('GET /cm/modules/:id/versions error:', err);
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 

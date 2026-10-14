@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
-import { CheckInModal } from './ContentModals'
+import { CheckInModal, VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
 
@@ -142,6 +142,7 @@ export default function FAQsSection({ token }) {
   const [faqEsignErr, setFaqEsignErr] = useState('')
   const [faqEsignLoading, setFaqEsignLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [historyFaq, setHistoryFaq] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -254,6 +255,7 @@ export default function FAQsSection({ token }) {
     if (s !== 'Archived') {
       btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(faq)}>Clone</button>)
     }
+    btns.push(<button key="hist" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryFaq(faq)}>History</button>)
     return <div className="cm-action-btns">{btns}</div>
   }
 
@@ -343,6 +345,9 @@ export default function FAQsSection({ token }) {
       )}
       {showDrawer && (
         <FAQDrawer faq={editFaq} folders={folders} token={token} onClose={() => { setShowDrawer(false); setEditFaq(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
+      )}
+      {historyFaq && (
+        <VersionHistoryModal entityType="faq" entityId={historyFaq.id} entityName={historyFaq.question} token={token} onClose={() => setHistoryFaq(null)} />
       )}
       {checkInFaq && (
         <CheckInModal item={checkInFaq} onClose={() => setCheckInFaq(null)} onConfirm={handleCheckIn} loading={checkInLoading} />

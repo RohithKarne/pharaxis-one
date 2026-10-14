@@ -14,6 +14,7 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory } = require('../../services/cmLineage');
 const { logAudit } = require('../../utils/auditLog');
 const bcrypt = require('bcrypt');
 
@@ -443,15 +444,8 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
     if (await publishedOnly(req)) return res.status(404).json({ error: 'Template not found.' });
-    const [versions] = await pool.execute(
-      `SELECT vh.*, u.name AS author_name
-       FROM cm_version_history vh
-       LEFT JOIN users u ON u.id = vh.author_id
-       WHERE vh.entity_type = 'template' AND vh.entity_id = ?
-       ORDER BY vh.created_at DESC`,
-      [req.params.id]
-    );
-    res.json({ versions });
+    // The whole line of versions, not only this row's (each revision is a row).
+    res.json({ versions: await lineageHistory('template', template.id) });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

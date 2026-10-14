@@ -14,6 +14,7 @@ const { enforceEvidenceGate } = require('../../services/contentIntelligenceServi
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
+const { lineageHistory } = require('../../services/cmLineage');
 const { logAudit } = require('../../utils/auditLog');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -126,6 +127,20 @@ router.get('/faqs', authenticate, async (req, res) => {
     res.json({ faqs: faqs.map(decorateFaqRow), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /cm/faqs error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/faqs/:id/versions — the version history of the whole line of
+// versions. The screen had no history for faqs although it was recorded.
+router.get('/faqs/:id/versions', authenticate, async (req, res) => {
+  try {
+    const row = await getScopedFaq(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'FAQ not found.' });
+    if (await publishedOnly(req)) return res.status(404).json({ error: 'FAQ not found.' });
+    res.json({ versions: await lineageHistory('faq', row.id) });
+  } catch (err) {
+    console.error('GET /cm/faqs/:id/versions error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

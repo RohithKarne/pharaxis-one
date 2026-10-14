@@ -326,17 +326,15 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
   )
 }
 
-// ── #9 / #14 / #22: Version History Modal (documents and templates) ──────────
+// ── Version History Modal (documents, templates, modules, FAQs) ─────────────
+const VERSION_URL = { document: 'documents', template: 'templates', module: 'modules', faq: 'faqs' }
 export function VersionHistoryModal({ entityType, entityId, entityName, token, onClose }) {
   const authHeaders = { Authorization: `Bearer ${token}` }
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const url = entityType === 'template'
-      ? `/api/cm/templates/${entityId}/versions`
-      : `/api/cm/documents/${entityId}/versions`
-    httpFetch(url, { headers: authHeaders })
+    httpFetch(`/api/cm/${VERSION_URL[entityType] || 'documents'}/${entityId}/versions`, { headers: authHeaders })
       .then(r => r.json())
       .then(d => setVersions(d.versions || []))
       .catch(() => {})
