@@ -3771,6 +3771,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-13 | Saad | Case form pending items closed: E2B dates written CCYYMMDD; one-sided lab ranges split; long verbatim kept whole in the narrative; ICSR builder readable; Customize Forms and Validation Rules files and endpoints removed; Case Form Fields shows show-only-when rules. Sections 8 and 9 updated. |
 | 2026-10-13 | Saad | MI and PC field review (Rohith, "go with all 6"): MI answer is the signed letter (MI answer boxes hidden, "Answer sent" shown), AE/PC screening answer required before a response is sent (`miSendCheck.js`); PC strength, reply to complainant, counterfeit (makes the case Urgent), device part, patient initials, Investigation & CAPA cut to what the complaint record needs, check before Route to Quality (`pcHandoffCheck.js`). Migrations 176–177. Section 9b updated. |
 | 2026-10-14 | Saad | MI response and hand-off review: MI Response Settings (off-label and closing statements, prescribing information required on off-label letters, routine/urgent working days, second-signer rules; migration 178); Transmission Setup screen (safety and quality targets, encrypted key, hand-off days, test); hand-off due date and reconciliation list. Sections 8 and 9b updated. |
+| 2026-10-14 | Saad | Content management review: letters use only published, in-date modules, templates and documents; templates signed on approve and publish with an independent approver and moving versions; document fields that were dropped now saved (review cycle, regulatory reference, extra expiry recipients); expired check-outs released; Revise for published documents and templates (migration 179); product and language on documents, followed by the letter builder (migration 180); one merge-field list with case fields and Insert field; Make letter files a letter on the case; Merge Reports retired; MI shows documents sent; linked documents suggested. Sections 1 and 7 updated. |
 
 ---
 
@@ -3783,7 +3784,7 @@ MIMS handles:
 - Incoming medical inquiries via email (inbox), triaged by agents
 - Case creation + management across 3 case types: MI (Medical Information), AE (Adverse Events), PC (Product Complaints)
 - Admin config per org — picklists, field setup, security groups, sites, workflows, case numbering, audit trails
-- Content management — documents, FAQs, templates, merge reports with approval lifecycles
+- Content management — documents, modules, FAQs and letter templates with approval lifecycles; letters merged with case data
 - Multi-org support — single MIMS instance serves multiple pharma client orgs with full data isolation
 
 **Relationship to CP Portal:**
@@ -4140,16 +4141,20 @@ Backend on port 3000. All routes under `/api/`.
 |--------|------|---------|
 | GET | `/api/cm/folders` | Active content folders |
 | CRUD | `/api/cm/documents` | Documents — Draft → Published lifecycle |
-| POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor). Auto-sets owner_user_id on first checkin. |
-| POST | `/api/cm/documents/:id/publish` | Publish — enforces owner lock (only owner can publish). Sets publisher as owner_user_id. |
-| POST | `/api/cm/documents/:id/release` | Release owner lock — resets document to Draft, clears owner_user_id |
+| POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor) and notes into the version history. Auto-sets owner_user_id on first checkin. |
+| POST | `/api/cm/documents/:id/publish` | Publish — password and reason; next major version. Publishing a revision archives the version it replaces ("Superseded by version N"). |
+| POST | `/api/cm/documents/:id/revise` | Draft the next version of a published document; the published one stays in use until the revision is published (`revision_of`, migration 179). Checking out a published document is refused. |
+| POST | `/api/cm/documents/:id/release` | Return a Pending or checked-out document to Draft (not a published or approved one) |
+| GET | `/api/cm/products` | The organisation's products, for tagging a document (`cm_documents.product_id`, migration 180) |
+| POST | `/api/cm/documents/release-stale-checkouts` | Return expired two-hour check-outs to Draft now; the `cm-release-stale-checkouts` job does it every 15 minutes |
 | GET/POST/DELETE | `/api/cm/documents/:id/relations` | Associated documents — link/unlink, relation types |
 | GET/PUT | `/api/cm/documents/:id/alert-config` | Per-document version alert config (alert_days JSON, alert_email_account_id) |
 | POST/DELETE | `/api/cm/documents/:id/alert-subs` | Per-document alert subscribers (users to notify) |
 | GET/PUT | `/api/cm/settings` | Org-level CM default settings (upsert via ON DUPLICATE KEY) |
 | CRUD | `/api/cm/faqs` | FAQs with lifecycle |
-| CRUD | `/api/cm/templates` | Email/response templates |
-| CRUD | `/api/cm/merge-reports` | Merge report templates |
+| CRUD | `/api/cm/templates` | Letter templates (Response, Acknowledgment, Correspondence, Email); a folder is required. Approve and publish need password and reason, and the author cannot approve. Publish = next major version; a wording change adds to the minor. A published template changes through `POST /:id/revise`. |
+| GET | `/api/cm/merge-fields` | The merge-field catalogue (`services/mergeFields.js`), one list for the letter builder, the preview and generated letters; values escaped in a letter body |
+| POST | `/api/cm/templates/:id/generate` | Make a letter for a case number from a published, in-date template; filed on the case as an attachment (field `Letters`) and audited. Replaces Merge Reports (retired 2026-10-14; `cm_merge_reports` kept). |
 | GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers |
 | CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
 
@@ -4329,7 +4334,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `cm_org_settings` | Org-level CM default settings — key/value JSON store. Keys: `default_alert_days`, `default_alert_email_account_id`, `default_alert_roles` |
 | `cm_faqs` | FAQs with lifecycle |
 | `cm_templates` | Email/response/acknowledgment templates |
-| `cm_merge_reports` | Merge report templates with lifecycle |
+| `cm_merge_reports` | Retired 2026-10-14 — kept, no screen or route reads it |
 | `cm_reviews` | Review sessions |
 | `cm_reviewers` | Individual reviewer assignments per review session |
 | `cm_version_history` | Version tracking per document/FAQ/merge-report |

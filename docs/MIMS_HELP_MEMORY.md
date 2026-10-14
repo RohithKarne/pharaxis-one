@@ -69,8 +69,8 @@ Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spa
 | `cm.folders` | `cm` | Content Management folders |
 | `cm.documents` | `cm` | Documents — upload, versioning, bulk actions |
 | `cm.modules` | `cm` | Reusable content modules |
-| `cm.templates` | `cm` | Response / Transmission / Correspondence templates |
-| `cm.merge_reports` | `cm` | Merge report generation from case data |
+| `cm.templates` | `cm` | Letter templates (Response, Acknowledgment, Correspondence, Email); Make letter for a case |
+| `cm.merge_reports` | `cm` | Retired 2026-10-14 — letters for a case are made from Templates |
 | `cm.faqs` | `cm` | FAQs — create, approve, expire |
 | `cm.reviews` | `cm` | Periodic content review cycles |
 | `browse` | `browse` | Browse Content module — agents viewing approved content |
@@ -110,7 +110,7 @@ Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spa
 | 16 | Content Modules | `cm.modules` | cm_admin, admin | 30 |
 | 17 | Response Templates | `cm.templates` | cm_admin, admin | 40 |
 | 18 | Template Merge Fields Reference | `cm.templates` | cm_admin, admin | 41 |
-| 19 | Merge Reports | `cm.merge_reports` | cm_admin, admin, agent | 50 |
+| 19 | Merge Reports (retired 2026-10-14 — see Templates, Make letter) | `cm.merge_reports` | cm_admin, admin, agent | 50 |
 | 20 | FAQs Management | `cm.faqs` | cm_admin, admin | 60 |
 | 21 | FAQ Approval Workflow | `cm.faqs` | cm_admin, admin | 61 |
 | 22 | Content Reviews | `cm.reviews` | cm_admin, admin | 70 |
