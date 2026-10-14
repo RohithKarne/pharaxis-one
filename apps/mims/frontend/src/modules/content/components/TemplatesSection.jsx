@@ -240,7 +240,9 @@ export default function TemplatesSection({ token }) {
   const [editTemplate, setEditTemplate] = useState(null)
   const [historyTemplate, setHistoryTemplate] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const { hasCapability } = useAuth()
+  const { hasCapability, hasModuleAccess } = useAuth()
+  // A letter is filed on a case, so making one needs Cases and Update case.
+  const canMakeLetter = hasModuleAccess('mims_core') && hasCapability('case.update')
   // Approve and publish are electronic signatures: password and reason.
   const [esign, setEsign] = useState(null)
   const [esignPw, setEsignPw] = useState('')
@@ -379,7 +381,7 @@ export default function TemplatesSection({ token }) {
                 <td>
                   <div className="cm-action-btns">
                     {t.status !== 'Published' && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>}
-                    {t.status === 'Published' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setLetter({ t, caseNumber: '', busy: false, result: null })}>Make letter</button>}
+                    {t.status === 'Published' && canMakeLetter && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setLetter({ t, caseNumber: '', busy: false, result: null })}>Make letter</button>}
                     {t.status === 'Published' && !t.open_revision_id && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => revise(t)}>Revise</button>}
                     {t.status === 'Published' && t.open_revision_id && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Revision in progress</span>}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>

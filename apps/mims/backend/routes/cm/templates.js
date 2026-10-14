@@ -16,6 +16,7 @@ const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
 const { lineageHistory } = require('../../services/cmLineage');
 const { logAudit } = require('../../utils/auditLog');
+const { verifyCaseOrg } = require('../../services/caseHelpers');
 const bcrypt = require('bcrypt');
 
 // The kinds of template the letter builder uses. "Transmission" was offered on
@@ -497,6 +498,11 @@ router.post('/templates/:id/generate', authenticate, async (req, res) => {
       hasPlatformAdminScope(req) ? [caseNumber] : [caseNumber, req.user.orgId]);
     if (cases.length !== 1) return res.status(404).json({ error: `No case ${caseNumber} in this organisation.` });
     const theCase = cases[0];
+    // The letter carries the case's details and is filed on the case, so the
+    // person needs to be able to change that case (access review).
+    if (!(await verifyCaseOrg(theCase.id, req, 'case.update'))) {
+      return res.status(403).json({ error: `You do not have access to case ${caseNumber}.` });
+    }
 
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
