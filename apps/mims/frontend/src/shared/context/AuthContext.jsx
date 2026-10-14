@@ -39,11 +39,11 @@ async function fetchUnlessRestarting(url, init) {
 const COOKIE_SESSION = 'cookie-session'
 
 function createUnrestrictedSecurityAccess() {
-  return { resolved: true, unrestricted: true, system_options: null, case_options: null }
+  return { resolved: true, unrestricted: true, privileges: null }
 }
 
 function createUnresolvedSecurityAccess() {
-  return { resolved: false, unrestricted: false, system_options: {}, case_options: {} }
+  return { resolved: false, unrestricted: false, privileges: null }
 }
 
 // Case-form drafts (adverse event, product complaint, medical information,
@@ -380,24 +380,6 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     return modules.includes(module)
   }
 
-  function hasSecurityOption(scope, section, option) {
-    if (!user) return false
-    if (hasGlobalAdminScope({ ...user, modules })) return true
-    if (securityAccess?.resolved === false) return false
-    if (securityAccess?.unrestricted) return true
-    const matrix = securityAccess?.[scope]
-    if (!matrix) return true
-    return Boolean(matrix?.[section]?.[option])
-  }
-
-  function hasSystemOption(section, option) {
-    return hasSecurityOption('system_options', section, option)
-  }
-
-  function hasCaseOption(section, option) {
-    return hasSecurityOption('case_options', section, option)
-  }
-
   // New capability model: hasCapability('case.close') etc. Superadmin / unrestricted
   // / null privileges all pass; otherwise check the effective capability keys.
   function hasCapability(key) {
@@ -415,7 +397,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   return (
     <AuthContext.Provider value={{
       user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess, restoring, serverUnreachable,
-      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption, hasCapability
+      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasCapability
     }}>
       {children}
     </AuthContext.Provider>

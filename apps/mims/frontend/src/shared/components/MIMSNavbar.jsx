@@ -59,7 +59,7 @@ function NavSection({ title, collapsed }) {
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess, hasCaseOption, hasCapability, user } = useAuth()
+  const { hasModuleAccess, hasCapability, user } = useAuth()
 
   const [casesOpen, setCasesOpen] = useState(false)
 
@@ -73,13 +73,11 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   const isActive = (path) => location.pathname === path
   const isCasesActive = location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log'
   const can = (k) => hasModuleAccess(k)
-  const canUseCase = (section, option) => (hasCaseOption ? hasCaseOption(section, option) : true)
 
   const canUseCases = can('mims_core')
   // New Case shows to people who may create cases (the case list's own button
-  // checks the same); the security group's Add New Case option can still turn it off.
+  // checks the same).
   const canCreateCases = canUseCases && (hasCapability ? hasCapability('case.create') : true)
-  const canAddCase = canCreateCases && canUseCase('case_entry_options', 'add_new_case')
   const work = { overview: canUseCases, inbox: can('inbox'), cases: canUseCases, transmissions: can('transmissions') }
   const knowledge = { browse: can('browse_content'), content: can('content_mgmt') }
   const reporting = can('reports')
@@ -96,12 +94,10 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {canCreateCases && (
         <div className="mims-sidenav-new-case">
           <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
-            onMouseEnter={() => canAddCase && prefetchRoutePath('/cases')}
-            onFocus={() => canAddCase && prefetchRoutePath('/cases')}
-            onClick={() => canAddCase && navigate('/cases?new=1')}
-            disabled={!canAddCase}
-            aria-label="Create new case"
-            title={!canAddCase ? 'Your security group does not allow Add New Case.' : undefined}>
+            onMouseEnter={() => prefetchRoutePath('/cases')}
+            onFocus={() => prefetchRoutePath('/cases')}
+            onClick={() => navigate('/cases?new=1')}
+            aria-label="Create new case">
             {collapsed ? <Icon name="plus" size={16} /> : <><Icon name="plus" size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />New Case</>}
           </button>
         </div>

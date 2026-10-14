@@ -20,7 +20,6 @@ const LotMasterAdmin = lazy(() => import('./LotMasterAdmin'))
 const FieldActionsAdmin = lazy(() => import('./FieldActionsAdmin'))
 const CapaAdmin = lazy(() => import('./CapaAdmin'))
 const PiiRedactionRules = lazy(() => import('./PiiRedactionRules'))
-// import GroupSecurity from './GroupSecurity' // legacy nav-key version — kept on disk for rollback
 const CapabilityGroupSecurity = lazy(() => import('./CapabilityGroupSecurity'))
 const LoggedInUsers = lazy(() => import('./LoggedInUsers'))
 const SetupAlerts = lazy(() => import('./SetupAlerts'))
