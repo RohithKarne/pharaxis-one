@@ -252,7 +252,8 @@ function AppRoutes() {
           <Route path="/admin-console/*" element={<Navigate to="/mims-admin" replace />} />
           <Route path="/mims-admin" element={
             <ProtectedRoute loginPath="/mims-admin/login">
-              <ModuleAccessGuard moduleKey="admin_console">
+              {/* The menu shows MIMS Admin to administrators with the module; the address follows the same rule. */}
+              <ModuleAccessGuard moduleKey="admin_console" adminOnly>
                 <MIMSAdminPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
