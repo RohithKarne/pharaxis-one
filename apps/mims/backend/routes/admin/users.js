@@ -81,7 +81,6 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
       { key: 'security_group_name', label: 'Security Group' },
       { key: 'department', label: 'Department' },
       { label: 'Status', value: u => u.is_disabled ? 'Disabled' : (u.is_active ? 'Active' : 'Inactive') },
-      { key: 'access_admin_site', label: 'Admin Site Access' },
       { key: 'case_admin', label: 'Case Admin' },
       { key: 'password_expires_at', label: 'Password Expires At' },
       { key: 'created_at', label: 'Created At' },
