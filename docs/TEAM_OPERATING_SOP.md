@@ -3776,6 +3776,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-14 | Saad | Content management in-depth review: emailed letters enclose on-screen and module-built documents as PDFs; folder permissions enforced (and Configure folders checked); review outcome when nobody accepts, reviewer decisions shown to the approver, Reviews I Started, daily overdue reminders; version history across revisions and for modules and FAQs; compare versions by text; Relations, alert settings, publishing checks, Browse filters and bookmarks, dashboard review queues and the module form fixed; unreachable screens, the activity log and the duplicate Browse tab removed. No migration. Section 7 updated. |
 | 2026-10-14 | Saad | Reports review: formula fields, certify/publish/versions and the open scheduled-export routes removed; report audience enforced; server-side audited export; Schedule reports privilege; Reports Access grids removed; library rebuilt (20 reports on case, MI, hand-off, inbox, content and user data) with a filter bar; dashboards rebuilt; schedules by period, monthly, time-zone list, recipients inside the organisation who can see the report; Governance tab, Overview and legacy `/api/reports/*` removed; hand-off "sent" ignores MI letters (migration 183). Section 7 updated. |
 | 2026-10-14 | Saad | Menu (Rohith, "go with your menu recommendation"): New Case at the top; Work · Knowledge · Reporting · Administration; items a user cannot open are hidden, not greyed; Cases opens the list, with Correspondence added; Deleted Cases for administrators only; menu, quick search and Overview follow each page's access rule. Section 6 updated. |
+| 2026-10-14 | Saad | Access review: one case-access check in front of every case route (`middleware/caseAccess.js`), read-only cases for people without Update case; Inbox, content reads, admin endpoints and attachments follow their screen; audit-trail write routes, the attachment search and the shared role-screens route removed; Create transmission enforced; 46 unchecked permissions, the manager role and template, the old Group Security screen and six screen-less modules removed (migrations 184, 185); Screens per person on Edit User; MIMS Admin address for administrators only. Sections 4, 7 and 8 updated. |
 
 ---
 
@@ -3919,11 +3920,19 @@ if (req.user.role !== 'platform_admin') {
 // Platform Admin has orgId = null in JWT → bypasses all org filters
 ```
 
-##### Module Access
-- Modules: `mims_core`, `admin_console`, `content_mgmt`, `data_visualization`
-- Stored in `user_module_permissions` table per user
-- Frontend enforces via `ModuleAccessGuard` component wrapping each route
+##### Module Access (screens)
+- Screens: `mims_core` (Cases), `inbox`, `transmissions`, `browse_content`, `content_mgmt`, `reports`, `admin_console` (MIMS Admin). Nothing else (access review, 2026-10-14; migration 185 removed six keys with no screen).
+- A person's screens are their role's defaults (`role_permissions`, shared by all organisations, changed only by a migration) plus their own differences (`user_module_permissions`, `can_access` 1 or 0), read by `utils/userModules.js` `getUserModules`.
+- An administrator sets a person's screens on Add / Edit Users › Screens (`PUT /api/admin/users/:id/modules`); only differences from the role are stored (`setUserModules`). MIMS Admin is not set there: it needs the administrator role as well as the module, in the menu and at the address (`ModuleAccessGuard adminOnly`).
+- The server enforces each screen: cases (`middleware/caseAccess.js`), Inbox (`routes/inbox.js`), content (`middleware/cmAccess.js` `cmReadAccess`), Reports and Transmissions (`requireModule`). The frontend hides what a person cannot open (`ModuleAccessGuard`, `MIMSNavbar`).
 - Platform Admin bypasses all module checks
+
+##### Case access (access review, 2026-10-14)
+- Every request about a case — the case, its AE / PC versions and rows, MI tabs, letters, comments, contacts, attachments, field history, rich text, emails filed on it — needs Cases and View cases for that case (own or all); a change needs Update case. Pinning, following and presence need only View. Route checks (close, assign, escalate, letters, transmissions) apply after it.
+- Without Update case the case page opens read only: a Read only label instead of Save Case, no version, transmit, add or delete buttons, fields locked.
+
+##### Permissions (Group Security)
+- 32 permissions, each checked by the server (`access_activity_privileges`, migration 184 removed 46 that nothing checked). A group adds rights to its members' role and never removes them (MIPM-192): the role's rights show ticked and locked.
 - Platform Admin hidden from User Management + Module Access screens — `WHERE role != 'platform_admin'` on both `/api/admin/platform/users` and `/api/admin/platform/all-users`
 
 ##### Session Timeout
@@ -4114,7 +4123,7 @@ Backend on port 3000. All routes under `/api/`.
 | POST | `/api/admin/platform/users/:id/reset-2fa` | Reset user 2FA enrollment, lock state, backup codes, trusted devices |
 | GET/POST/PUT/DELETE | `/api/admin/platform/users/:id/org-access` | CRUD org assignments |
 | GET | `/api/admin/platform/orgs-for-assignment` | Active orgs + sites for dropdown |
-| PUT | `/api/admin/platform/users/:id/modules` | Override user module access |
+| PUT | `/api/admin/platform/users/:id/modules` | Set a person's screens (any of the seven); stores only differences from the role, leaves the platform-console row alone |
 | GET | `/api/admin/platform/orgs` | List all orgs with sites + session_timeout_minutes |
 | POST | `/api/admin/platform/orgs` | Create org |
 | PUT | `/api/admin/platform/orgs/:id` | Update org name / is_active / session_timeout_minutes / 2FA settings |
@@ -4245,7 +4254,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `organizations` | Organizations | Org cards with site lists, active/inactive toggles, session timeout editor, add site form |
 | `2fa-config` | 2FA Configuration | Platform SMTP config + test/send buttons; per-org 2FA enable/methods/remember-days table |
 | `users` | Users | User list with 2FA status, org assignments, Reset 2FA button; create user form; org assignment panel (Org / Site / Role tabs) |
-| `module-access` | Module Access | Per-user module checkboxes (mims_core, admin_console, content_mgmt, data_visualization) |
+| `module-access` | Module Access | No screen any more; a person's screens are set on MIMS Admin › Add / Edit Users › Screens (2026-10-14) |
 | `alerts` | Alerts | Alert rule setup, enable/disable, thresholds, recipients, recent alert event history |
 | `notifications` | Notifications | In-app notification inbox for platform-admin alerts with read/unread state |
 | `audit` | Audit Trail | Paginated general audit log — entity changes across platform |
