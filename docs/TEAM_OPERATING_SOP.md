@@ -3772,6 +3772,7 @@ This section described the integration as a future plan long after it shipped. C
 | 2026-10-13 | Saad | MI and PC field review (Rohith, "go with all 6"): MI answer is the signed letter (MI answer boxes hidden, "Answer sent" shown), AE/PC screening answer required before a response is sent (`miSendCheck.js`); PC strength, reply to complainant, counterfeit (makes the case Urgent), device part, patient initials, Investigation & CAPA cut to what the complaint record needs, check before Route to Quality (`pcHandoffCheck.js`). Migrations 176–177. Section 9b updated. |
 | 2026-10-14 | Saad | MI response and hand-off review: MI Response Settings (off-label and closing statements, prescribing information required on off-label letters, routine/urgent working days, second-signer rules; migration 178); Transmission Setup screen (safety and quality targets, encrypted key, hand-off days, test); hand-off due date and reconciliation list. Sections 8 and 9b updated. |
 | 2026-10-14 | Saad | Content management review: letters use only published, in-date modules, templates and documents; templates signed on approve and publish with an independent approver and moving versions; document fields that were dropped now saved (review cycle, regulatory reference, extra expiry recipients); expired check-outs released; Revise for published documents and templates (migration 179); product and language on documents, followed by the letter builder (migration 180); one merge-field list with case fields and Insert field; Make letter files a letter on the case; Merge Reports retired; MI shows documents sent; linked documents suggested. Sections 1 and 7 updated. |
+| 2026-10-14 | Saad | Content management review follow-up: Revise for modules (documents built from a module move to its new version) and FAQs (migration 181); Make letter files a PDF; templates carry a language (migration 182); new documents default to a yearly review. Section 7 updated. |
 
 ---
 
@@ -4151,10 +4152,11 @@ Backend on port 3000. All routes under `/api/`.
 | GET/PUT | `/api/cm/documents/:id/alert-config` | Per-document version alert config (alert_days JSON, alert_email_account_id) |
 | POST/DELETE | `/api/cm/documents/:id/alert-subs` | Per-document alert subscribers (users to notify) |
 | GET/PUT | `/api/cm/settings` | Org-level CM default settings (upsert via ON DUPLICATE KEY) |
-| CRUD | `/api/cm/faqs` | FAQs with lifecycle |
+| CRUD | `/api/cm/faqs` | FAQs with lifecycle; `POST /api/cm/faqs/:id/revise` drafts the next version of a published FAQ, which is archived as superseded when the revision is published |
+| POST | `/api/cm/modules/:id/revise` | Draft the next version of a published module; publishing it moves Module-type documents to the new module and archives the old one as superseded (no archive cascade). A published module cannot be set back to Draft. |
 | CRUD | `/api/cm/templates` | Letter templates (Response, Acknowledgment, Correspondence, Email); a folder is required. Approve and publish need password and reason, and the author cannot approve. Publish = next major version; a wording change adds to the minor. A published template changes through `POST /:id/revise`. |
 | GET | `/api/cm/merge-fields` | The merge-field catalogue (`services/mergeFields.js`), one list for the letter builder, the preview and generated letters; values escaped in a letter body |
-| POST | `/api/cm/templates/:id/generate` | Make a letter for a case number from a published, in-date template; filed on the case as an attachment (field `Letters`) and audited. Replaces Merge Reports (retired 2026-10-14; `cm_merge_reports` kept). |
+| POST | `/api/cm/templates/:id/generate` | Make a letter for a case number from a published, in-date template; filed on the case as a PDF attachment (field `Letters`, `makeLetterPdf` in `services/pdfExportService.js`) and audited. Replaces Merge Reports (retired 2026-10-14; `cm_merge_reports` kept). |
 | GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers |
 | CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
 
