@@ -13,6 +13,17 @@ import BulkUserImport from './BulkUserImport'
 import './Users.css'
 
 const API = '/api/admin'
+// The screens an administrator can give or take away per person. MIMS Admin
+// follows the administrator role and is not one of them.
+const PERSON_SCREENS = [
+  { key: 'mims_core', label: 'Cases' },
+  { key: 'inbox', label: 'Inbox' },
+  { key: 'transmissions', label: 'Transmissions' },
+  { key: 'browse_content', label: 'Browse Content' },
+  { key: 'content_mgmt', label: 'Content Management' },
+  { key: 'reports', label: 'Reports' },
+]
+const personScreens = (list) => (list || []).filter(k => PERSON_SCREENS.some(s => s.key === k)).sort()
 const PAGE_SIZE = 100
 
 function fmtDate(d) {
@@ -362,6 +373,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       access_admin_site:!!editUser.access_admin_site,
       case_admin:       !!editUser.case_admin,
       tenant_ids:       editUser.tenant_ids       || [],
+      modules:          personScreens(editUser.modules),
       inactive_reason:  '',
       reactivation_reason: '',
     }
@@ -386,6 +398,9 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
     if (errors[key]) setErrors(e => ({ ...e, [key]: '' }))
   }
   function toggle(key) { set(key, !form[key]) }
+  function toggleScreen(key) {
+    set('modules', form.modules.includes(key) ? form.modules.filter(k => k !== key) : [...form.modules, key])
+  }
 
   function toggleTenant(orgId) {
     setForm(f => ({
@@ -450,6 +465,15 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         })
         const dt = await rt.json()
         if (!rt.ok) { setApiErr(dt.error || 'Failed to update tenants.'); return }
+
+        // Screens, only when they changed
+        if (personScreens(form.modules).join() !== personScreens(editUser.modules).join()) {
+          const rm = await httpFetch(`/api/admin/users/${editUser.id}/modules`, {
+            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules }),
+          })
+          const dm = await rm.json()
+          if (!rm.ok) { setApiErr(dm.error || 'Failed to update screens.'); return }
+        }
       } else {
         // Create (tenants included in body)
         const r = await httpFetch('/api/admin/users', {
@@ -715,6 +739,26 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   )}
                 </div>
               </div>
+
+              {/* Screens the person opens: the role's defaults, which an
+                  administrator can add to or take away (access review). */}
+              {isEdit && (
+                <div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>Screens</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    What this person sees in the menu. Marked “role” comes with their role; untick to take it away.
+                  </div>
+                  <div className="ma-usr-checks">
+                    {PERSON_SCREENS.map(sc => (
+                      <label key={sc.key} className="ma-usr-check">
+                        <input type="checkbox" checked={form.modules.includes(sc.key)} onChange={() => toggleScreen(sc.key)} />
+                        {sc.label}
+                        {(editUser.role_modules || []).includes(sc.key) && <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--text-muted)' }}>· role</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
