@@ -53,18 +53,24 @@ const CORE_OVERRIDES = {
 };
 const CASE_COLUMNS = { case_number: 'case_number', date_received: 'date_received', latest_information_date: 'latest_information_date', date_of_intake: 'date_of_intake', case_type: 'case_type', status_id: 'status_id', case_owner_id: 'case_owner_id', org_id: 'org_id', intake_channel: 'intake_channel', priority: 'priority', description: 'description', internal_notes: 'internal_notes' };
 
-async function columnExists(db, table, column, cache) {
+// The column's data type, or null when the column does not exist.
+async function columnType(db, table, column, cache) {
   const key = `${table}.${column}`;
   if (cache.has(key)) return cache.get(key);
-  const [[r]] = await db.execute('SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]);
-  cache.set(key, r.n > 0);
-  return r.n > 0;
+  const [[r]] = await db.execute('SELECT DATA_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]);
+  cache.set(key, r ? r.t : null);
+  return r ? r.t : null;
 }
 
 // Cases of this organisation with a non-empty value in table.column. null when the column does not exist.
 async function countColumn(db, table, column, orgId, versionType, cache) {
-  if (!(await columnExists(db, table, column, cache))) return null;
-  const notEmpty = `t.\`${column}\` IS NOT NULL AND t.\`${column}\` <> '' AND t.\`${column}\` <> '0'`;
+  const type = await columnType(db, table, column, cache);
+  if (!type) return null;
+  // MySQL refuses to compare a date with '' ("Incorrect DATE value"), which
+  // stopped migration 174 and the "Used in cases" count; a date is set or NULL.
+  const notEmpty = /date|time|year/.test(type)
+    ? `t.\`${column}\` IS NOT NULL`
+    : `t.\`${column}\` IS NOT NULL AND t.\`${column}\` <> '' AND t.\`${column}\` <> '0'`;
   let sql;
   if (table === 'cases') sql = `SELECT COUNT(*) AS n FROM cases t WHERE t.is_deleted = 0 AND t.org_id = ? AND ${notEmpty}`;
   else if (versionType) sql = `SELECT COUNT(DISTINCT v.case_id) AS n FROM ${table} t JOIN ${versionType === 'ae' ? 'case_ae_versions' : 'case_pc_versions'} v ON v.id = t.version_id JOIN cases c ON c.id = v.case_id WHERE c.is_deleted = 0 AND c.org_id = ? AND ${notEmpty}`;
