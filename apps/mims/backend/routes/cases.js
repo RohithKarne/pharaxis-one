@@ -219,6 +219,12 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     const limit  = clamp(parseIntSafe(req.query.limit, 50), 1, 500);
     const offset = Math.max(0, parseIntSafe(req.query.offset, 0));
 
+    // Deleted cases are for administrators, who alone can delete one; the list
+    // was open to anyone who could view cases (menu review, 14 Oct 2026).
+    if (deleted === 'true' && !isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Only administrators can see deleted cases.' });
+    }
+
     if (corr_from && !isValidDateOnly(corr_from)) {
       return res.status(400).json({ error: 'corr_from must be YYYY-MM-DD.' });
     }
