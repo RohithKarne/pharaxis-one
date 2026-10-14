@@ -512,17 +512,20 @@ router.post('/templates/:id/generate', authenticate, async (req, res) => {
     const mergeData = await buildMergeData({ caseId: theCase.id, userId: req.user.userId });
     const subject = applyText(template.subject || template.name, mergeData);
     const body = applyHtml(template.body_html, mergeData);
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${subject.replace(/</g, '&lt;')}</title></head>`
-      + `<body style="font-family:Arial,sans-serif;font-size:13px;line-height:1.6;max-width:800px;margin:40px auto">${body}</body></html>`;
+    // The letter is a PDF (Helvetica, wrapped, paged), so it can be printed,
+    // posted or attached as it stands.
+    const { makeLetterPdf } = require('../../services/pdfExportService');
+    const { buffer: buf, pages } = makeLetterPdf({
+      title: subject, html: body, footer: [mergeData.org_name, theCase.case_number].filter(Boolean).join(' · '),
+    });
     const storage = require('../../services/fileStorageService');
     const crypto = require('crypto');
-    const buf = Buffer.from(html, 'utf8');
-    const key = storage.generateKey('.html');
-    await storage.put({ orgId: theCase.org_id, key, body: buf, contentType: 'text/html' });
-    const fileName = `${template.name} - ${theCase.case_number} - ${new Date().toISOString().slice(0, 10)}.html`.replace(/[\\/:*?"<>|]/g, '-');
+    const key = storage.generateKey('.pdf');
+    await storage.put({ orgId: theCase.org_id, key, body: buf, contentType: 'application/pdf' });
+    const fileName = `${template.name} - ${theCase.case_number} - ${new Date().toISOString().slice(0, 10)}.pdf`.replace(/[\\/:*?"<>|]/g, '-');
     const [ins] = await pool.execute(
       `INSERT INTO attachments (org_id, entity_type, entity_id, field_name, storage_provider, storage_key, original_name, mime_type, size_bytes, checksum_sha256, uploaded_by, ocr_status)
-       VALUES (?, 'case', ?, 'Letters', ?, ?, ?, 'text/html', ?, ?, ?, 'skipped')`,
+       VALUES (?, 'case', ?, 'Letters', ?, ?, ?, 'application/pdf', ?, ?, ?, 'skipped')`,
       [theCase.org_id, theCase.id, storage.PROVIDER || 'local', key, fileName, buf.length,
        crypto.createHash('sha256').update(buf).digest('hex'), req.user.userId]);
     await audit(req.user.userId, req.user.email, 'GENERATE_LETTER', 'cm_template', Number(template.id), {
@@ -532,7 +535,7 @@ router.post('/templates/:id/generate', authenticate, async (req, res) => {
     res.status(201).json({
       message: `Letter filed on case ${theCase.case_number}.`,
       attachment_id: ins.insertId, file_name: fileName, case_id: theCase.id, case_number: theCase.case_number,
-      rendered_subject: subject, rendered_body: body,
+      pages, rendered_subject: subject, rendered_body: body,
     });
   } catch (err) {
     console.error('POST /cm/templates/:id/generate error:', err);
