@@ -68,7 +68,7 @@ const { ISO_COUNTRIES } = require('../catalogs/isoCountries');
 
 const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
-  listResponseBuilderRecipients, buildResponsePackage,
+  listResponseBuilderRecipients, buildResponsePackage, TEMPLATE_ORG_SQL,
 } = require('../services/miResponseService');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
@@ -2312,12 +2312,9 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
         WHERE t.status = 'Published'
           AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
           AND t.type IN ('Response','Email','Acknowledgment','Correspondence')
-          AND (? = 1 OR u.org_id = ? OR EXISTS (
-            SELECT 1 FROM user_org_access uoa
-             WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
-          ))
+          AND (? = 1 OR ${TEMPLATE_ORG_SQL})
         ORDER BY product_group_match DESC, FIELD(t.type, 'Response','Email','Acknowledgment','Correspondence'), t.name ASC`,
-      [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+      [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id, scopedCase.org_id]
     );
     const [documents] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
@@ -2328,6 +2325,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
         WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
+          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())
           AND COALESCE(d.doc_type, '') <> 'Internal Document'
         ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
@@ -2338,19 +2336,14 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
               m.language, m.document_category, m.standard_response_text, m.content_html, m.send_as_pdf
          FROM cm_modules m
          INNER JOIN cm_folders f ON f.id = m.folder_id
-        WHERE m.status IN ('Published','Approved')
+        WHERE m.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())
+          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())
         ORDER BY CASE WHEN m.document_category = 'Response Builder' THEN 0 ELSE 1 END, m.name ASC
         LIMIT 200`,
       [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
-    const [bundles] = await pool.execute(
-      `SELECT * FROM response_template_bundles
-        WHERE org_id = ? AND is_active = 1
-        ORDER BY language ASC, name ASC`,
-      [scopedCase.org_id]
-    ).catch(() => [[]]);
 
     // What the builder needs to say about this answer (MI Response Settings):
     // an off-label MI must enclose the prescribing information when required.
@@ -2375,11 +2368,6 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       templates,
       documents: documents.map((doc) => ({ ...doc, selected_modules: parseJsonSafe(doc.selected_modules, []) })),
       modules,
-      bundles: bundles.map((bundle) => ({
-        ...bundle,
-        document_ids: parseJsonSafe(bundle.document_ids, []),
-        module_ids: parseJsonSafe(bundle.module_ids, []),
-      })),
     });
   } catch (err) {
     logger.error({ err }, 'GET /cases/:id/mi-response-builder/context error');
