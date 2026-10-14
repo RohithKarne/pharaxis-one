@@ -13,6 +13,7 @@ const { authenticate } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
 const { logAudit } = require('../../utils/auditLog');
 const bcrypt = require('bcrypt');
 
@@ -227,6 +228,7 @@ router.get('/templates', authenticate, async (req, res) => {
     }
     // MIPM-210: drafts are for Content Management, not for agents.
     if (await publishedOnly(req)) query += " AND t.status = 'Published'";
+    query += await folderFilterSql(req.user, 't.folder_id');
     if (search) {
       query += ' AND (t.name LIKE ? OR t.subject LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);

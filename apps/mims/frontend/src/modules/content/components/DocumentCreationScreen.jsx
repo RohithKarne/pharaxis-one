@@ -320,7 +320,12 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 1fr', gap: 16, marginBottom: 24, alignItems: 'end' }}>
           <div className="cm-form-group" style={{ margin: 0 }}>
             <label className="cm-form-label">Folder <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
+            <select className="cm-form-select" value={form.folder_id} onChange={e => {
+              // A folder kept for one product gives a new document that product,
+              // unless one is already chosen.
+              const folder = folders.find(f => String(f.id) === e.target.value)
+              setForm(p => ({ ...p, folder_id: e.target.value, product_id: p.product_id || folder?.product_id || '' }))
+            }}>
               <option value="">— Select Folder —</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>

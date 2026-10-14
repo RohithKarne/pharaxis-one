@@ -220,6 +220,7 @@ function publicDoc(d) {
 // documents. The Browse Content page listed Draft, Under Review and Approved
 // documents next to published ones, and any of them could be opened and downloaded.
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
@@ -302,6 +303,7 @@ router.get('/documents', authenticate, async (req, res) => {
     if (await publishedOnly(req)) {
       query += " AND d.status = 'Published'";
     }
+    query += await folderFilterSql(req.user, 'd.folder_id');
     if (status) {
       query += ' AND d.status = ?';
       params.push(status);
@@ -492,6 +494,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     if (folder_id) { query += ` AND d.folder_id = ?`; params.push(folder_id); }
+    query += await folderFilterSql(req.user, 'd.folder_id');
     if (status) {
       query += ` AND d.status = ?`;
       params.push(status);
@@ -1594,7 +1597,7 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
        WHERE response_doc_type = 'Module'
          AND d.selected_modules IS NOT NULL
          AND JSON_CONTAINS(d.selected_modules, CAST(? AS JSON))
-         ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}`,
+         ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}${await folderFilterSql(req.user, 'd.folder_id')}`,
       hasPlatformAdminScope(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
     );
     res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });

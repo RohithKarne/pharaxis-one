@@ -70,6 +70,7 @@ const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
   listResponseBuilderRecipients, buildResponsePackage, TEMPLATE_ORG_SQL,
 } = require('../services/miResponseService');
+const { folderFilterSql } = require('../services/cmFolderAccess');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const { auditChanges } = require('../services/componentAudit');
@@ -2312,7 +2313,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
         WHERE t.status = 'Published'
           AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
           AND t.type IN ('Response','Email','Acknowledgment','Correspondence')
-          AND (? = 1 OR ${TEMPLATE_ORG_SQL})
+          AND (? = 1 OR ${TEMPLATE_ORG_SQL})${await folderFilterSql(req.user, 't.folder_id')}
         ORDER BY product_group_match DESC, FIELD(t.type, 'Response','Email','Acknowledgment','Correspondence'), t.name ASC`,
       [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id, scopedCase.org_id]
     );
@@ -2329,7 +2330,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
           AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())
-          AND COALESCE(d.doc_type, '') <> 'Internal Document'
+          AND COALESCE(d.doc_type, '') <> 'Internal Document'${await folderFilterSql(req.user, 'd.folder_id')}
         ORDER BY CASE WHEN d.product_id = ? THEN 0 WHEN d.product_id IS NULL THEN 1 ELSE 2 END,
                  CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
@@ -2343,7 +2344,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
         WHERE m.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())
-          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())
+          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())${await folderFilterSql(req.user, 'm.folder_id')}
         ORDER BY CASE WHEN m.document_category = 'Response Builder' THEN 0 ELSE 1 END, m.name ASC
         LIMIT 200`,
       [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]

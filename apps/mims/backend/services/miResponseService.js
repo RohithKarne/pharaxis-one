@@ -18,6 +18,7 @@ const { buildMergeData, applyHtml, applyText } = require('./mergeFields');
 
 const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { folderFilterSql } = require('./cmFolderAccess');
 const {
   uniquePositiveInts,
   stripHtml,
@@ -148,7 +149,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       `SELECT t.* FROM cm_templates t LEFT JOIN users u ON u.id = t.created_by
         WHERE t.id = ? AND t.status = 'Published'
           AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
-          AND (? = 1 OR ${TEMPLATE_ORG_SQL}) LIMIT 1`,
+          AND (? = 1 OR ${TEMPLATE_ORG_SQL})${await folderFilterSql(req.user, 't.folder_id')} LIMIT 1`,
       [payload.template_id, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id, scopedCase.org_id]
     );
     template = templateRows[0] || null;
@@ -176,7 +177,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
           AND d.status = 'Published'
           AND COALESCE(d.doc_type, '') <> 'Internal Document'
           AND (d.expiry_date     IS NULL OR d.expiry_date     >= CURDATE())
-          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())`,
+          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())${await folderFilterSql(req.user, 'd.folder_id')}`,
       [...selectedDocumentIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     selectedDocuments = rows;
@@ -189,7 +190,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       const found   = new Set(rows.map((d) => d.id));
       const blocked = selectedDocumentIds.filter((id) => !found.has(id));
       const error = new Error(
-        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date, not expired and not an internal document.`
+        `Document(s) ${blocked.join(', ')} are not available to send. A document must be published, past its activation date, not expired, not an internal document, and in a folder you can open.`
       );
       error.statusCode = 400;
       throw error;
@@ -214,7 +215,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
         WHERE m.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)
           AND m.status = 'Published'
           AND (m.expiry_date     IS NULL OR m.expiry_date     >= CURDATE())
-          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())`,
+          AND (m.activation_date IS NULL OR m.activation_date <= CURDATE())${await folderFilterSql(req.user, 'm.folder_id')}`,
       [...allModuleIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     if (rows.length !== allModuleIds.length) {
@@ -223,7 +224,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
         `SELECT name FROM cm_modules WHERE id IN (${allModuleIds.filter((id) => !found.has(id)).map(() => '?').join(',')})`,
         allModuleIds.filter((id) => !found.has(id)));
       const error = new Error(
-        `These modules are not published and in date, so they cannot be sent: ${missing.map((m) => m.name).join(', ') || 'unknown module'}.`
+        `These modules are not published and in date, or are in a folder you cannot open, so they cannot be sent: ${missing.map((m) => m.name).join(', ') || 'unknown module'}.`
       );
       error.statusCode = 400;
       throw error;

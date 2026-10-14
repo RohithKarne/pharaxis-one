@@ -422,6 +422,7 @@ function mountRoutes(r, prefix = '') {
   // Content management
   // MIPM-175: Content Management changes follow the screen's access rules.
   r.use(`${prefix}/cm`, require('./middleware/cmAccess').cmWriteAccess);
+  r.use(`${prefix}/cm`, require('./middleware/cmAccess').cmFolderAccess);
   r.use(`${prefix}/cm`, require('./routes/cm/picklists'));
   r.use(`${prefix}/cm`, require('./routes/cm/settings'));
   r.use(`${prefix}/cm`, require('./routes/cm/folders'));

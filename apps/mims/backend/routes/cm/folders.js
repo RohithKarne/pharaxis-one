@@ -11,6 +11,38 @@ const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
+
+// Security groups this organisation may use: its own, and shared groups opened
+// to it — the same rule as Admin > Security Groups.
+async function usableGroups(req) {
+  const [rows] = await pool.execute(
+    `SELECT id, name, org_id, privileges FROM security_groups
+      WHERE is_active = 1 AND COALESCE(is_template, 0) = 0
+        ${hasPlatformAdminScope(req) ? '' : 'AND (org_id = ? OR org_id IS NULL)'}
+      ORDER BY name`,
+    hasPlatformAdminScope(req) ? [] : [req.user.orgId]);
+  return rows.filter((g) => {
+    if (hasPlatformAdminScope(req) || Number(g.org_id) === Number(req.user.orgId)) return true;
+    let p = g.privileges;
+    try { p = typeof p === 'string' ? JSON.parse(p) : (p || {}); } catch (_) { p = {}; }
+    return (p?.details?.tenant_ids || []).map(Number).includes(Number(req.user.orgId));
+  }).map(({ id, name }) => ({ id, name }));
+}
+
+const FOLDER_STATUSES = ['Active', 'Inactive'];
+
+// What still lives in a folder: a folder holding live content cannot be closed.
+async function liveContent(folderId) {
+  const [[c]] = await pool.execute(
+    `SELECT (SELECT COUNT(*) FROM cm_documents WHERE folder_id = ? AND status != 'Archived') AS documents,
+            (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = ? AND status != 'Archived') AS faqs,
+            (SELECT COUNT(*) FROM cm_modules WHERE folder_id = ? AND status != 'Archived') AS modules,
+            (SELECT COUNT(*) FROM cm_templates WHERE folder_id = ? AND status != 'Archived') AS templates`,
+    [folderId, folderId, folderId, folderId]);
+  const parts = Object.entries(c).filter(([, n]) => Number(n) > 0).map(([k, n]) => `${n} ${Number(n) === 1 ? k.replace(/s$/, '') : k}`);
+  return parts.length ? `This folder still holds ${parts.join(', ')}. Archive or move them first.` : null;
+}
 
 async function audit(userId, userName, action, entity, entityId, details) {
   await logAudit(userId, userName, action, entity, entityId, details);
@@ -77,6 +109,8 @@ async function verifyScopedEntity(req, entityType, entityId) {
 // GET /api/cm/folders — list active folders
 router.get('/folders', authenticate, async (req, res) => {
   try {
+    const statusSql = req.query.include_inactive === 'true' ? '1=1' : "f.status = 'Active'";
+    const readable = await folderFilterSql(req.user, 'f.id');
     const [folders] = await pool.execute(
       hasPlatformAdminScope(req)
         ? `SELECT f.*,
@@ -90,7 +124,7 @@ router.get('/folders', authenticate, async (req, res) => {
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id
            LEFT JOIN users u ON f.created_by = u.id
-           WHERE f.status = 'Active'
+           WHERE ${statusSql}${readable}
            ORDER BY f.name`
         : `SELECT f.*,
                   p.trade_name AS product_name,
@@ -103,7 +137,7 @@ router.get('/folders', authenticate, async (req, res) => {
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id
            LEFT JOIN users u ON f.created_by = u.id
-           WHERE f.status = 'Active' AND f.org_id = ?
+           WHERE ${statusSql}${readable} AND f.org_id = ?
            ORDER BY f.name`,
       hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
@@ -118,12 +152,12 @@ router.get('/folders', authenticate, async (req, res) => {
 router.post('/folders', authenticate, async (req, res) => {
   try {
     const { name, product_id, site_id, description } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required.' });
+    if (!String(name || '').trim()) return res.status(400).json({ error: 'name is required.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
 
     const [result] = await pool.execute(
-      'INSERT INTO cm_folders (name, product_id, site_id, description, created_by, org_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [name.trim(), product_id || null, site_id || null, description || null, req.user.userId, orgId]
+      "INSERT INTO cm_folders (name, product_id, site_id, description, created_by, org_id, status) VALUES (?, ?, ?, ?, ?, ?, 'Active')",
+      [String(name).trim(), product_id || null, site_id || null, description || null, req.user.userId, orgId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_folder', result.insertId, { name });
     const [[created]] = await pool.execute('SELECT * FROM cm_folders WHERE id = ?', [result.insertId]);
@@ -143,19 +177,26 @@ router.put('/folders/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
       hasPlatformAdminScope(req)
-        ? 'SELECT id, org_id FROM cm_folders WHERE id = ?'
-        : 'SELECT id, org_id FROM cm_folders WHERE id = ? AND org_id = ?',
+        ? 'SELECT id, org_id, status FROM cm_folders WHERE id = ?'
+        : 'SELECT id, org_id, status FROM cm_folders WHERE id = ? AND org_id = ?',
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Folder not found.' });
     const orgId = getScopedOrgId(req, req.body.org_id || existing.org_id);
 
     const { name, product_id, site_id, description } = req.body;
+    if (!String(name || '').trim()) return res.status(400).json({ error: 'name is required.' });
+    const status = req.body.status === undefined ? existing.status : req.body.status;
+    if (!FOLDER_STATUSES.includes(status)) return res.status(400).json({ error: 'Status must be Active or Inactive.' });
+    if (status === 'Inactive' && existing.status !== 'Inactive') {
+      const busy = await liveContent(id);
+      if (busy) return res.status(400).json({ error: busy });
+    }
     await pool.execute(
-      'UPDATE cm_folders SET name = ?, product_id = ?, site_id = ?, description = ?, org_id = ?, updated_at = NOW() WHERE id = ?',
-      [name, product_id || null, site_id || null, description || null, orgId, id]
+      'UPDATE cm_folders SET name = ?, product_id = ?, site_id = ?, description = ?, org_id = ?, status = ?, updated_at = NOW() WHERE id = ?',
+      [String(name).trim(), product_id || null, site_id || null, description || null, orgId, status, id]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_folder', Number(id), { name });
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_folder', Number(id), { name, status });
     res.json({ message: 'Folder updated.' });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
@@ -178,29 +219,26 @@ router.delete('/folders/:id', authenticate, async (req, res) => {
     );
     if (!existing) return res.status(404).json({ error: 'Folder not found.' });
 
-    // Check for documents
-    const [[docCount]] = await pool.execute(
-      "SELECT COUNT(*) AS count FROM cm_documents WHERE folder_id = ? AND status != 'Archived'",
-      [id]
-    );
-    if (docCount.count > 0) {
-      return res.status(400).json({ error: 'Cannot deactivate folder — it contains active documents. Archive all documents first.' });
-    }
-
-    // Check for FAQs
-    const [[faqCount]] = await pool.execute(
-      "SELECT COUNT(*) AS count FROM cm_faqs WHERE folder_id = ? AND status != 'Archived'",
-      [id]
-    );
-    if (faqCount.count > 0) {
-      return res.status(400).json({ error: 'Cannot deactivate folder — it contains active FAQs. Archive all FAQs first.' });
-    }
+    const busy = await liveContent(id);
+    if (busy) return res.status(400).json({ error: busy });
 
     await pool.execute("UPDATE cm_folders SET status = 'Inactive', updated_at = NOW() WHERE id = ?", [id]);
     await audit(req.user.userId, req.user.email, 'DELETE', 'cm_folder', Number(id), { name: existing.name });
     res.json({ message: 'Folder deactivated.' });
   } catch (err) {
     console.error('DELETE /cm/folders/:id error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/sites — the organisation's sites, for a folder. The admin site
+// list refuses content managers.
+router.get('/sites', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, name FROM sites WHERE is_active = 1 AND org_id = ? ORDER BY name', [req.user.orgId]);
+    res.json({ sites: rows });
+  } catch (err) {
+    console.error('GET /cm/sites error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -217,10 +255,10 @@ router.get('/folders/:id/permissions', authenticate, async (req, res) => {
        FROM cm_folder_permissions fp
        JOIN security_groups sg ON sg.id = fp.security_group_id
        WHERE fp.folder_id = ?
-       ${hasPlatformAdminScope(req) ? '' : 'AND sg.org_id = ?'}`,
-      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+       ORDER BY sg.name`,
+      [req.params.id]
     );
-    res.json({ permissions: perms });
+    res.json({ permissions: perms, groups: await usableGroups(req) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -233,13 +271,12 @@ router.post('/folders/:id/permissions', authenticate, async (req, res) => {
     if (!folder) return res.status(404).json({ error: 'Folder not found.' });
     const { security_group_id, permission_level } = req.body;
     if (!security_group_id) return res.status(400).json({ error: 'security_group_id required' });
-    const [groups] = await pool.execute(
-      hasPlatformAdminScope(req)
-        ? 'SELECT id FROM security_groups WHERE id = ?'
-        : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
-      hasPlatformAdminScope(req) ? [security_group_id] : [security_group_id, req.user.orgId]
-    );
-    if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
+    if (permission_level && !['read', 'write', 'manage'].includes(permission_level)) {
+      return res.status(400).json({ error: 'Permission level must be read, write or manage.' });
+    }
+    if (!(await usableGroups(req)).some((g) => Number(g.id) === Number(security_group_id))) {
+      return res.status(404).json({ error: 'Security group not found for active organisation.' });
+    }
     await pool.execute(
       `INSERT INTO cm_folder_permissions (folder_id, security_group_id, permission_level, created_by)
        VALUES (?, ?, ?, ?)
@@ -258,17 +295,12 @@ router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res
   try {
     const folder = await getScopedFolder(req, req.params.id);
     if (!folder) return res.status(404).json({ error: 'Folder not found.' });
-    const [groups] = await pool.execute(
-      hasPlatformAdminScope(req)
-        ? 'SELECT id FROM security_groups WHERE id = ?'
-        : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
-      hasPlatformAdminScope(req) ? [req.params.groupId] : [req.params.groupId, req.user.orgId]
-    );
-    if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
-    await pool.execute(
+    const [gone] = await pool.execute(
       `DELETE FROM cm_folder_permissions WHERE folder_id = ? AND security_group_id = ?`,
       [req.params.id, req.params.groupId]
     );
+    if (!gone.affectedRows) return res.status(404).json({ error: 'That group has no permission on this folder.' });
+    await audit(req.user.userId, req.user.email, 'REMOVE_FOLDER_PERMISSION', 'cm_folder', Number(req.params.id), { security_group_id: Number(req.params.groupId) });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

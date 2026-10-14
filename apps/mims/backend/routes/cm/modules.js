@@ -20,6 +20,7 @@ const multer = require('multer');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { publishedOnly } = require('../../middleware/cmAccess');
+const { folderFilterSql } = require('../../services/cmFolderAccess');
 const bcrypt = require('bcrypt');
 
 // MIPM-191: a module's status came straight from the request, so an author could
@@ -281,6 +282,7 @@ router.get('/modules', authenticate, async (req, res) => {
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
     const draftsHidden = await publishedOnly(req);
+    const folderFilter = await folderFilterSql(req.user, 'm.folder_id');
     const buildQuery = (includeCreatedBy) => {
       let query = `
         SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''},
@@ -298,6 +300,7 @@ router.get('/modules', authenticate, async (req, res) => {
       }
       if (status) { query += ' AND m.status = ?'; params.push(status); }
       if (draftsHidden) query += " AND m.status = 'Published'";
+      query += folderFilter;
       if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
       if (search) {
         query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
