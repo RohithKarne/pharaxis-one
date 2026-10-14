@@ -334,7 +334,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
             <label className="cm-form-label">Document Type <span style={{ color: 'var(--danger)' }}>*</span></label>
             <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
               {/* Prescribing Information is enclosed with an off-label answer (MI Response Settings). */}
-              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+              {/* A document's own type is kept even when it is not in the list, so saving does not change it. */}
+              {[...new Set([...DOC_TYPES, form.doc_type].filter(Boolean))].map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="cm-form-group" style={{ margin: 0 }}>

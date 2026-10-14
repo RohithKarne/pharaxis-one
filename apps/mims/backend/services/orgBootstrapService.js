@@ -56,7 +56,8 @@ const CONTENT_PACK = [
     moduleType: 'Checklist',
     moduleBody: '<p>Baseline checklist for review, approval, and publication governance inside Content Management.</p>',
     documentName: 'Starter FAQ Pack',
-    documentType: 'FAQ',
+    // A real document type: "FAQ" is not one (FAQs are their own content).
+    documentType: 'Information Document',
     documentBody: '<p>Populate common answers, approved references, and approved escalation guidance here.</p>',
   },
 ];
