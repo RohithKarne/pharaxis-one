@@ -160,16 +160,6 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
             <label className="cm-form-label">Usage Instructions</label>
             <textarea aria-label="Usage Instructions" className="cm-form-textarea" rows={2} value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} />
           </div>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
-              Publish as PDF
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
-              Send as PDF
-            </label>
-          </div>
         </div>
         <div className="cm-drawer-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>

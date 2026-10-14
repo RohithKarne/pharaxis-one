@@ -562,16 +562,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
-                Publish as PDF
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
-                Send as PDF
-              </label>
-            </div>
 
             {form.response_doc_type === 'Module' && (() => {
               const selectedIds = normalizeSelectedModules(form.selected_modules)
