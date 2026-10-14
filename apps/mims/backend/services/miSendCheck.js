@@ -22,16 +22,16 @@
 const pool = require('../database/db');
 const { getSettings } = require('./miResponseSettings');
 
-// The prescribing information a letter encloses, by document type.
-async function lettersPiEnclosed(responseId, db) {
+// The documents a letter encloses.
+async function lettersDocuments(responseId, db) {
   const [[r]] = await db.execute('SELECT selected_documents FROM case_mi_responses WHERE id = ?', [responseId]);
   let list = [];
   try { list = typeof r?.selected_documents === 'string' ? JSON.parse(r.selected_documents) : (r?.selected_documents || []); } catch { list = []; }
   const ids = (Array.isArray(list) ? list : []).map(d => Number(d?.id ?? d)).filter(Boolean);
-  if (!ids.length) return false;
+  if (!ids.length) return [];
   const [rows] = await db.execute(
-    `SELECT id FROM cm_documents WHERE id IN (${ids.map(() => '?').join(',')}) AND doc_type = 'Prescribing Information'`, ids);
-  return rows.length > 0;
+    `SELECT id, name, doc_type FROM cm_documents WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  return rows;
 }
 
 async function linkedSafetyCase(caseId, db) {
@@ -71,7 +71,7 @@ async function miSendCheck(caseId, miTabId = null, db = pool, { responseId = nul
     // in MI Response Settings. Known only for a letter, so the card says so.
     if (t.is_off_label && settings.require_pi_offlabel) {
       if (responseId) {
-        const ok = await lettersPiEnclosed(responseId, db);
+        const ok = (await lettersDocuments(responseId, db)).some(d => d.doc_type === 'Prescribing Information');
         items.push({ key: 'pi', label: `${prefix(t)}Prescribing information enclosed (off-label)`, level: 'block', ok, detail: ok ? '' : 'enclose a Prescribing Information document' });
       } else {
         items.push({ key: 'pi', label: `${prefix(t)}Off-label: the letter must enclose the prescribing information`, level: 'info', ok: false, detail: 'checked when the letter is sent' });

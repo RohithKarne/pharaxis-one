@@ -3,12 +3,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+// The lists a content screen reads. Content Type, Audience and Therapeutic Area
+// were offered here but no screen used them; their values are kept.
 const CM_FIELD_TYPES = [
   { key: 'document_category', label: 'Document Category' },
-  { key: 'content_type', label: 'Content Type' },
   { key: 'language', label: 'Language' },
-  { key: 'audience', label: 'Audience' },
-  { key: 'therapeutic_area', label: 'Therapeutic Area' },
 ]
 
 function CMOrgAlertsSettings({ token }) {
@@ -274,7 +273,7 @@ export default function CMSettingsSection({ token }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{currentFieldLabel} Values</h4>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These values appear in the "{currentFieldLabel}" dropdown in document creation.</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These values appear in the "{currentFieldLabel}" dropdown on a document.{activeField === 'language' ? ' Store the two-letter code (en, fr, de) as the value.' : ''}</p>
         </div>
         <button
           onClick={openAdd}

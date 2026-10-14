@@ -4475,3 +4475,6 @@
 /* MI response builder: the off-label rule (MI response review, 14 Oct 2026). */
 .cf-builder-note--warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
 .cf-builder-statement { margin-top: 6px; padding: 6px 8px; background: #fff; border: 1px dashed #fcd34d; color: #374151; white-space: pre-wrap; }
+
+/* "Show other products' documents" in the letter builder: a quiet text button. */
+.cf-link-btn { background: none; border: none; padding: 6px 0 0; color: var(--primary); font-size: 12px; cursor: pointer; text-align: left; text-decoration: underline; }

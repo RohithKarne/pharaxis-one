@@ -2319,17 +2319,21 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
     const [documents] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
               d.language, d.document_category, d.standard_response_text, d.content_html,
-              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor
+              d.send_as_pdf, d.selected_modules, d.version_major, d.version_minor,
+              d.product_id, p.trade_name AS product_name,
+              CASE WHEN d.product_id IS NULL THEN 'any' WHEN d.product_id = ? THEN 'this' ELSE 'other' END AS product_match
          FROM cm_documents d
          INNER JOIN cm_folders f ON f.id = d.folder_id
+         LEFT JOIN products p ON p.id = d.product_id
         WHERE d.status = 'Published'
           AND (? = 1 OR f.org_id = ?)
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
           AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())
           AND COALESCE(d.doc_type, '') <> 'Internal Document'
-        ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
+        ORDER BY CASE WHEN d.product_id = ? THEN 0 WHEN d.product_id IS NULL THEN 1 ELSE 2 END,
+                 CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
-      [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
+      [productId || 0, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, productId || 0]
     );
     const [modules] = await pool.execute(
       `SELECT m.id, m.module_id, m.name, m.module_type, m.status,

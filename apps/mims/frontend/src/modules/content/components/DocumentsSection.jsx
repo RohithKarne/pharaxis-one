@@ -437,6 +437,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
                       <td style={{ fontWeight: 500, minWidth: 220, maxWidth: 360 }}>
                         {d.name}
                         {d.revises_version && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Revision of published v{d.revises_version}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{d.product_name || 'Any product'} · {d.language || 'en'}</div>
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

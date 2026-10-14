@@ -100,6 +100,7 @@ export default function CaseMITab({
   const [miEsignForm,    setMiEsignForm]    = useState({ password: '', reason: '' })
   const [miEsignSaving,  setMiEsignSaving]  = useState(false)
   const [builderContext, setBuilderContext] = useState(null)
+  const [showOtherProductDocs, setShowOtherProductDocs] = useState(false)
   const [builderLoading, setBuilderLoading] = useState(false)
   const [builderPreview, setBuilderPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -508,11 +509,19 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
-  const documents = builderContext?.documents || []
-  const modules = builderContext?.modules || []
+  const allDocuments = builderContext?.documents || []
+  const allModules = builderContext?.modules || []
   const templates = builderContext?.templates || []
   // Languages: English plus every language the published content is written in.
-  const languages = [...new Set(['en', ...[...templates, ...documents, ...modules].map(x => x.language).filter(Boolean)])]
+  const languages = [...new Set(['en', ...[...templates, ...allDocuments, ...allModules].map(x => x.language).filter(Boolean)])]
+  // Content in the letter's language, and documents for this question's product
+  // or for any product. Another product's documents stay one click away.
+  const inLanguage = (x) => !x.language || x.language === miRespForm.language
+  const otherProductDocs = allDocuments.filter(d => d.product_match === 'other' && inLanguage(d))
+  // Anything already ticked stays in view, so it can be seen and unticked.
+  const ticked = (list, id) => (list || []).map(Number).includes(Number(id))
+  const documents = allDocuments.filter(d => ticked(miRespForm.selected_document_ids, d.id) || (inLanguage(d) && (d.product_match !== 'other' || showOtherProductDocs)))
+  const modules = allModules.filter(m => ticked(miRespForm.selected_module_ids, m.id) || inLanguage(m))
   const LANGUAGE_NAMES = { en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', ja: 'Japanese', zh: 'Chinese', pt: 'Portuguese', nl: 'Dutch' }
   const channels = builderContext?.channels?.length ? builderContext.channels : ['Email', 'Phone Call', 'Written Letter', 'Portal', 'Fax', 'In-Person Meeting']
   const verbalChannel = !/^(email|portal)$/i.test(String(miRespForm.channel || ''))
@@ -852,10 +861,15 @@ export default function CaseMITab({
                           {documents.map(doc => (
                             <label key={doc.id} className="cf-builder-check">
                               <input type="checkbox" checked={miRespForm.selected_document_ids.map(Number).includes(Number(doc.id))} onChange={() => toggleSelection('selected_document_ids', doc.id)} />
-                              <span>{doc.name}<small>{doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}{doc.language ? ` - ${doc.language}` : ''}{rules.require_pi && doc.doc_type === 'Prescribing Information' ? ' - needed for this off-label answer' : ''}</small></span>
+                              <span>{doc.name}<small>{doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}{doc.language ? ` - ${doc.language}` : ''}{doc.product_name ? ` - ${doc.product_name}` : ''}{rules.require_pi && doc.doc_type === 'Prescribing Information' ? ' - needed for this off-label answer' : ''}</small></span>
                             </label>
                           ))}
-                          {documents.length === 0 && <div className="cf-empty-msg">No published documents available.</div>}
+                          {documents.length === 0 && <div className="cf-empty-msg">No published documents in this language for this product.</div>}
+                          {otherProductDocs.length > 0 && (
+                            <button type="button" className="cf-link-btn" onClick={() => setShowOtherProductDocs(v => !v)}>
+                              {showOtherProductDocs ? 'Hide other products\' documents' : `Show other products' documents (${otherProductDocs.length})`}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="cf-builder-card">
@@ -872,6 +886,10 @@ export default function CaseMITab({
                       </div>
                       <div className="cf-builder-card">
                         <div className="cf-builder-card-title">Response Controls</div>
+                        {/* A document written for another product, ticked for this question. */}
+                        {allDocuments.filter(d => d.product_match === 'other' && miRespForm.selected_document_ids.map(Number).includes(Number(d.id))).map(d => (
+                          <div key={d.id} className="cf-builder-note cf-builder-note--warn" role="alert">{d.name} is for {d.product_name}, not this question's product.</div>
+                        ))}
                         {/* Follow-up is ticked once, on the MI (Follow-up Required and its
                             due date); the letter's own tick went in the MI field review. */}
                         {/* The sent date is recorded when the letter is sent; a date is asked

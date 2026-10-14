@@ -149,6 +149,16 @@ function normalizeOptionalUrl(value) {
   }
 }
 
+// The product a document is about must be one of its organisation's products;
+// empty means any product.
+async function scopedProductId(value, orgId) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [[p]] = await pool.execute('SELECT id FROM products WHERE id = ? AND (org_id = ? OR org_id IS NULL)', [id, orgId]);
+  if (!p) { const e = new Error('That product is not in this organisation.'); e.statusCode = 400; throw e; }
+  return id;
+}
+
 // Periodic review: how many days a published document runs before its owner is
 // reminded to review it (cmReviewReminderService). The screen offered the field
 // but it was never saved, so no reminder could fire.
@@ -273,6 +283,7 @@ router.get('/documents', authenticate, async (req, res) => {
 
     let query = `
       SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name,
+             (SELECT p.trade_name FROM products p WHERE p.id = d.product_id) AS product_name,
              (SELECT r.id FROM cm_documents r WHERE r.revision_of = d.id AND r.status NOT IN ('Published','Archived') LIMIT 1) AS open_revision_id,
              (SELECT CONCAT(o.version_major, '.', o.version_minor) FROM cm_documents o WHERE o.id = d.revision_of) AS revises_version
       FROM cm_documents d
@@ -315,6 +326,10 @@ router.get('/documents', authenticate, async (req, res) => {
       query += ' AND d.document_category = ?';
       params.push(req.query.category);
     }
+    if (req.query.product_id) {
+      query += ' AND d.product_id = ?';
+      params.push(Number(req.query.product_id));
+    }
     if (include_expired !== 'true') {
       query += ' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())';
     }
@@ -346,7 +361,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
-      review_cycle_days, regulatory_ref, expiry_alert_recipients,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id,
     } = req.body;
     const parsedSelectedModules = parseSelectedModules(selected_modules);
 
@@ -360,6 +375,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       await conn.rollback();
       return res.status(404).json({ error: 'Folder not found for active organisation.' });
     }
+    const productId = await scopedProductId(product_id, scopedFolder.org_id);
 
     const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
     const normalizedResponseDocType = response_doc_type || 'File';
@@ -402,8 +418,8 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
           mi_category_id, document_category, standard_response_text, authoring_source,
           external_provider, external_document_url, external_share_url, external_document_id,
           external_drive_id, external_account_email, external_api_endpoint, created_by,
-          review_cycle_days, regulatory_ref, expiry_alert_recipients)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         docId, folder_id, doc_type || 'SRD', normalizedResponseDocType, name.trim(), effectiveContentHtml,
         filePath, fileName, fileSize, fileMime,
@@ -419,7 +435,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
         normalizedExternalDocumentId, normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
         req.user.userId,
         reviewCycleDays(review_cycle_days), normalizeOptionalString(regulatory_ref, 255),
-        alertRecipients(expiry_alert_recipients),
+        alertRecipients(expiry_alert_recipients), productId,
       ]
     );
 
@@ -438,10 +454,25 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     res.status(201).json({ message: 'Document created.', id: result.insertId, document: publicDoc(created) });
   } catch (err) {
     await conn.rollback();
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
     conn.release();
+  }
+});
+
+// GET /api/cm/products — the organisation's products, for tagging content. The
+// admin product list refuses content managers.
+router.get('/products', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, trade_name FROM products WHERE is_active = 1 AND (org_id = ? OR org_id IS NULL) ORDER BY trade_name',
+      [req.user.orgId]);
+    res.json({ products: rows });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/products' }, 'Failed to list products for content');
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 
@@ -633,8 +664,9 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
       mi_category_id, document_category, standard_response_text,
       authoring_source, external_provider, external_document_url, external_share_url,
       external_document_id, external_drive_id, external_account_email, external_api_endpoint,
-      review_cycle_days, regulatory_ref, expiry_alert_recipients,
+      review_cycle_days, regulatory_ref, expiry_alert_recipients, product_id,
     } = req.body;
+    const productId = product_id !== undefined ? await scopedProductId(product_id, doc.folder_org_id) : doc.product_id;
     const parsedSelectedModules = selected_modules !== undefined
       ? parseSelectedModules(selected_modules)
       : null;
@@ -700,7 +732,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
          standard_response_text = ?, authoring_source = ?, external_provider = ?,
          external_document_url = ?, external_share_url = ?, external_document_id = ?,
          external_drive_id = ?, external_account_email = ?, external_api_endpoint = ?,
-         review_cycle_days = ?, regulatory_ref = ?, expiry_alert_recipients = ?,
+         review_cycle_days = ?, regulatory_ref = ?, expiry_alert_recipients = ?, product_id = ?,
          updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
@@ -729,6 +761,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
         review_cycle_days !== undefined ? reviewCycleDays(review_cycle_days) : doc.review_cycle_days,
         regulatory_ref !== undefined ? normalizeOptionalString(regulatory_ref, 255) : doc.regulatory_ref,
         expiry_alert_recipients !== undefined ? alertRecipients(expiry_alert_recipients) : doc.expiry_alert_recipients,
+        productId,
         req.user.userId, id,
       ]
     );
@@ -748,6 +781,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
     res.json({ message: 'Document updated.' });
   } catch (err) {
     await conn.rollback();
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
@@ -795,7 +829,7 @@ router.post('/documents/:id/revise', authenticate, async (req, res) => {
           external_provider, external_document_url, external_share_url, external_document_id,
           external_drive_id, external_account_email, external_api_endpoint,
           review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
-          revision_of, created_by)
+          product_id, revision_of, created_by)
        SELECT doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
           'Draft', version_major, version_minor, expiry_date, activation_date, language,
           is_product_specific, is_site_specific, search_tags, usage_instructions,
@@ -804,7 +838,7 @@ router.post('/documents/:id/revise', authenticate, async (req, res) => {
           external_provider, external_document_url, external_share_url, external_document_id,
           external_drive_id, external_account_email, external_api_endpoint,
           review_cycle_days, regulatory_ref, expiry_alert_recipients, alert_days, alert_email_account_id,
-          id, ?
+          product_id, id, ?
          FROM cm_documents WHERE id = ?`,
       [req.user.userId, src.id]
     );
@@ -1683,8 +1717,8 @@ router.post('/documents/:id/clone', authenticate, async (req, res) => {
           publish_as_pdf, send_as_pdf, selected_modules, attributes,
           mi_category_id, document_category, standard_response_text, authoring_source,
           external_provider, external_document_url, external_share_url, external_document_id,
-          external_drive_id, external_account_email, external_api_endpoint, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          external_drive_id, external_account_email, external_api_endpoint, created_by, product_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newDocId, src.folder_id, src.doc_type, src.response_doc_type,
         `Copy of ${src.name}`, src.content_html,
@@ -1698,7 +1732,7 @@ router.post('/documents/:id/clone', authenticate, async (req, res) => {
         src.external_provider || null, src.external_document_url || null, src.external_share_url || null,
         src.external_document_id || null, src.external_drive_id || null,
         src.external_account_email || null, src.external_api_endpoint || null,
-        req.user.userId,
+        req.user.userId, src.product_id || null,
       ]
     );
     await conn.commit();

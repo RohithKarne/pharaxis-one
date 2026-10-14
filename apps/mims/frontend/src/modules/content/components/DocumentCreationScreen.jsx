@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
-import { normalizeSelectedModules, parseMaybeJson, DOC_TYPES } from './ContentUtils'
+import { normalizeSelectedModules, parseMaybeJson, DOC_TYPES, DEFAULT_LANGUAGES } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -31,6 +31,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     activation_date: doc?.activation_date ? doc.activation_date.slice(0, 10) : '',
     expiry_alert_recipients: parseMaybeJson(doc?.expiry_alert_recipients, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     language: doc?.language || 'en',
+    product_id: doc?.product_id || '',
     search_tags: doc?.search_tags || '',
     mi_category_id: doc?.mi_category_id || '',
     document_category: doc?.document_category || '',
@@ -65,6 +66,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const [folders, setFolders] = useState([])
   const [miCategories, setMiCategories] = useState([])
   const [docCategories, setDocCategories] = useState([])
+  const [products, setProducts] = useState([])
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
   const [microsoftProvider, setMicrosoftProvider] = useState(null)
 
   useEffect(() => {
@@ -80,6 +83,16 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       .then(r => r.ok ? r.json() : { picklists: [] })
       .then(d => setDocCategories(d.picklists || []))
       .catch(() => setDocCategories([]))
+    // The product a document is about, from the organisation's product list.
+    httpFetch('/api/cm/products', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { products: [] })
+      .then(d => setProducts(d.products || []))
+      .catch(() => setProducts([]))
+    // The organisation's own language list (Settings > Language), else the defaults.
+    httpFetch('/api/cm/picklists?field_type=language&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { picklists: [] })
+      .then(d => { if ((d.picklists || []).length) setLanguages(d.picklists.map(p => ({ value: p.value, label: p.label || p.value }))) })
+      .catch(() => {})
     httpFetch('/api/auth/sso/providers', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { providers: [] })
       .then(d => {
@@ -643,6 +656,24 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               )
             })()}
 
+            {/* The letter builder offers a document for its product's questions (and
+                one with no product for any question), in the language chosen. */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Product</label>
+                <select aria-label="Product" className="cm-form-select" value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
+                  <option value="">Any product</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
+                </select>
+              </div>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Language</label>
+                <select aria-label="Language" className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
+                  {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                  {!languages.some(l => l.value === form.language) && <option value={form.language}>{form.language}</option>}
+                </select>
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
               <div className="cm-form-group" style={{ margin: 0 }}>
                 <label className="cm-form-label">Search Tags</label>
