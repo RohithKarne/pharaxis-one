@@ -1637,7 +1637,7 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
        JOIN cm_folders f ON d.folder_id = f.id
        WHERE response_doc_type = 'Module'
          AND d.selected_modules IS NOT NULL
-         AND JSON_CONTAINS(d.selected_modules, CAST(? AS JSON))
+         AND JSON_CONTAINS(d.selected_modules, ?)
          ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}${await folderFilterSql(req.user, 'd.folder_id')}`,
       hasPlatformAdminScope(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
     );
