@@ -1765,8 +1765,9 @@ module.exports = [
 
         // The write route was removed (access review); the row is seeded directly.
         const [createAudit] = await pool.execute(
+          // user_id is required: the row is put down to whoever created the case.
           `INSERT INTO case_audit_trail (case_id, user_id, user_name, action_type, field_name, old_value, new_value)
-           VALUES (?, NULL, 'regression', 'REGRESSION_UPDATE', 'priority', 'normal', 'high')`,
+           SELECT id, created_by, 'regression', 'REGRESSION_UPDATE', 'priority', 'normal', 'high' FROM cases WHERE id = ?`,
           [caseId]
         )
         auditId = Number(createAudit.insertId || 0)
