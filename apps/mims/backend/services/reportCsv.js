@@ -31,6 +31,7 @@ const COLUMN_LABELS = Object.freeze({
   response_due_at: 'Response due',
   age_hours: 'Age (hours)',
   icsr_status: 'ICSR status',
+  modules: 'Screens',
 });
 
 function columnLabel(key) {

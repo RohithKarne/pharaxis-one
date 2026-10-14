@@ -195,7 +195,7 @@ const BUILTIN_REPORT_DEFINITIONS = Object.freeze([
   {
     report_key: 'user-access-review',
     name: 'User Access Review',
-    description: 'Everyone with access to the organisation: role, account status, modules, last sign-in and failed attempts — for the periodic access review.',
+    description: 'Everyone with access to the organisation: role, account status, the screens they can open and how that differs from their role, last sign-in and failed attempts — for the periodic access review.',
     group_key: 'administration',
     audience: 'admin_only',
     default_filters: {},
