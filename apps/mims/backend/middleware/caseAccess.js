@@ -23,6 +23,7 @@ const { getUserModules } = require('../utils/userModules');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const { resolveActivityScope } = require('../services/accessConfigurationService');
 const { verifyCaseOrg } = require('../services/caseHelpers');
+const { gatePath } = require('../utils/gatePath');
 
 // Paths this check covers.
 const CASE_AREA = /^\/(cases|mi|mi-responses)(\/|$)|^\/inbox\/case\/\d+\//;
@@ -55,14 +56,15 @@ const VIEWER_ACTIONS = /^\/cases\/\d+\/(pin|touch|presence|watchers(\/\d+)?|vali
 // or null when the record is not a case's.
 async function entityCaseId(req) {
   const q = req.query || {};
+  const path = gatePath(req);
   let m;
-  if ((m = req.path.match(/^\/(?:attachments\/source-for|rich-fields)\/([^/]+)\/(\d+)\//))) return m[1] === 'case' ? Number(m[2]) : null;
-  if (['/attachments', '/field-history', '/rich-fields'].includes(req.path)) return q.entity_type === 'case' && q.entity_id ? Number(q.entity_id) : null;
-  if ((m = req.path.match(/^\/attachments\/(\d+)(\/|$)/))) {
+  if ((m = path.match(/^\/(?:attachments\/source-for|rich-fields)\/([^/]+)\/(\d+)\//))) return m[1] === 'case' ? Number(m[2]) : null;
+  if (['/attachments', '/field-history', '/rich-fields'].includes(path)) return String(q.entity_type).toLowerCase() === 'case' && q.entity_id ? Number(q.entity_id) : null;
+  if ((m = path.match(/^\/attachments\/(\d+)(\/|$)/))) {
     const [[a]] = await pool.execute('SELECT entity_type, entity_id FROM attachments WHERE id = ?', [m[1]]);
     return a?.entity_type === 'case' ? Number(a.entity_id) : null;
   }
-  if ((m = req.path.match(/^\/files\/\d+\/(.+)$/))) {
+  if ((m = path.match(/^\/files\/\d+\/(.+)$/))) {
     const [[a]] = await pool.execute('SELECT entity_type, entity_id FROM attachments WHERE storage_key = ? OR thumb_key = ? LIMIT 1', [m[1], m[1]]);
     return a?.entity_type === 'case' ? Number(a.entity_id) : null;
   }
@@ -100,14 +102,15 @@ async function check(req, res, next) {
     return deny(res, 403, 'You do not have access to Cases.');
   }
   const read = ['GET', 'HEAD'].includes(req.method);
-  const target = await caseIdFor(req.path);
+  const path = gatePath(req);
+  const target = await caseIdFor(path);
   if (!target) {
     // Lists, searches and new-case screens: the person must be able to see cases at all.
     const scope = await resolveActivityScope(req.user, 'case.view');
     return scope === 'none' ? deny(res, 403, 'You do not have permission to view cases.') : next();
   }
   if (!target.id) return deny(res, 404, 'Not found.');
-  const key = read || VIEWER_ACTIONS.test(req.path) ? 'case.view' : 'case.update';
+  const key = read || VIEWER_ACTIONS.test(path) ? 'case.view' : 'case.update';
   if (await verifyCaseOrg(target.id, req, key)) return next();
   const [[exists]] = await pool.execute('SELECT id FROM cases WHERE id = ? LIMIT 1', [target.id]);
   if (!exists) return deny(res, 404, 'Case not found.');
@@ -115,7 +118,8 @@ async function check(req, res, next) {
 }
 
 function caseAccess(req, res, next) {
-  const gate = CASE_AREA.test(req.path) ? check : ENTITY_AREA.test(req.path) ? checkEntity : null;
+  const path = gatePath(req);
+  const gate = CASE_AREA.test(path) ? check : ENTITY_AREA.test(path) ? checkEntity : null;
   if (!gate) return next();
   const run = () => gate(req, res, next).catch(next);
   return req.user ? run() : authenticate(req, res, run);

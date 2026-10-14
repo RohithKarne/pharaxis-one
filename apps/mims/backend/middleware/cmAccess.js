@@ -22,12 +22,13 @@ const { userHasActivityPrivilege } = require('../services/accessConfigurationSer
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const pool = require('../database/db');
 const { canUseFolder } = require('../services/cmFolderAccess');
+const { gatePath } = require('../utils/gatePath');
 
 const CONSUMER = [/^\/content-usage$/, /^\/(documents|faqs)\/\d+\/view$/, /^\/folders\/bookmarks(\/\d+)?$/];
 
 async function allowed(req) {
   if (hasGlobalAdminScope(req.user)) return true;
-  const path = req.path;
+  const path = gatePath(req);
   const has = (key) => userHasActivityPrivilege(req.user, key);
   if (CONSUMER.some((re) => re.test(path))) {
     const modules = await getUserModules(req.user.userId);
@@ -88,7 +89,7 @@ function cmReadAccess(req, res, next) {
       if (hasGlobalAdminScope(req.user)) return next();
       const modules = await getUserModules(req.user.userId);
       if (modules.includes('content_mgmt')) return next();
-      if (modules.includes('browse_content') && BROWSE_READS.some((re) => re.test(req.path))) return next();
+      if (modules.includes('browse_content') && BROWSE_READS.some((re) => re.test(gatePath(req)))) return next();
       return res.status(403).json({ error: 'You do not have access to Content Management.', error_code: 'MODULE_FORBIDDEN', should_logout: false });
     } catch (err) {
       return next(err);
@@ -106,24 +107,25 @@ const READ_ACTIONS = /\/(view|approve|publish|render|generate|alert-subs(\/\d+)?
 
 async function foldersToCheck(req) {
   const read = ['GET', 'HEAD'].includes(req.method);
+  const path = gatePath(req);
   const checks = [];
-  const item = req.path.match(/^\/(documents|modules|faqs|templates)\/(\d+)(\/|$)/);
+  const item = path.match(/^\/(documents|modules|faqs|templates)\/(\d+)(\/|$)/);
   if (item) {
     const [[row]] = await pool.execute(`SELECT folder_id FROM ${ITEM_TABLE[item[1]]} WHERE id = ?`, [Number(item[2])]);
-    if (row?.folder_id) checks.push([row.folder_id, read || READ_ACTIONS.test(req.path) ? 'read' : 'write']);
+    if (row?.folder_id) checks.push([row.folder_id, read || READ_ACTIONS.test(path) ? 'read' : 'write']);
   }
-  const usage = req.path.match(/^\/content-usage\/(document|module|faq)\/(\d+)$/);
+  const usage = path.match(/^\/content-usage\/(document|module|faq)\/(\d+)$/);
   if (usage) {
     const [[row]] = await pool.execute(`SELECT folder_id FROM ${ITEM_TABLE[`${usage[1]}s`]} WHERE id = ?`, [Number(usage[2])]);
     if (row?.folder_id) checks.push([row.folder_id, 'read']);
   }
-  const folder = req.path.match(/^\/folders\/(\d+)(\/|$)/);
+  const folder = path.match(/^\/folders\/(\d+)(\/|$)/);
   if (folder) checks.push([Number(folder[1]), read ? 'read' : 'manage']);
   if (!read && req.body?.folder_id) checks.push([Number(req.body.folder_id), 'write']);
-  if (!read && /^\/(documents\/bulk|faqs\/bulk-tags)$/.test(req.path) && Array.isArray(req.body?.ids)) {
+  if (!read && /^\/(documents\/bulk|faqs\/bulk-tags)$/.test(path) && Array.isArray(req.body?.ids)) {
     const ids = req.body.ids.map(Number).filter(Boolean);
     if (ids.length) {
-      const table = req.path.startsWith('/documents') ? 'cm_documents' : 'cm_faqs';
+      const table = path.startsWith('/documents') ? 'cm_documents' : 'cm_faqs';
       const [rows] = await pool.execute(`SELECT DISTINCT folder_id FROM ${table} WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
       for (const r of rows) if (r.folder_id) checks.push([r.folder_id, req.body.action === 'publish' ? 'read' : 'write']);
     }
@@ -136,7 +138,7 @@ function cmFolderAccess(req, res, next) {
   return authenticate(req, res, async () => {
     try {
       const target = ['GET', 'HEAD'].includes(req.method) ? null : Number(req.body?.folder_id) || null;
-      if (target && !/^\/folders\//.test(req.path)) {
+      if (target && !/^\/folders\//.test(gatePath(req))) {
         const [[f]] = await pool.execute('SELECT status FROM cm_folders WHERE id = ?', [target]);
         if (f && f.status !== 'Active') return res.status(400).json({ error: 'That folder is inactive. Choose an active folder.' });
       }
