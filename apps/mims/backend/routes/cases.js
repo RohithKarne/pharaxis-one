@@ -2919,7 +2919,9 @@ async function caseIsClosed(caseId) {
   return Number(row?.is_closed) === 1;
 }
 
-router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
+// Starting a hand-off needs Create transmission (agents and admins by default);
+// the privilege existed but nothing checked it (access review).
+router.post('/cases/:id/ae-transmissions', authenticate, requireCapability('transmission.create'), async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
@@ -3067,7 +3069,7 @@ router.get('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/pc-transmissions — route to quality team
-router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
+router.post('/cases/:id/pc-transmissions', authenticate, requireCapability('transmission.create'), async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });

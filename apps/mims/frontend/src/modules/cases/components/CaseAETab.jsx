@@ -187,7 +187,7 @@ export default function CaseAETab({
   id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
-  readOnly = false,
+  readOnly = false, canTransmit = true,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -502,9 +502,9 @@ export default function CaseAETab({
         >
           {aeClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
+        {canTransmit && <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
-        </button>
+        </button>}
       </div>}
       {!canCreateAeVersion && !caseClosed && !readOnly && (
         <div className="cf-inline-note">Close the current AE version before creating a new version.</div>

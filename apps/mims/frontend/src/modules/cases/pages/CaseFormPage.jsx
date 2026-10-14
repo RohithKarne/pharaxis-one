@@ -30,6 +30,8 @@ export default function CaseFormPage() {
   const canSave = hasCapability('case.update')
   // Without it the case opens read only: no save, no edit buttons, fields locked.
   const readOnly = !canSave
+  // Starting a PV or Quality hand-off needs Create transmission.
+  const canTransmit = hasCapability('transmission.create')
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
@@ -306,7 +308,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'AE' && (
                 <CaseAETab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
-                  caseClosed={caseClosed} readOnly={readOnly}
+                  caseClosed={caseClosed} readOnly={readOnly} canTransmit={canTransmit}
                   handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
@@ -321,7 +323,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'PC' && (
                 <CasePCTab
                   id={id} headers={headers} setSavedMsg={setSavedMsg}
-                  caseClosed={caseClosed} readOnly={readOnly}
+                  caseClosed={caseClosed} readOnly={readOnly} canTransmit={canTransmit}
                   handoffUsers={handoffUsers}
                   users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
                   onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}

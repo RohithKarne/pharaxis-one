@@ -140,7 +140,7 @@ export default function CasePCTab({
   id, headers, setSavedMsg, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType, registerSectionSave, caseClosed = false, handoffUsers = [],
-  readOnly = false,
+  readOnly = false, canTransmit = true,
 }) {
   const ctx = useCaseFieldContext()
   // Admin settings for the panel's own fields — formConfig.core entries carry
@@ -385,9 +385,9 @@ export default function CasePCTab({
         >
           {pcClosingVersion ? 'Closing…' : 'Close Version'}
         </button>
-        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
+        {canTransmit && <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)} disabled={!!caseClosed} title={caseClosed ? 'Reopen the case to start a hand-off' : undefined}>
           {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
-        </button>
+        </button>}
       </div>}
       {!canCreatePcVersion && !caseClosed && !readOnly && (
         <div className="cf-inline-note">Close the current PC version before creating a new version.</div>

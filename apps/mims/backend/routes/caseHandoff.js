@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireCapability } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const handoff = require('../services/caseHandoffService');
 
@@ -63,7 +63,8 @@ router.get('/cases/:caseId/handoff', authenticate, async (req, res) => {
   }
 });
 
-router.post('/cases/:caseId/handoff/transmit', authenticate, async (req, res) => {
+// Sending to the safety system needs Create transmission (access review).
+router.post('/cases/:caseId/handoff/transmit', authenticate, requireCapability('transmission.create'), async (req, res) => {
   try {
     const owner = await orgForCase(req.params.caseId, req);
     if (!owner) return res.status(404).json({ error: 'Case not found.' });

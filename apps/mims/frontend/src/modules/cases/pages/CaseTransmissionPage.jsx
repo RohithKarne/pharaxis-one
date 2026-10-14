@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import toast from '../../../shared/utils/toast'
 import '../cases.css'
@@ -32,6 +33,7 @@ function formatWhen(value) {
 export default function CaseTransmissionPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { hasCapability } = useAuth()
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -216,7 +218,7 @@ export default function CaseTransmissionPage() {
             )}
           </section>
 
-          <div className="cf-handoff-actions">
+          {hasCapability('transmission.create') && <div className="cf-handoff-actions">
             <button
               type="button"
               className="cf-save-btn"
@@ -226,7 +228,7 @@ export default function CaseTransmissionPage() {
             >
               {sending ? 'Transmitting…' : 'Transmit to safety system'}
             </button>
-          </div>
+          </div>}
 
           <section className="cf-handoff-card">
             <div className="cf-handoff-card-head"><h3>Transmission history</h3></div>
