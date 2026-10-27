@@ -99,6 +99,17 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 
 ---
 
+### MIMS — Inquiry Ledger and the bridge claim (MIPM-223, CPPM-162; branch `feat/CPPM-157-bridge-watch`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), 2026-10-27; Rohith to confirm.*
+**Why:** a new read-only screen and new notices; no case record, audit trail, e-signature or calculation changed. One bridge call now also stores, once, the key a portal uses for a case it sent before keys existed — metadata about where the case came from, never its content.
+**Revalidate:** the Inquiry Ledger (lists, filters, own-cases-only view), its notices and alert email, and the portal's comparison with MIMS.
+
+- New Inquiry Ledger (Cases > Inquiry Ledger): every open case from every channel, its stage, its age and a light against fixed limits — `frontend/src/modules/inquiryledger/pages/InquiryLedgerPage.jsx`, `backend/routes/caseLedger.js`, `backend/services/inquiryLedger.js`
+- New scheduler job `inquiry-ledger-watch` (every 5 minutes): one notice per case newly past its limit, to its owner or the case supervisors; one summary above 20; alert email only through the existing `MIMS_ALERT_EMAIL` switch — `backend/services/scheduler.js`, `schedulerRegistry.js`
+- Migration 187: `inquiry_ledger_alerts`, so each case and stage is notified once
+- `POST /api/v1/cases/claim` also takes `keys` and answers `keyed`; older callers unaffected — `backend/routes/apiPlatform.js`
+
 ## Unreleased — CP Portal
 
 **Not tagged.** On 4 Oct 2026 Rohith decided not to tag CP Portal releases for now, and
@@ -115,6 +126,19 @@ confirmations, training attempts, consent proof, access requests). Each of these
 is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
+
+### CP Portal — bridge watch (CPPM-157 to CPPM-163; branch `feat/CPPM-157-bridge-watch`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), 2026-10-27; Rohith to confirm.*
+**Why:** new monitoring, alerts and a monthly report; no audit trail, e-signature or calculation changed. A client's own side-effect form now asks the required Seriousness question, so the report a reporter sends, and what MIMS receives, changes.
+**Revalidate:** the side-effect report form (Seriousness), Sync Health (heartbeat, delivery time, comparison coverage), bridge alerts, Other-request holder and alert, the Zero-Loss Report and its PDF.
+
+- CPPM-157 Bridge Heartbeat: each background job records its runs; a stopped job raises an alert that closes itself; Sync Health shows each job — `backend/services/bridgeHeartbeat.js`, `backend/server.js`, migration 0054
+- CPPM-158 delivery-time target: 15 minutes, 5 for a serious side effect; alert at twice the target; this month's figures on Sync Health — `backend/services/deliveryTarget.js`
+- CPPM-159 Zero-Loss Monthly Report: one page per month, print or PDF, fingerprint in the audit trail (not an electronic signature) — `backend/services/zeroLossReport.js`, `frontend/src/admin/pages/ZeroLossReportPage.jsx`
+- CPPM-160 Other requests: default holder on arrival and an alert after the client's wait — `backend/services/otherRequests.js`, migration 0055
+- CPPM-162 (defect): the comparison with MIMS now covers reports sent before reports carried a key, and says when it cannot — `backend/services/mimsReconcile.js`
+- CPPM-163 (defect): a client's own side-effect form gets the Seriousness question when it has none — `backend/services/formFields.js`
 
 ### CP Portal end-to-end walk (4 Oct 2026, branch `claude/gallant-rubin-43pd3g`, no Jira per Rohith)
 
