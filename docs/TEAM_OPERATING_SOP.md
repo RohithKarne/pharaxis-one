@@ -3714,6 +3714,15 @@ This section described the integration as a future plan long after it shipped. C
 
 `other_inquiry` stays CP-only by design. See Version History 2026-07-15.
 
+**Bridge watch (Rohith, 2026-10-27; CPPM-157 to CPPM-163, MIPM-223).** Nothing the bridge carries can be lost unseen:
+- **Bridge heartbeat** — Sync Health shows when each bridge job last ran; one that misses three runs alerts every client with a MIMS connection, and the alert closes itself when the job runs.
+- **Delivery target** — in MIMS within 15 minutes, 5 for a side effect reported as serious; an alert at twice the target; this month's figures on Sync Health.
+- **Comparison coverage** — reports sent before keys existed are keyed once and compared; any still not covered is counted on Sync Health, never left out silently.
+- **Seriousness** — a client's own side-effect form without a seriousness question gets the built-in one, required.
+- **Other requests** — a default holder on arrival (Overview › Who is told) and an alert after the client's wait (48 hours unless set).
+- **Zero-Loss Report** (Reports) — one page per month accounting for every report, print or PDF, fingerprint in the audit trail. It is not an electronic signature.
+- MIMS's side of the watch is the Inquiry Ledger, §42.
+
 ---
 
 #### 12. How to Update This File
@@ -4022,6 +4031,7 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/transmissions` | TransmissionsPage | `mims_core` |
 | `/browse-content` | BrowseContentPage | `content_mgmt` |
 | `/response-log` | ResponseLogPage | `mims_core` |
+| `/inquiry-ledger` | InquiryLedgerPage (MIPM-223) | `mims_core` |
 | `*` | Redirect | → `/dashboard` |
 
 ##### Navbar Structure (MIMSNavbar.jsx)
@@ -4030,7 +4040,8 @@ Left menu (`shared/components/MIMSNavbar.jsx`, Rohith 2026-10-14):
 **New Case** (top; shown to people who may create cases) · **Work:** Overview · Inbox · Cases ▾ · Transmissions · **Knowledge:** Browse Content · Content Management · **Reporting:** Reports · **Administration:** MIMS Admin
 
 - An item shows only to someone who can open its page — the same module rule as its route in `App.jsx`; a heading with nothing under it is not shown. Quick search (Ctrl-K, `CommandPalette.jsx`) and the Overview's Modules list use the same rules.
-- **Cases** opens the case list; its arrow lists My Cases, Unassigned Cases, Correspondence (`/cases?view=correspondence`, the former Case Query) and the Response Log.
+- **Cases** opens the case list; its arrow lists My Cases, Unassigned Cases, Correspondence (`/cases?view=correspondence`, the former Case Query), the Response Log and the Inquiry Ledger.
+- **Inquiry Ledger** (MIPM-223, 2026-10-27): every open case from every channel, its stage and age, red past its limit (waiting for an owner 8 h, serious side effect 2 h, with an owner 5 days). The `inquiry-ledger-watch` job notifies the owner, or the case supervisors, once per red case; alert email only through `MIMS_ALERT_EMAIL`. A reader with own-cases access sees only their own.
 - **Deleted Cases** is a tab in the case list for administrators only; the server refuses `GET /api/cases?deleted=true` to anyone else.
 - Session Management is in the user menu; the logs and audit trails are in MIMS Admin.
 
