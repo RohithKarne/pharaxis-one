@@ -300,6 +300,7 @@ async function warnOnUnreachableAlertRules() {
 }
 
 module.exports = {
+  sendAlertEmail, // MIPM-223: the Inquiry Ledger mails through the same alert switch
   emitPlatformAdminAlert,
   warnOnUnreachableAlertRules,
   getSystemConfig,

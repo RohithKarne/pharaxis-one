@@ -26,6 +26,7 @@ const DESTINATIONS = [
   { label: 'Content Management', to: '/content', icon: 'content', module: 'content_mgmt' },
   { label: 'Reports', to: '/reports', icon: 'reports', module: 'reports' },
   { label: 'Response Log', to: '/response-log', icon: 'content', module: 'mims_core' },
+  { label: 'Inquiry Ledger', to: '/inquiry-ledger', icon: 'content', module: 'mims_core' }, // MIPM-223
   { label: 'MIMS Admin', to: '/mims-admin', icon: 'admin', module: 'admin_console', adminOnly: true },
 ]
 
