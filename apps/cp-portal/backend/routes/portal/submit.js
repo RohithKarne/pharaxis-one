@@ -1043,7 +1043,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
       }
       await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
-      clearAlerts(clientId, `sync:${submissionId}`, 'system: the report reached MIMS');
+      clearAlerts(clientId, [`sync:${submissionId}`, `late:${submissionId}`], 'system: the report reached MIMS');
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {

@@ -374,6 +374,10 @@ function createContentScheduler() {
       await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
       // Bridge row 7: files held unscanned too long.
       await sweepHeldFiles().catch(err => log.error('admin_alerts.held_sweep_failed', { err }));
+      // CPPM-158: reports past twice their delivery target and still not in MIMS. Run
+      // here, not by the sending job, so a stopped sender is still caught.
+      const { sweepLateDeliveries } = require('./services/deliveryTarget');
+      await sweepLateDeliveries();
       // CPPM-137: one reminder to doctors who have not confirmed a high or critical
       // safety letter three days after it went live.
       const { sweepSafetyReminders } = require('./services/safetyConfirmations');

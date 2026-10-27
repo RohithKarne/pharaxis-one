@@ -24,6 +24,7 @@ export default function SyncHealthPage() {
   const [followups, setFollowups] = useState([])
   const [reconciliation, setReconciliation] = useState({})
   const [heartbeat, setHeartbeat] = useState({ jobs: [], connections: [] })
+  const [delivery, setDelivery] = useState(null)
   const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -44,6 +45,7 @@ export default function SyncHealthPage() {
       setFollowups(d.followups || [])
       setReconciliation(d.reconciliation || {})
       setHeartbeat(d.heartbeat || { jobs: [], connections: [] })
+      setDelivery(d.delivery || null)
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -161,6 +163,25 @@ export default function SyncHealthPage() {
               A job is late once three of its runs are missed. A late job raises an alert, which closes itself when the job runs again.
             </div>
           </div>
+
+          {/* CPPM-158: how long reports took to reach MIMS this month, against the target. */}
+          {delivery && (
+            <>
+              <div className="cp-section-header"><h2>Delivery time this month</h2></div>
+              <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
+                <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6 }}>
+                  Target: in MIMS within {delivery.target_minutes} minutes, or {delivery.serious_target_minutes} for a side effect reported as serious. A report not in MIMS at twice its target raises an alert.
+                </div>
+                <DeliveryLine label="All reports" f={delivery.all} />
+                <DeliveryLine label="Serious side effects" f={delivery.serious} />
+                {delivery.missed.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    Missed the target: {delivery.missed.map(m => `${m.reference} (${m.delivery_seconds == null ? 'not in MIMS yet' : since(m.delivery_seconds)})`).join(', ')}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2>Comparison with MIMS</h2>
@@ -299,6 +320,16 @@ export default function SyncHealthPage() {
         </>
       )}
     </AdminLayout>
+  )
+}
+
+function DeliveryLine({ label, f }) {
+  if (!f.received) return <div>{label}: none received this month.</div>
+  return (
+    <div>
+      {label}: {f.received} received, {f.delivered} in MIMS, <b>{f.within_target} within target</b>
+      {f.delivered ? ` · median ${since(f.median_seconds)} · slowest ${since(f.slowest_seconds)}` : ''}
+    </div>
   )
 }
 

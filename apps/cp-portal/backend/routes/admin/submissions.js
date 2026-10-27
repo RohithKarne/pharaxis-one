@@ -319,7 +319,9 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
     // even when every job is stopped.
     const beat = await require('../../services/bridgeHeartbeat').check();
     const heartbeat = { jobs: beat.jobs, connections: beat.connections.filter(c => Number(c.client_id) === Number(req.params.clientId)) };
-    res.json({ counts: byStatus, failures, files, followups, reconciliation, heartbeat });
+    // CPPM-158: this month's delivery time against the target.
+    const delivery = await require('../../services/deliveryTarget').monthFigures(req.params.clientId, new Date().toISOString().slice(0, 7));
+    res.json({ counts: byStatus, failures, files, followups, reconciliation, heartbeat, delivery });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
