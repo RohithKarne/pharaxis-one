@@ -43,7 +43,20 @@ async function loadFormFields(clientId, formType) {
   // CPPM-95: one shape for the portal — newline-separated choices — however the
   // row stored them (a JSON list, or a list the old form builder encoded twice).
   const fields = rows.map(r => (r.options ? { ...r, options: optionList(r.options).join('\n') } : r));
-  return { fields: withAeScreening(fields, formType), defaultTemplate: false };
+  return { fields: withAeScreening(withSeriousness(fields, formType), formType), defaultTemplate: false };
+}
+
+// CPPM-163: a client's own side-effect form that does not ask about seriousness gets
+// the built-in question, so a serious report is known to be serious — in MIMS (the
+// criteria, high priority, the critical alert) and for the delivery target. Before,
+// only the built-in form asked it, and every client with its own form sent every
+// report as routine. A form that asks it under any of the names MIMS reads is left alone.
+const SERIOUSNESS_KEYS = ['seriousness', 'seriousness_criteria', 'serious'];
+function withSeriousness(fields, formType) {
+  if (formType !== 'adverse_event' || fields.some(f => SERIOUSNESS_KEYS.includes(f.field_key))) return fields;
+  const builtIn = DEFAULT_AE_FIELDS.find(f => f.field_key === 'seriousness');
+  const last = fields.reduce((n, f) => Math.max(n, Number(f.display_order) || 0), 0);
+  return [...fields, { ...builtIn, id: 'ae-seriousness', display_order: last + 1 }];
 }
 
 // The choices a select, radio or multiselect field offers. Stored as a JSON array,
