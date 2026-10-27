@@ -309,7 +309,11 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
          JOIN (SELECT scope, MAX(id) AS id FROM cp_mims_reconciliations WHERE client_id = ? GROUP BY scope) l ON l.id = r.id`,
       [req.params.clientId]);
     const reconciliation = Object.fromEntries(runs.map(r => [r.scope, r]));
-    res.json({ counts: byStatus, failures, files, followups, reconciliation });
+    // CPPM-157: opening this page checks the jobs too, so a stopped job is found
+    // even when every job is stopped.
+    const beat = await require('../../services/bridgeHeartbeat').check();
+    const heartbeat = { jobs: beat.jobs, connections: beat.connections.filter(c => Number(c.client_id) === Number(req.params.clientId)) };
+    res.json({ counts: byStatus, failures, files, followups, reconciliation, heartbeat });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

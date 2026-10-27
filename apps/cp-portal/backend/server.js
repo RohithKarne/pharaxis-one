@@ -250,8 +250,19 @@ async function withJobLock(name, work) {
   try {
     const [[row]] = await conn.query('SELECT GET_LOCK(?, 0) AS acquired', [key]);
     if (Number(row?.acquired || 0) !== 1) return false; // another instance is running it
+    // CPPM-157: every run is recorded, and every job then checks the others, so a
+    // stopped job is noticed by one that is still running.
+    const heartbeat = require('./services/bridgeHeartbeat');
     try {
-      await work();
+      await heartbeat.recordStart(name);
+      try {
+        await work();
+      } catch (err) {
+        await heartbeat.recordFinish(name, err);
+        throw err;
+      }
+      await heartbeat.recordFinish(name);
+      await heartbeat.check();
     } finally {
       await conn.query('SELECT RELEASE_LOCK(?)', [key])
         .catch(err => log.error('job.lock_release_failed', { err, lock: key }));

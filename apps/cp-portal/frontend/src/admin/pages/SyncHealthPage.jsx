@@ -23,6 +23,7 @@ export default function SyncHealthPage() {
   const [files, setFiles]       = useState([])
   const [followups, setFollowups] = useState([])
   const [reconciliation, setReconciliation] = useState({})
+  const [heartbeat, setHeartbeat] = useState({ jobs: [], connections: [] })
   const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -42,6 +43,7 @@ export default function SyncHealthPage() {
       setFiles(d.files || [])
       setFollowups(d.followups || [])
       setReconciliation(d.reconciliation || {})
+      setHeartbeat(d.heartbeat || { jobs: [], connections: [] })
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -129,6 +131,35 @@ export default function SyncHealthPage() {
               <span key={t.key}>{t.label}: <b>{counts[t.key] || 0}</b></span>
             ))}
             <span>Total submissions: <b>{total}</b></span>
+          </div>
+
+          {/* CPPM-157: each background job of the bridge, and when it last ran. */}
+          <div className="cp-section-header"><h2>Bridge heartbeat</h2></div>
+          <div className="cp-card" style={{ marginBottom: 20, fontSize: 14 }}>
+            <table className="cp-table" style={{ margin: 0 }}>
+              <thead><tr><th>Job</th><th>Runs every</th><th>Last finished</th><th>Status</th></tr></thead>
+              <tbody>
+                {heartbeat.jobs.map(j => (
+                  <tr key={j.key}>
+                    <td>{j.label}</td>
+                    <td>{since(j.every_seconds)}</td>
+                    <td>{j.finished_seconds_ago == null ? 'Not since this server started' : `${since(j.finished_seconds_ago)} ago`}</td>
+                    <td><BeatChip status={j.status} title={j.last_error || ''} /></td>
+                  </tr>
+                ))}
+                {heartbeat.connections.map(c => (
+                  <tr key={`c-${c.integration_id}`}>
+                    <td>Updates from MIMS for this portal</td>
+                    <td>{since(heartbeat.jobs.find(j => j.key === 'cp-portal-mims-close-sync')?.every_seconds || 300)}</td>
+                    <td>{c.read_seconds_ago == null ? 'Never read yet' : `${since(c.read_seconds_ago)} ago`}</td>
+                    <td><BeatChip status={c.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+              A job is late once three of its runs are missed. A late job raises an alert, which closes itself when the job runs again.
+            </div>
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -263,4 +294,28 @@ export default function SyncHealthPage() {
       )}
     </AdminLayout>
   )
+}
+
+const BEAT = {
+  on_time: { text: 'On time', bg: '#dcfce7', fg: '#166534' },
+  error:   { text: 'Ran, with an error', bg: '#fef9c3', fg: '#854d0e' },
+  not_yet: { text: 'Not run yet', bg: '#f1f5f9', fg: '#475569' },
+  late:    { text: 'Late', bg: '#fee2e2', fg: '#991b1b' },
+}
+
+function BeatChip({ status, title }) {
+  const b = BEAT[status] || BEAT.not_yet
+  return <span title={title} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: b.bg, color: b.fg }}>{b.text}</span>
+}
+
+// "45 seconds", "5 minutes", "3 hours", "2 days"
+function since(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0))
+  if (s < 90) return `${s} second${s === 1 ? '' : 's'}`
+  const m = Math.round(s / 60)
+  if (m < 90) return `${m} minute${m === 1 ? '' : 's'}`
+  const h = Math.round(s / 3600)
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`
+  const d = Math.round(s / 86400)
+  return `${d} day${d === 1 ? '' : 's'}`
 }
