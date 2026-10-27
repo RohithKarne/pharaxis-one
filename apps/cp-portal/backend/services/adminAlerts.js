@@ -44,7 +44,8 @@ async function recipients(clientId, audience) {
  * Raise an alert. Returns the new alert id, or null if the same problem is already
  * open (or was raised before and not cleared — the dedupe key is the problem).
  */
-async function raiseAlert(clientId, { kind, audience, title, body = null, linkPath = null, relatedType = null, relatedId = null, dedupeKey }) {
+// alsoTo (CPPM-160): extra addresses for this one alert, e.g. the person holding the item.
+async function raiseAlert(clientId, { kind, audience, title, body = null, linkPath = null, relatedType = null, relatedId = null, dedupeKey, alsoTo = [] }) {
   try {
     const [r] = await pool.execute(
       `INSERT IGNORE INTO cp_admin_alerts (client_id, kind, audience, title, body, link_path, related_type, related_id, dedupe_key)
@@ -53,14 +54,14 @@ async function raiseAlert(clientId, { kind, audience, title, body = null, linkPa
     if (!r.affectedRows) return null;
     const alertId = r.insertId;
 
-    const to = await recipients(clientId, audience);
+    const to = [...new Set([...(await recipients(clientId, audience)), ...splitEmails(alsoTo.join(','))])];
     const link = linkPath ? `${FRONTEND_BASE_URL}${linkPath}` : null;
     for (const address of to) {
       queueEmail(clientId, {
         to: address,
         subject: `[Portal alert] ${title}`,
-        text: `${title}\n\n${body || ''}${link ? `\n\nOpen it here (sign-in required): ${link}` : ''}\n\nYou receive this because ${audience === 'admin' ? 'you administer this portal' : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.`,
-        html: `<p><strong>${escapeHtml(title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${link ? `<p><a href="${link}">Open it in the portal</a> (sign-in required)</p>` : ''}<p style="color:#6b7280;font-size:12px">You receive this because ${audience === 'admin' ? 'you administer this portal' : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.</p>`,
+        text: `${title}\n\n${body || ''}${link ? `\n\nOpen it here (sign-in required): ${link}` : ''}\n\nYou receive this because ${audience === 'admin' ? `you administer this portal${alsoTo.length ? ' or hold this item' : ''}` : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.`,
+        html: `<p><strong>${escapeHtml(title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${link ? `<p><a href="${link}">Open it in the portal</a> (sign-in required)</p>` : ''}<p style="color:#6b7280;font-size:12px">You receive this because ${audience === 'admin' ? `you administer this portal${alsoTo.length ? ' or hold this item' : ''}` : `you are named for ${audience === 'safety' ? 'safety' : 'integration'} alerts on this portal`}.</p>`,
       }, { kind: 'admin_alert', relatedType: 'admin_alert', relatedId: alertId });
     }
     await pool.execute('UPDATE cp_admin_alerts SET emailed_to = ? WHERE id = ?', [to.join(', ') || null, alertId]);

@@ -2,7 +2,7 @@
  * Admin alerts — /api/admin/alerts (bridge row 2)
  *
  *   GET  /:clientId                    open alerts, the last resolved ones, and who is told
- *   PUT  /:clientId/settings           who is emailed, and how long a safety task may wait
+ *   PUT  /:clientId/settings           who is emailed, how long a safety task may wait, and who holds Other requests (CPPM-160)
  *   POST /:clientId/:alertId/resolve   an admin marks an alert dealt with
  */
 const express = require('express')
@@ -11,6 +11,7 @@ const { pool } = require('../../database/db')
 const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth')
 const { audit } = require('../../utils/audit')
 const { recipients, splitEmails } = require('../../services/adminAlerts')
+const workOwnership = require('../../utils/workOwnership')
 const log = require('../../utils/logger')
 
 const COLUMNS = 'id, kind, audience, title, body, link_path, related_type, related_id, emailed_to, created_at, resolved_at, resolved_by'
@@ -29,7 +30,11 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
         integration_emails: settings?.integration_emails || '',
         safety_emails: settings?.safety_emails || '',
         safety_wait_hours: settings?.safety_wait_hours ?? 4,
+        // CPPM-160: who holds a new Other request, and how long one may wait.
+        other_owner_id: settings?.other_owner_id ?? null,
+        other_wait_hours: settings?.other_wait_hours ?? 48,
       },
+      staff: await workOwnership.staffFor(clientId),
       // Who would be emailed right now — the named list, or the default when none is set.
       sends_to: { integration: await recipients(clientId, 'integration'), safety: await recipients(clientId, 'safety') },
     })
@@ -57,13 +62,23 @@ router.put('/:clientId/settings', authenticateAdmin, requireClientAccess, requir
     if (!Number.isInteger(hours) || hours < 1 || hours > 72) {
       return res.status(400).json({ error: 'The safety wait must be a whole number of hours, from 1 to 72.', field: 'safety_wait_hours' })
     }
-    const [[before]] = await pool.execute('SELECT integration_emails, safety_emails, safety_wait_hours FROM cp_alert_settings WHERE client_id = ?', [clientId])
+    // CPPM-160: the default holder must be someone who could take the request themselves.
+    const otherHours = req.body.other_wait_hours == null || req.body.other_wait_hours === '' ? 48 : Number(req.body.other_wait_hours)
+    if (!Number.isInteger(otherHours) || otherHours < 1 || otherHours > 720) {
+      return res.status(400).json({ error: 'The wait for Other requests must be a whole number of hours, from 1 to 720.', field: 'other_wait_hours' })
+    }
+    let ownerId = req.body.other_owner_id == null || req.body.other_owner_id === '' ? null : Number(req.body.other_owner_id)
+    if (ownerId != null && !(await workOwnership.staffFor(clientId)).some(u => u.id === ownerId)) {
+      return res.status(400).json({ error: 'That person cannot hold work for this client.', field: 'other_owner_id' })
+    }
+    const [[before]] = await pool.execute('SELECT integration_emails, safety_emails, safety_wait_hours, other_owner_id, other_wait_hours FROM cp_alert_settings WHERE client_id = ?', [clientId])
     await pool.execute(
-      `INSERT INTO cp_alert_settings (client_id, integration_emails, safety_emails, safety_wait_hours) VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE integration_emails = VALUES(integration_emails), safety_emails = VALUES(safety_emails), safety_wait_hours = VALUES(safety_wait_hours)`,
-      [clientId, cleaned.integration_emails, cleaned.safety_emails, hours])
+      `INSERT INTO cp_alert_settings (client_id, integration_emails, safety_emails, safety_wait_hours, other_owner_id, other_wait_hours) VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE integration_emails = VALUES(integration_emails), safety_emails = VALUES(safety_emails), safety_wait_hours = VALUES(safety_wait_hours),
+                               other_owner_id = VALUES(other_owner_id), other_wait_hours = VALUES(other_wait_hours)`,
+      [clientId, cleaned.integration_emails, cleaned.safety_emails, hours, ownerId, otherHours])
     await audit(req.admin, clientId, 'UPDATE', 'alert_settings', clientId, {
-      before: before || null, after: { ...cleaned, safety_wait_hours: hours },
+      before: before || null, after: { ...cleaned, safety_wait_hours: hours, other_owner_id: ownerId, other_wait_hours: otherHours },
     })
     res.json({ ok: true })
   } catch (err) {

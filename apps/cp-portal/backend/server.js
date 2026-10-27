@@ -378,6 +378,9 @@ function createContentScheduler() {
       // here, not by the sending job, so a stopped sender is still caught.
       const { sweepLateDeliveries } = require('./services/deliveryTarget');
       await sweepLateDeliveries();
+      // CPPM-160: Other requests past the client's wait without an answer.
+      const { sweepWaitingOtherRequests } = require('./services/otherRequests');
+      await sweepWaitingOtherRequests();
       // CPPM-137: one reminder to doctors who have not confirmed a high or critical
       // safety letter three days after it went live.
       const { sweepSafetyReminders } = require('./services/safetyConfirmations');

@@ -10,7 +10,7 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ integration_emails: '', safety_emails: '', safety_wait_hours: 4 })
+  const [form, setForm] = useState({ integration_emails: '', safety_emails: '', safety_wait_hours: 4, other_owner_id: '', other_wait_hours: 48 })
   const [saveMsg, setSaveMsg] = useState('')
 
   async function load() {
@@ -38,7 +38,7 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
     setSaveMsg('')
     const res = await fetch(`/api/admin/alerts/${clientId}/settings`, {
       method: 'PUT', headers: adminHeaders(),
-      body: JSON.stringify({ ...form, safety_wait_hours: Number(form.safety_wait_hours) }),
+      body: JSON.stringify({ ...form, safety_wait_hours: Number(form.safety_wait_hours), other_wait_hours: Number(form.other_wait_hours), other_owner_id: form.other_owner_id || null }),
     })
     const d = await res.json().catch(() => ({}))
     if (!res.ok) { setSaveMsg(d.error || 'Could not save.'); return }
@@ -79,7 +79,9 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
       {data && !editing && (
         <p style={{ fontSize: 12, color: '#4b5563', margin: '10px 0 0' }}>
           Integration alerts go to {data.sends_to.integration.join(', ') || 'nobody'}.{' '}
-          Safety alerts go to {data.sends_to.safety.join(', ') || 'nobody'}; a safety task waiting more than {data.settings.safety_wait_hours} hour{data.settings.safety_wait_hours === 1 ? '' : 's'} is flagged.
+          Safety alerts go to {data.sends_to.safety.join(', ') || 'nobody'}; a safety task waiting more than {data.settings.safety_wait_hours} hour{data.settings.safety_wait_hours === 1 ? '' : 's'} is flagged.{' '}
+          {/* CPPM-160 */}
+          New Other requests go to {(data.staff || []).find(u => u.id === data.settings.other_owner_id)?.name || 'nobody until someone takes them'}; one without an answer after {data.settings.other_wait_hours} hours is flagged to the admins and its holder.
         </p>
       )}
       {saveMsg && !editing && <div style={{ fontSize: 13, marginTop: 6 }}>{saveMsg}</div>}
@@ -97,6 +99,19 @@ export default function AlertsPanel({ clientId, onOpenAlerts }) {
           <div className="cp-field" style={{ maxWidth: 260 }}>
             <label>Flag a safety task that has waited this many hours</label>
             <input type="number" min={1} max={72} value={form.safety_wait_hours} onChange={e => setForm(f => ({ ...f, safety_wait_hours: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div className="cp-field" style={{ minWidth: 240 }}>
+              <label>Other requests — who holds new ones</label>
+              <select value={form.other_owner_id ?? ''} onChange={e => setForm(f => ({ ...f, other_owner_id: e.target.value ? Number(e.target.value) : '' }))}>
+                <option value="">Nobody until someone takes them</option>
+                {(data?.staff || []).map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+              </select>
+            </div>
+            <div className="cp-field" style={{ maxWidth: 260 }}>
+              <label>Flag an Other request without an answer after this many hours</label>
+              <input type="number" min={1} max={720} value={form.other_wait_hours} onChange={e => setForm(f => ({ ...f, other_wait_hours: e.target.value }))} />
+            </div>
           </div>
           {saveMsg && <div className="cp-error" style={{ marginBottom: 8 }}>{saveMsg}</div>}
           <div style={{ display: 'flex', gap: 8 }}>

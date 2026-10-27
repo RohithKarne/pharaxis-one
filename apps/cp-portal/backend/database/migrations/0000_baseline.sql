@@ -1176,6 +1176,8 @@ CREATE TABLE IF NOT EXISTS cp_alert_settings (
   integration_emails   TEXT     NULL,
   safety_emails        TEXT     NULL,
   safety_wait_hours    INT      NOT NULL DEFAULT 4,
+  other_owner_id       INT      NULL,                -- CPPM-160 (0055)
+  other_wait_hours     INT      NOT NULL DEFAULT 48,
   updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1482,4 +1484,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0051_add_sessions.sql',                     NULL),
   ('0052_add_admin_passkeys.sql',               NULL),
   ('0053_add_known_devices.sql',                NULL),
-  ('0054_add_job_heartbeats.sql',               NULL);
+  ('0054_add_job_heartbeats.sql',               NULL),
+  ('0055_add_other_request_owner.sql',          NULL);
