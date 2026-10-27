@@ -101,7 +101,7 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 
 ### MIMS — Inquiry Ledger and the bridge claim (MIPM-223, CPPM-162; branch `feat/CPPM-157-bridge-watch`)
 
-**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), 2026-10-27; Rohith to confirm.*
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), confirmed by Rohith in the project chat, 2026-10-27.*
 **Why:** a new read-only screen and new notices; no case record, audit trail, e-signature or calculation changed. One bridge call now also stores, once, the key a portal uses for a case it sent before keys existed — metadata about where the case came from, never its content.
 **Revalidate:** the Inquiry Ledger (lists, filters, own-cases-only view), its notices and alert email, and the portal's comparison with MIMS.
 
@@ -129,7 +129,7 @@ the ones a validation plan should name.
 
 ### CP Portal — bridge watch (CPPM-157 to CPPM-163; branch `feat/CPPM-157-bridge-watch`)
 
-**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), 2026-10-27; Rohith to confirm.*
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), confirmed by Rohith in the project chat, 2026-10-27.*
 **Why:** new monitoring, alerts and a monthly report; no audit trail, e-signature or calculation changed. A client's own side-effect form now asks the required Seriousness question, so the report a reporter sends, and what MIMS receives, changes.
 **Revalidate:** the side-effect report form (Seriousness), Sync Health (heartbeat, delivery time, comparison coverage), bridge alerts, Other-request holder and alert, the Zero-Loss Report and its PDF.
 
