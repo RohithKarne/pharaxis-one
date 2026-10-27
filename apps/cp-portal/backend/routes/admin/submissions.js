@@ -357,6 +357,29 @@ router.get('/:clientId/reconciliation.csv', authenticateAdmin, requireClientAcce
   }
 });
 
+// GET /api/admin/submissions/:clientId/zero-loss?month=YYYY-MM (and zero-loss.pdf) —
+// CPPM-159: the month's accounting of every report, for the screen or as a PDF. Each
+// time it is made, its fingerprint goes to the audit trail, so a copy can be checked.
+for (const format of ['json', 'pdf']) {
+  router.get(`/:clientId/zero-loss${format === 'pdf' ? '.pdf' : ''}`, authenticateAdmin, requireClientAccess, async (req, res) => {
+    try {
+      const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month || '')) ? req.query.month : new Date().toISOString().slice(0, 7);
+      const zeroLoss = require('../../services/zeroLossReport');
+      const report = await zeroLoss.build(req.params.clientId, month);
+      const generated = { at: new Date().toISOString().slice(0, 19).replace('T', ' '), by: req.admin.name || req.admin.email || `admin #${req.admin.adminId}` };
+      await audit(req.admin, req.params.clientId, 'REPORT_GENERATED', 'zero_loss_report', null,
+        { month, format, fingerprint: report.fingerprint, verdict: report.verdict.state });
+      if (format === 'json') return res.json({ ...report, generated });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="zero-loss-${req.params.clientId}-${month}.pdf"`);
+      zeroLoss.renderPdf(report, generated, res);
+    } catch (err) {
+      log.error('admin.submissions.error', { err, route: `GET /:clientId/zero-loss (${format})`, path: req.path, request_id: req.requestId || null });
+      if (!res.headersSent) res.status(500).json({ error: 'Could not make the Zero-Loss report.' });
+    }
+  });
+}
+
 // POST /api/admin/submissions/:clientId/attachments/:attachmentId/retry — send one
 // file to its MIMS case again (bridge row 3). Not limited by the automatic try cap.
 router.post('/:clientId/attachments/:attachmentId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {

@@ -21,6 +21,7 @@ const FormsPage            = lazy(() => import('./admin/pages/FormsPage'))
 const MSLPage              = lazy(() => import('./admin/pages/MSLPage'))
 const IntegrationPage      = lazy(() => import('./admin/pages/IntegrationPage'))
 const SyncHealthPage       = lazy(() => import('./admin/pages/SyncHealthPage'))
+const ZeroLossReportPage   = lazy(() => import('./admin/pages/ZeroLossReportPage')) // CPPM-159
 const DataRequestsPage     = lazy(() => import('./admin/pages/DataRequestsPage'))
 const SsoConfigPage        = lazy(() => import('./admin/pages/SsoConfigPage'))
 const PortalUsersPage      = lazy(() => import('./admin/pages/PortalUsersPage'))
@@ -228,6 +229,7 @@ function AdminRoutes() {
         <Route path="/admin/clients/:clientId/msls" element={<AdminGuard><MSLPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sync-health" element={<AdminGuard><SyncHealthPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/zero-loss" element={<AdminGuard><ZeroLossReportPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/data-requests" element={<AdminGuard><DataRequestsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />

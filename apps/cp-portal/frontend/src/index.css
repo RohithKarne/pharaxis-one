@@ -2964,6 +2964,13 @@ textarea:focus-visible {
   @page { margin: 1.5cm; }
 }
 
+/* CPPM-159: the Zero-Loss Report prints as the report alone, without the admin chrome. */
+@media print {
+  .cp-admin-sidebar, .cp-admin-topbar, .zl-controls, .cp-brandbar { display: none !important; }
+  .cp-admin-main, .cp-admin-wrapper { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .zl-section { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; }
+}
+
 /* ── Loading skeletons + empty states (CP-30) ─────────────────────────────── */
 .pp-skeleton {
   background: #eef1f5;

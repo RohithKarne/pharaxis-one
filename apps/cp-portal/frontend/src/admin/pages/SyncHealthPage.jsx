@@ -185,7 +185,11 @@ export default function SyncHealthPage() {
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2>Comparison with MIMS</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadReconciliation}>Download this month (CSV)</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* CPPM-159 */}
+              <Link to={`/admin/clients/${clientId}/zero-loss`} style={{ fontSize: 13 }}>Zero-Loss report</Link>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadReconciliation}>Download this month (CSV)</button>
+            </div>
           </div>
           <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
             <div>Side-effect reports, every hour: {describeRun(reconciliation.ae)}</div>
