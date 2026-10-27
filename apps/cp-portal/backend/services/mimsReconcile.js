@@ -51,8 +51,41 @@ async function compare(integ, items) {
   return body;
 }
 
+/**
+ * CPPM-162: reports MIMS holds that were sent before reports carried a key could not
+ * be compared at all, and every run still read "0 differences". Each gets a key here,
+ * kept only once MIMS confirms it stored the key on the case; a MIMS that does not
+ * confirm leaves them as they were, and Sync Health counts them as not covered.
+ * Two requests on one case keep the key on the first only.
+ */
+async function keyOlderReports(integ) {
+  const [rows] = await pool.execute(
+    `SELECT MIN(id) AS id, external_ref FROM cp_submissions
+      WHERE client_id = ? AND sync_key IS NULL AND external_ref IS NOT NULL AND status IN ('synced', 'closed')
+        AND submission_type IN ('adverse_event', 'medical_inquiry', 'product_complaint')
+      GROUP BY external_ref ORDER BY MIN(id) LIMIT ${BATCH}`, [integ.client_id]);
+  const items = rows.map(r => ({ sub: r.id, id: Number(r.external_ref), key: require('crypto').randomUUID() }))
+    .filter(i => Number.isInteger(i.id) && i.id > 0);
+  if (!items.length) return 0;
+  const headers = await buildHeaders(integ);
+  const r = await safeFetch(new URL('/api/v1/cases/claim', integ.api_base_url).toString(), {
+    method: 'POST', headers, body: JSON.stringify({ ids: items.map(i => i.id), keys: items.map(({ id, key }) => ({ id, key })) }),
+  });
+  const body = await r.json().catch(() => null);
+  if (!r.ok || !Array.isArray(body?.keyed)) return 0;
+  const keyed = new Set(body.keyed.map(Number));
+  let stored = 0;
+  for (const i of items.filter(x => keyed.has(x.id))) {
+    const [u] = await pool.execute('UPDATE cp_submissions SET sync_key = ? WHERE id = ? AND sync_key IS NULL', [i.key, i.sub]);
+    stored += u.affectedRows;
+  }
+  if (stored) systemAudit('MIMS integration', integ.client_id, 'OLDER_REPORTS_KEYED', 'integration', integ.id, { sent: items.length, keyed: stored });
+  return stored;
+}
+
 /** One comparison for one integration. Returns the run's counts. */
 async function reconcileIntegration(integ, scope) {
+  await keyOlderReports(integ).catch(err => log.warn('mims.reconcile.keying_failed', { client_id: integ.client_id, error: err.message }));
   const types = SCOPES[scope];
   const [run] = await pool.execute(
     'INSERT INTO cp_mims_reconciliations (client_id, integration_id, scope) VALUES (?, ?, ?)', [integ.client_id, integ.id, scope]);
@@ -154,4 +187,4 @@ async function reconcileTick() {
   if (!last?.at || Date.now() - new Date(last.at).getTime() > 23 * 60 * 60 * 1000) await reconcileOnce('all');
 }
 
-module.exports = { reconcileTick, reconcileOnce, reconcileIntegration };
+module.exports = { reconcileTick, reconcileOnce, reconcileIntegration, keyOlderReports };

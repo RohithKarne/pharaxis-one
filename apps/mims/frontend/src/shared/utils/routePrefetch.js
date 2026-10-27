@@ -12,6 +12,7 @@ const routeLoaders = [
   { key: 'case-form', match: (path) => path.startsWith('/cases/'), load: () => import('../../modules/cases/pages/CaseFormPage') },
   { key: 'transmissions', match: (path) => path === '/transmissions', load: () => import('../../modules/transmissions/pages/TransmissionsPage') },
   { key: 'response-log', match: (path) => path === '/response-log', load: () => import('../../modules/responselog/pages/ResponseLogPage') },
+  { key: 'inquiry-ledger', match: (path) => path === '/inquiry-ledger', load: () => import('../../modules/inquiryledger/pages/InquiryLedgerPage') },
   { key: 'exceptions', match: (path) => path === '/exceptions', load: () => import('../../modules/max/pages/ExceptionLogsPage') },
   { key: 'browse-content', match: (path) => path === '/browse-content', load: () => import('../../modules/browse/pages/BrowseContentPage') },
   { key: 'content', match: (path) => path === '/content', load: () => import('../../modules/content/pages/ContentPage') },

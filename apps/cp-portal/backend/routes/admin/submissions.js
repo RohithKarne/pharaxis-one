@@ -309,7 +309,19 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
          JOIN (SELECT scope, MAX(id) AS id FROM cp_mims_reconciliations WHERE client_id = ? GROUP BY scope) l ON l.id = r.id`,
       [req.params.clientId]);
     const reconciliation = Object.fromEntries(runs.map(r => [r.scope, r]));
-    res.json({ counts: byStatus, failures, files, followups, reconciliation });
+    // CPPM-162: reports in MIMS the comparison cannot look up (no key yet), said out loud.
+    const [[uncovered]] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM cp_submissions WHERE client_id = ? AND sync_key IS NULL AND external_ref IS NOT NULL
+          AND status IN ('synced', 'closed') AND submission_type IN ('adverse_event', 'medical_inquiry', 'product_complaint')`,
+      [req.params.clientId]);
+    reconciliation.not_covered = Number(uncovered.n);
+    // CPPM-157: opening this page checks the jobs too, so a stopped job is found
+    // even when every job is stopped.
+    const beat = await require('../../services/bridgeHeartbeat').check();
+    const heartbeat = { jobs: beat.jobs, connections: beat.connections.filter(c => Number(c.client_id) === Number(req.params.clientId)) };
+    // CPPM-158: this month's delivery time against the target.
+    const delivery = await require('../../services/deliveryTarget').monthFigures(req.params.clientId, new Date().toISOString().slice(0, 7));
+    res.json({ counts: byStatus, failures, files, followups, reconciliation, heartbeat, delivery });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -344,6 +356,29 @@ router.get('/:clientId/reconciliation.csv', authenticateAdmin, requireClientAcce
     res.status(500).json({ error: 'Server error.' });
   }
 });
+
+// GET /api/admin/submissions/:clientId/zero-loss?month=YYYY-MM (and zero-loss.pdf) —
+// CPPM-159: the month's accounting of every report, for the screen or as a PDF. Each
+// time it is made, its fingerprint goes to the audit trail, so a copy can be checked.
+for (const format of ['json', 'pdf']) {
+  router.get(`/:clientId/zero-loss${format === 'pdf' ? '.pdf' : ''}`, authenticateAdmin, requireClientAccess, async (req, res) => {
+    try {
+      const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month || '')) ? req.query.month : new Date().toISOString().slice(0, 7);
+      const zeroLoss = require('../../services/zeroLossReport');
+      const report = await zeroLoss.build(req.params.clientId, month);
+      const generated = { at: new Date().toISOString().slice(0, 19).replace('T', ' '), by: req.admin.name || req.admin.email || `admin #${req.admin.adminId}` };
+      await audit(req.admin, req.params.clientId, 'REPORT_GENERATED', 'zero_loss_report', null,
+        { month, format, fingerprint: report.fingerprint, verdict: report.verdict.state });
+      if (format === 'json') return res.json({ ...report, generated });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="zero-loss-${req.params.clientId}-${month}.pdf"`);
+      zeroLoss.renderPdf(report, generated, res);
+    } catch (err) {
+      log.error('admin.submissions.error', { err, route: `GET /:clientId/zero-loss (${format})`, path: req.path, request_id: req.requestId || null });
+      if (!res.headersSent) res.status(500).json({ error: 'Could not make the Zero-Loss report.' });
+    }
+  });
+}
 
 // POST /api/admin/submissions/:clientId/attachments/:attachmentId/retry — send one
 // file to its MIMS case again (bridge row 3). Not limited by the automatic try cap.

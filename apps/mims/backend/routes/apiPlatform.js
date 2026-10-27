@@ -334,6 +334,10 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
 // connection created each case. The portal stores the MIMS id of every case it made,
 // so it sends that list once; only cases in this organisation with no recorded
 // creator are claimed, and updated_at is left alone.
+// CPPM-162: it can also give each such case the key the portal now uses for the report
+// (`keys`: [{ id, key }]), so reports sent before keys existed are covered by the
+// comparison below. A key is stored only on a case of this connection that has none;
+// `keyed` lists the cases that took one, and the portal keeps a key only for those.
 router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 1000) : [];
   if (!ids.length) return res.status(400).json({ error: 'ids must be a list of case ids (at most 1000).' });
@@ -341,7 +345,17 @@ router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) =
     `UPDATE cases SET source_api_client_id = ?, source_reference = COALESCE(source_reference, case_number), updated_at = updated_at
       WHERE org_id = ? AND source_api_client_id IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
     [req.apiClient.id, req.apiClient.org_id, ...ids]);
-  res.json({ claimed: r.affectedRows, sent: ids.length });
+  const keyed = [];
+  for (const k of (Array.isArray(req.body?.keys) ? req.body.keys.slice(0, 1000) : [])) {
+    const id = Number(k?.id);
+    if (!ids.includes(id) || typeof k?.key !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(k.key)) continue;
+    const [u] = await pool.execute(
+      `UPDATE cases SET source_key = ?, updated_at = updated_at
+        WHERE id = ? AND org_id = ? AND source_api_client_id = ? AND source_key IS NULL`,
+      [k.key, id, req.apiClient.org_id, req.apiClient.id]);
+    if (u.affectedRows) keyed.push(id);
+  }
+  res.json({ claimed: r.affectedRows, sent: ids.length, keyed });
 });
 
 // Bridge plan P6: the sending portal checks its list against MIMS. It sends the key

@@ -108,6 +108,10 @@ const HANDLERS = {
     const { runScheduledExports } = require('./scheduledExportService')
     await runScheduledExports()
   },
+  'inquiry-ledger-watch': async () => {
+    const { sweep } = require('./inquiryLedger')
+    await sweep()
+  },
   'ae-handoff-deadlines': async () => {
     const { sweepAeHandoffDeadlines } = require('./intakeAlertService')
     await sweepAeHandoffDeadlines()

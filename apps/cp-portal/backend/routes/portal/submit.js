@@ -225,6 +225,9 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     // A1: audit the inquiry lifecycle. 'submitted' is the first entry.
     systemAudit('portal', client.id, 'SUBMITTED', 'submission', submissionId, { type: formType });
 
+    // CPPM-160: an Other request goes to the client's default holder, if one is set.
+    if (formType === 'other_inquiry') await require('../../services/otherRequests').assignDefaultOwner(client.id, submissionId);
+
     // CPPM-4: the first entry in the history shown back to the person — "Received".
     await recordStatusEvent({ submissionId, clientId: client.id, status: 'submitted', source: 'portal' });
 
@@ -1043,7 +1046,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
       }
       await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
-      clearAlerts(clientId, `sync:${submissionId}`, 'system: the report reached MIMS');
+      clearAlerts(clientId, [`sync:${submissionId}`, `late:${submissionId}`], 'system: the report reached MIMS');
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {

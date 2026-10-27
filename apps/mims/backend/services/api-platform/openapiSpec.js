@@ -35,7 +35,7 @@ paths:
       summary: Cases this connection sent that changed since a checkpoint (status, closed, owner, when first taken on, sent answer, reporter erased, serious and report due date, questions for the reporter)
   /cases/claim:
     post:
-      summary: Record this connection as the sender of cases it created before senders were recorded
+      summary: Record this connection as the sender of cases it created before senders were recorded, and store the key now used for each (keys; answered with the cases keyed)
   /cases/reconcile:
     post:
       summary: Compare the sender's list of report keys and fingerprints with the cases this connection created; returns the missing and the different

@@ -250,8 +250,19 @@ async function withJobLock(name, work) {
   try {
     const [[row]] = await conn.query('SELECT GET_LOCK(?, 0) AS acquired', [key]);
     if (Number(row?.acquired || 0) !== 1) return false; // another instance is running it
+    // CPPM-157: every run is recorded, and every job then checks the others, so a
+    // stopped job is noticed by one that is still running.
+    const heartbeat = require('./services/bridgeHeartbeat');
     try {
-      await work();
+      await heartbeat.recordStart(name);
+      try {
+        await work();
+      } catch (err) {
+        await heartbeat.recordFinish(name, err);
+        throw err;
+      }
+      await heartbeat.recordFinish(name);
+      await heartbeat.check();
     } finally {
       await conn.query('SELECT RELEASE_LOCK(?)', [key])
         .catch(err => log.error('job.lock_release_failed', { err, lock: key }));
@@ -363,6 +374,13 @@ function createContentScheduler() {
       await sweepWaitingSafetyTasks().catch(err => log.error('admin_alerts.sweep_failed', { err }));
       // Bridge row 7: files held unscanned too long.
       await sweepHeldFiles().catch(err => log.error('admin_alerts.held_sweep_failed', { err }));
+      // CPPM-158: reports past twice their delivery target and still not in MIMS. Run
+      // here, not by the sending job, so a stopped sender is still caught.
+      const { sweepLateDeliveries } = require('./services/deliveryTarget');
+      await sweepLateDeliveries();
+      // CPPM-160: Other requests past the client's wait without an answer.
+      const { sweepWaitingOtherRequests } = require('./services/otherRequests');
+      await sweepWaitingOtherRequests();
       // CPPM-137: one reminder to doctors who have not confirmed a high or critical
       // safety letter three days after it went live.
       const { sweepSafetyReminders } = require('./services/safetyConfirmations');

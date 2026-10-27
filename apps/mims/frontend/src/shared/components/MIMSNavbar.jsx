@@ -18,6 +18,7 @@ const CASE_ITEMS = [
   { label: 'Unassigned Cases', to: '/cases?tab=unassigned' },
   { label: 'Correspondence', to: '/cases?view=correspondence' },
   { label: 'Response Log', to: '/response-log' },
+  { label: 'Inquiry Ledger', to: '/inquiry-ledger' }, // MIPM-223
 ]
 
 function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
@@ -71,7 +72,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   }, [collapsed])
 
   const isActive = (path) => location.pathname === path
-  const isCasesActive = location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log'
+  const isCasesActive = location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log' || location.pathname === '/inquiry-ledger'
   const can = (k) => hasModuleAccess(k)
 
   const canUseCases = can('mims_core')

@@ -35,6 +35,7 @@ const ExceptionLogsPage        = lazy(() => import('./pages/ExceptionLogsPage'))
 const TransmissionsPage        = lazy(() => import('../transmissions/pages/TransmissionsPage'))
 const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
 const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
+const InquiryLedgerPage        = lazy(() => import('../inquiryledger/pages/InquiryLedgerPage')) // MIPM-223
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
@@ -331,6 +332,13 @@ function AppRoutes() {
           } />
           <Route path="/regression" element={
             <Navigate to="/mims-admin?tab=system&system=sys-uat-regression" replace />
+          } />
+          <Route path="/inquiry-ledger" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <InquiryLedgerPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
           } />
           <Route path="/response-log" element={
             <ProtectedRoute>

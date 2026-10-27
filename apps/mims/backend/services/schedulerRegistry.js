@@ -105,6 +105,14 @@ module.exports = [
     configRoute:    '/transmissions',
   },
   {
+    name:           'inquiry-ledger-watch',
+    source:         'Cases',
+    cronExpression: '*/5 * * * *',
+    description:    'Tells the owner, or the case supervisors, once when an open case turns red on the Inquiry Ledger (MIPM-223)',
+    type:           'cron',
+    configRoute:    '/inquiry-ledger',
+  },
+  {
     name:           'ae-handoff-deadlines',
     source:         'Transmissions',
     cronExpression: '*/30 * * * *',

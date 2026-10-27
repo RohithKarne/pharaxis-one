@@ -135,3 +135,24 @@
 **What:** A server killed abruptly at 19:25 left two background workers alive. For three hours they ran old code against the same mail queue, and one of them failed an MI email. The defect was real (MIPM-187), but it also meant some earlier results came partly from stale code.
 **Why:** The restart script stopped the server only, and the workers did not notice their parent had gone.
 **Rule:** After restarting a service, list the running processes (`ps -eo pid,ppid,lstart,args`) and confirm there is exactly one of each, all started at the restart. Child processes must exit when their parent does.
+
+---
+
+## L-019 — A copy of a database carries the real mail servers and connections (2026-10-27)
+**What:** For the bridge-watch walk, both dev databases were copied into throwaway ones. The CP Portal copy kept client 4's Gmail mail server, so two bridge-job alert emails left the machine through that account (to undeliverable example.com and .test addresses, no health details). The MIMS copy kept the org mailbox and read two new messages from the real Gmail inbox into the copy (read without marking them read, so the real inbox and the shared MIMS were unaffected). Found from the outbox and the poller log, within minutes.
+**Why:** The copy was treated as data, and its settings were not. A mail server, a mailbox and a connection address are instructions to reach the outside world.
+**Rule:** Seal a copy before anything starts on it: every mail server, mailbox and outbound connection points at a local stand-in (a mail catcher, a stand-in MIMS), in the same script that makes the copy. Then check the outbox and the poller log after the first start.
+
+---
+
+## L-020 — Copying columns by "not generated" skipped every automatic date (2026-10-27)
+**What:** The copy script left out columns whose `EXTRA` contains `GENERATED`, to skip computed columns. MySQL 8 marks `DEFAULT CURRENT_TIMESTAMP` columns `DEFAULT_GENERATED`, so every created, submitted and received date in both copies became the copy time. Caught before any age-based check ran, because a report from March read as submitted today.
+**Why:** The filter matched a word, not the meaning: computed columns are `VIRTUAL GENERATED` / `STORED GENERATED`.
+**Rule:** When filtering schema metadata, match the exact marker (`VIRTUAL GENERATED`, `STORED GENERATED`), and spot-check one copied date against the source before using the copy.
+
+---
+
+## L-021 — A check that covered nothing said "0 differences" (2026-10-27, CPPM-162)
+**What:** The hourly and nightly comparison with MIMS only looks up reports that carry a key. Every report on the dev copy predates keys, so each run checked 0 of 22 and Sync Health read "0 checked, 0 differences" — healthy-looking. Same failure class as the skipped CI check that reported as a pass (§38.7).
+**Why:** The result counted what was checked, never what was left out.
+**Rule:** Any check that can skip items reports how many it could not cover, next to its result, and the screen shows it. "Nothing found" is only true over a stated population.

@@ -67,6 +67,7 @@ const CLIENT_SECTIONS = [
     { path: 'analytics',     label: 'Analytics' },
     { path: 'audit',         label: 'Audit Trail' },
     { path: 'safety-confirmations', label: 'Safety Confirmations' }, // CPPM-127: for reading, so no area
+    { path: 'zero-loss',     label: 'Zero-Loss Report', keywords: 'mims bridge audit monthly' }, // CPPM-159: for reading, so no area
     { path: 'compliance',    label: 'Compliance', area: 'compliance', keywords: 'consent privacy' },
   ] },
 ]
@@ -82,6 +83,7 @@ const SEGMENT_TITLES = {
   gate:           'User Gate',
   integration:    'Integration',
   'sync-health':  'Sync Health',
+  'zero-loss':    'Zero-Loss Report',
   'data-requests': 'Data Requests',
   chatbox:        'Chatbox AI',
   'chat-records': 'Chat Conversations',

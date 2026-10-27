@@ -23,6 +23,8 @@ export default function SyncHealthPage() {
   const [files, setFiles]       = useState([])
   const [followups, setFollowups] = useState([])
   const [reconciliation, setReconciliation] = useState({})
+  const [heartbeat, setHeartbeat] = useState({ jobs: [], connections: [] })
+  const [delivery, setDelivery] = useState(null)
   const [fileResult, setFileResult] = useState({})
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -42,6 +44,8 @@ export default function SyncHealthPage() {
       setFiles(d.files || [])
       setFollowups(d.followups || [])
       setReconciliation(d.reconciliation || {})
+      setHeartbeat(d.heartbeat || { jobs: [], connections: [] })
+      setDelivery(d.delivery || null)
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -131,13 +135,71 @@ export default function SyncHealthPage() {
             <span>Total submissions: <b>{total}</b></span>
           </div>
 
+          {/* CPPM-157: each background job of the bridge, and when it last ran. */}
+          <div className="cp-section-header"><h2>Bridge heartbeat</h2></div>
+          <div className="cp-card" style={{ marginBottom: 20, fontSize: 14 }}>
+            <table className="cp-table" style={{ margin: 0 }}>
+              <thead><tr><th>Job</th><th>Runs every</th><th>Last finished</th><th>Status</th></tr></thead>
+              <tbody>
+                {heartbeat.jobs.map(j => (
+                  <tr key={j.key}>
+                    <td>{j.label}</td>
+                    <td>{since(j.every_seconds)}</td>
+                    <td>{j.finished_seconds_ago == null ? 'Not since this server started' : `${since(j.finished_seconds_ago)} ago`}</td>
+                    <td><BeatChip status={j.status} title={j.last_error || ''} /></td>
+                  </tr>
+                ))}
+                {heartbeat.connections.map(c => (
+                  <tr key={`c-${c.integration_id}`}>
+                    <td>Updates from MIMS for this portal</td>
+                    <td>{since(heartbeat.jobs.find(j => j.key === 'cp-portal-mims-close-sync')?.every_seconds || 300)}</td>
+                    <td>{c.read_seconds_ago == null ? 'Never read yet' : `${since(c.read_seconds_ago)} ago`}</td>
+                    <td><BeatChip status={c.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+              A job is late once three of its runs are missed. A late job raises an alert, which closes itself when the job runs again.
+            </div>
+          </div>
+
+          {/* CPPM-158: how long reports took to reach MIMS this month, against the target. */}
+          {delivery && (
+            <>
+              <div className="cp-section-header"><h2>Delivery time this month</h2></div>
+              <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
+                <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6 }}>
+                  Target: in MIMS within {delivery.target_minutes} minutes, or {delivery.serious_target_minutes} for a side effect reported as serious. A report not in MIMS at twice its target raises an alert.
+                </div>
+                <DeliveryLine label="All reports" f={delivery.all} />
+                <DeliveryLine label="Serious side effects" f={delivery.serious} />
+                {delivery.missed.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    Missed the target: {delivery.missed.map(m => `${m.reference} (${m.delivery_seconds == null ? 'not in MIMS yet' : since(m.delivery_seconds)})`).join(', ')}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2>Comparison with MIMS</h2>
-            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadReconciliation}>Download this month (CSV)</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* CPPM-159 */}
+              <Link to={`/admin/clients/${clientId}/zero-loss`} style={{ fontSize: 13 }}>Zero-Loss report</Link>
+              <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadReconciliation}>Download this month (CSV)</button>
+            </div>
           </div>
           <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
             <div>Side-effect reports, every hour: {describeRun(reconciliation.ae)}</div>
             <div>All reports, every night: {describeRun(reconciliation.all)}</div>
+            {/* CPPM-162: never let "0 differences" stand for reports nobody compared. */}
+            {reconciliation.not_covered > 0 && (
+              <div style={{ color: '#b45309' }}>
+                {reconciliation.not_covered} report{reconciliation.not_covered === 1 ? ' is' : 's are'} in MIMS but not covered by the comparison: sent before reports carried a key, and MIMS has not taken one yet. The next comparison tries again.
+              </div>
+            )}
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -263,4 +325,38 @@ export default function SyncHealthPage() {
       )}
     </AdminLayout>
   )
+}
+
+function DeliveryLine({ label, f }) {
+  if (!f.received) return <div>{label}: none received this month.</div>
+  return (
+    <div>
+      {label}: {f.received} received, {f.delivered} in MIMS, <b>{f.within_target} within target</b>
+      {f.delivered ? ` · median ${since(f.median_seconds)} · slowest ${since(f.slowest_seconds)}` : ''}
+    </div>
+  )
+}
+
+const BEAT = {
+  on_time: { text: 'On time', bg: '#dcfce7', fg: '#166534' },
+  error:   { text: 'Ran, with an error', bg: '#fef9c3', fg: '#854d0e' },
+  not_yet: { text: 'Not run yet', bg: '#f1f5f9', fg: '#475569' },
+  late:    { text: 'Late', bg: '#fee2e2', fg: '#991b1b' },
+}
+
+function BeatChip({ status, title }) {
+  const b = BEAT[status] || BEAT.not_yet
+  return <span title={title} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: b.bg, color: b.fg }}>{b.text}</span>
+}
+
+// "45 seconds", "5 minutes", "3 hours", "2 days"
+function since(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0))
+  if (s < 90) return `${s} second${s === 1 ? '' : 's'}`
+  const m = Math.round(s / 60)
+  if (m < 90) return `${m} minute${m === 1 ? '' : 's'}`
+  const h = Math.round(s / 3600)
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`
+  const d = Math.round(s / 86400)
+  return `${d} day${d === 1 ? '' : 's'}`
 }
