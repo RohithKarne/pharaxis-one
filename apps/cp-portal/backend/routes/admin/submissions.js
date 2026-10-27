@@ -309,6 +309,12 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
          JOIN (SELECT scope, MAX(id) AS id FROM cp_mims_reconciliations WHERE client_id = ? GROUP BY scope) l ON l.id = r.id`,
       [req.params.clientId]);
     const reconciliation = Object.fromEntries(runs.map(r => [r.scope, r]));
+    // CPPM-162: reports in MIMS the comparison cannot look up (no key yet), said out loud.
+    const [[uncovered]] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM cp_submissions WHERE client_id = ? AND sync_key IS NULL AND external_ref IS NOT NULL
+          AND status IN ('synced', 'closed') AND submission_type IN ('adverse_event', 'medical_inquiry', 'product_complaint')`,
+      [req.params.clientId]);
+    reconciliation.not_covered = Number(uncovered.n);
     // CPPM-157: opening this page checks the jobs too, so a stopped job is found
     // even when every job is stopped.
     const beat = await require('../../services/bridgeHeartbeat').check();

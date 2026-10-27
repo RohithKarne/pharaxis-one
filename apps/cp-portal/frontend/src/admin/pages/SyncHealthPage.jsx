@@ -169,6 +169,12 @@ export default function SyncHealthPage() {
           <div className="cp-card" style={{ marginBottom: 20, fontSize: 14, lineHeight: 1.7 }}>
             <div>Side-effect reports, every hour: {describeRun(reconciliation.ae)}</div>
             <div>All reports, every night: {describeRun(reconciliation.all)}</div>
+            {/* CPPM-162: never let "0 differences" stand for reports nobody compared. */}
+            {reconciliation.not_covered > 0 && (
+              <div style={{ color: '#b45309' }}>
+                {reconciliation.not_covered} report{reconciliation.not_covered === 1 ? ' is' : 's are'} in MIMS but not covered by the comparison: sent before reports carried a key, and MIMS has not taken one yet. The next comparison tries again.
+              </div>
+            )}
           </div>
 
           <div className="cp-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
