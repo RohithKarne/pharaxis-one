@@ -28,7 +28,7 @@
     "express-rate-limit": "^8.7.0",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "mysql2": "^3.24.5",
     "nodemailer": "^10.0.14",
     "openai": "^6.29.0",
