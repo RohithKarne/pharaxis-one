@@ -30,7 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.4.0",
     "mysql2": "^3.24.5",
-    "nodemailer": "^10.0.14",
+    "nodemailer": "^10.1.4",
     "openai": "^6.29.0",
     "pdfkit": "^0.19.1",
     "qrcode": "^1.5.4"
