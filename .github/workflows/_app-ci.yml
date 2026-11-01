@@ -59,7 +59,7 @@ jobs:
       run:
         working-directory: ${{ inputs.frontend_dir }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v7
@@ -85,7 +85,7 @@ jobs:
       run:
         working-directory: ${{ inputs.backend_working_directory }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v7
@@ -103,7 +103,7 @@ jobs:
       run:
         working-directory: ${{ inputs.app_root }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v7
@@ -143,7 +143,7 @@ jobs:
       run:
         working-directory: ${{ inputs.app_root }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v7
@@ -213,7 +213,7 @@ jobs:
       BOOTSTRAP_PLATFORM_ADMIN_PASSWORD: Test@1234
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v7
