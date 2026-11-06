@@ -116,6 +116,7 @@ async function initializeDatabase() {
       -- services/ssoService.js getClientById — a database without it cannot serve SSO
       -- at all. See the SSO table definitions below for the rest of that pairing.
       login_mode           VARCHAR(30)  NOT NULL DEFAULT 'local_only',
+      portal_two_step      TINYINT(1)   NOT NULL DEFAULT 0,
       PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
@@ -162,6 +163,7 @@ async function initializeDatabase() {
       copyright_text      TEXT         NULL,
       show_powered_by     TINYINT(1)   NOT NULL DEFAULT 1,
       sla_response_text   MEDIUMTEXT   NULL,
+      popular_searches    TEXT         NULL,
       updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       CONSTRAINT fk_branding_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE

@@ -131,8 +131,17 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
       'button_bg', 'button_text', 'link_color', 'border_color',
       'font_family', 'heading_font', 'base_font_size', 'border_radius',
       'header_style', 'footer_text_content', 'copyright_text', 'show_powered_by',
-      'sla_response_text',
+      'sla_response_text', 'popular_searches',
     ];
+
+    // The words under the home-page search: one per line, at most 6, each up to 40 characters.
+    if (req.body.popular_searches !== undefined) {
+      const words = String(req.body.popular_searches || '').split('\n').map(w => w.trim()).filter(Boolean);
+      if (words.length > 6) return res.status(400).json({ error: 'Popular searches: at most 6 words or phrases.' });
+      const long = words.find(w => w.length > 40);
+      if (long) return res.status(400).json({ error: `Popular searches: "${long.slice(0, 40)}…" is longer than 40 characters.` });
+      req.body.popular_searches = words.length ? words.join('\n') : null;
+    }
 
     const updates = [], params = [];
     for (const key of allowed) {

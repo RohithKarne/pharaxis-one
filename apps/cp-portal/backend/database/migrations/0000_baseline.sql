@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS cp_clients (
   is_active            TINYINT(1)   NOT NULL DEFAULT 1,
   language_config_json VARCHAR(500) NOT NULL DEFAULT '{"default":"en","enabled":["en"]}',
   login_mode           VARCHAR(30)  NOT NULL DEFAULT 'local_only',
+  portal_two_step      TINYINT(1)   NOT NULL DEFAULT 0,    -- row 6 of the 27 Oct review (0057)
   created_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
@@ -143,6 +144,7 @@ CREATE TABLE IF NOT EXISTS cp_branding (
   copyright_text      TEXT         NULL,
   show_powered_by     TINYINT(1)   NOT NULL DEFAULT 1,
   sla_response_text   MEDIUMTEXT   NULL,
+  popular_searches    TEXT         NULL,                -- row 3 of the 27 Oct review (0056)
   updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT fk_branding_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -538,6 +540,7 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   owner_id          INT          NULL,   -- CPPM-61 (0026): who holds it now
   owner_since       DATETIME     NULL,
   therapeutic_area_id INT NULL, -- folded in from 0042 (CPPM-122)
+  search_text       MEDIUMTEXT   NULL,   -- row 4 of the 27 Oct review (0058): the PDF's words, for search
   PRIMARY KEY (id),
   KEY idx_docs_area (therapeutic_area_id),
   KEY idx_cp_docs_client (client_id),
@@ -1426,6 +1429,62 @@ CREATE TABLE IF NOT EXISTS cp_job_heartbeats (
   PRIMARY KEY (job_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Doctor two-step sign-in codes (0057).
+CREATE TABLE IF NOT EXISTS cp_portal_2fa_codes (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  portal_user_id INT          NOT NULL,
+  client_id      INT          NOT NULL,
+  code_hash      CHAR(64)     NOT NULL,
+  attempts       INT          NOT NULL DEFAULT 0,
+  expires_at     DATETIME     NOT NULL,
+  is_consumed    TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_cp_portal_2fa_codes_user (portal_user_id, is_consumed),
+  CONSTRAINT fk_cp_portal_2fa_codes_user FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Search terms counted per day, no identity (0059).
+CREATE TABLE IF NOT EXISTS cp_search_terms (
+  client_id          INT          NOT NULL,
+  term               VARCHAR(100) NOT NULL,
+  day                DATE         NOT NULL,
+  searches           INT          NOT NULL DEFAULT 0,
+  no_result_searches INT          NOT NULL DEFAULT 0,
+  PRIMARY KEY (client_id, term, day),
+  KEY idx_cp_search_terms_day (client_id, day),
+  CONSTRAINT fk_cp_search_terms_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Doctors' remembered browsers for the sign-in code (0060).
+CREATE TABLE IF NOT EXISTS cp_portal_trusted_devices (
+  id                INT          NOT NULL AUTO_INCREMENT,
+  portal_user_id    INT          NOT NULL,
+  device_token_hash CHAR(64)     NOT NULL,
+  user_agent        VARCHAR(500) NULL,
+  expires_at        DATETIME     NOT NULL,
+  last_used_at      DATETIME     NULL,
+  created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cp_portal_trusted_device (portal_user_id, device_token_hash),
+  CONSTRAINT fk_cp_portal_trusted_user FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Doctors' event registrations made in the portal (0061).
+CREATE TABLE IF NOT EXISTS cp_event_registrations (
+  id             INT       NOT NULL AUTO_INCREMENT,
+  client_id      INT       NOT NULL,
+  event_id       INT       NOT NULL,
+  portal_user_id INT       NOT NULL,
+  registered_at  DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  cancelled_at   DATETIME  NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cp_event_registration (event_id, portal_user_id),
+  KEY idx_cp_event_registrations_client (client_id, event_id),
+  CONSTRAINT fk_cp_event_reg_event FOREIGN KEY (event_id) REFERENCES cp_events(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cp_event_reg_user  FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1485,4 +1544,10 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0052_add_admin_passkeys.sql',               NULL),
   ('0053_add_known_devices.sql',                NULL),
   ('0054_add_job_heartbeats.sql',               NULL),
-  ('0055_add_other_request_owner.sql',          NULL);
+  ('0055_add_other_request_owner.sql',          NULL),
+  ('0056_add_popular_searches.sql',             NULL),
+  ('0057_add_portal_two_step.sql',              NULL),
+  ('0058_add_document_search_text.sql',        NULL),
+  ('0059_add_search_terms.sql',                 NULL),
+  ('0060_add_portal_trusted_devices.sql',      NULL),
+  ('0061_add_event_registrations.sql',         NULL);

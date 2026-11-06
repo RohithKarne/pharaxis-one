@@ -7,7 +7,7 @@ import SpecialtyCard from '../components/SpecialtyCard'
 import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function PortalHomePage() {
-  const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders, t } = usePortal()
+  const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders, language, t } = usePortal()
   const navigate  = useNavigate()
   const branding  = portalConfig?.branding || {}
   const client    = portalConfig?.client   || {}
@@ -25,13 +25,13 @@ export default function PortalHomePage() {
     // CPPM-25: suggestions need a signed-in user; signed-out visitors get none.
     if (!user || q.length < 2) { setSuggestions([]); setActiveIdx(-1); return }
     const t = setTimeout(() => {
-      fetch(`/api/portal/search/suggest?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
+      fetch(`/api/portal/search/suggest?clientCode=${clientCode}&q=${encodeURIComponent(q)}&lang=${language || 'en'}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => { setSuggestions(d?.suggestions || []); setActiveIdx(-1) })
         .catch(() => {})
     }, 250)
     return () => clearTimeout(t)
-  }, [homeSearch, clientCode, user])
+  }, [homeSearch, clientCode, user, language])
 
   // CP-16: keyboard navigation for the typeahead (↑/↓/Enter/Esc).
   function onSearchKeyDown(e) {
@@ -96,6 +96,22 @@ export default function PortalHomePage() {
       .catch(() => {})
   }, [clientCode, portalHeaders])
 
+  // The Safety Update box shows the alert that matters most right now — the first live
+  // one, most severe then newest, as the Safety page orders them — and hides when none is live.
+  const [topAlert, setTopAlert] = useState(null)
+  const [moreAlerts, setMoreAlerts] = useState(0) // E4: the other live alerts, so one is not mistaken for all
+  useEffect(() => {
+    if (!clientCode) return
+    fetch(`/api/portal/safety?clientCode=${clientCode}${language && language !== 'en' ? `&lang=${language}` : ''}`, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const live = (d?.alerts || []).filter(a => a.status === 'active')
+        setTopAlert(live[0] || null)
+        setMoreAlerts(Math.max(0, live.length - 1))
+      })
+      .catch(() => { setTopAlert(null); setMoreAlerts(0) })
+  }, [clientCode, language, user?.id])
+
   useEffect(() => {
     if (!clientCode) return
     fetch(`/api/portal/news?clientCode=${clientCode}&limit=4`, { headers: portalHeaders() })
@@ -138,7 +154,11 @@ export default function PortalHomePage() {
     },
   ].filter(c => isFeatureEnabled(c.key))
 
-  const quickSearches = [productTerm, t('Dosing'), t('Clinical trials'), t('Prescribing information'), t('Safety')].filter(Boolean)
+  // The client's own words from Branding, else the built-in ones.
+  const clientSearches = (branding.popular_searches || '').split('\n').map(w => w.trim()).filter(Boolean)
+  const quickSearches = clientSearches.length
+    ? clientSearches
+    : [productTerm, t('Dosing'), t('Clinical trials'), t('Prescribing information'), t('Safety')].filter(Boolean)
 
   const heroTitle    = portalConfig?.welcome_title || t('Medical Information')
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || t('Ask a question about our products, report a side effect, or find approved documents.')
@@ -188,7 +208,7 @@ export default function PortalHomePage() {
                       <button type="button" className={`pp-suggest-item ${i === activeIdx ? 'active' : ''}`}
                         onMouseEnter={() => setActiveIdx(i)}
                         onMouseDown={() => navigate(`${base}/${s.path}`)}>
-                        <span className="pp-suggest-type">{s.type}</span>
+                        <span className="pp-suggest-type">{t(s.label || s.type)}</span>
                         <span className="pp-suggest-title">{s.title}</span>
                       </button>
                     </li>
@@ -203,16 +223,24 @@ export default function PortalHomePage() {
               ))}
             </div>
           </div>
-          <aside className="pp-hero-panel" aria-label={t('Portal shortcuts')}>
+          {topAlert && <aside className="pp-hero-panel" aria-label={t('Safety Update')}>
             <div className="pp-safety-card">
               <div className="pp-safety-card-icon"><Icon name="shield" size={20} /></div>
               <div>
                 <div className="pp-safety-card-title">{t('Safety Update')}</div>
-                <p>{t('Review the latest safety information before using approved content.')}</p>
-                <Link to={`${base}/safety`}>{t('View Safety Alerts')}</Link>
+                <p className="pp-safety-card-alert">
+                  <Link to={`${base}/safety#alert-${topAlert.id}`}>{topAlert.title}</Link>
+                </p>
+                <p>
+                  {topAlert.severity && <span className="pp-safety-card-sev">{topAlert.severity}</span>}
+                  {(topAlert.effective_date || topAlert.created_at) && <> {t('Issued')} {formatLongDate(topAlert.effective_date || topAlert.created_at)}</>}
+                </p>
+                <Link to={`${base}/safety`}>
+                  {moreAlerts > 0 ? `${t('View all')} — ${moreAlerts} ${moreAlerts === 1 ? t('more live alert') : t('more live alerts')}` : t('View Safety Alerts')}
+                </Link>
               </div>
             </div>
-          </aside>
+          </aside>}
         </div>
       </section>
 

@@ -6,10 +6,11 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticatePortal } = require('../../middleware/auth');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { loadFormFields } = require('../../services/formFields');
 const training = require('../../services/training');
 const log = require('../../utils/logger');
+const { systemAudit } = require('../../utils/audit');
 
 async function getClient(code) {
   const [[row]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [code]);
@@ -85,6 +86,67 @@ router.get('/:clientCode/events', async (req, res) => {
     res.json({ items: rows });
   } catch (err) {
     log.error('portal.content.error', { err, route: 'GET /:clientCode/events', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// F2 (27 Oct review): registering for an event inside the portal. Only a published,
+// active event that has not ended and has no outside registration link.
+async function registrableEvent(clientCode, eventId) {
+  const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
+  if (!client) return { error: [404, 'Portal not found.'] };
+  const [[ev]] = await pool.execute(
+    `SELECT id, title, registration_url, COALESCE(end_date, start_date) AS ends FROM cp_events
+      WHERE id = ? AND client_id = ? AND is_active = 1 AND status = 'published'`, [eventId, client.id]);
+  if (!ev) return { error: [404, 'This event is not available.'] };
+  if (ev.ends && new Date(ev.ends) < new Date()) return { error: [409, 'This event has ended.'] };
+  if (String(ev.registration_url || '').trim()) return { error: [409, 'This event takes registrations on its own site.'] };
+  return { client, ev };
+}
+
+// GET /api/portal/content/:clientCode/events/:eventId/registration — am I registered?
+router.get('/:clientCode/events/:eventId/registration', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const [[r]] = await pool.execute(
+      `SELECT r.registered_at FROM cp_event_registrations r JOIN cp_clients c ON c.id = r.client_id
+        WHERE c.code = ? AND r.event_id = ? AND r.portal_user_id = ? AND r.cancelled_at IS NULL`,
+      [req.params.clientCode, req.params.eventId, req.portalUser.userId]);
+    res.json({ registered: !!r, registered_at: r?.registered_at || null });
+  } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/events/:eventId/registration', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST — register (again, after a cancellation)
+router.post('/:clientCode/events/:eventId/registration', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const { client, ev, error } = await registrableEvent(req.params.clientCode, req.params.eventId);
+    if (error) return res.status(error[0]).json({ error: error[1] });
+    await pool.execute(
+      `INSERT INTO cp_event_registrations (client_id, event_id, portal_user_id) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE cancelled_at = NULL, registered_at = CURRENT_TIMESTAMP`,
+      [client.id, ev.id, req.portalUser.userId]);
+    await systemAudit('portal user', client.id, 'REGISTER', 'event_registration', ev.id, { portal_user_id: req.portalUser.userId });
+    res.json({ registered: true });
+  } catch (err) {
+    log.error('portal.content.error', { err, route: 'POST /:clientCode/events/:eventId/registration', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// DELETE — cancel my registration
+router.delete('/:clientCode/events/:eventId/registration', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const { client, ev, error } = await registrableEvent(req.params.clientCode, req.params.eventId);
+    if (error) return res.status(error[0]).json({ error: error[1] });
+    await pool.execute(
+      'UPDATE cp_event_registrations SET cancelled_at = CURRENT_TIMESTAMP WHERE event_id = ? AND portal_user_id = ? AND cancelled_at IS NULL',
+      [ev.id, req.portalUser.userId]);
+    await systemAudit('portal user', client.id, 'CANCEL', 'event_registration', ev.id, { portal_user_id: req.portalUser.userId });
+    res.json({ registered: false });
+  } catch (err) {
+    log.error('portal.content.error', { err, route: 'DELETE /:clientCode/events/:eventId/registration', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

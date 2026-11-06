@@ -19,7 +19,7 @@ function timeAgo(dateStr) {
   return `${days}d ago`
 }
 
-const NOTIF_ICONS = { news: 'news', document: 'file', safety: 'shield' }
+const NOTIF_ICONS = { news: 'news', document: 'file', safety: 'shield', booking: 'calendar' }
 
 function NavDropdown({ label, items, base, location, onNavigate }) {
   const [open, setOpen] = useState(false)
@@ -340,6 +340,7 @@ export default function PortalLayout({ children }) {
                           const href = n.type === 'news' ? `${base}/news/${n.item_id}`
                                      : n.type === 'document' ? `${base}/documents?doc=${n.item_id}`
                                      : n.type === 'safety' ? `${base}/safety#alert-${n.item_id}`
+                                     : n.type === 'booking' ? `${base}/my-activity#meetings`
                                      : null
                           return (
                             <div

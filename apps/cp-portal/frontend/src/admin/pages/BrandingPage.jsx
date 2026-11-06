@@ -353,6 +353,15 @@ export default function BrandingPage() {
           <small className="cp-help-text">Shown on the submission success screen. Leave blank for the default message.</small>
         </div>
 
+        <div className="cp-card">
+          <div className="cp-card-title">Home Page Search</div>
+          <div className="cp-field">
+            <label htmlFor="popular-searches">Popular searches</label>
+            <textarea id="popular-searches" rows={4} value={branding.popular_searches || ''} onChange={e => set('popular_searches', e.target.value)} placeholder={'Dosing\nClinical trials\nPrescribing information\nSafety'} />
+          </div>
+          <small className="cp-help-text">One per line, up to 6, each up to 40 characters. Shown under the search box on the portal home page. Leave blank for your lead product, Dosing, Clinical trials, Prescribing information and Safety.</small>
+        </div>
+
         {error && <div className="cp-error">{error}</div>}
         {saved && <div className="cp-success">Branding saved.</div>}
 

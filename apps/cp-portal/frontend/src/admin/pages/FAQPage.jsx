@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { CanChange, ReadOnlyUnless } from '../components/RoleGate'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 import { label } from '../../shared/utils/labels'
 
 const EMPTY = { question: '', answer: '', category: '', sort_order: 0, is_published: true }
@@ -30,6 +30,19 @@ export default function FAQPage() {
   }
 
   function openCreate() { setEditItem(null); setForm(EMPTY); setError(''); setShowForm(true) }
+
+  // F5 (27 Oct review): Reports › "Searches that found nothing" links here with the
+  // words doctors searched, so a new question starts from them. Nothing is saved until Save.
+  const [params, setParams] = useSearchParams()
+  const { canChange } = useAdminAuth()
+  useEffect(() => {
+    const ask = (params.get('ask') || '').trim().slice(0, 200)
+    if (!ask || !canChange('faq')) return
+    setEditItem(null); setError('')
+    setForm({ ...EMPTY, question: ask.charAt(0).toUpperCase() + ask.slice(1) + (/[?.!]$/.test(ask) ? '' : '?') })
+    setShowForm(true)
+    setParams({}, { replace: true })
+  }, [])
   function openEdit(f)  { setEditItem(f); setForm({ question: f.question, answer: f.answer, category: f.category || '', sort_order: f.sort_order || 0, is_published: !!f.is_published }); setError(''); setShowForm(true) }
 
   async function handleSubmit(e) {

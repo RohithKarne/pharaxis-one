@@ -142,6 +142,22 @@ router.get('/:clientId/events', authenticateAdmin, async (req, res) => {
   }
 });
 
+// F2 (27 Oct review): who registered for an event in the portal, and who withdrew.
+// The client's own admins only (the router-level client check above).
+router.get('/:clientId/events/:id/registrations', authenticateAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT u.first_name, u.last_name, u.email, u.specialty, r.registered_at, r.cancelled_at
+         FROM cp_event_registrations r JOIN cp_portal_users u ON u.id = r.portal_user_id
+        WHERE r.client_id = ? AND r.event_id = ? ORDER BY r.cancelled_at IS NOT NULL, r.registered_at`,
+      [req.params.clientId, req.params.id]);
+    res.json({ registrations: rows });
+  } catch (err) {
+    log.error('admin.content.error', { err, route: 'GET /:clientId/events/:id/registrations', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.post('/:clientId/events', authenticateAdmin, async (req, res) => {
   try {
     const title = cleanText(req.body.title);

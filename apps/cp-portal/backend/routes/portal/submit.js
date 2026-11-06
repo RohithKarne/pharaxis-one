@@ -424,6 +424,52 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
   }
 });
 
+// F3 (27 Oct review): the doctor's own copy of an answer, as a PDF to keep or print.
+// Only their own request, only a sent answer. A copy, not a signed letter: it carries no
+// signature and says so.
+router.get('/:clientCode/submissions/:id/answer.pdf', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Not found.' });
+    const [[client]] = await pool.execute(
+      `SELECT c.id, COALESCE(b.portal_name, c.name) AS portal_name FROM cp_clients c LEFT JOIN cp_branding b ON b.client_id = c.id
+        WHERE c.code = ? AND c.is_active = 1`, [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    const [sub] = await describeRequests(client.id, signedInOwner(req, 'id'));
+    if (!sub) return res.status(404).json({ error: 'Not found.' });
+    if (!sub.answer) return res.status(404).json({ error: 'No answer has been sent for this request yet.' });
+
+    const plain = v => String(v || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
+    const day = d => (d ? new Date(d).toISOString().slice(0, 10) : '—');
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4', info: { Title: `Answer ${sub.reference}` } });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="answer-${sub.reference}.pdf"`);
+    doc.pipe(res);
+    doc.font('Helvetica-Bold').fontSize(16).text(client.portal_name);
+    doc.font('Helvetica').fontSize(12).fillColor('#333').text('Medical information — your answer');
+    doc.moveDown();
+    doc.fontSize(10).fillColor('#000')
+      .text(`Reference: ${sub.reference}`)
+      .text(`Asked: ${day(sub.submitted_at)}`)
+      .text(`Answered: ${day(sub.answered_at)}`);
+    doc.moveDown();
+    doc.font('Helvetica-Bold').fontSize(11).text('Your question');
+    doc.font('Helvetica').fontSize(10).text(plain(sub.request_text) || '—');
+    doc.moveDown();
+    doc.font('Helvetica-Bold').fontSize(11).text('Answer');
+    doc.font('Helvetica').fontSize(10).text(plain(sub.answer));
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor('#666').text(
+      `A copy for your records, downloaded ${new Date().toISOString().slice(0, 10)}. It carries no signature. ` +
+      'For the current approved information, see the portal or contact the medical information team.');
+    doc.end();
+  } catch (err) {
+    log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions/:id/answer.pdf', path: req.path, request_id: req.requestId || null });
+    if (!res.headersSent) res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/portal/submit/:clientCode/request/:token — the one request a visitor's
 // private link opens, shaped as My Submissions shows it.
 router.get('/:clientCode/request/:token', requireVisitorLink, async (req, res) => {

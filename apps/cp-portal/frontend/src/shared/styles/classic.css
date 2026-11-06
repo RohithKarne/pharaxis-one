@@ -162,7 +162,10 @@
 :root .pp-top-task-card, :root .pp-feature-card { min-height: 0; padding: 12px 14px; }
 :root .pp-top-task-card:hover, :root .pp-feature-card:hover { background: #fff8e6; }
 :root .pp-top-task-body h3, :root .pp-feature-title { font-size: 15px; color: var(--pp-link); text-decoration: underline; }
-:root .pp-feature-link, :root .pp-top-task-body > span, :root .pp-update-panel-head a { color: var(--pp-link); text-decoration: underline; font-weight: normal; }
+:root .pp-feature-link, :root .pp-update-panel-head a { color: var(--pp-link); text-decoration: underline; font-weight: normal; }
+/* Each home task card is one link. The underlined title already says so; a second
+   underlined "Start a question" read as another link to the same place. */
+:root .pp-top-task-body > span { display: none; }
 :root .pp-section-heading h2 { font-size: 16px; border-bottom: 2px solid var(--pp-primary); padding-bottom: 4px; width: 100%; }
 :root .pp-chip { border-radius: 0; }
 :root .pp-auth-card { border-radius: 0; box-shadow: none; border: 1px solid #b9c2cd; padding: 18px 20px; max-width: 420px; }

@@ -56,8 +56,10 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       };
     });
 
+    const [[twoStep]] = await pool.execute('SELECT portal_two_step FROM cp_clients WHERE id = ?', [client.id]);
     res.json({
       login_mode: sso.normalizeLoginMode(client.login_mode),
+      portal_two_step: !!twoStep?.portal_two_step,
       providers,
     });
   } catch (err) {
@@ -79,7 +81,10 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     if (loginMode === 'sso_only' && !incoming.some(p => p && p.is_active && String(p.oidc_client_id || '').trim())) {
       return res.status(400).json({ error: 'Switch on at least one provider, with its client ID, before choosing SSO only.' });
     }
-    await pool.execute('UPDATE cp_clients SET login_mode = ?, updated_at = NOW() WHERE id = ?', [loginMode, client.id]);
+    // Row 6 of the 27 Oct review: doctors confirm a password sign-in with an emailed code.
+    const [[before]] = await pool.execute('SELECT portal_two_step FROM cp_clients WHERE id = ?', [client.id]);
+    const portalTwoStep = req.body.portal_two_step === undefined ? !!before?.portal_two_step : !!req.body.portal_two_step;
+    await pool.execute('UPDATE cp_clients SET login_mode = ?, portal_two_step = ?, updated_at = NOW() WHERE id = ?', [loginMode, portalTwoStep ? 1 : 0, client.id]);
 
     const saved = []; // CPPM-10: what changed per provider — never the client secret
     for (const item of incoming) {
@@ -128,7 +133,10 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       saved.push({ provider_key: providerKey, is_active: !!item.is_active, secret_changed: nextSecret !== (existing?.client_secret_encrypted || null) });
     }
 
-    await audit(req.admin, client.id, 'UPDATE', 'sso_config', client.id, { login_mode: loginMode, providers: saved });
+    await audit(req.admin, client.id, 'UPDATE', 'sso_config', client.id, {
+      login_mode: loginMode, providers: saved,
+      ...(portalTwoStep !== !!before?.portal_two_step && { portal_two_step: { from: !!before?.portal_two_step, to: portalTwoStep } }),
+    });
     res.json({ message: 'SSO configuration saved.' });
   } catch (err) {
     log.error('admin.sso.error', { err, route: 'PUT /:clientId', path: req.path, request_id: req.requestId || null });

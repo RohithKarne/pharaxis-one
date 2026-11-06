@@ -13,6 +13,7 @@ const LOGIN_MODES = [
 export default function SsoConfigPage() {
   const { clientId } = useParams()
   const [loginMode, setLoginMode] = useState('local_only')
+  const [portalTwoStep, setPortalTwoStep] = useState(false)
   const [providers, setProviders] = useState([])
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
@@ -25,6 +26,7 @@ export default function SsoConfigPage() {
       .then(r => r.json())
       .then(d => {
         setLoginMode(d.login_mode || 'local_only')
+        setPortalTwoStep(!!d.portal_two_step)
         // client_secret is intentionally blank in the form; masked hint shown separately.
         setProviders((d.providers || []).map(p => ({ ...p, client_secret: '' })))
       })
@@ -48,6 +50,7 @@ export default function SsoConfigPage() {
         method: 'PUT', headers: adminHeaders(),
         body: JSON.stringify({
           login_mode: loginMode,
+          portal_two_step: portalTwoStep,
           providers: providers.map(p => ({
             provider_key: p.provider_key,
             oidc_client_id: p.oidc_client_id,
@@ -105,6 +108,15 @@ export default function SsoConfigPage() {
               </label>
             ))}
           </div>
+          {loginMode !== 'sso_only' && (
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginTop: 14 }}>
+              <input type="checkbox" checked={portalTwoStep} onChange={e => { setPortalTwoStep(e.target.checked); setSaved(false) }} style={{ marginTop: 3 }} />
+              <span>
+                <span style={{ fontWeight: 600, display: 'block' }}>Ask doctors for a code after their password</span>
+                <span style={{ fontSize: 13, color: 'var(--cp-text-muted, #6b7280)' }}>Each password sign-in sends a six-digit code to the doctor's email, valid for 10 minutes. Single sign-on is not affected: the identity provider runs its own second step.</span>
+              </span>
+            </label>
+          )}
         </div>
 
         {/* ── Providers ───────────────────────────────────────────── */}

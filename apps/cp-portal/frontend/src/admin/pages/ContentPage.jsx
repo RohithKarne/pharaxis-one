@@ -8,6 +8,37 @@ import { label } from '../../shared/utils/labels'
 
 const TABS = ['Therapeutic Areas', 'Drugs', 'Events', 'Resources']
 
+// F2 (27 Oct review): doctors who registered in the portal. Shown only to this client's
+// admins; doctors never see each other. An event with a Registration URL takes its
+// registrations on that site instead, so this list stays empty for it.
+function EventRegistrations({ clientId, eventId }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    fetch(`/api/admin/content/${clientId}/events/${eventId}/registrations`, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : null).then(d => setRows(d?.registrations || [])).catch(() => setRows([]))
+  }, [clientId, eventId])
+  if (rows === null) return null
+  const active = rows.filter(r => !r.cancelled_at)
+  return (
+    <div className="cp-field">
+      <label>Registered in the portal ({active.length})</label>
+      {rows.length === 0 ? <small className="cp-help-text">No doctor has registered in the portal yet.</small> : (
+        <table className="cp-table" style={{ width: '100%' }}>
+          <thead><tr><th>Name</th><th>Email</th><th>Specialty</th><th>Registered</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.email} style={r.cancelled_at ? { color: '#9CA3AF' } : undefined}>
+                <td>{r.first_name} {r.last_name}</td><td>{r.email}</td><td>{r.specialty || '—'}</td>
+                <td>{r.cancelled_at ? `Withdrew ${new Date(r.cancelled_at).toLocaleDateString()}` : new Date(r.registered_at).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 const endpoints = { 'Therapeutic Areas': 'therapeutic-areas', Drugs: 'drugs', Events: 'events', Resources: 'resources' }
 
 const STATUS_COLORS = {
@@ -249,6 +280,7 @@ export default function ContentPage() {
                   <div className="cp-field"><label>End Date</label><input type="date" value={editForm.end_date||''} onChange={e=>setEditForm(f=>({...f,end_date:e.target.value}))} /></div>
                 </div>
                 <div className="cp-field"><label>Registration URL</label><input value={editForm.registration_url||''} onChange={e=>setEditForm(f=>({...f,registration_url:e.target.value}))} /></div>
+                <EventRegistrations clientId={clientId} eventId={editItem.id} />
               </>}
               {tab === 'Resources' && <>
                 <div className="cp-field"><label>Title</label><input value={editForm.title||''} onChange={e=>setEditForm(f=>({...f,title:e.target.value}))} /></div>
