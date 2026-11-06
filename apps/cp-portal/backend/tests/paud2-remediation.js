@@ -67,6 +67,7 @@ stub('../middleware/auth', {
     req.portalUser = { id: 42, user_type: 'hcp' };
     next();
   },
+  requirePortalAuth: (_req, _res, next) => next(), // content.js uses it from 27 Oct (F2)
   authenticateAdmin: (_req, _res, next) => next(),
   requireClientAccess: (_req, _res, next) => next(),
 });

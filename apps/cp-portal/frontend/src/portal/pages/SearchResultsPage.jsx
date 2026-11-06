@@ -4,7 +4,7 @@ import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 export default function SearchResultsPage() {
-  const { clientCode, user, t } = usePortal()
+  const { clientCode, user, language, t } = usePortal()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const q = params.get('q') || ''
@@ -18,12 +18,12 @@ export default function SearchResultsPage() {
     // CPPM-25: search is for signed-in users only, so results can respect audience.
     if (!user || !clientCode || q.trim().length < 2) { setResults([]); return }
     setLoading(true)
-    fetch(`/api/portal/search?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
+    fetch(`/api/portal/search?clientCode=${clientCode}&q=${encodeURIComponent(q)}&lang=${language || 'en'}`)
       .then(r => r.ok ? r.json() : { results: [] })
       .then(d => setResults(d.results || []))
       .catch(() => setResults([]))
       .finally(() => setLoading(false))
-  }, [clientCode, q, user])
+  }, [clientCode, q, user, language])
 
   const base = `/portal/${clientCode}`
 
@@ -40,7 +40,7 @@ export default function SearchResultsPage() {
     <div className="pp-container pp-page-content pp-page-narrow">
       <div className="pp-page-header">
         <h1>{t('Search')}</h1>
-        <p>{q ? <>{t('Results for “')}<strong>{q}</strong>”</> : 'Enter a search term.'}</p>
+        <p>{q ? <>{t('Results for “')}<strong>{q}</strong>{t('”')}</> : 'Enter a search term.'}</p>
       </div>
 
       {!user ? (
@@ -55,9 +55,9 @@ export default function SearchResultsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {facets.length > 1 && (
               <div className="pp-sev-filter" role="group" aria-label={t('Filter results by type')}>
-                <button className={`pp-sev-chip${typeFilter === 'all' ? ' on' : ''}`} onClick={() => setTypeFilter('all')}>All ({results.length})</button>
+                <button className={`pp-sev-chip${typeFilter === 'all' ? ' on' : ''}`} onClick={() => setTypeFilter('all')}>{t('All')} ({results.length})</button>
                 {facets.map(f => (
-                  <button key={f.type} className={`pp-sev-chip${typeFilter === f.type ? ' on' : ''}`} onClick={() => setTypeFilter(f.type)}>{f.label} ({f.count})</button>
+                  <button key={f.type} className={`pp-sev-chip${typeFilter === f.type ? ' on' : ''}`} onClick={() => setTypeFilter(f.type)}>{t(f.label)} ({f.count})</button>
                 ))}
               </div>
             )}
@@ -71,7 +71,7 @@ export default function SearchResultsPage() {
                 }}
               >
                 <span style={{ flex: 1 }}>
-                  <span style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--pp-primary, #6B3FA0)', fontWeight: 700 }}>{r.label}</span>
+                  <span style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--pp-primary, #6B3FA0)', fontWeight: 700 }}>{t(r.label)}</span>
                   <span style={{ display: 'block', fontWeight: 600, fontSize: 15, color: '#1A1A2E', margin: '2px 0' }}>{r.title}</span>
                   {r.snippet && <span style={{ display: 'block', fontSize: 13, color: '#4B5563' }}>{r.snippet}</span>}
                 </span>

@@ -127,6 +127,48 @@ is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
 
+### CP Portal — enhancements F1–F5, 27 Oct (no Jira and no branch, per Rohith; changes in the working copy)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-10-27; Rohith to approve.*
+**Why:** a new record (event registrations, audited) and a new copy of an existing record (the answer PDF); no access control, audit trail, e-signature or calculation changed. A defect fix stops the admin's internal booking notes reaching the doctor's browser.
+**Revalidate:** MSL meeting status changes and what the doctor is told; event registration and the admin attendee list; the answer PDF and who may download it; search suggestions.
+
+- F1: when an admin confirms or cancels a meeting request, the doctor gets a portal notification (signed-in requests) and an email, with a calendar invite on confirmation; My activity lists the doctor's meeting requests; a later change replaces the earlier notification and is unread again. The admin's internal notes are never included — `backend/routes/admin/msls.js`, `frontend/src/portal/pages/MyActivityPage.jsx`, `frontend/src/portal/components/PortalLayout.jsx`
+- Found on the way (defect): the doctor's own booking list returned the admin's "Internal Notes — visible to admin only" to the doctor's browser; removed — `backend/routes/portal/bookings.js`
+- F2: a signed-in doctor registers for, or cancels, an event in the portal when it has no outside registration link; a past event refuses; the client's admins see who registered and who withdrew in the event editor — `backend/routes/portal/content.js`, `backend/routes/admin/content.js`, `frontend/src/portal/pages/EventDetailPage.jsx`, `frontend/src/admin/pages/ContentPage.jsx`, migration 0061. The unit test that stands in for portal sign-in gained the matching "signed in" stand-in — `backend/tests/paud2-remediation.js`
+- F4: search suggestions follow the search's rules — features switched off are not suggested, titles in the reader's language, words inside documents — and open the item itself rather than its list (found on the way: they opened the list, and ignored feature switches) — `backend/routes/portal/search.js`, `frontend/src/portal/pages/PortalHomePage.jsx`
+- F5: Reports › Searches that found nothing › "Write an FAQ" opens a new FAQ with those words as the question; nothing is saved until Save — `frontend/src/admin/pages/AnalyticsPage.jsx`, `frontend/src/admin/pages/FAQPage.jsx`
+- F3: a signed-in doctor downloads a PDF copy of a sent answer — reference, dates, question, answer; it says it carries no signature. Another doctor's request, a draft answer, and a signed-out request are refused — `backend/routes/portal/submit.js`, `frontend/src/portal/pages/MySubmissionsPage.jsx`
+
+### CP Portal — enhancements E1–E5, 27 Oct (no Jira and no branch, per Rohith; changes in the working copy)
+
+**Revalidation impact:** Full — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-10-27; approved by Rohith in the project chat the same day.*
+**Why:** an access control changed (a doctor may skip the sign-in code on a remembered browser), and what the AI assistant is given to answer from changed (approved documents, and a corrected lookup). No record structure, audit trail or e-signature changed.
+**Revalidate:** the AI assistant's sources and its "no approved information" answer; doctor sign-in with a remembered browser, on another browser, and after a password change; portal search in another language; the Analytics search tables; the home Safety box.
+
+- E4: the home Safety box says how many more live alerts this reader can see — `frontend/src/portal/pages/PortalHomePage.jsx`
+- E1: search matches news and FAQ translations and shows results in the reader's language; result types and the "All" filter are translated — `backend/routes/portal/search.js`, `frontend/src/portal/pages/SearchResultsPage.jsx`. Calder holds no stored translations today, and outside machine translation is off for it, so E1 shows only once translations exist
+- E2: Analytics shows Top searches and Searches that found nothing, 30 days; a term is stored with client, day and counts only, no identity, removed after 90 days; one person repeating a search within 10 seconds counts once — `backend/routes/portal/search.js`, `backend/routes/admin/analytics.js`, `frontend/src/admin/pages/AnalyticsPage.jsx`, migration 0059
+- E5: "Remember this browser for 7 days" on the doctor code screen, unticked by default; a password change or reset forgets every remembered browser — `backend/routes/portal/auth.js`, `frontend/src/portal/pages/LoginPage.jsx`, migration 0060
+- E3: the AI assistant draws on approved, published, unexpired documents the reader may see, quoting the passage and citing the title; never a draft, never an unapproved document. Calder's 18 live documents carry no approval record (they predate the approval step), so none is used until a reviewer approves it — `backend/utils/retrieve.js`
+- Found on the way (defect): the assistant looked up the whole question as one exact phrase, so "What is the dose of Glimepiride?" found nothing and the assistant said it had no information; it now uses the question's keywords and ranks sources by how many match — `backend/utils/retrieve.js`
+- Found on the way: the search heading's French quotation marks did not pair (« … ”); the tick boxes on the code screen and the request-access form were stretched across the form — `frontend/src/portal/pages/SearchResultsPage.jsx`, `frontend/src/portal/pages/LoginPage.jsx`, `frontend/src/index.css`
+
+### CP Portal — 27 Oct review (no Jira and no branch, per Rohith; changes in the working copy)
+
+**Revalidation impact:** Full — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner) and approved by Rohith in the project chat, 2026-10-27.*
+**Why:** an access control changed: a client can now require doctors to confirm a password sign-in with an emailed code. Search now reads document text, so what a doctor can find changes; who may see a document does not.
+**Revalidate:** doctor sign-in with the code switch on and off, wrong-code and resend limits, the switch on Single Sign-On and its audit entry; portal search for documents; the home page Safety Update box; Popular searches on Branding.
+
+- Row 5, security: package updates clear every known issue in the backend and the critical one in the HTML cleaner that protects news and safety pages (`dompurify` 3.4.17, `multer` 2.5.0, `nodemailer` 10.2.1, `body-parser` 1.20.9, `@simplewebauthn/server` 13.3.3). Left open: two moderate `react-router` advisories, fixed only in a major upgrade; neither reaches this app (no server rendering, and no redirect target read from a link) — `backend/package-lock.json`, `frontend/package-lock.json`
+- Row 1, home page: the Safety Update box shows the most important live alert (title, severity, date) and opens it; it hides when no alert is live — `frontend/src/portal/pages/PortalHomePage.jsx`
+- Row 2, home page: each task card had two underlined links to the same place; only the title is underlined now — `frontend/src/shared/styles/classic.css`
+- Row 3, Popular searches: the client admin sets them on Branding (one per line, up to 6); blank keeps the built-in words — `backend/routes/admin/branding.js`, `frontend/src/admin/pages/BrandingPage.jsx`, migration 0056
+- Row 6, doctor two-step sign-in: optional per client, off by default, on Single Sign-On; a six-digit emailed code, 10 minutes, five tries, a new code at most every 30 seconds; single sign-on unchanged — `backend/routes/portal/auth.js`, `backend/routes/admin/sso.js`, `frontend/src/portal/pages/LoginPage.jsx`, `frontend/src/admin/pages/SsoConfigPage.jsx`, migration 0057
+- Row 4, search inside documents: a PDF's text is read at upload and searched; results show the words around the match and open the document itself; safety results open the alert itself. New library `pdfjs-dist` (Mozilla PDF.js, 5.4 line for Node 20) to read PDF text; existing documents filled by `backend/scripts/backfill-document-text.js` — `backend/utils/pdfText.js`, `backend/routes/portal/search.js`, `backend/routes/admin/documents.js`, migration 0058
+- Found on the way: mail to a `.invalid` address (test accounts) is marked failed instead of being handed to the client's real mail server, where it bounced — `backend/utils/emailOutbox.js`
+- Row 7, backups: `docs/scripts/backup-cp-portal.sh` copies uploads and the database to `~/Pharaxis-Backups/cp-portal`, keeping 14; a restore was checked table by table. Run by hand: Rohith declined a nightly schedule
+
 ### CP Portal — bridge watch (CPPM-157 to CPPM-163; branch `feat/CPPM-157-bridge-watch`)
 
 **Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and Saad Rahman (compliance owner), confirmed by Rohith in the project chat, 2026-10-27.*

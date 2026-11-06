@@ -24,6 +24,9 @@ export default function LoginPage() {
   const [showLoginPassword, setShowLoginPassword]       = useState(false)
   // CPPM-113: a doctor with no account can ask for one.
   const [requesting, setRequesting] = useState(false)
+  // Two-step sign-in (row 6 of the 27 Oct review): set once the password passes on a
+  // portal that asks for an emailed code.
+  const [challenge, setChallenge] = useState(null)
 
   // SSO: which OIDC providers this portal offers, and whether local password
   // login is still allowed (a portal may be configured sso_only).
@@ -65,6 +68,7 @@ export default function LoginPage() {
         setForm(f => ({ ...f, password: '' }))
         return
       }
+      if (data.twoStep) { setChallenge(data); setForm(f => ({ ...f, password: '' })); return }
       login(data.user, data.token)
       navigate(returnTo, { replace: true })
     } catch {
@@ -79,7 +83,10 @@ export default function LoginPage() {
       <div className="pp-auth-card">
         {error && <div className="pp-error-msg" id="pp-login-error" role="alert">{error}</div>}
 
-        {requesting ? (
+        {challenge ? (
+          <SignInCode challenge={challenge} onBack={() => { setChallenge(null); setError('') }}
+            onDone={u => { login(u); navigate(returnTo, { replace: true }) }} />
+        ) : requesting ? (
           <RequestAccess clientCode={clientCode} userTypes={portalConfig?.gate?.userTypes} onBack={() => setRequesting(false)} />
         ) : (<>
         <div className="pp-auth-footer" style={{ marginBottom: 16, textAlign: 'left' }}>
@@ -130,6 +137,72 @@ export default function LoginPage() {
         </>)}
       </div>
     </div>
+  )
+}
+
+// Step two: the six-digit code from the email.
+function SignInCode({ challenge, onBack, onDone }) {
+  const { t } = usePortal()
+  const [code, setCode] = useState('')
+  const [remember, setRemember] = useState(false) // E5: unticked unless the doctor chooses it
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+
+  async function post(path, body) {
+    const res = await fetch(`/api/portal/auth/login/${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken: challenge.challengeToken, ...body }),
+    })
+    return { res, data: await res.json().catch(() => ({})) }
+  }
+
+  async function verify(e) {
+    e.preventDefault(); setBusy(true); setError(''); setNote('')
+    try {
+      const { res, data } = await post('verify', { code, rememberBrowser: remember })
+      if (!res.ok) { setError(data.error || t('That code is not right.')); setCode(''); return }
+      onDone(data.user)
+    } catch { setError('Network error. Please check your connection and try again.') } finally { setBusy(false) }
+  }
+
+  async function resend() {
+    setError(''); setNote('')
+    try {
+      const { res, data } = await post('resend', {})
+      if (!res.ok) { setError(data.error || 'Could not send a new code.'); return }
+      setNote(t('A new code is on its way. Earlier codes no longer work.'))
+    } catch { setError('Network error. Please check your connection and try again.') }
+  }
+
+  return (
+    <form onSubmit={verify} className="pp-auth-form" aria-labelledby="pp-code-title">
+      <h2 id="pp-code-title" style={{ fontSize: 18, margin: '0 0 4px' }}>{t('Enter your sign-in code')}</h2>
+      <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--pp-text-muted, #6B7280)' }}>
+        {t('We emailed a six-digit code to')} {challenge.maskedEmail}. {t('It works for')} {challenge.expiresInMinutes} {t('minutes.')}
+      </p>
+      {error && <div className="pp-error-msg" role="alert" id="pp-code-error">{error}</div>}
+      {note && <div className="pp-success-msg" role="status">{note}</div>}
+      <div className="pp-field">
+        <label htmlFor="pp-login-code">{t('Code from the email')}</label>
+        <input id="pp-login-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required autoFocus
+          value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setError('') }}
+          aria-invalid={!!error} aria-describedby={error ? 'pp-code-error' : undefined} />
+      </div>
+      <div className="pp-field">
+        <label className="pp-checkbox-label">
+          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+          <span>{t('Remember this browser for 7 days. Do not tick this on a shared computer.')}</span>
+        </label>
+      </div>
+      <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={busy || code.length !== 6}>
+        {busy ? t('Signing in…') : t('Sign In')}
+      </button>
+      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between' }}>
+        <button type="button" className="pp-link-btn" onClick={resend}>{t('Send a new code')}</button>
+        <button type="button" className="pp-link-btn" onClick={onBack}>{t('Back to sign in')}</button>
+      </div>
+    </form>
   )
 }
 
@@ -191,8 +264,8 @@ function RequestAccess({ clientCode, userTypes, onBack }) {
       <div className="pp-field"><label htmlFor="ra-country">{t('Country')}</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
       {/* CPPM-101: the reader's own yes to the weekly email, never ticked for them. */}
       <div className="pp-field">
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontWeight: 400 }}>
-          <input type="checkbox" checked={f.weekly_email} onChange={e => set('weekly_email', e.target.checked)} style={{ marginTop: 3 }} />
+        <label className="pp-checkbox-label">
+          <input type="checkbox" checked={f.weekly_email} onChange={e => set('weekly_email', e.target.checked)} />
           <span>{t('Email me a weekly update of new content. You can switch it off at any time in your preferences.')}</span>
         </label>
       </div>

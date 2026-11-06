@@ -19,8 +19,12 @@ const lockout = require('../../utils/loginLockout');
 const { raiseAlert, releaseResolved } = require('../../services/adminAlerts');
 const passwordRules = require('../../utils/passwordRules');
 const sessions = require('../../utils/sessions');
+const twoFactor = require('../../utils/twoFactor');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
+// E5: a browser the doctor asked us to remember skips the sign-in code for this long.
+const TRUSTED_DAYS = 7;
+const TRUSTED_COOKIE = 'cp_portal_device';
 
 // CPPM-49: compared against when the email has no account, so a wrong address takes
 // as long as a wrong password and the timing does not reveal who is registered.
@@ -152,7 +156,7 @@ router.post('/login', async (req, res) => {
     if (email.length    > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
     if (password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-    const [[client]] = await pool.execute('SELECT id, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
+    const [[client]] = await pool.execute('SELECT id, login_mode, portal_two_step FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
     // CPPM-50: the sign-in page hides the password form for a single-sign-on-only
     // portal; refuse the password itself too, before it is checked, so a password
@@ -178,16 +182,122 @@ router.post('/login', async (req, res) => {
     await lockout.clearAttempts(lockKey);
     if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email address before signing in. Check your inbox for the verification link.', unverified: true });
 
-    await pool.execute(`UPDATE cp_portal_users SET last_login_at = NOW() WHERE id = ?`, [user.id]);
-
-    const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
-    const token = makeToken(user, client.id);
-    await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
-    await noteNewDevice(req, res, user, client.id);
-    res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-       .json({ user: safe });
+    // Row 6 of the 27 Oct review: when the client asks for it, the password is step
+    // one and a code emailed to the doctor is step two. No session exists until then.
+    if (client.portal_two_step && await isTrustedBrowser(user.id, req.cookies?.[TRUSTED_COOKIE])) {
+      await systemAudit('portal sign-in', client.id, 'LOGIN', 'portal_user', user.id, { second_step: 'remembered_browser' });
+      return await finishSignIn(req, res, user, client.id);
+    }
+    if (client.portal_two_step) {
+      await sendSignInCode(user, client.id);
+      return res.json({ twoStep: true, challengeToken: makeChallenge(user, client.id), maskedEmail: twoFactor.maskEmail(user.email), expiresInMinutes: twoFactor.EMAIL_CODE_MINUTES });
+    }
+    await finishSignIn(req, res, user, client.id);
   } catch (err) {
     log.error('portal.auth.error', { err, route: 'POST /login', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+async function finishSignIn(req, res, user, clientId) {
+  await pool.execute(`UPDATE cp_portal_users SET last_login_at = NOW() WHERE id = ?`, [user.id]);
+  const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed, specialty: user.specialty };
+  const token = makeToken(user, clientId);
+  await sessions.createSession('portal', user.id, token, req.headers['user-agent']);
+  await noteNewDevice(req, res, user, clientId);
+  res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+     .json({ user: safe });
+}
+
+async function isTrustedBrowser(userId, rawToken) {
+  if (!rawToken) return false;
+  const [[row]] = await pool.execute(
+    'SELECT id FROM cp_portal_trusted_devices WHERE portal_user_id = ? AND device_token_hash = ? AND expires_at > NOW()',
+    [userId, twoFactor.hashValue(rawToken)]);
+  if (!row) return false;
+  await pool.execute('UPDATE cp_portal_trusted_devices SET last_used_at = NOW() WHERE id = ?', [row.id]);
+  return true;
+}
+
+// A new password means every remembered browser must prove itself again.
+async function forgetBrowsers(userId) {
+  await pool.execute('DELETE FROM cp_portal_trusted_devices WHERE portal_user_id = ?', [userId]);
+}
+
+// The proof that step one passed: short-lived, and good only for the code routes.
+function makeChallenge(user, clientId) {
+  return jwt.sign({ stage: 'portal_2fa', userId: user.id, clientId }, PORTAL_SECRET, { expiresIn: `${twoFactor.EMAIL_CODE_MINUTES}m` });
+}
+
+async function readChallenge(req) {
+  let decoded;
+  try { decoded = jwt.verify(String(req.body?.challengeToken || ''), PORTAL_SECRET, { algorithms: ['HS256'] }); } catch { return null; }
+  if (decoded.stage !== 'portal_2fa') return null;
+  const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ? AND client_id = ? AND is_active = 1', [decoded.userId, decoded.clientId]);
+  return user ? { user, clientId: decoded.clientId } : null;
+}
+
+// A new code replaces any earlier one still waiting.
+async function sendSignInCode(user, clientId) {
+  const code = twoFactor.generateEmailCode();
+  await pool.execute('UPDATE cp_portal_2fa_codes SET is_consumed = 1 WHERE portal_user_id = ? AND is_consumed = 0', [user.id]);
+  await pool.execute(
+    `INSERT INTO cp_portal_2fa_codes (portal_user_id, client_id, code_hash, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+    [user.id, clientId, twoFactor.hashValue(code), twoFactor.EMAIL_CODE_MINUTES]);
+  await queueEmail(clientId, {
+    to: user.email,
+    subject: 'Your sign-in code',
+    text: `Hello ${user.first_name}, your sign-in code is ${code}. It expires in ${twoFactor.EMAIL_CODE_MINUTES} minutes. If you did not try to sign in, change your password.`,
+    html: `<p>Hello ${user.first_name},</p><p>Your sign-in code is <strong style="font-size:20px;letter-spacing:3px">${code}</strong>.</p><p>It expires in ${twoFactor.EMAIL_CODE_MINUTES} minutes. If you did not try to sign in, change your password.</p>`,
+  }, { kind: 'portal_2fa_code', relatedType: 'portal_user', relatedId: user.id, sensitive: true });
+}
+
+// POST /api/portal/auth/login/verify — step two: the emailed code, then the real sign-in.
+router.post('/login/verify', async (req, res) => {
+  try {
+    const pending = await readChallenge(req);
+    if (!pending) return res.status(401).json({ error: 'Your sign-in timed out. Enter your password again.', restart: true });
+    const { user, clientId } = pending;
+    const [[row]] = await pool.execute(
+      `SELECT id, code_hash, attempts FROM cp_portal_2fa_codes
+        WHERE portal_user_id = ? AND is_consumed = 0 AND expires_at > NOW() ORDER BY id DESC LIMIT 1`, [user.id]);
+    if (!row) return res.status(401).json({ error: 'That code has expired. Send a new code.' });
+    if (row.attempts >= 5) return res.status(423).json({ error: 'Too many wrong codes. Send a new code.' });
+    const given = twoFactor.hashValue(String(req.body?.code || '').trim());
+    if (!twoFactor.timingSafeEqualStr(given, row.code_hash)) {
+      await pool.execute('UPDATE cp_portal_2fa_codes SET attempts = attempts + 1 WHERE id = ?', [row.id]);
+      await systemAudit('portal sign-in', clientId, 'LOGIN_FAILED', 'portal_user', user.id, { reason: 'wrong_code' });
+      return res.status(401).json({ error: row.attempts + 1 >= 5 ? 'Too many wrong codes. Send a new code.' : 'That code is not right. Check the email and try again.' });
+    }
+    await pool.execute('UPDATE cp_portal_2fa_codes SET is_consumed = 1 WHERE id = ?', [row.id]);
+    if (req.body?.rememberBrowser) {
+      const raw = twoFactor.generateDeviceToken();
+      await pool.execute(
+        `INSERT INTO cp_portal_trusted_devices (portal_user_id, device_token_hash, user_agent, expires_at, last_used_at)
+         VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY), NOW())`,
+        [user.id, twoFactor.hashValue(raw), String(req.headers['user-agent'] || '').slice(0, 500), TRUSTED_DAYS]);
+      res.cookie(TRUSTED_COOKIE, raw, { ...COOKIE_OPTS, path: '/', maxAge: TRUSTED_DAYS * 24 * 60 * 60 * 1000 });
+    }
+    await systemAudit('portal sign-in', clientId, 'LOGIN', 'portal_user', user.id, { second_step: 'email_code', remembered_browser: !!req.body?.rememberBrowser });
+    await finishSignIn(req, res, user, clientId);
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /login/verify', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/auth/login/resend — a fresh code for the same step-one pass.
+router.post('/login/resend', async (req, res) => {
+  try {
+    const pending = await readChallenge(req);
+    if (!pending) return res.status(401).json({ error: 'Your sign-in timed out. Enter your password again.', restart: true });
+    const [[recent]] = await pool.execute(
+      'SELECT id FROM cp_portal_2fa_codes WHERE portal_user_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 30 SECOND) LIMIT 1', [pending.user.id]);
+    if (recent) return res.status(429).json({ error: 'A code was sent a moment ago. Wait 30 seconds before asking for another.' });
+    await sendSignInCode(pending.user, pending.clientId);
+    res.json({ sent: true });
+  } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /login/resend', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -271,6 +381,7 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
 
     const hash = await bcrypt.hash(new_password, 12);
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
+    await forgetBrowsers(req.portalUser.userId);
     await passwordRules.rememberPassword('portal', user.id, hash);
     // CP walk 2026-10-04: re-issue this browser's cookie with the new token version, so the
     // person who changed the password stays signed in; every other browser is signed out.
@@ -408,6 +519,7 @@ router.post('/reset-password', async (req, res) => {
       'UPDATE cp_portal_users SET password = ?, token_version = token_version + 1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?',
       [hash, user.id]
     );
+    await forgetBrowsers(user.id);
     await passwordRules.rememberPassword('portal', user.id, hash);
     res.json({ message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {

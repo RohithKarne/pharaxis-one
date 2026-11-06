@@ -12,10 +12,56 @@ const { VISIBLE_DOCUMENT_SQL } = require('../../utils/documentVisibility');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { canSee } = require('../../utils/audience');
 const log = require('../../utils/logger');
+const { applyTranslation } = require('../../utils/translator');
 
 function snippet(text) {
   const s = String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   return s.length > 160 ? s.slice(0, 160) + '…' : s;
+}
+
+// The words around the first place a document's text matches, so the reader sees why
+// a document whose title does not mention the term came up (row 4, 27 Oct review).
+function textAround(text, q) {
+  const s = String(text || '').replace(/\s+/g, ' ');
+  const at = s.toLowerCase().indexOf(String(q).toLowerCase());
+  if (at < 0) return '';
+  let start = Math.max(0, at - 70);
+  if (start > 0) start = s.indexOf(' ', start) + 1 || start; // begin on a whole word
+  let end = Math.min(s.length, at + q.length + 90);
+  if (end < s.length) end = s.lastIndexOf(' ', end) > at ? s.lastIndexOf(' ', end) : end;
+  return (start > 0 ? '…' : '') + s.slice(start, end).trim() + (end < s.length ? '…' : '');
+}
+
+// E1 (27 Oct review): news and FAQs carry stored translations. A row matches when the
+// term is in its own text or in any of its translations — checked on the parsed values,
+// so a search for "title" does not match the JSON keys.
+function inTranslations(json, fields, q) {
+  let t = {};
+  try { t = JSON.parse(json || '{}') || {}; } catch { return false; }
+  const needle = q.toLowerCase();
+  return Object.values(t).some(byLang => fields.some(f => String(byLang?.[f] || '').toLowerCase().includes(needle)));
+}
+function plainHas(row, fields, q) {
+  const needle = q.toLowerCase();
+  return fields.some(f => String(row[f] || '').replace(/<[^>]*>/g, ' ').toLowerCase().includes(needle));
+}
+
+// E2 (27 Oct review): what doctors search for, and what finds nothing, counted per day
+// with no identity attached. Kept 90 days, because a term is whatever was typed.
+// The same person repeating the same search within 10 seconds (a refresh, a language
+// switch, React's development double-run) counts once. Held in memory only, never stored.
+const recentlyCounted = new Map();
+async function countSearch(clientId, userId, q, found) {
+  const term = q.toLowerCase().replace(/\s+/g, ' ').slice(0, 100);
+  const key = `${clientId}|${userId}|${term}`, now = Date.now();
+  if (now - (recentlyCounted.get(key) || 0) < 10000) return;
+  recentlyCounted.set(key, now);
+  if (recentlyCounted.size > 5000) for (const [k, at] of recentlyCounted) if (now - at >= 10000) recentlyCounted.delete(k);
+  await pool.execute(
+    `INSERT INTO cp_search_terms (client_id, term, day, searches, no_result_searches) VALUES (?, ?, UTC_DATE(), 1, ?)
+     ON DUPLICATE KEY UPDATE searches = searches + 1, no_result_searches = no_result_searches + VALUES(no_result_searches)`,
+    [clientId, term, found ? 0 : 1]);
+  await pool.execute('DELETE FROM cp_search_terms WHERE client_id = ? AND day < UTC_DATE() - INTERVAL 90 DAY', [clientId]);
 }
 
 // GET /api/portal/search?clientCode=xxx&q=term
@@ -32,6 +78,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     const cid = client.id;
     const like = `%${q}%`;
     const userType = req.portalUser.user_type || 'other';
+    const lang = /^[a-z]{2}$/.test(String(req.query.lang || '')) ? req.query.lang : 'en';
 
     const [featRows] = await pool.execute('SELECT feature_key FROM cp_features WHERE client_id = ? AND is_enabled = 1', [cid]);
     const enabled = new Set(featRows.map(r => r.feature_key));
@@ -40,9 +87,11 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     if (enabled.has('news_announcements')) {
       const [rows] = await pool.execute(
-        `SELECT id, title, body_html, target_types_json FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
-        [cid, like, like]);
-      rows.filter(r => canSee(r.target_types_json, userType)).slice(0, 8)
+        `SELECT id, title, body_html, target_types_json, translations_json FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ? OR translations_json LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
+        [cid, like, like, like]);
+      rows.filter(r => canSee(r.target_types_json, userType))
+        .filter(r => plainHas(r, ['title', 'body_html'], q) || inTranslations(r.translations_json, ['title', 'body_html'], q)).slice(0, 8)
+        .map(r => applyTranslation(r, lang, ['title', 'body_html']))
         .forEach(r => results.push({ type: 'news', label: 'News', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `news/${r.id}` }));
     }
 
@@ -52,13 +101,15 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
         `SELECT id, title, body_html, target_types_json FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (publish_at IS NULL OR publish_at <= NOW()) AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
         [cid, like, like]);
       rows.filter(r => canSee(r.target_types_json, userType)).slice(0, 8)
-        .forEach(r => results.push({ type: 'safety', label: 'Safety Alert', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `safety` }));
+        .forEach(r => results.push({ type: 'safety', label: 'Safety Alert', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `safety#alert-${r.id}` }));
     }
     {
       const [rows] = await pool.execute(
-        `SELECT id, question, answer FROM cp_faq_items WHERE client_id=? AND is_published=1 AND (question LIKE ? OR answer LIKE ?) LIMIT 8`,
-        [cid, like, like]);
-      rows.forEach(r => results.push({ type: 'faq', label: 'FAQ', id: r.id, title: r.question, snippet: snippet(r.answer), path: `faq` }));
+        `SELECT id, question, answer, translations_json FROM cp_faq_items WHERE client_id=? AND is_published=1 AND (question LIKE ? OR answer LIKE ? OR translations_json LIKE ?) LIMIT 20`,
+        [cid, like, like, like]);
+      rows.filter(r => plainHas(r, ['question', 'answer'], q) || inTranslations(r.translations_json, ['question', 'answer'], q)).slice(0, 8)
+        .map(r => applyTranslation(r, lang, ['question', 'answer']))
+        .forEach(r => results.push({ type: 'faq', label: 'FAQ', id: r.id, title: r.question, snippet: snippet(r.answer), path: `faq` }));
     }
 
     if (enabled.has('therapeutic_areas')) {
@@ -84,13 +135,17 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     if (enabled.has('document_library')) {
       const [rows] = await pool.execute(
-        `SELECT id, title, visible_to_json FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 40`,
-        [cid, like]);
+        `SELECT id, title, visible_to_json, title LIKE ? AS in_title, search_text FROM cp_documents
+          WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND (title LIKE ? OR search_text LIKE ?)
+          ORDER BY in_title DESC LIMIT 40`,
+        [like, cid, like, like]);
       rows.filter(r => canSee(r.visible_to_json, userType)).slice(0, 8)
-        .forEach(r => results.push({ type: 'document', label: 'Document', id: r.id, title: r.title, snippet: '', path: `documents` }));
+        .forEach(r => results.push({ type: 'document', label: 'Document', id: r.id, title: r.title,
+          snippet: r.in_title ? '' : textAround(r.search_text, q), path: `documents?doc=${r.id}` }));
     }
 
     res.json({ query: q, results });
+    countSearch(cid, req.portalUser.userId, q, results.length).catch(err => log.warn('portal.search.count_failed', { err: { message: err.message } }));
   } catch (err) {
     log.error('portal.search.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -111,18 +166,38 @@ router.get('/suggest', authenticatePortal, requirePortalAuth, async (req, res) =
     const like = `%${q}%`;
     const userType = req.portalUser.user_type || 'other';
     const out = [];
+    // F4 (27 Oct review): suggestions follow the same rules as the search itself — only
+    // content whose portal feature is on, titles in the reader's language, words inside
+    // documents — and each one opens the item, not its list.
+    const lang = /^[a-z]{2}$/.test(String(req.query.lang || '')) ? req.query.lang : 'en';
+    const [featRows] = await pool.execute('SELECT feature_key FROM cp_features WHERE client_id = ? AND is_enabled = 1', [cid]);
+    const enabled = new Set(featRows.map(r => r.feature_key));
 
-    const [news] = await pool.execute(
-      `SELECT title, target_types_json FROM cp_news_posts WHERE client_id=? AND status='published' AND title LIKE ? ORDER BY publish_at DESC LIMIT 25`, [cid, like]);
-    news.filter(r => canSee(r.target_types_json, userType)).slice(0, 5).forEach(r => out.push({ title: r.title, type: 'news', path: 'news' }));
+    if (enabled.has('news_announcements')) {
+      const [news] = await pool.execute(
+        `SELECT id, title, target_types_json, translations_json FROM cp_news_posts WHERE client_id=? AND status='published'
+           AND (title LIKE ? OR translations_json LIKE ?) ORDER BY publish_at DESC LIMIT 25`, [cid, like, like]);
+      news.filter(r => canSee(r.target_types_json, userType))
+        .filter(r => plainHas(r, ['title'], q) || inTranslations(r.translations_json, ['title'], q)).slice(0, 5)
+        .map(r => applyTranslation(r, lang, ['title']))
+        .forEach(r => out.push({ title: r.title, type: 'news', label: 'News', path: `news/${r.id}` }));
+    }
 
     const [faq] = await pool.execute(
-      `SELECT question FROM cp_faq_items WHERE client_id=? AND is_published=1 AND question LIKE ? LIMIT 5`, [cid, like]);
-    faq.forEach(r => out.push({ title: r.question, type: 'faq', path: 'faq' }));
+      `SELECT id, question, translations_json FROM cp_faq_items WHERE client_id=? AND is_published=1 AND (question LIKE ? OR translations_json LIKE ?) LIMIT 15`,
+      [cid, like, like]);
+    faq.filter(r => plainHas(r, ['question'], q) || inTranslations(r.translations_json, ['question'], q)).slice(0, 5)
+      .map(r => applyTranslation(r, lang, ['question']))
+      .forEach(r => out.push({ title: r.question, type: 'faq', label: 'FAQ', path: 'faq' }));
 
-    const [docs] = await pool.execute(
-      `SELECT title, visible_to_json FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 25`, [cid, like]);
-    docs.filter(r => canSee(r.visible_to_json, userType)).slice(0, 5).forEach(r => out.push({ title: r.title, type: 'document', path: 'documents' }));
+    if (enabled.has('document_library')) {
+      const [docs] = await pool.execute(
+        `SELECT id, title, visible_to_json, title LIKE ? AS in_title FROM cp_documents
+          WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND (title LIKE ? OR search_text LIKE ?)
+          ORDER BY in_title DESC LIMIT 25`, [like, cid, like, like]);
+      docs.filter(r => canSee(r.visible_to_json, userType)).slice(0, 5)
+        .forEach(r => out.push({ title: r.title, type: 'document', label: 'Document', path: `documents?doc=${r.id}` }));
+    }
 
     res.json({ suggestions: out.slice(0, 8) });
   } catch (err) {

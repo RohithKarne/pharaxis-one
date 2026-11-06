@@ -61,7 +61,7 @@ const CLIENT_SECTIONS = [
   { key: 'connections', label: 'Connections', icon: 'link', tabs: [
     { path: 'integration',   label: 'Integration', area: 'integration' },
     { path: 'sync-health',   label: 'Sync Health', area: 'submissions' },
-    { path: 'sso',           label: 'Single Sign-On', area: 'sso', keywords: 'sso login oidc' },
+    { path: 'sso',           label: 'Single Sign-On', area: 'sso', keywords: 'sso login oidc two-step code doctor sign-in' },
   ] },
   { key: 'reports', label: 'Reports', icon: 'chart', tabs: [
     { path: 'analytics',     label: 'Analytics' },

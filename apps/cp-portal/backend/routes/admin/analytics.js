@@ -42,7 +42,18 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       [id]
     );
 
+    // E2 (27 Oct review): the last 30 days of portal searches, counted with no identity.
+    const [topSearches] = await pool.execute(
+      `SELECT term, SUM(searches) AS searches FROM cp_search_terms
+        WHERE client_id = ? AND day >= UTC_DATE() - INTERVAL 30 DAY GROUP BY term ORDER BY searches DESC, term LIMIT 10`, [id]);
+    const [noResultSearches] = await pool.execute(
+      `SELECT term, SUM(no_result_searches) AS searches, MAX(day) AS last_day FROM cp_search_terms
+        WHERE client_id = ? AND day >= UTC_DATE() - INTERVAL 30 DAY AND no_result_searches > 0
+        GROUP BY term ORDER BY searches DESC, last_day DESC LIMIT 15`, [id]);
+
     res.json({
+      top_searches:      topSearches,
+      no_result_searches: noResultSearches,
       stats: {
         portal_users:      portalUsers.cnt,
         total_submissions: totalSubs.cnt,

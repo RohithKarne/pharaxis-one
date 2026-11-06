@@ -129,7 +129,8 @@ router.get('/:clientCode', authenticatePortal, async (req, res) => {
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
     const [bookings] = await pool.execute(`
-      SELECT b.id, b.preferred_date, b.topic, b.message, b.status, b.admin_notes, b.created_at,
+      -- Never admin_notes: the admin screen labels them "visible to admin only" (27 Oct, F1).
+      SELECT b.id, b.preferred_date, b.topic, b.message, b.status, b.created_at, b.updated_at,
              m.name as msl_name, m.title as msl_title, m.specialty as msl_specialty
       FROM cp_msl_bookings b
       JOIN cp_msls m ON m.id = b.msl_id

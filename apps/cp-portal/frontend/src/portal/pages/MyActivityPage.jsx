@@ -14,6 +14,7 @@ export default function MyActivityPage() {
   const [stats, setStats]     = useState(null)
   const [follows, setFollows] = useState([])
   const [letters, setLetters] = useState(null) // CPPM-145
+  const [meetings, setMeetings] = useState([]) // F1: the doctor's own MSL meeting requests
   const [loading, setLoading] = useState(true)
 
   usePageTitle(t('My Activity'))
@@ -24,10 +25,16 @@ export default function MyActivityPage() {
       fetch(`/api/portal/personal/activity?clientCode=${clientCode}`, { headers: portalHeaders() }).then(r => r.ok ? r.json() : null),
       fetch(`/api/portal/personal/follows?clientCode=${clientCode}`, { headers: portalHeaders() }).then(r => r.ok ? r.json() : null),
       fetch(`/api/portal/safety/${clientCode}/my-letters`, { headers: portalHeaders() }).then(r => r.ok ? r.json() : null),
-    ]).then(([a, f, l]) => { setStats(a); setFollows(f?.follows || []); setLetters(l); setLoading(false) }).catch(() => setLoading(false))
+      fetch(`/api/portal/bookings/${clientCode}`, { headers: portalHeaders() }).then(r => r.ok ? r.json() : null),
+    ]).then(([a, f, l, b]) => { setStats(a); setFollows(f?.follows || []); setLetters(l); setMeetings(b?.bookings || []); setLoading(false) }).catch(() => setLoading(false))
   }, [user, clientCode])
 
   const fmtDate = (str) => formatDateTime(str)
+
+  // A notification links here as #meetings; the list arrives after the page, so scroll once it does.
+  useEffect(() => {
+    if (!loading && window.location.hash === '#meetings') document.getElementById('meetings')?.scrollIntoView()
+  }, [loading])
 
   if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">{t('Loading…')}</div></div>
 
@@ -101,6 +108,27 @@ export default function MyActivityPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* F1 (27 Oct review): what happened to each meeting the doctor asked for. */}
+      {meetings.length > 0 && (
+        <div id="meetings" style={{ marginBottom: 26 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{t('Meeting requests')}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {meetings.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--pp-border)', borderRadius: 10, padding: '12px 16px' }}>
+                <Icon name="calendar" size={18} />
+                <span style={{ flex: 1 }}>
+                  <span style={{ fontWeight: 600, display: 'block' }}>{m.msl_name}{m.topic ? ` — ${m.topic}` : ''}</span>
+                  <span style={{ fontSize: 13, color: 'var(--pp-text-muted)' }}>{m.preferred_date ? fmtDate(m.preferred_date) : t('Time to be confirmed')}</span>
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: m.status === 'confirmed' ? '#047857' : m.status === 'cancelled' ? '#B91C1C' : 'var(--pp-text-muted)' }}>
+                  {t({ pending: 'Waiting for confirmation', confirmed: 'Confirmed', cancelled: 'Cancelled', completed: 'Held' }[m.status] || m.status)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

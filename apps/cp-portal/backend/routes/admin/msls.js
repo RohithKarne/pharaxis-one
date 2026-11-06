@@ -8,6 +8,8 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const { queueEmail } = require('../../utils/emailOutbox');
+const { buildEvent } = require('../../utils/ics');
 const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
@@ -109,6 +111,37 @@ async function releaseSlot(clientId, bookingId) {
   );
 }
 
+// F1 (27 Oct review): a doctor who asked for a meeting is told when it is confirmed or
+// cancelled — in the portal (signed-in requests) and by email. The admin's internal
+// notes are never included.
+async function tellRequester(clientId, b, status) {
+  const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const confirmed = status === 'confirmed';
+  const title = confirmed ? `Your meeting with ${b.msl_name} is confirmed` : `Your meeting request with ${b.msl_name} was cancelled`;
+  const when = b.preferred_date ? new Date(b.preferred_date).toUTCString().replace(':00 GMT', ' UTC') : null;
+  if (b.portal_user_id) {
+    await pool.execute(
+      // One notification per booking (the table's dedup key): a later change replaces it and is unread again.
+      `INSERT INTO cp_notifications (portal_user_id, client_id, type, title, item_id) VALUES (?, ?, 'booking', ?, ?)
+       ON DUPLICATE KEY UPDATE title = VALUES(title), is_read = 0, created_at = CURRENT_TIMESTAMP`,
+      [b.portal_user_id, clientId, title, b.id]);
+  }
+  let attachments;
+  if (confirmed && b.preferred_date) {
+    const ics = buildEvent({ uid: `msl-booking-${b.id}@pharaxis`, start: b.preferred_date, summary: `Meeting with ${b.msl_name}`,
+      description: b.topic ? `Topic: ${b.topic}` : 'Medical Science Liaison meeting' });
+    attachments = [{ filename: 'meeting.ics', content: ics, contentType: 'text/calendar; method=REQUEST' }];
+  }
+  await queueEmail(clientId, {
+    to: b.requester_email,
+    subject: title,
+    html: `<p>Hi ${esc(b.requester_name)},</p><p>${confirmed
+      ? `Your meeting with <strong>${esc(b.msl_name)}</strong> is confirmed${when ? ` for <strong>${esc(when)}</strong>` : ''}.${attachments ? ' A calendar invite is attached.' : ''}`
+      : `Your meeting request with <strong>${esc(b.msl_name)}</strong> was cancelled. You are welcome to ask for another time.`}</p>${b.topic ? `<p>Topic: ${esc(b.topic)}</p>` : ''}<p>Booking reference ${b.id}.</p>`,
+    attachments,
+  }, { kind: confirmed ? 'booking_confirmed' : 'booking_cancelled', relatedType: 'msl_booking', relatedId: b.id });
+}
+
 // PUT /api/admin/msls/:clientId/bookings/:bookingId — update status + notes
 router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
@@ -116,6 +149,10 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
     const { status, admin_notes } = req.body;
     const allowed = ['pending', 'confirmed', 'cancelled', 'completed'];
     if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+    const [[before]] = await pool.execute(
+      `SELECT b.id, b.status, b.portal_user_id, b.requester_name, b.requester_email, b.preferred_date, b.topic, m.name AS msl_name
+         FROM cp_msl_bookings b JOIN cp_msls m ON m.id = b.msl_id WHERE b.id = ? AND b.client_id = ?`,
+      [req.params.bookingId, req.params.clientId]);
     const fields = [], values = [];
     if (status !== undefined)      { fields.push('status = ?');      values.push(status); }
     if (admin_notes !== undefined) { fields.push('admin_notes = ?'); values.push(admin_notes?.trim() || null); }
@@ -127,6 +164,9 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
     // CPPM-26: a cancelled meeting gives its time back.
     if (status === 'cancelled') await releaseSlot(req.params.clientId, req.params.bookingId);
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl_booking', req.params.bookingId, { status });
+    if (before && status && status !== before.status && ['confirmed', 'cancelled'].includes(status)) {
+      await tellRequester(req.params.clientId, before, status);
+    }
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.msls.error', { err, route: 'PUT /:clientId/bookings/:bookingId', path: req.path, request_id: req.requestId || null });

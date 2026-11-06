@@ -42,6 +42,15 @@ async function queueEmail(clientId, { to, subject, html, text, attachments }, { 
 async function attemptSend(id) {
   const [[row]] = await pool.execute(`SELECT * FROM cp_email_outbox WHERE id = ? AND status = 'pending'`, [id]);
   if (!row) return;
+  // ".invalid" is reserved and can never be delivered (RFC 2606). Test accounts use it;
+  // handing it to a real mail server only bounces back into the client's own mailbox.
+  if (/\.invalid$/i.test(String(row.to_email).trim())) {
+    await pool.execute(
+      `UPDATE cp_email_outbox SET status='failed', attempts=attempts+1, last_error=? WHERE id=?`,
+      ['Not sent: .invalid addresses can never be delivered.', id]);
+    if (row.is_sensitive) await wipeBody(id);
+    return;
+  }
   try {
     await sendEmail(row.client_id, {
       to: row.to_email,

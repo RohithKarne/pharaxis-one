@@ -43,6 +43,8 @@ const { validateContent, inspectDangerousContent } = require('../../utils/fileVa
 const { refuseUnlessClean } = require('../../utils/virusScan');
 const { documentUnavailableReason } = require('../../utils/documentVisibility');
 const { parsePublishAt } = require('../../utils/publishAt');
+const { extractPdfText } = require('../../utils/pdfText');
+const fileStore = require('../../utils/storage');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -445,6 +447,13 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       await audit(req.admin, req.params.clientId, 'UPLOAD', 'document', doc.id, { title: doc.title });
       if (approving) await audit(req.admin, req.params.clientId, 'APPROVE', 'document', doc.id, { title: doc.title, version: doc.version, review_due_at: doc.review_due_at });
       autoTranslate(req.params.clientId, 'cp_documents', doc.id, { title }).catch(() => {});
+      // Row 4 of the 27 Oct review: the PDF's words, for the portal search. Not awaited —
+      // a long file must not hold the upload; the title still finds it meanwhile.
+      if (req.file.mimetype === 'application/pdf') {
+        extractPdfText(fileStore.resolve(filePath))
+          .then(text => text && pool.execute('UPDATE cp_documents SET search_text = ? WHERE id = ?', [text, doc.id]))
+          .catch(() => {});
+      }
       res.json({ document: doc });
     } catch (e) {
       log.error('admin.documents.error', { err: e, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });

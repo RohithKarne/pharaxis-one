@@ -181,6 +181,12 @@ export function RequestCard({ s, screening, base, onChanged, portalHeaders }) {
           <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
             {t('A copy was emailed to you. If you need anything further, reply below.')}
           </div>
+          {/* F3 (27 Oct review): a PDF copy to keep — signed-in requests only. */}
+          {base?.includes('/submissions/') && (
+            <a href={`${base}/answer.pdf`} download className="pp-link-btn" style={{ display: 'inline-block', marginTop: 8, fontSize: '0.85rem' }}>
+              {t('Download a copy (PDF)')}
+            </a>
+          )}
         </div>
       )}
 

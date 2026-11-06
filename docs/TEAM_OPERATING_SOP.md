@@ -3389,6 +3389,8 @@ retires it.
 | 2026-10-03 | Saad | Doctor Review release merged in PR #709 (CPPM-84–95, CPPM-106–117, CPPM-119, CPPM-121, CPPM-122). Fixes: forms, drafts, submissions and feature switches. Doctors gain: check-your-answers before sending, request access, "I have read this" on high and critical safety letters, notifications that open the exact item, "For you" on Home, an event page with Register and Add to calendar. Admins gain: approve or decline access requests, therapeutic-area tags on news, documents and events, on/off switches for Clinical Trials and Training. Migrations 0039–0042, folded into the baseline. Not yet done: the revalidation flag and a tagged release. |
 | 2026-10-07 | Saad | CP Portal end-to-end walk, 4–7 Oct 2026, on Rohith's instruction and with no Jira: every admin screen, every portal page, every admin role and every portal user type opened on a local copy with its own test users, happy path and failing path, and fixed as found. 30 fixes and features in three pull requests (#723, #724, #727), each verified on the real screen; the change log under "CP Portal end-to-end walk" lists them by area. Excluded by decision: the CP–MIMS bridge, SSO round trips and anything calling out. Open at the close: the Clinical Trials page hides itself while no trial is active (documented as intended); the client admin opening the platform audit page sees the server's refusal text rather than being sent away; a visitor's cookie consent before sign-in is recorded to the account only from this release on. |
 | 2026-10-10 | Saad | CP Portal ease-of-use plan, all 22 rows (drag-to-reorder on Features left out), merged in three pull requests (#739, #742, #744), alongside the CP-to-MIMS bridge work (#740, #743). Admins gain: a sidebar that opens each area to its screens, a "To do today" list on the client Overview, Submissions as an inbox with the case open beside the list, four ready Branding themes with a live preview, grouped Features, and one set of status words on every content screen. Decisions (Rohith, 10 Oct): a clinical trial goes live only after a second person publishes it (migration 0047); safety alerts stay direct, with no review step; screens show local time with UTC on hover, while exports and the audit trail stay in UTC. Checked the same day: every CP Portal migration on MySQL 8.0.46, fresh and as an upgrade; every admin screen as superadmin and client admin, every portal page as a doctor and as a visitor, and one failing path on 20 forms. Four faults found were fixed: the audit trail showed local time, a client admin opening the platform audit page saw empty filters, two client lists counted open submissions under "Submissions", and Features misdescribed Coming soon training modules. Not checked: screen readers, phone widths for Branding and Features, real MIMS traffic after #744. |
+| 2026-10-27 | Saad | 27 Oct review, on Rohith's instruction (no Jira, no branch; changes in the working copy): the home page Safety Update box shows the live alert; task cards carry one link each; Popular searches set on Branding; doctor two-step sign-in, optional per client; search reads inside PDF documents; package updates clear the critical and high advisories; a backup script for uploads and the database. Guide corrected the same day: Process Explorer and Custom Reports no longer exist; screen and table counts; sign-in sessions are HttpOnly cookies, not browser storage. |
+| 2026-10-27 | Saad | Enhancements E1–E5, on Rohith's instruction (no Jira, no branch): search matches news and FAQ translations and answers in the reader's language; Analytics shows top searches and searches that found nothing (no names kept, 90 days); the home Safety box says how many more alerts are live; doctors may have a browser remembered for the sign-in code for 7 days, forgotten on a password change; the AI assistant also draws on approved documents, never drafts or unapproved ones. Found and fixed: the assistant looked up the whole question as one phrase and so found almost nothing; Calder's chat provider was Anthropic with an OpenAI key and model (set to OpenAI). Open: none of Calder's 18 live documents carries an approval record, so the assistant quotes none until a reviewer approves them; the virus-list updater had stopped (list 28 days old) — restarted, cause not found. Revalidation flag Full, approved by Rohith. |
 
 ---
 
@@ -3481,7 +3483,7 @@ Both CP Portal and MIMS share the same native MySQL 8.0.45 instance — `pharaxi
 cp-portal/
   backend/
     server.js              — Express app, all route registrations
-    database/db.js         — MySQL pool + all 34 table definitions (idempotent CREATE TABLE IF NOT EXISTS)
+    database/db.js         — MySQL pool + the original table definitions; the full schema is migrations/0000_baseline.sql plus numbered migrations
     middleware/auth.js     — JWT auth for admin + portal, requireClientAccess
     routes/admin/          — 27 admin API route files
     routes/portal/         — 15 portal API route files
@@ -3495,17 +3497,17 @@ cp-portal/
       admin/
         context/AdminAuthContext.jsx  — admin auth state + adminHeaders() helper
         components/AdminLayout.jsx    — sidebar nav, all client nav groups
-        pages/                        — 28 admin pages
+        pages/                        — 35 admin pages
       portal/
         context/PortalContext.jsx     — portal config, user auth, language, t()
         components/PortalLayout.jsx   — header nav, language switcher, notifications
-        pages/                        — 19 portal pages
+        pages/                        — 31 portal pages
         utils/translations.js         — UI string translations (en/fr/de/es/ja/zh)
 ```
 
 ##### Authentication
-- **Admin:** JWT stored in `localStorage` as `cp_admin_token`. `adminHeaders()` helper in `AdminAuthContext`.
-- **Portal:** JWT stored in `localStorage` as `cp_portal_token`. `portalFetch()` in `PortalContext` auto-handles 401 → logout.
+- **Admin:** a password, then a second step (emailed code, authenticator app, backup code or passkey). The session is an HttpOnly cookie, `cp_admin_token`, never readable by page scripts.
+- **Portal:** a password — then, where the client turns it on, a code emailed to the doctor (from 2026-10-27) — or single sign-on. The session is an HttpOnly cookie, `cp_portal_token`. `portalFetch()` in `PortalContext` handles 401 → sign-out.
 - **Portal session restore:** `GET /api/portal/auth/me` called on mount to verify token against DB.
 
 ##### Feature Flags
@@ -3532,15 +3534,12 @@ cp-portal/
 - `notify.js` creates rows in `cp_notifications` per portal user
 - Portal layout fetches on mount — bell icon shows unread count
 
-##### Process Explorer
-- 47 flows total: 28 admin flows + 19 portal flows
-- 295+ live log captures. IST timezone corrected.
-- Data in `cp_process_logs` table
-- Read `project_process_explorer.md` memory before editing `ProcessExplorerPage.jsx`
+##### Process Explorer — removed
+No longer in the product: no screen, no route and no `cp_process_logs` table (checked 2026-10-27).
 
 ---
 
-#### 5. Database Tables (34 total)
+#### 5. Database Tables (75 in the database on 2026-10-27; the core ones below)
 
 ##### Admin & Config
 | Table | Purpose |
@@ -3589,12 +3588,10 @@ cp-portal/
 | Table | Purpose |
 |-------|---------|
 | `cp_audit_logs` | Every admin action logged (action, entity, admin_email) |
-| `cp_custom_reports` | Saved report definitions |
-| `cp_process_logs` | Process Explorer event logs |
 
 ---
 
-#### 6. Admin Panel Pages (28 pages)
+#### 6. Admin Panel Pages (35 on 2026-10-27; the main ones below)
 
 All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients list, and Process Explorer.
 
@@ -3623,15 +3620,13 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 | AnalyticsPage | `:id/analytics` | Page views, submissions, user metrics |
 | FeedbackPage | `:id/feedback` | Portal user feedback responses |
 | ReviewQueuePage | `:id/review-queue` | Content pending review (badge count in nav) |
-| CustomReportsPage | `:id/reports` | Saved/scheduled report builder |
 | AdminUsersPage | `:id/admin-users` | Per-client admin user management |
 | EmailSettingsPage | `:id/email-settings` | SMTP + template config |
 | LanguagePage | `:id/language` | Enable languages + Retranslate All Content button |
-| ProcessExplorerPage | `/admin/process-explorer` | 47 flows, 295+ live captures, IST-corrected timestamps |
 
 ---
 
-#### 7. Portal Pages (19 pages)
+#### 7. Portal Pages (31 on 2026-10-27; the main ones below)
 
 All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 
@@ -3678,11 +3673,10 @@ All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 CP Portal reopened to feature development on 2026-08-08, when §46 introduced the CP-PM routine whose analyst-specified work is built and shipped. The last closed sprint (Sprint 6) ended 2026-03-24; everything since runs through the §26 lock and the §38 delivery path. This section previously still read *STABLE — no active sprint*, contradicting the header of §41; corrected 2026-09-13 on Rohith's instruction.
 
 **What is working:**
-- Full admin panel (28 pages) — all features operational
-- Full portal (19 pages) — all feature-gated pages operational
+- Full admin panel (35 pages) — all features operational
+- Full portal (31 pages) — all feature-gated pages operational
 - 6-language auto-translation — content auto-translates on save
-- Process Explorer — 47 flows, 295+ captures
-- MySQL migration complete — Docker-based MySQL
+- MySQL migration complete — native MySQL on the developer machine, shared with MIMS
 
 **Time on screen:** screens show the viewer's local time with UTC on hover; exports and the audit trail are in UTC (Rohith, 2026-10-10).
 
@@ -3695,10 +3689,10 @@ CP Portal reopened to feature development on 2026-08-08, when §46 introduced th
 | # | Item | Type | Priority |
 |---|------|------|----------|
 | 1 | `Unknown column 'client_code'` in `cp_clients` — appears in some edge queries | Low-severity bug | Low |
-| 2 | 15 pre-existing npm vulnerabilities (14 high, 1 moderate) — need `npm audit fix` session | Security debt | Medium |
+| 2 | ~~npm vulnerabilities~~ — **closed 2026-10-27**: none left in the backend; in the frontend two moderate `react-router` advisories remain, fixed only by a major upgrade and not reachable here (no server rendering, no redirect read from a link) | Security debt | Low |
 | 3 | Translation coverage — existing content before 2026-03-21 has empty `translations_json`. Admin must click "Retranslate All Content" once per client to backfill. | Data gap | Low |
 | 4 | Bundle size — 1.1MB JS bundle (single chunk). Should split with `React.lazy()` per route when performance matters. | Performance debt | Low |
-| 5 | Uploads not backed up — `cp-portal/backend/uploads/` is gitignored. Ensure this folder is persisted in any deployment (not ephemeral). | Deployment risk | Medium |
+| 5 | Uploads are gitignored. **From 2026-10-27** `docs/scripts/backup-cp-portal.sh` copies uploads and the database to `~/Pharaxis-Backups/cp-portal` (newest 14; a restore was checked). Run by hand — Rohith declined a nightly schedule, 2026-10-27. Same machine and unencrypted, so not disaster recovery; any deployment still needs persistent storage. | Deployment risk | Medium |
 | 6 | ~~MIMS → CP Portal integration not built~~ — **closed 2026-07-15.** Shipped both directions and browser-verified; see Version History | Closed | — |
 
 ---

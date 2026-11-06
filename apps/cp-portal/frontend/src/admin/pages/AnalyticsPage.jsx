@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import { CanChange } from '../components/RoleGate'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { activityActor } from '../../shared/utils/activityActor'
 import { label } from '../../shared/utils/labels'
@@ -99,6 +100,8 @@ export default function AnalyticsPage() {
   const topSafety      = data?.top_safety        || []
   const trend          = (data?.submissions_trend || []).map(r => ({ ...r, Submissions: r.count }))
   const recentActivity = data?.recent_activity   || []
+  const topSearches    = data?.top_searches       || []
+  const noResults      = data?.no_result_searches || []
 
   const topDocsChart   = topDocuments.map(d => ({
     name: d.title?.length > 28 ? d.title.slice(0, 28) + '…' : d.title,
@@ -222,6 +225,39 @@ export default function AnalyticsPage() {
           )}
         </SectionCard>
 
+      </div>
+
+      {/* E2 (27 Oct review): what doctors search for, and what finds nothing — last 30 days,
+          counted with no names. A term that finds nothing is content the portal is missing. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <SectionCard title="Searches That Found Nothing (30 days)">
+          {noResults.length === 0 ? <EmptyState msg="Every search found something." /> : (
+            <table className="cp-table" style={{ width: '100%' }}>
+              <thead><tr><th>Search</th><th style={{ textAlign: 'right' }}>Times</th><th style={{ textAlign: 'right' }}>Last</th><th /></tr></thead>
+              <tbody>
+                {noResults.map(r => (
+                  <tr key={r.term}><td>{r.term}</td><td style={{ textAlign: 'right' }}>{r.searches}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{r.last_day ? new Date(r.last_day).toLocaleDateString() : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {/* F5: answer the gap — opens a new FAQ with these words as the question. */}
+                      <CanChange area="faq"><Link to={`/admin/clients/${clientId}/faq?ask=${encodeURIComponent(r.term)}`}>Write an FAQ</Link></CanChange>
+                    </td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p style={{ fontSize: 12, color: '#5F6B7A', margin: '10px 0 0' }}>No names are kept with a search. Searches are removed after 90 days.</p>
+        </SectionCard>
+        <SectionCard title="Top Searches (30 days)">
+          {topSearches.length === 0 ? <EmptyState msg="No searches yet." /> : (
+            <table className="cp-table" style={{ width: '100%' }}>
+              <thead><tr><th>Search</th><th style={{ textAlign: 'right' }}>Times</th></tr></thead>
+              <tbody>
+                {topSearches.map(r => <tr key={r.term}><td>{r.term}</td><td style={{ textAlign: 'right' }}>{r.searches}</td></tr>)}
+              </tbody>
+            </table>
+          )}
+        </SectionCard>
       </div>
 
       {/* Recent Activity */}
