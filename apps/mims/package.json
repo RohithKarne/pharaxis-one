@@ -30,7 +30,7 @@
     "geoip-lite": "^1.2.2",
     "imapflow": "^1.6.0",
     "ioredis": "^5.10.1",
-    "joi": "^18.2.1",
+    "joi": "^18.3.1",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.20",
