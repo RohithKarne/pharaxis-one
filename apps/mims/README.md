@@ -38,7 +38,7 @@ npm run dev
 ## Tests
 
 ```bash
-npm run test
+MYSQL_DATABASE=pharaxis_mims_test npm run test
 npm run test:e2e
 ```
 

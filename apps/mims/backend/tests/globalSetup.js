@@ -24,6 +24,14 @@
  */
 
 module.exports = async () => {
+  // The suites run every pending migration and write rows. With no database named,
+  // db.js falls back to .env — the shared dev database — so name a test one or stop.
+  const target = process.env.MYSQL_DATABASE;
+  if (!target || !/_test$/.test(target)) {
+    throw new Error(`Refusing to run the MIMS tests against "${target || 'the .env database'}". ` +
+      'Name a test database: MYSQL_DATABASE=pharaxis_mims_test npm test');
+  }
+
   const started = Date.now();
   const pool = require('../database/db');
 
