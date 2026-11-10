@@ -337,7 +337,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, changeApprovals);
   r.use(`${prefix}/admin`, dependencyCheck);
   r.use(`${prefix}/admin`, require('./routes/admin/impactPreview'));
-  r.use(`${prefix}/admin`, require('./routes/admin/policyGraph'));
   r.use(`${prefix}/admin`, require('./routes/admin/contentIntelligence'));
   r.use(`${prefix}/admin`, require('./routes/admin/loggedInUsers'));
   r.use(`${prefix}/admin`, require('./routes/integrations/schedulerAdmin'));

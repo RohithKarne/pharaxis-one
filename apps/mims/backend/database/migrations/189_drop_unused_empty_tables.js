@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * Migration 189 — drops seventeen tables no running code reads or writes
+ * Migration 189 — drops twenty tables no running code reads or writes
  * (full audit, Rohith's decision of 2026-11-10).
  *
  * WHY
  * They belong to features that were never built past their table (the reports
- * roadmap), were removed (the phone app, support access, Process Explorer
+ * roadmap, the policy graph), were removed (the phone app, support access, Process Explorer
  * requests) or were replaced. Each widens what a validation has to cover.
  *
  * A table is dropped only where it holds no rows. One that holds anything is
@@ -21,6 +21,9 @@ const TABLES = [
   'email_retry_log',
   'mobile_push_devices',
   'org_support_access',
+  'policy_decision_logs',
+  'policy_edges',
+  'policy_nodes',
   'process_explorer_ops_requests',
   'report_access_requests',
   'report_anomaly_flags',

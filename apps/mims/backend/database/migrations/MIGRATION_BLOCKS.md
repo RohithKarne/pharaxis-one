@@ -38,7 +38,7 @@ Two teams are working on the case-form roadmap in parallel.
 | 187 | **Inquiry Ledger (Rohith, 2026-10-27; MIPM-223)** | **DONE** | Within the 100+ block. `inquiry_ledger_alerts`: one row per case and stage (waiting for an owner, with an owner) the Ledger has told someone about, so each red case is notified once; `summary` marks cases covered by one summary notice. |
 | 167 | **MIMS role walk (2026-10-10)** | **DONE** | Within the 100+ block. An "auditor" role that can only view cases and reports, given by the Read-only Auditor template; template groups still giving "reviewer" move to it with their members. |
 | 188 | **Full audit (2026-11-10)** | **DONE** | Within the 100+ block. `cm_faqs.view_count` and `user_2fa_challenges.attempts`: both were added by the code at run time; a new database never got the first one. |
-| 189 | **Full audit (Rohith, 2026-11-10)** | **DONE** | Within the 100+ block. Drops seventeen tables no running code uses, each only where it holds no rows; what was dropped and what was kept is in `audit_logs` (entity `unused_tables`). |
+| 189 | **Full audit (Rohith, 2026-11-10)** | **DONE** | Within the 100+ block. Drops twenty tables no running code uses, each only where it holds no rows; what was dropped and what was kept is in `audit_logs` (entity `unused_tables`). |
 
 ## Rules
 
