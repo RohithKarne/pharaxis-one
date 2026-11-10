@@ -110,6 +110,13 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Migration 187: `inquiry_ledger_alerts`, so each case and stage is notified once
 - `POST /api/v1/cases/claim` also takes `keys` and answers `keyed`; older callers unaffected — `backend/routes/apiPlatform.js`
 
+### MIMS — setup check fix, 10 Nov (no Jira; branch `fix/mims-walk-1110`)
+
+**Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** an admin setup indicator only; no record, audit trail, calculation or access rule changed.
+
+- Admin home › Setup checks › Help baseline counts only the 28 required help topics; it showed "88/28" and a red cross — `backend/services/orgBootstrapService.js`
+
 ## Unreleased — CP Portal
 
 **Not tagged.** On 4 Oct 2026 Rohith decided not to tag CP Portal releases for now, and
