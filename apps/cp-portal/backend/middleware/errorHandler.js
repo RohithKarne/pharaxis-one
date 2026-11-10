@@ -15,7 +15,7 @@ function globalErrorHandler(error, req, res, _next) {
     // here with a 4xx was actively refused: a disallowed CORS origin, or
     // inputSecurity blocking an injection or prototype-pollution attempt. Logging
     // only 5xx meant those were rejected and recorded nowhere, which is the same
-    // silent-failure shape as CP-19 and #543, one status code lower. SOP §37.2.
+    // silent-failure shape as CP-19 and #543, one status code lower. docs/RULES.md › How the AI works, rule 5.
     // Name and message only, deliberately: an outsider can trigger this path at
     // will with one header, and a stack per rejection is bulk without signal —
     // the message already names the cause, and status/method/path localise it.

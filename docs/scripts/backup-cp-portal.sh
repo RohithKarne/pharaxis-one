@@ -5,7 +5,7 @@
 #     ./docs/scripts/backup-cp-portal.sh
 #
 # Uploaded files (documents, logos, safety letters) live only in the backend's
-# uploads folder, which git ignores, so nothing else keeps a copy (§41.10 item 5).
+# uploads folder, which git ignores, so nothing else keeps a copy (docs/PROGRESS.md › CP Portal, known issue 5).
 # Each run writes one folder:
 #
 #     ~/Pharaxis-Backups/cp-portal/<YYYY-MM-DD_HHMM>/uploads.tar.gz

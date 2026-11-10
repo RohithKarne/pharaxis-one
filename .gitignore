@@ -57,7 +57,7 @@ output/
 apps/**/frontend/design-screenshots/
 
 # Process-manager config. No template is kept in the repo — every deployment
-# pipeline and server template was removed 2026-09-24 (SOP §38.12), so anything
+# pipeline and server template was removed 2026-09-24 (docs/RULES.md › Getting a change to main, local only), so anything
 # of this shape is a local experiment and stays out of the repository.
 ecosystem.config*.js
 

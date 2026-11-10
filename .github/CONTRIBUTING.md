@@ -8,7 +8,7 @@
 - The ticket key is what links Jira to the diff. Without it nothing connects a
   merged change back to the discussion that authorised it.
 
-Full process, including who owns each step: `docs/TEAM_OPERATING_SOP.md` §38.
+Full process, including who owns each step: `docs/RULES.md` › How work flows and › Getting a change to `main`.
 
 ## Development Setup
 

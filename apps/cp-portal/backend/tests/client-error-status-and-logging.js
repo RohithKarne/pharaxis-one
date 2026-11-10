@@ -110,7 +110,7 @@ const throws = (status, message) => (_req, _res, next) => {
     const line = denied.lines.find((l) => l.level === 'warn' || l.level === 'error');
     assert.ok(line,
       'a 403 reached globalErrorHandler and NOTHING was logged — the 403 fix has ' +
-      'traded a misleading log for silence (SOP §37.2)');
+      'traded a misleading log for silence (docs/RULES.md, could it fail silently?)');
     assert.ok(line.err && /Origin not allowed/.test(line.err.message), 'the cause is missing from the log');
     assert.strictEqual(line.request_id, 'req-cp88-test');
   });
