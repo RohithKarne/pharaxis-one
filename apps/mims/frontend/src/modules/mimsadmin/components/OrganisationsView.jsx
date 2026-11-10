@@ -253,7 +253,7 @@ export default function OrganisationsView({ H, flash }) {
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Organisation Name *</label>
                 <input aria-label="Organisation Name" className="form-control" style={{ fontSize: 13 }} value={orgForm.name}
-                  onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Pfizer India" />
+                  onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Example Pharma India" />
               </div>
               <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Create</button>
               <button className="btn btn-secondary" type="button" style={{ fontSize: 12 }} onClick={() => setShowOrgForm(false)}>Cancel</button>
@@ -274,7 +274,7 @@ export default function OrganisationsView({ H, flash }) {
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>New Organisation Name *</label>
                 <input aria-label="New Organisation Name" className="form-control" style={{ fontSize: 13 }} value={cloneForm.target_name}
-                  onChange={e => setCloneForm(f => ({ ...f, target_name: e.target.value }))} placeholder="e.g. Pfizer US" />
+                  onChange={e => setCloneForm(f => ({ ...f, target_name: e.target.value }))} placeholder="e.g. Example Pharma US" />
               </div>
               <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Clone</button>
               <button className="btn btn-secondary" type="button" style={{ fontSize: 12 }} onClick={() => setShowCloneForm(false)}>Cancel</button>

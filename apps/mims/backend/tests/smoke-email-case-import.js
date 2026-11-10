@@ -21,7 +21,7 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 const pool = require('../database/db');
 const eci = require('../services/emailCaseImportService');
 
-const ORG_ID = 1; // Novartis (seeded dev org with active agents)
+const ORG_ID = 1; // the seeded dev organisation with active agents
 const TAG = `ecismoke-${Date.now()}`;
 
 let pass = 0;

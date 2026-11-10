@@ -118,11 +118,11 @@ export default function ClientsPage() {
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>Company Name *</label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="e.g. Ardelyx Medical" />
+                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="e.g. Example Pharma" />
                 </div>
                 <div className="cp-field">
                   <label>Client Code *</label>
-                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s/g, '-') }))} required placeholder="e.g. ardelyx" disabled={!!editing} />
+                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s/g, '-') }))} required placeholder="e.g. example-pharma" disabled={!!editing} />
                   <small>{editing ? 'The portal address cannot change: links and QR codes already point at it.' : 'Used in portal URL. Lowercase, no spaces.'}</small>
                 </div>
               </div>

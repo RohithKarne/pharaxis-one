@@ -20,7 +20,7 @@ assert.strictEqual(sso.normalizeProviderKey('Microsoft'), 'microsoft');
 assert.strictEqual(sso.normalizeProviderKey('invalid'), null);
 
 // 2. Verify domain parser
-const domains = sso.parseAllowedDomains('novartis.com, example.org, GMAIL.COM');
-assert.deepStrictEqual(domains, ['novartis.com', 'example.org', 'gmail.com']);
+const domains = sso.parseAllowedDomains('example.com, example.org, GMAIL.COM');
+assert.deepStrictEqual(domains, ['example.com', 'example.org', 'gmail.com']);
 
 console.log('✅ SSO configuration unit tests passed!');

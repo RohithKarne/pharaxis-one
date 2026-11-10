@@ -80,7 +80,7 @@ const DEFAULT_FORM_FIELDS = {
 
 // The code is the portal address (/portal/<code>), so it is what a URL can carry.
 const CODE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CODE_MESSAGE = 'Client code may contain only lowercase letters, digits and single hyphens, e.g. ardelyx or walk-pharma.';
+const CODE_MESSAGE = 'Client code may contain only lowercase letters, digits and single hyphens, e.g. example or walk-pharma.';
 
 function requireSuperadmin(req, res, next) {
   if (req.admin?.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required.' });

@@ -4,8 +4,8 @@
 /**
  * seed-e2e.js — deterministic test data for the CP Portal E2E suite.
  *
- * The negative tests post to /api/portal/submit/novartis/... and expect a 400
- * for an invalid form type. Without a `novartis` client that route returns 404
+ * The negative tests post to /api/portal/submit/demopharma/... and expect a 400
+ * for an invalid form type. Without a `demopharma` client that route returns 404
  * instead, so the test fails for the wrong reason. This creates the fixtures
  * those tests assume.
  *
@@ -28,9 +28,9 @@ const PASSWORD = process.env.MYSQL_PASSWORD || 'devpass';
 const ADMIN_EMAIL    = process.env.E2E_CP_ADMIN_EMAIL    || 'cpadmin';
 const ADMIN_PASSWORD = process.env.E2E_CP_ADMIN_PASSWORD || 'Test@1234';
 
-// `novartis` is referenced directly by e2e/negative.spec.js.
+// `demopharma` is referenced directly by e2e/negative.spec.js.
 const CLIENTS = [
-  { name: 'Novartis',        code: 'novartis', active: 1 },
+  { name: 'Demo Pharma',        code: 'demopharma', active: 1 },
   { name: 'E2E Test Client', code: 'e2etest',  active: 1 },
   { name: 'Inactive Client', code: 'inactive', active: 0 },
 ];

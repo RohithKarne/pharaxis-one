@@ -146,7 +146,7 @@ const HANDLERS = {
     const { runSignalDetection } = require('./pv/signalDetectionService')
     for (const org of orgs) await runSignalDetection(org.id)
   },
-  // CUT (product rationalization): Novartis demo-data simulation removed — it fabricated
+  // CUT (product rationalization): demo-data simulation removed — it fabricated
   // ~100k synthetic cases/day for a single seeded org and is not a product feature.
   'login-audit-archive': async () => {
     // Login history is audit evidence: keep 7 years unless system_config
