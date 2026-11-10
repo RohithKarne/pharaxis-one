@@ -112,7 +112,7 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 
 ### MIMS — setup check fix, 10 Nov (no Jira; branch `fix/mims-walk-1110`)
 
-**Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Revalidation impact:** None — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-11-10; merged on Rohith's word (#807).*
 **Why:** an admin setup indicator only; no record, audit trail, calculation or access rule changed.
 
 - Admin home › Setup checks › Help baseline counts only the 28 required help topics; it showed "88/28" and a red cross — `backend/services/orgBootstrapService.js`
@@ -136,7 +136,7 @@ the ones a validation plan should name.
 
 ### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
 
-**Revalidation impact:** Full — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Revalidation impact:** Full — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-11-10; merged on Rohith's word (#806).*
 **Why:** an access control changed: a portal user's role, which decides who sees HCP-only content, can no longer be changed by the user at first sign-in.
 **Revalidate:** first sign-in for each role; who sees HCP-only content; the reporter's name on a side-effect case in MIMS.
 
