@@ -47,6 +47,19 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 12 | Rohith updates the session-opening prompt and any cloud routine that names the old SOP | Rohith | ⏳ |
 | 13 | After the merge: point Claude's memory files at the six documents | Saad | ⏳ |
 
+## Now — new team: Tim and Medical Affairs (no Jira; locked by Rohith 2026-11-10)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Write the new team into RULES.md › Who does what: Rohith Founder & CEO, Tim, Varun Head of Technology, Saad under Varun, John, Meera, Daniel; Rohith's role outside Pharaxis | Saad | ✅ |
+| 2 | Add the Medical view to the overview; Tim first in "Who answers"; new session-opening prompt | Saad | ✅ |
+| 3 | Update CLAUDE.md, README and `/varun`; add `/tim`, `/john`, `/meera`, `/daniel` | Kiranmai | ✅ |
+| 4 | PROGRESS.md: clinical gap closed, new gap recorded | Saad | ✅ |
+| 5 | Fix what was found while reading: a password in ARCHITECTURE.md, broken references in PROGRESS.md, removed people still named | Kiranmai | ✅ |
+| 6 | Check every link and table; check the new commands load in a fresh session | Kiranmai | ✅ |
+| 7 | Review the change | Varun | ⏳ |
+| 8 | Push and open the pull request — only with Rohith's word | Varun | ⏳ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |

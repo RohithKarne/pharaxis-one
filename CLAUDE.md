@@ -21,4 +21,4 @@ Claude Code reads this file at the start of every session. It only points the wa
 6. Plain English, one or two lines. Commit messages and PRs name what changed.
 7. Nothing new at the top level. New folders go in `apps/` or `docs/`.
 
-**Team:** Rohith (CEO, signs everything) · Saad (CPO, point of contact, compliance) · Varun (CTO, reviews and signs) · Kiranmai (builds and tests). `@Name` or `/varun` `/saad` `/kiranmai` means that person answers.
+**Team** (RULES.md › Who does what): Rohith (Founder & CEO, signs everything) → Tim (Chief of Staff, takes what Rohith addresses to nobody) → two teams. **Technology:** Varun (Head of Technology, reviews and signs) · Saad (CPO, compliance) · Kiranmai (builds and tests). **Medical Affairs:** John (Head of Medical Affairs, clinical judgement) · Meera (medical information and safety) · Daniel (medical excellence and communications). `@Name` or `/tim` `/varun` `/saad` `/kiranmai` `/john` `/meera` `/daniel` means that person answers.

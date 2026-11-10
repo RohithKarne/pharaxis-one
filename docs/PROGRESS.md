@@ -10,7 +10,8 @@ What is done, what broke, what is next. Newest first. Updated by whoever does th
 CP Portal ── active development ── local only ── last merged: #795 (27 Oct review, E1–E5, F1–F5)
 MIMS ─────── active development ── local only ── last merged: #794 (migration 174, "Used in cases")
 Bridge ───── live between the two, locally ── watched by Sync Health and the Inquiry Ledger
-Documents ── six core files replace the SOP (this change)
+Documents ── six core files replace the SOP (#802)
+Team ─────── restructured 2026-11-10: Rohith → Tim → Technology (Varun) and Medical Affairs (John)
 ```
 
 | | CP Portal | MIMS |
@@ -57,9 +58,9 @@ What our way of working does not yet enforce, said openly.
 | **No automated test is written any more** | RULES.md › Proving it works retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
 | **The tester is the author** | Since 2026-09-28 Kiranmai writes and tests most changes, and Varun reviews the code and signs. FDA's software validation guidance (RULES.md › Who does what, independence of review) calls self-validation extremely difficult; our independence rests on Varun's reading of her evidence, not on a separate tester. **Replaces** the 2026-09-20 gap *"the author is usually the reviewer"*, which closed the same day. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. The regulatory position — Saad's from 2026-10-01, Vasu's before — is stated and never tested from outside. | Rohith |
-| **Compliance is held by the product owner** | Vasu left 2026-10-01 and Saad took compliance, validation and GxP alongside product. The person who defines a feature also rules on its compliance and confirms its revalidation flag; a client's supplier audit looks for those two to be independent. Rohith's sign-off is the control that remains. | Rohith |
+| **Compliance is held by the product owner** | Vasu left 2026-10-01 and Saad took compliance, validation and GxP alongside product. The person who defines a feature also rules on its compliance and confirms its revalidation flag; a client's supplier audit looks for those two to be independent. **From 2026-11-10 Saad also reports to the Head of Technology**, so compliance sits inside engineering's own line. Rohith set it; Saad said so once. Rohith's sign-off is the control that remains. | Rohith |
 | **Work found mid-build skips the lock** | From 2026-10-01 (RULES.md › How we talk point 6) a defect, a miss or a new feature found while working is built in the same session without Rohith's prior approval. It is still its own ticket and its own commit, checked on the real screen, named in the report, and not pushed until he says so — but nobody outside the session agrees it before it is built. | Rohith |
-| **AI and clinical judgement are unstaffed** | Mark Antony and Sowmya left 2026-09-20. No expert remains. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** | Rohith |
+| **AI governance is unstaffed** | Mark Antony left 2026-09-20. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** Clinical judgement, unstaffed from 2026-09-20 (Sowmya), moved to John's Medical Affairs team on 2026-11-10. | Rohith |
 
 
 ---
