@@ -66,12 +66,31 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | # | Step | Who | Done |
 |---|---|---|---|
 | 1 | Push this TASKS.md change and open the pull request — PR #805 | Varun | ✅ |
-| 2 | Review the five Dependabot pull requests (#797–#801): all green; pdfkit and mailparser seen working on the walk copy; #801 replaces #797. Merge only on Rohith's word | Varun | ⏳ merge |
-| 3 | One-page view on "safety alerts go live with no review step" (decision of 2026-10-10), for Rohith to decide — given in chat 2026-11-10 | Daniel, Saad | ⏳ Rohith |
+| 2 | Review the five Dependabot pull requests (#797–#801): merged #798–#801 on Rohith's word; #797 closed (replaced by #801) | Varun | ✅ |
+| 3 | One-page view on safety alerts; Rohith chose option (c): live at once, second check within 24 hours — built on `feat/meeting-decisions-1110` | Daniel, Saad | ✅ |
 | 4 | Fresh screen walk of CP Portal — 33 admin screens, sign-up, reports, safety alerts, PDFs; 4 fixes on `fix/cp-portal-walk-1110` | Kiranmai | ✅ |
 | 5 | Fresh screen walk of MIMS — 25 screens, 56 admin settings, email intake, portal cases; 1 fix on `fix/mims-walk-1110` | Kiranmai, Meera | ✅ |
 | 6 | Medical walk: side-effect and question flows from CP Portal into MIMS, and the AI assistant on an off-label question. Findings given in chat 2026-11-10; decisions with Rohith | John | ✅ |
-| 7 | Report: what was found, what was fixed, what was not checked | Tim | ⏳ |
+| 7 | Report: what was found, what was fixed, what was not checked — in chat 2026-11-10 | Tim | ✅ |
+
+## Now — the meeting's decisions and open items (no Jira; locked by Rohith 2026-11-10)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Safety alerts: second check within 24 hours (migration 0063) | Kiranmai | ✅ |
+| 2 | Side-effect form: optional patient initials and sex (migration 0062) | Kiranmai | ✅ |
+| 3 | AI assistant: off-label questions go to Medical Information | Kiranmai, John | ✅ — live reply not seen: Calder's AI key is rejected (401) |
+| 4 | Side-effect hint on questions answered "No" | Kiranmai, Meera | ✅ |
+| 5 | "DHPC / Dear HCP letter" label | Kiranmai, Daniel | ✅ |
+| 6 | Role confirmation audited | Varun | ✅ |
+| 7 | Found: MIMS hid the portal's notes and the reporter's answers — shown in the bridge bar | Kiranmai | ✅ |
+| 8 | Found: training list offered modules a reader cannot open | Kiranmai | ✅ |
+| 9 | Push `feat/meeting-decisions-1110` and open the pull request | Varun | ⏳ Rohith's word |
+| 10 | MIMS dev product list is real brand names and does not match Calder's portal products | Saad | ⏳ |
+| 11 | Wording: PRD and RULES say "password and reason at each step"; MIMS asks at Approve and Send only | Saad | ⏳ Rohith confirms |
+| 12 | Forced password reset happens before the two-step code in MIMS | Varun | ⏳ |
+| 13 | Calder lets patients see CME training; Calder's AI key is invalid | John, Varun | ⏳ |
+| 14 | Three switched-off routines (The Job, MIMS-PM, CP-PM) still name the old SOP | Rohith | ⏳ |
 
 ## Waiting on a decision
 
