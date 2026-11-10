@@ -418,12 +418,15 @@ async function getOrgReadinessWithConnection(conn, orgId) {
          AND (org_id = ? OR org_id IS NULL)`,
       [orgId]
     ),
+    // Count only the required topics. Counting every active topic showed
+    // "88/28 help topics covered" and marked the check failed.
     conn.execute(
       `SELECT COUNT(DISTINCT feature_key) AS covered_keys
        FROM help_articles
        WHERE is_active = 1
-         AND (org_id = ? OR org_id IS NULL)`,
-      [orgId]
+         AND (org_id = ? OR org_id IS NULL)
+         AND feature_key IN (${REQUIRED_HELP_KEYS.map(() => '?').join(', ')})`,
+      [orgId, ...REQUIRED_HELP_KEYS]
     ),
     conn.execute(
       'SELECT COUNT(*) AS total_folders FROM cm_folders WHERE org_id = ?',
