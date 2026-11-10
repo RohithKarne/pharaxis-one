@@ -28,9 +28,20 @@ async function bridgeInfo(caseId) {
       WHERE c.id = ? LIMIT 1`, [caseId]);
   if (!c) return null;
   const [questions] = await pool.execute(
-    `SELECT q.id, q.question, q.asked_at, q.answered_at, q.answer_comment_id, q.withdrawn_at, COALESCE(u.name, u.email) AS asked_by_name
+    `SELECT q.id, q.question, q.asked_at, q.answered_at, q.answer_comment_id, q.withdrawn_at, COALESCE(u.name, u.email) AS asked_by_name,
+            ac.comment AS answer_text
        FROM case_reporter_questions q LEFT JOIN users u ON u.id = q.asked_by
+       LEFT JOIN case_comments ac ON ac.id = q.answer_comment_id AND ac.case_id = q.case_id
       WHERE q.case_id = ? ORDER BY q.id ASC`, [caseId]);
+  // Found on the 10 Nov 2026 walk: what the portal sends as a case comment (every other
+  // answer, a product it could not match, a possible side effect in a question) was on
+  // no screen — the comments drawer is behind a feature flag that is off. The bridge bar
+  // shows the portal's notes and the reporter's added information, so the agent reads them where the case says it came from.
+  const [notes] = c.source_api_client_id ? await pool.execute(
+    `SELECT cc.id, cc.comment, cc.created_at FROM case_comments cc
+      WHERE cc.case_id = ? AND cc.user_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM case_reporter_questions q WHERE q.case_id = cc.case_id AND q.answer_comment_id = cc.id)
+      ORDER BY cc.id ASC LIMIT 20`, [caseId]) : [[]];
   return {
     source: c.source_api_client_id
       ? { name: c.source_name || `Connection #${c.source_api_client_id}`, reference: c.source_reference, link: c.source_link || null }
@@ -46,6 +57,7 @@ async function bridgeInfo(caseId) {
     cannot_ask_reason: !c.source_api_client_id ? 'not_from_portal' : c.reporter_erased_at ? 'reporter_erased'
       : c.source_can_reply === 0 ? 'reporter_not_signed_in' : c.source_can_reply === 1 ? null : 'portal_not_ready',
     questions,
+    notes,
   };
 }
 
