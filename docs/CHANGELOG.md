@@ -155,7 +155,9 @@ the ones a validation plan should name.
 
 ### CP Portal — full audit clean-up, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
 
-**Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+
+**Revalidate:** resetting an administrator's two-step sign-in from Admin Users.
 **Why:** No record, calculation or access rule changed. Two buttons were added for actions the server already had; the rest removes files, packages and styles nothing used.
 
 - Removed eight unused files, including an old script with passwords written in it — `browser-verify.js`, three unused services, four unused screen helpers
