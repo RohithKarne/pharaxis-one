@@ -3263,6 +3263,12 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
     // Nothing typed is not an error (M-38 — was a raw "fields array required.").
     if (!fields.length) return res.json({ message: 'Nothing to save.' });
 
+    // Compliance Controls on: changing a value that was already stored needs a
+    // reason, sent with this save and kept with the change. The screen used to
+    // ask per keystroke and post the reason to an address that did not exist.
+    const reason = String(req.body.reason || '').trim().slice(0, 1000);
+    const reasonNeeded = await require('../services/featureFlagsService').isEnabledForOrg('cf.theme9_compliance', owned.org_id);
+
     // Every changed value goes into the case history, before and after. These
     // saves wrote no history at all, so a configured value could change with no
     // record of who changed it or from what (found in the case form clean-up,
@@ -3273,6 +3279,18 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
       ? await pool.execute(`SELECT id, section_name, field_name FROM field_setup WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
       : [[]];
     const nameOf = new Map(names.map(n => [Number(n.id), `${n.section_name} / ${n.field_name}`]));
+    if (reasonNeeded && !reason) {
+      const changed = fields.filter(f => {
+        const fieldId = Number(f.field_id || f.field_definition_id || 0);
+        const was = String(before.get(fieldId) ?? '');
+        const now = String((Object.prototype.hasOwnProperty.call(f, 'field_value') ? f.field_value : f.value) ?? '');
+        return fieldId && was !== '' && was !== now;
+      }).map(f => nameOf.get(Number(f.field_id || f.field_definition_id)) || 'a field');
+      if (changed.length) {
+        return res.status(400).json({ error: `A reason is needed to change: ${changed.join(', ')}.`, reason_required: true });
+      }
+    }
+    const sectionOf = new Map(names.map(n => [Number(n.id), n]));
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;
@@ -3287,6 +3305,15 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
       if (String(was) !== String(now)) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED',
           nameOf.get(fieldId) || `field ${fieldId}`, was === '' ? null : String(was), now === '' ? null : String(now));
+        if (reason && was !== '') {
+          const def = sectionOf.get(fieldId);
+          await require('../services/complianceService').recordReason({
+            orgId: owned.org_id, entityType: 'case', entityId: req.params.id,
+            section: def?.section_name || '', field: def?.field_name || `field ${fieldId}`,
+            oldValue: String(was), newValue: String(now), reason,
+            changedBy: req.user.userId, requestId: req.id || null,
+          });
+        }
       }
     }
     res.json({ message: 'Dynamic fields saved.' });

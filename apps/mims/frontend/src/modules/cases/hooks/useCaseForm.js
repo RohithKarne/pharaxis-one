@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -30,6 +31,10 @@ export default function useCaseForm(id, token) {
   const [escalateSaving, setEscalateSaving] = useState(false)
   const [dynFieldValues, setDynFieldValues] = useState({})
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
+  // Compliance Controls: a save that changes a stored value asks for one reason
+  // first. { changes: [{ label, oldValue, newValue }], resolve } while it waits.
+  const reasonOn = useFeatureFlag('cf.theme9_compliance')
+  const [reasonRequest, setReasonRequest] = useState(null)
   const [dynFieldErrors, setDynFieldErrors] = useState({})
   const [draftStatus, setDraftStatus] = useState('')
   // A restored draft stays flagged until it is saved or discarded; the
@@ -331,12 +336,28 @@ export default function useCaseForm(id, token) {
         throw new Error(`Please fix before saving: ${validateData.errors.map(e => e.message).join(' ')}`)
       }
       setDynFieldErrors({})
+      let reason = ''
+      if (reasonOn) {
+        const saved = JSON.parse(dynSaved.current || '{}')
+        const labelOf = {}
+        for (const section of formConfig?.sections || []) {
+          for (const field of section.fields || []) labelOf[field.id] = field.field_label || field.field_name
+        }
+        const changes = Object.keys(saved)
+          .filter(fid => hasValue(saved[fid]) && String(saved[fid]) !== String(dynFieldValues[fid] ?? ''))
+          .map(fid => ({ label: labelOf[fid] || `Field ${fid}`, oldValue: saved[fid], newValue: dynFieldValues[fid] ?? '' }))
+        if (changes.length) {
+          reason = await new Promise(resolve => setReasonRequest({ changes, resolve }))
+          setReasonRequest(null)
+          if (!reason) throw new Error('Nothing was saved: a reason is needed for the changed fields.')
+        }
+      }
       const fields = Object.entries(dynFieldValues).map(([field_definition_id, value]) => ({
         field_definition_id: Number(field_definition_id),
         value: String(value ?? ''),
       }))
       const res  = await httpFetch(`${API}/cases/${id}/dynamic-fields`, {
-        method: 'POST', headers, body: JSON.stringify({ fields }),
+        method: 'POST', headers, body: JSON.stringify(reason ? { fields, reason } : { fields }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -397,7 +418,7 @@ export default function useCaseForm(id, token) {
     draftStatus, draftRestored, discardDraft,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
     changeControlAsk, setChangeControlAsk,
-    loadDynFields, saveDynFields, dynFieldsChanged,
+    loadDynFields, saveDynFields, dynFieldsChanged, reasonRequest,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,
   }
