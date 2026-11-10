@@ -411,6 +411,7 @@ Medical Affairs:
 | L-019 | Seal a database copy before starting anything on it: mail, mailboxes and connections to local stand-ins |
 | L-020 | Filter schema metadata by the exact marker (`VIRTUAL GENERATED`, `STORED GENERATED`); spot-check a copied date |
 | L-021 | A check that can skip items reports how many it could not cover, on screen |
+| L-022 | Before saying a route, screen or feature does not exist, search the whole app for its last path segment, not only the file its address points to |
 
 ---
 
