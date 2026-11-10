@@ -183,7 +183,7 @@ export default function SafetyPage() {
                 <div className="cp-field">
                   <label htmlFor="alert-type">Alert type</label>
                   <select id="alert-type" value={form.alert_type} onChange={e => setField('alert_type', e.target.value)}>
-                    <option value="dhcp_letter">DHCP Letter</option>
+                    <option value="dhcp_letter">DHPC / Dear HCP letter</option>
                     <option value="product_recall">Product Recall</option>
                     <option value="urgent_safety_restriction">Urgent Safety Restriction</option>
                     <option value="field_safety_notice">Field Safety Notice</option>
