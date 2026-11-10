@@ -26,7 +26,8 @@ router.get('/admin/vault/documents', authenticate, requireRole('admin', 'platfor
 
     return res.json({ documents: data });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    // Vault not set up for the organisation is a setup gap, not a server failure.
+    return res.status(/not configured/i.test(err.message) ? 409 : 500).json({ error: err.message });
   }
 });
 

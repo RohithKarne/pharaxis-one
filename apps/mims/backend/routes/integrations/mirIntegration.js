@@ -23,7 +23,7 @@ router.post('/admin/integrations/mir/send-case/:caseId', authenticate, requireRo
     const result = await sendCaseToMir(req.user.orgId, req.params.caseId);
     return res.json(result);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(/not found/i.test(error.message) ? 404 : 500).json({ error: error.message });
   }
 });
 
