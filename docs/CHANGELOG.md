@@ -122,7 +122,7 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 **Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
 **Why:** No case record, calculation or access rule changed. One audit-trail gap is closed (a user created through the platform route now gets its audit record), and two columns move from run-time creation into the schema.
 
-**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation.
+**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation; reason for change on Additional Fields where Compliance Controls is on.
 
 - Platform create-user route: the user was created but the reply said "Email already exists", with no temporary password and no audit record. Now answers correctly — `backend/routes/platformAdmin.js`
 - Consent records and 19 other routes (bridge API, address lookup, case presence, data portability, sign-out) could leave a request unanswered when a query failed. They now answer with an error — `backend/middleware/errorHandler.js` and the route files
@@ -130,6 +130,10 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Clone Organisation called an address that does not exist and always failed; it now calls the working one — `frontend/src/modules/mimsadmin/components/OrganisationsView.jsx`
 - Ten routes answer bad input as a request error (400, 404 or 409) instead of a server error — `backend/routes/admin/accessConfigurations.js`, `workflowEngine.js`, `aiAssistant.js`, `backend/routes/integrations/`
 - ICSR gateway settings are read from the columns that exist; behaviour is still mock, as nothing saves these settings yet — `backend/services/pv/gatewayConfig.js`
+- Reason for change (Compliance Controls, off by default): asked once at Save for the Additional Fields block, required by the server, and stored in the field history with who, when, old and new value. Before, it was asked per keystroke and never stored. The core case fields still ask per keystroke and drop the reason: not changed here — `frontend/src/modules/cases/hooks/useCaseForm.js`, `backend/routes/cases.js`
+- Migration 189 drops twenty tables no running code uses, each only where it holds no rows; the outcome is in `audit_logs` (entity `unused_tables`) — `backend/database/migrations/189_drop_unused_empty_tables.js`
+- Removed the policy graph routes (no screen used them)
+- Frontend lint runs in CI; 585 style rules no screen names removed
 - Removed: the Excel and PDF case exports, which never ran (their packages were never installed; CSV and E2B exports unchanged); four unused files; three unused frontend packages
 
 ## Unreleased — CP Portal
@@ -152,10 +156,12 @@ the ones a validation plan should name.
 ### CP Portal — full audit clean-up, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
 
 **Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
-**Why:** Nothing a person uses changed. Only files and packages that nothing loaded were removed.
+**Why:** No record, calculation or access rule changed. Two buttons were added for actions the server already had; the rest removes files, packages and styles nothing used.
 
 - Removed eight unused files, including an old script with passwords written in it — `browser-verify.js`, three unused services, four unused screen helpers
 - Removed two unused packages: `openai` (the chat calls that provider directly) and `react-grid-layout`
+- Admin Users: a "Reset two-step" button (the route existed, no button reached it). Language: "Retranslate All Content", shown only while machine translation is on
+- Removed the reply templates routes (no screen used them) and 219 style rules no screen names
 
 ### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
 
