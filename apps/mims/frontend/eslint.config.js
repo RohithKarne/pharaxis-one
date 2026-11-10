@@ -29,6 +29,14 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // The React compiler rules flag working patterns across about sixty files
+      // (state set when a screen loads, helpers declared below the effect that
+      // calls them). Shown as warnings so that lint can block in CI on the rules
+      // that catch real faults: undefined names, unused variables, hook order.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
     },
   },
   {

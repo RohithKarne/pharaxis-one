@@ -40,3 +40,4 @@ jobs:
       # Component tests (vitest). They failed unnoticed on main for weeks because
       # CI never ran them (M-65).
       frontend_test_command: npm test
+      frontend_lint_command: npm run lint
