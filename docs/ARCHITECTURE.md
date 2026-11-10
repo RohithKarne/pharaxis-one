@@ -890,7 +890,6 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `inquiry_notes` | Internal notes per inquiry |
 | `inquiry_attachments` | Email attachment metadata |
 | `reply_templates` | Global email reply templates |
-| `email_retry_log` | Retry attempts for failed notification emails |
 
 ### Content Management
 | Table | Purpose |

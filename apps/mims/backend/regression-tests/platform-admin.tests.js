@@ -81,7 +81,6 @@ async function cleanupUser(userId) {
   if (!userId) return;
   await pool.execute('DELETE FROM notifications WHERE user_id = ?', [userId]).catch(() => {});
   await pool.execute('DELETE FROM user_report_access WHERE user_id = ?', [userId]).catch(() => {});
-  await pool.execute('DELETE FROM report_access_requests WHERE user_id = ? OR requested_by = ? OR reviewed_by = ?', [userId, userId, userId]).catch(() => {});
   await pool.execute('DELETE FROM user_module_permissions WHERE user_id = ?', [userId]).catch(() => {});
   await pool.execute('DELETE FROM user_org_access WHERE user_id = ?', [userId]).catch(() => {});
   await pool.execute('DELETE FROM user_2fa_backup_codes WHERE user_id = ?', [userId]).catch(() => {});

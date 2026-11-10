@@ -70,7 +70,6 @@ async function main() {
       scheduled_jobs: await count(conn, 'SELECT COUNT(*) AS cnt FROM scheduled_jobs WHERE org_id = ?', [orgId]),
       novartis_simulation_jobs: await count(conn, 'SELECT COUNT(*) AS cnt FROM scheduled_jobs WHERE org_id = ? AND job_type = ?', [orgId, 'novartis_simulation']),
       chat_conversations: await count(conn, 'SELECT COUNT(*) AS cnt FROM chat_conversations WHERE org_id = ?', [orgId]),
-      report_access_requests: await count(conn, 'SELECT COUNT(*) AS cnt FROM report_access_requests WHERE org_id = ?', [orgId]),
     };
 
     const anomalies = {
