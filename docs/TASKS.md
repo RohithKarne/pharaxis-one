@@ -44,7 +44,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9b | See the files rendered on GitHub — every table and diagram renders | Kiranmai | ✅ |
 | 10 | Review the whole change | Varun | ✅ |
 | 11 | Push and open the pull request — pushed on Rohith's word, PR #802 | Varun | ✅ |
-| 12 | New session-opening prompt written into RULES.md in full (2026-11-10); Rohith checks any cloud routine that names the old SOP | Rohith | ⏳ |
+| 12 | New session-opening prompt written into RULES.md in full (PR #804, merged 2026-11-10); Rohith checks any cloud routine that names the old SOP | Rohith | ⏳ |
 | 13 | After the merge: point Claude's memory files at the six documents | Saad | ⏳ |
 
 ## Now — new team: Tim and Medical Affairs (no Jira; locked by Rohith 2026-11-10)
@@ -57,9 +57,9 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 4 | PROGRESS.md: clinical gap closed, new gap recorded | Saad | ✅ |
 | 5 | Fix what was found while reading: a password in ARCHITECTURE.md, broken references in PROGRESS.md, removed people still named | Kiranmai | ✅ |
 | 6 | Check every link (28), heading reference (34) and table in the changed files | Kiranmai | ✅ |
-| 6b | Open a new session and try `/tim`, `/john`, `/meera`, `/daniel` — a running session does not see new commands | Rohith | ⏳ |
-| 7 | Review the change | Varun | ⏳ |
-| 8 | Push and open the pull request — only with Rohith's word | Varun | ⏳ |
+| 6b | Open a new session and try `/tim`, `/john`, `/meera`, `/daniel` — a running session does not see new commands. All four seen listed in the 2026-11-10 session that followed; not yet invoked | Rohith | ⏳ |
+| 7 | Review the change | Varun | ✅ |
+| 8 | Push and open the pull request — pushed on Rohith's word, PR #803, merged 2026-11-10 | Varun | ✅ |
 
 ## Waiting on a decision
 
