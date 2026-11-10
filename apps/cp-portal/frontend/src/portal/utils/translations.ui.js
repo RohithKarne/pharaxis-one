@@ -343,6 +343,7 @@ export const UI = {
   'Your Name *': { fr: 'Votre nom *', de: 'Ihr Name *', es: 'Su nombre *', ja: 'お名前 *', zh: '您的姓名 *' },
   'Your account is active. Redirecting you now…': { fr: 'Votre compte est actif. Redirection en cours…', de: 'Ihr Konto ist aktiv. Sie werden weitergeleitet…', es: 'Su cuenta está activa. Redirigiendo…', ja: 'アカウントは有効です。移動しています…', zh: '您的账户已激活。正在跳转…' },
   'Your attempts': { fr: 'Vos tentatives', de: 'Ihre Versuche', es: 'Sus intentos', ja: '挑戦回数', zh: '您的尝试次数' },
+  'Your role was set when your access was approved. To change it, please contact the portal team.': { fr: 'Votre rôle a été défini lors de l’approbation de votre accès. Pour le modifier, contactez l’équipe du portail.', de: 'Ihre Rolle wurde bei der Freigabe Ihres Zugangs festgelegt. Wenden Sie sich für eine Änderung an das Portal-Team.', es: 'Su función se fijó al aprobar su acceso. Para cambiarla, contacte con el equipo del portal.', ja: 'ロールはアクセス承認時に設定されました。変更するにはポータルチームにお問い合わせください。', zh: '您的角色在访问获批时已设定。如需更改，请联系门户团队。' },
   'Your password has been reset.': { fr: 'Votre mot de passe a été réinitialisé.', de: 'Ihr Passwort wurde zurückgesetzt.', es: 'Su contraseña se ha restablecido.', ja: 'パスワードを再設定しました。', zh: '您的密码已重置。' },
   'Your reference number is': { fr: 'Votre numéro de référence est', de: 'Ihre Referenznummer lautet', es: 'Su número de referencia es', ja: '参照番号：', zh: '您的参考编号为' },
   'Your reply': { fr: 'Votre réponse', de: 'Ihre Antwort', es: 'Su respuesta', ja: '返信内容', zh: '您的回复' },
