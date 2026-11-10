@@ -117,6 +117,21 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 
 - Admin home › Setup checks › Help baseline counts only the 28 required help topics; it showed "88/28" and a red cross — `backend/services/orgBootstrapService.js`
 
+### MIMS — full audit fixes, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** No case record, calculation or access rule changed. One audit-trail gap is closed (a user created through the platform route now gets its audit record), and two columns move from run-time creation into the schema.
+
+**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation.
+
+- Platform create-user route: the user was created but the reply said "Email already exists", with no temporary password and no audit record. Now answers correctly — `backend/routes/platformAdmin.js`
+- Consent records and 19 other routes (bridge API, address lookup, case presence, data portability, sign-out) could leave a request unanswered when a query failed. They now answer with an error — `backend/middleware/errorHandler.js` and the route files
+- Migration 188: `cm_faqs.view_count` and `user_2fa_challenges.attempts` come from the schema. A new database never got the FAQ view counter — `backend/database/migrations/188_faq_view_count_and_challenge_attempts.js`
+- Clone Organisation called an address that does not exist and always failed; it now calls the working one — `frontend/src/modules/mimsadmin/components/OrganisationsView.jsx`
+- Ten routes answer bad input as a request error (400, 404 or 409) instead of a server error — `backend/routes/admin/accessConfigurations.js`, `workflowEngine.js`, `aiAssistant.js`, `backend/routes/integrations/`
+- ICSR gateway settings are read from the columns that exist; behaviour is still mock, as nothing saves these settings yet — `backend/services/pv/gatewayConfig.js`
+- Removed: the Excel and PDF case exports, which never ran (their packages were never installed; CSV and E2B exports unchanged); four unused files; three unused frontend packages
+
 ## Unreleased — CP Portal
 
 **Not tagged.** On 4 Oct 2026 Rohith decided not to tag CP Portal releases for now, and
@@ -133,6 +148,14 @@ confirmations, training attempts, consent proof, access requests). Each of these
 is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
+
+### CP Portal — full audit clean-up, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
+
+**Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** Nothing a person uses changed. Only files and packages that nothing loaded were removed.
+
+- Removed eight unused files, including an old script with passwords written in it — `browser-verify.js`, three unused services, four unused screen helpers
+- Removed two unused packages: `openai` (the chat calls that provider directly) and `react-grid-layout`
 
 ### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
 
