@@ -123,6 +123,27 @@ export default function SafetyPage() {
     setSaving(false)
   }
 
+  // Rohith, 10 Nov 2026: a second person reads every live alert within 24 hours.
+  async function handleSecondCheck(alert) {
+    if (!confirm(`Confirm you have read "${alert.title}" as doctors see it, and it is right?`)) return
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/safety/${clientId}/${alert.id}/second-check`, { method: 'POST', headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not record the second check (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
+    load()
+  }
+
+  function secondCheckText(a) {
+    if (a.second_check_at) return `Checked by ${a.second_check_by_name || 'an admin'}`
+    if (!a.second_check_waiting) return 'Not needed (before 10 Nov 2026)'
+    const due = new Date(String(a.second_check_due_at).replace(' ', 'T') + (String(a.second_check_due_at).endsWith('Z') ? '' : 'Z'))
+    return `${Number(a.second_check_overdue) ? 'Overdue' : 'Waiting'} — due ${due.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+  }
+
   async function handleResolve(alert) {
     if (!confirm(`Mark "${alert.title}" as resolved?`)) return
     setError('')
@@ -158,11 +179,12 @@ export default function SafetyPage() {
         <h2>Safety Alerts</h2>
         {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New alert</button>}
       </div>
-      {/* Rohith, 10 Oct 2026: safety alerts stay direct, with no review step, so a
-          warning is never held up waiting for a second person (trials have one). */}
+      {/* Rohith, 10 Oct 2026: safety alerts stay direct, so a warning is never held up.
+          Rohith, 10 Nov 2026: a second person then reads it within 24 hours. */}
       <p className="cp-page-desc">
-        A safety alert reaches doctors as soon as it is saved as live, or at the time you schedule. There is no review
-        step, so read it through before you save. Doctors are asked to confirm they have read high and critical alerts.
+        A safety alert reaches doctors as soon as it is saved as live, or at the time you schedule. A second person
+        must then read it within 24 hours and press Second check; until then it is on the Overview's To do today.
+        Changing what doctors read asks for a new second check. Doctors are asked to confirm they have read high and critical alerts.
       </p>
 
       {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -295,6 +317,7 @@ export default function SafetyPage() {
                 <th>Product</th>
                 <th>Effective date</th>
                 <th>Status</th>
+                <th>Second check</th>
                 <th>Views</th>
                 <th></th>
               </tr>
@@ -316,8 +339,17 @@ export default function SafetyPage() {
                       {label('contentStatus', a.status)}
                     </span>
                   </td>
+                  <td style={{ fontSize: 12, color: a.second_check_waiting && Number(a.second_check_overdue) ? '#B91C1C' : undefined }}>
+                    {secondCheckText(a)}
+                    {a.written_by_name && <div style={{ color: '#5F6B7A' }}>Written by {a.written_by_name}</div>}
+                  </td>
                   <td>{a.view_count || 0}</td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+                    {canWrite && Number(a.second_check_waiting) === 1 && (
+                      <button className="cp-btn cp-btn-sm cp-btn-primary" disabled={!Number(a.can_second_check)}
+                        title={Number(a.can_second_check) ? 'Confirm you have read this alert' : 'You wrote or last changed this alert; a different person must check it'}
+                        onClick={() => handleSecondCheck(a)}>Second check</button>
+                    )}
                     {canPublish && a.status === 'active' && (
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleResolve(a)}>Resolve</button>
                     )}
