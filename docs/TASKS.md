@@ -41,9 +41,9 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 7 | Delete the replaced and stale documents | Kiranmai | ✅ |
 | 8 | Point every reference at the new files; cut CLAUDE.md to a pointer | Kiranmai | ✅ |
 | 9 | Check every link resolves (36, none broken), tables and code blocks well formed | Kiranmai | ✅ |
-| 9b | See the files rendered on GitHub — after the push | Kiranmai | ⏳ |
+| 9b | See the files rendered on GitHub — every table and diagram renders | Kiranmai | ✅ |
 | 10 | Review the whole change | Varun | ✅ |
-| 11 | Push and open the pull request — only with Rohith's word | Varun | ⏳ |
+| 11 | Push and open the pull request — pushed on Rohith's word, PR #802 | Varun | ✅ |
 | 12 | Rohith updates the session-opening prompt and any cloud routine that names the old SOP | Rohith | ⏳ |
 | 13 | After the merge: point Claude's memory files at the six documents | Saad | ⏳ |
 
