@@ -56,7 +56,8 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 3 | Update CLAUDE.md, README and `/varun`; add `/tim`, `/john`, `/meera`, `/daniel` | Kiranmai | ✅ |
 | 4 | PROGRESS.md: clinical gap closed, new gap recorded | Saad | ✅ |
 | 5 | Fix what was found while reading: a password in ARCHITECTURE.md, broken references in PROGRESS.md, removed people still named | Kiranmai | ✅ |
-| 6 | Check every link and table; check the new commands load in a fresh session | Kiranmai | ✅ |
+| 6 | Check every link (28), heading reference (34) and table in the changed files | Kiranmai | ✅ |
+| 6b | Open a new session and try `/tim`, `/john`, `/meera`, `/daniel` — a running session does not see new commands | Rohith | ⏳ |
 | 7 | Review the change | Varun | ⏳ |
 | 8 | Push and open the pull request — only with Rohith's word | Varun | ⏳ |
 

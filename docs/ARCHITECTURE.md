@@ -938,7 +938,7 @@ Key functions:
 - `getApiCatalog(app)` — traverses `app._router.stack` recursively to list all registered routes
 - `discoverTests()` — fs.readdirSync scans `regression-tests/` for `*.tests.js` files. New test files auto-detected without config changes.
 
-**Regression credentials:** Set in `mims/backend/.env` (NOT the top-level `mims/.env`). Server CWD is `backend/` so `--env-file=.env` loads `backend/.env`. Missing credentials = token null = 170 tests fail with 401. Current: `REGRESSION_EMAIL=vanaja_admin@reviewco.com` / `REGRESSION_PASSWORD=Test@1234`.
+**Regression credentials:** Set in `mims/backend/.env` (NOT the top-level `mims/.env`). Server CWD is `backend/` so `--env-file=.env` loads `backend/.env`. Missing credentials = token null = 170 tests fail with 401. The values live only in `backend/.env`; never write a password in a document.
 
 **Test files location:** `mims/backend/regression-tests/*.tests.js`
 
@@ -1006,7 +1006,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 
 ## In-app help articles (was MIMS Help Memory File)
 *Sprint 21 — In-App Help System*
-*Created: 2026-04-24 | Owner: Bala (PMO/AI) | Last updated by: Varun (CTO)*
+*Created: 2026-04-24 | Kept current by Saad (RULES.md › Keeping these documents current)*
 
 ---
 
@@ -1163,7 +1163,7 @@ Expected response:
 4. **Choose sort_order** — higher numbers appear lower in the list; use gaps of 10 between related articles.
 5. **Add to seed JSON** or POST directly to `/api/admin/help`.
 6. **Update this file** — add the article to the index table and, if a new feature_key, to the feature key table.
-7. **Mark reviewed** — after Bhavya QA verifies the article against live UI, call `PATCH /api/admin/help/:id/reviewed`.
+7. **Mark reviewed** — after Kiranmai checks the article against the live screen, call `PATCH /api/admin/help/:id/reviewed`.
 
 ---
 
@@ -1187,7 +1187,7 @@ Articles are flagged as stale when `last_reviewed_at` is NULL or older than **90
 
 ---
 
-*Next update: after Sprint 22 features are added. Assign to Bhavya for QA verification of all articles.*
+*Next update: after Sprint 22 features are added. Kiranmai checks every article against the live screen.*
 
 ---
 
