@@ -127,6 +127,17 @@ is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
 
+### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
+
+**Revalidation impact:** Full — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** an access control changed: a portal user's role, which decides who sees HCP-only content, can no longer be changed by the user at first sign-in.
+**Revalidate:** first sign-in for each role; who sees HCP-only content; the reporter's name on a side-effect case in MIMS.
+
+- First sign-in popup starts on the role the portal team approved and locks the others; the server refuses a different role (403). Before, a user approved as a patient could choose "Healthcare Professional" and see HCP-only content — `backend/routes/portal/auth.js`, `frontend/src/portal/components/UserTypeGate.jsx`, `frontend/src/index.css`, `frontend/src/portal/utils/translations.ui.js`
+- A full-name answer mapped onto the reporter's first or last name keeps the bridge's split; MIMS showed "Walk Doctor Doctor" — `backend/routes/portal/submit.js`
+- Side-effect and complaint forms fill "Reporter Type" from the signed-in role, as the question form already did — `frontend/src/portal/pages/SubmitPage.jsx`
+- Set-password page says "Your password is set" and "Save password", which fits a new account as well as a reset — `frontend/src/portal/pages/ResetPasswordPage.jsx`, `frontend/src/portal/utils/translations.ui.js`
+
 ### CP Portal — enhancements F1–F5, 27 Oct (no Jira and no branch, per Rohith; changes in the working copy)
 
 **Revalidation impact:** Partial — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-10-27; Rohith to approve.*
