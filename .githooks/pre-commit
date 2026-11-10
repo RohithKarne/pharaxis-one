@@ -2,7 +2,7 @@
 #
 # pre-commit — refuse a commit that adds anything new at the top level.
 #
-# Why: SOP §38.11 (Rohith, 2026-09-26) — the repository root is two visible
+# Why: docs/RULES.md › Hard rules, rule 7 (Rohith, 2026-09-26) — the repository root is two visible
 # folders, apps/ and docs/, plus the hidden folders and four files each pinned
 # there by a tool. Every new folder goes inside apps/ or docs/. A rule that is
 # only words is caught by someone noticing; this catches it before the commit
@@ -39,7 +39,7 @@ echo "✗ Commit rejected: it adds something new at the top level of the reposit
 echo "" >&2
 for p in "${BAD[@]}"; do echo "    $p" >&2; done
 echo "" >&2
-echo "  The root is apps/ and docs/ only (SOP §38.11). Put a new folder or file" >&2
+echo "  The root is apps/ and docs/ only (docs/RULES.md, hard rule 7). Put a new folder or file" >&2
 echo "  inside apps/ or docs/. If it genuinely fits neither, raise it in chat and stop." >&2
 echo "" >&2
 echo "  Emergency bypass: git commit --no-verify" >&2

@@ -15,7 +15,7 @@
 # portal from starting: without a scanner the portal still runs, holds portal attachments
 # and refuses admin uploads, and the admin screens say so.
 #
-# Local only (SOP §38.12). Nothing here changes how the Mac starts up.
+# Local only (docs/RULES.md › Getting a change to main). Nothing here changes how the Mac starts up.
 
 set -uo pipefail
 

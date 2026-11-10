@@ -1,101 +1,24 @@
 # CLAUDE.md — Pharaxis One
 
-Read this before writing code in this repository.
+Claude Code reads this file at the start of every session. It only points the way. **The rules are in [`docs/RULES.md`](docs/RULES.md). Read it before writing code.**
 
-**Precedence.** `docs/TEAM_OPERATING_SOP.md` is **the** SOP — the single source of truth for process, governance, communication and execution. Where a rule appears in both files, **the SOP wins**. This file exists only because Claude Code loads it at the start of every session; it is the doorway to the SOP, not a second rulebook.
-
-> **Consolidated 2026-08-07.** `docs/live-communication-use-and-format.md` and `docs/workflow_orchestration.md` were merged into the SOP as §39 and §40 and deleted. There is now one SOP.
-
----
-
-## The team, as of 2026-10-01
-
-Four people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — leads the product and is the team's point of contact; also market and competitor research, keeps the documents current, and **from 2026-10-01 owns compliance, validation and GxP**). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
-
-**Saad is the team's point of contact.** When Rohith names a person, only that person answers his question; when he names nobody, Saad takes it first — answers what is product or compliance, brings in Varun or Kiranmai for what is theirs — and tracks it to closure. On a build or fix, Varun and Kiranmai talk it through in chat either way.
-
-Removed 2026-10-01: Vasu Ranabothu — his compliance work is Saad's. Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
-
----
-
-## Hard constraints — these are not style preferences
-
-1. **Pushing is enabled, and it is not blanket authorisation.** Rohith re-enabled `git push` on 2026-07-27, ending the Sprint 3 restriction, so CI runs the tests instead of someone remembering to. **Confirm with Rohith before pushing anything of substance**, and never push to `main` without saying what is going and what has not been checked. → SOP §31
-2. **Nothing is "Done" until browser-verified.** Data in the database and a 200 from the API are **not** evidence. Open the real screen. **And a ticket is not Done in Jira until its code is merged to `main`** — verified but unmerged stays In Progress. → SOP §26 *Functional Verification Standard*, §22
-3. **Pharaxis One has no customers.** Never describe any company as a customer, user, or reference.
-4. **Evidence or nothing — but keep it at the foot.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located. **Since 2026-08-10 the citations are collected in one block at the end, never scattered through the text, and the explanation itself is plain English** — no paths, line numbers, table or function names in the body. Relocated, not relaxed. → SOP §47
-5. **`main` is protected — work on a branch and open a pull request.** Direct pushes to `main` are blocked by ruleset `main protection`. Even a one-line change goes through a PR carrying its ticket key, its §26 lock, what you verified, and **what you did not check**. → SOP §38
-6. **Plain English, one or two lines.** Explain what a person does, what the system does, what they see. Lead with the answer and stop; the reader asks if they want more, including for the technical view. **A commit message and a pull request are the exception — they must name what changed.** → SOP §47
-7. **No file and no folder is created at the top level of the repository.** Every new file goes inside an existing folder — `apps`, `docs`, `.github`, `.claude`, `.githooks` — and **every new folder goes inside `apps` or `docs`, with no exceptions and nothing to agree** (Rohith, 2026-09-26: the root is two visible folders, always). If something fits neither, raise it in chat and stop. **Only four files live at the root** — `.gitignore`, `CLAUDE.md`, `README.md`, `LICENSE` — each pinned there by a tool that looks nowhere else, and nothing joins that list without Rohith's word. → SOP §38.11
-
----
-
-## The ten rules
-
-**I. Read before you write.** Read the files you are about to touch — read, not skim. Copy the patterns that already exist. Check the imports to see what the project actually depends on, so you do not reach for `axios` where everything is `fetch`. When you cannot find a pattern, ask instead of guessing.
-
-**II. Think before you code.** State your assumptions — "add authentication" is five different things, so name the one you picked — and name the tradeoffs. If something is genuinely confusing, stop and ask rather than filling the gap with plausible-looking code. That is exactly the code that passes a casual review and fails when it matters.
-
-**III. Simplicity.** Write the minimum code that solves the problem in front of you, not the minimum that could solve every future version of it. Resist premature abstraction. Skip error handling for errors that cannot occur. Hardcode until there is a real reason to configure. **The test:** if the only reason something is abstracted is "in case we need to," you have over-built it.
-
-**IV. Surgical changes.** Your diff should be as small as the task allows. Do not touch what you were not asked to touch. Match the existing style. Do not reformat — a formatter pass buries the three lines that matter inside three hundred that do not. **The test:** can you justify every changed line by the task? If a line is there because "while I was in there," revert it.
-
-> **Changed 2026-10-01 (SOP §39.10 point 6).** A small diff is still the rule for each commit. But a defect, a miss or a new feature found while working is no longer left for later: **fix or build it in the same session, as its own ticket and its own commit, without waiting for Rohith's approval.** Pushing still needs his word.
-
-**V. Verification.** **Changed 2026-09-20: we no longer write automated tests.** Kiranmai stopped writing test code and nobody took it on, so SOP §29 is retired and the failing-test-first rule with it. What replaces it is not "less proof" but a different proof: **open the real screen, do the thing a user would do, including one path that should fail, and say what you saw.** → SOP §26
-
-> Two consequences, said out loud because they are easy to forget. A regression is now caught only by a person noticing it. And the person who writes a change is usually the person who verifies it — so **what you did not check matters more than ever, and goes in every report and every pull request.**
-
-> The tests already in the repositories still run in CI. Do not delete them, and do not let a red one stay red.
-
-**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. **Since 2026-09-28 that second reader is Varun** — Kiranmai writes most changes; when Varun writes one himself, Kiranmai reads it and Rohith is the second reader. → SOP §37.2
-
-**When we state something as fact and it turns out false, that earns a written postmortem** — not when code is wrong, but when we told someone something untrue. Half a page, blameless, and it ends in a filed ticket. → SOP §37.1
-
-**VI. Goal-driven execution.** Every task needs a success criterion **before** code is written. "Add validation" becomes "reject a missing or malformed email, return 400 with a clear message, and test both cases." For anything multi-step, state the plan first so Rohith can catch a wrong approach before you spend an hour building it. → SOP §26 *Pre-Development Feature Lock*
-
-**VII. Debugging.** When something breaks, investigate — do not guess. Read the whole error and the stack trace. **Reproduce the problem before you change anything.** Change one thing at a time. Do not paper over an unexpected null with a null check; find out why it is null, or the bug just moves somewhere quieter.
-
-**VIII. Dependencies.** Every dependency is permanent code you do not control. Before adding one, ask whether the project or the standard library already does it — `crypto.randomUUID()` over a `uuid` package. When you do add one, say why, so the choice is visible rather than smuggled into the manifest.
-
-> **Pharaxis addition (compliance — Vasu's rule, owned by Saad from 2026-10-01):** in a regulated app — MIMS, CP Portal — a new dependency needs a named reason in the commit message. This is a supply-chain control, not a style note.
-
-**IX. Communication.** **Plain English, one or two lines, references at the foot** (SOP §47 — this now governs every reply, document and thread, not only replies to Rohith). Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. On any **recommendation**, add one line naming what would change it — **"Changes if: …"**. That turns an opinion into something someone can test instead of merely agree with. → SOP §28 *Communication Brevity Standard*, §39.5 *What Would Change My Mind*
-
-**X. Common failure modes.** Four patterns recur often enough to name:
-
-| Pattern | What it looks like |
+| Read | For |
 |---|---|
-| **Kitchen Sink** | restructuring half the codebase while you are at it |
-| **Wrong Abstraction** | abstracting before you have copy-pasted twice |
-| **Optimistic Path** | the happy path handled, the 500 ignored |
-| **Runaway Refactor** | a fix that cascades across files |
+| [`docs/RULES.md`](docs/RULES.md) | Team, how work flows, proving it works, getting to `main`, how we talk, how the AI works, never-do list, lessons |
+| [`docs/PRD.md`](docs/PRD.md) | What we build and for whom |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, folders, data flow, how to run each app |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Colours, fonts, components |
+| [`docs/TASKS.md`](docs/TASKS.md) | The work in hand |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | What is done, what broke, what is next |
 
-Catch yourself in any of these and the right move is to **stop, not push through**.
+**The seven hard rules** (RULES.md › Hard rules), so no session starts without them:
 
----
+1. Push only with Rohith's word. Never push to `main`.
+2. Done means seen on the real screen. A ticket is Done only when merged to `main`.
+3. Pharaxis One has no customers.
+4. Evidence or nothing. References in one block at the foot.
+5. Work on a branch; open a pull request, even for one line.
+6. Plain English, one or two lines. Commit messages and PRs name what changed.
+7. Nothing new at the top level. New folders go in `apps/` or `docs/`.
 
-## Development tooling
-
-Claude Code is the only development tool. Write and edit code directly with Edit/Write. **Subagents and multi-agent workflows run only when Rohith asks for them** — not as a default. → SOP §40.2, `memory/feedback.md`
-
-## Where the rest lives — one SOP
-
-| Need | Where |
-|---|---|
-| Gates, approvals, roles, escalation | SOP §7–§23 |
-| Pre-development lock, functional verification | SOP §26 |
-| **Branches, pull requests, who owns each step** | **SOP §38** |
-| How the team talks in-channel, who says what | SOP §39 |
-| How the coding agent executes | SOP §40 |
-| CP Portal · MIMS | SOP §41 · §42 |
-
-**The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
-
-**`@Name` in a message, or a `/varun` `/saad` `/kiranmai` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
-
-**Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
-
----
-
-*Adopted 2026-07-31 on Rohith's instruction. Rules I–X adapted from field notes on LLM-assisted programming circulated as CLAUDE.md; the hard constraints, the SOP cross-references, and the compliance addition to VIII are ours.*
+**Team:** Rohith (CEO, signs everything) · Saad (CPO, point of contact, compliance) · Varun (CTO, reviews and signs) · Kiranmai (builds and tests). `@Name` or `/varun` `/saad` `/kiranmai` means that person answers.

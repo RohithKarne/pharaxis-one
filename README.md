@@ -6,7 +6,7 @@ It holds two products — MIMS and CP Portal — with shared operating standards
 ## What This Repository Contains
 
 - Production/active application code
-- Sprint and SOP context documents
+- The six core documents and the records (change log, validation, compliance, postmortems)
 - CI/CD workflows and dependency automation
 - Multi-service local development setup
 
@@ -114,20 +114,21 @@ There is no deployment pipeline, no container image, no web-server or
 process-manager template and no cloud project — all of it was removed on
 2026-09-24 so that whichever cloud is chosen later gets a path built for it
 rather than one adapted from somewhere else. See
-[docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md) §38.12.
+[docs/RULES.md](docs/RULES.md) › Getting a change to `main`.
 
 GitHub Actions is used for CI, labels, dependency automation and release artifact
 packaging only. Runtime verification is done against local app services.
 
 ## Documentation Index
 
-- Project overview: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
-- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Database details: [docs/DB_DETAILS.md](docs/DB_DETAILS.md)
-- GitHub product ops: [docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md](docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md)
-- Branch protection, pull requests, releases: [docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md) §38
-- Monitoring and backup baseline: [docs/MONITORING_AND_BACKUP_BASELINE.md](docs/MONITORING_AND_BACKUP_BASELINE.md)
-- Product runbooks: [docs/runbooks/](docs/runbooks)
+Six core documents, one job each:
+
+- What we build and for whom: [docs/PRD.md](docs/PRD.md)
+- Stack, folders, data flow, how to run: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Colours, fonts, components: [docs/DESIGN.md](docs/DESIGN.md)
+- How we work and what the AI must never do: [docs/RULES.md](docs/RULES.md)
+- The work in hand: [docs/TASKS.md](docs/TASKS.md)
+- What is done, what broke, what is next: [docs/PROGRESS.md](docs/PROGRESS.md)
 
 ## Security and Governance
 

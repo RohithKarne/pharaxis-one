@@ -57,7 +57,7 @@ module.exports = async () => {
  *
  * This provisions the smallest tenant those suites need and nothing more. It is a
  * fixture, not product data: it asserts nothing and is created automatically on
- * every run, so §29's rule that a suite must never depend on a manual setup step
+ * every run, so the old automated-testing rule that a suite must never depend on a manual setup step
  * still holds. Suites continue to build their own cases on top of it.
  *
  * Idempotent — a repeat run against an already-seeded database is a no-op.

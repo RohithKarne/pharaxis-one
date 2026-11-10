@@ -6,8 +6,8 @@
  * the team ran passed: the API returned it and the rows were in the database.
  * The MIMS case screen read from different tables and showed nothing.
  *
- * So the assertions here deliberately do NOT stop at the API. Per Team
- * Operating SOP §26, an integration is only verified when the data is visible
+ * So the assertions here deliberately do NOT stop at the API. Per
+ * docs/RULES.md › Proving it works, an integration is only verified when the data is visible
  * and usable in the RECEIVING application's real user interface. The API checks
  * below exist only to localise a failure — the test does not pass until the
  * case is on screen in MIMS.

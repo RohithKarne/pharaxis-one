@@ -7,7 +7,7 @@
 # off main's history and a stale local copy of main, and squash merges make work that
 # is already in main look missing when branches are compared commit by commit. This
 # script asks git the direct questions, and every status or pending list quotes its
-# output (SOP §39.9).
+# output (docs/RULES.md › Proving it works).
 #
 # It never pushes, merges, checks out or changes a branch. It refreshes the local copy
 # of origin/main (a fetch) and then only reads; the merge it tries is simulated in

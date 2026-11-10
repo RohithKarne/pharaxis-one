@@ -19,7 +19,7 @@ let app
 // seed failures" — which meant the LOGIN HAPPY PATH had no automated coverage
 // at all.
 //
-// Per SOP §29 a test must provision its own fixture and never depend on manual
+// Per the retired automated-testing rule, a test must provision its own fixture and never depend on manual
 // or ambient setup. This one now creates its user, and deletes it afterwards.
 const FIXTURE_EMAIL = 'auth.fixture@mims-test.local'
 const FIXTURE_PASSWORD = 'Fixture-9d41c7ba!Auth'

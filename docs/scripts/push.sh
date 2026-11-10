@@ -4,7 +4,7 @@
 #
 #     ./scripts/push.sh "what I changed"
 #
-# Stops on main, because SOP §38 requires a branch and a pull request.
+# Stops on main, because docs/RULES.md requires a branch and a pull request.
 set -uo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

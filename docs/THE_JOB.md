@@ -398,3 +398,92 @@ format (Sarvanan and Vasu) are replaced by the per-topic cast; Vasu stays for Va
 **Dropped by Rohith, recorded so it is not re-proposed:** a field for Rohith to record his own
 answer and rate himself weak or solid, and the spaced-repetition follow-on that depended on it.
 He will raise weak areas in conversation instead.
+
+---
+
+# Rules (moved from the Team Operating SOP on 2026-11-10)
+
+## Rules — The Job — Interview Rehearsal (Mandatory)
+
+> Established 2026-08-13 on Rohith Karne's instruction as *CSV/CSA Interviews*. Widened and
+> renamed **The Job** on 2026-09-22, on his instruction, to cover six topics instead of validation
+> alone. This is the governance; the operational prompt is the first part of this file.
+
+### Principle
+
+**This is the only routine whose subject is not a Pharaxis product, and not Pharaxis at all.**
+
+It prepares Rohith for interviews as he moves from one company to another. Every other routine
+looks inward at what we build. This one looks outward at a job market, and it is deliberately
+walled off from everything else we do.
+
+### What it is
+
+| Item | Value |
+|---|---|
+| Routine | **The Job** |
+| Runs | **Manual only.** Fired by Rohith from the routines screen, as often in a day as he wants |
+| Files to | Jira project **`CSV`** — the only project it writes to |
+| Produces | **One epic and seven stories** — one per topic, plus one extra situational story |
+| Topics | Project Management · IT Compliance · Validation · Support · System Administration · AI — all set in regulated life sciences |
+| Epic name | `The Job — <today's date>`, and `Round 2`, `Round 3` for later runs the same day |
+| Assigned to | Rohith |
+| Prompt | `docs/THE_JOB.md` |
+
+### What a story is
+
+One interview question, played out as a conversation. **Each topic has its own interviewer**,
+named with a designation and kept the same run after run — Vasu as Director of Validation for
+the validation question, and a matching head of delivery, IT compliance lead, support manager,
+platform operations lead and AI governance lead for the others. They behave like people: they
+greet him, they react to his last answer, they push when an answer is thin. His answers are
+written out as he would say them.
+
+The interviewer's follow-up probes happen **inside the conversation**, three to five exchanges
+per question. That is the point of the format. A question with a single answer teaches very
+little; the second and third question is where interviews are won and lost.
+
+Each story then steps out of the interview and coaches: what a weak answer sounds like and what
+it signals, a prompt for Rohith to write his own real example, three questions the interviewer
+would go to next, and the regulations, guidance or recognised practice behind the answer.
+
+### The rules that matter
+
+- **Main questions never repeat.** Every main question is checked against every story already in
+  the project — including the earlier CSV/CSA runs — by meaning, not by wording. Follow-up
+  questions are exempt, because repetition teaches.
+- **A follow-up may be promoted** into its own main question on a later day, carrying a reference
+  back to where it came from.
+- **All seven stories are written at full depth.** A shortened story is a broken story — the
+  weak-answer section only works against a complete answer.
+- **Every answer names its regulation, guidance or recognised practice**, and **no date or clause
+  number is quoted unless it has been verified**. Where a source was read only in summary, the
+  story says so. Project management has no regulation of its own; it names practice as practice.
+- **The mix is automatic** — two straightforward questions, the rest varying between mid and hard.
+  Rohith does not set it.
+- **Every run has one extra situational story**, rotating across the six topics.
+- **Topic weighting comes from current job adverts**, so the routine tracks what employers are
+  asking for rather than what was being asked three years ago.
+- **When a topic is used up, the routine says so** rather than padding a run with
+  near-duplicates.
+
+### Where it does not reach
+
+- It never reads Pharaxis code, names a Pharaxis product, or mentions the company.
+- It writes to no Jira project other than `CSV`.
+- **Nothing it produces enters the delivery flow.** It is not a source of work, it does not pass
+  through the lock (RULES.md › How work flows), and it never reaches RULES.md › Getting a change to main. It produces study material and nothing else.
+- The interviewers are simulated for the rehearsal only and none is a team member. The validation
+  interviewer keeps the name Vasu after Vasu Ranabothu left the team on 2026-10-01 — a rehearsal
+  character, not a role in RULES.md › Who does what or RULES.md › How we talk.
+
+### Listing the questions
+
+There is no standing local file. When Rohith asks for the list, it is generated from Jira on the
+spot — question, topic, ticket reference, no answers. A second copy would drift the moment a
+ticket was edited.
+
+### Ownership
+
+Rohith Karne owns it. Saad Rahman owns the content standard and the source discipline (Vasu
+Ranabothu's until 2026-10-01), the topic list and the story shape, and keeps this section current (Aditi Raghavan until 2026-09-29).
