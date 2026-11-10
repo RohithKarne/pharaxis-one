@@ -30,9 +30,6 @@ async function addVersionHistory(entityId, version, status, notes, authorId) {
   } catch (_) {}
 }
 
-// Try to add view_count column if it doesn't exist (CM-E6)
-pool.execute(`ALTER TABLE cm_faqs ADD COLUMN view_count INT DEFAULT 0`).catch(() => {});
-
 function hasPlatformAdminScope(req) {
   return hasGlobalAdminScope(req.user);
 }

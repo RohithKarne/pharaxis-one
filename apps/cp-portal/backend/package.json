@@ -31,7 +31,6 @@
     "multer": "^2.4.0",
     "mysql2": "^3.24.6",
     "nodemailer": "^10.3.1",
-    "openai": "^6.29.0",
     "pdfjs-dist": "~5.4.624",
     "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4"

@@ -12,6 +12,7 @@
 
 const express = require('express');
 const router  = express.Router();
+const { forwardErrors } = require('../../middleware/errorHandler');
 const { authenticate } = require('../../middleware/auth');
 const geo = require('../../services/geocoderService');
 
@@ -19,18 +20,18 @@ router.get('/geocode/status', authenticate, (_req, res) => {
   res.json({ provider: geo.PROVIDER, enabled: geo.isEnabled() });
 });
 
-router.get('/geocode', authenticate, async (req, res) => {
+router.get('/geocode', authenticate, forwardErrors(async (req, res) => {
   const { text, country } = req.query || {};
   if (!text) return res.status(400).json({ error: 'text required' });
   res.json({ result: await geo.forward({ text, country }) });
-});
+}));
 
-router.get('/geocode/reverse', authenticate, async (req, res) => {
+router.get('/geocode/reverse', authenticate, forwardErrors(async (req, res) => {
   const lat = Number(req.query.lat); const lng = Number(req.query.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return res.status(400).json({ error: 'lat and lng required' });
   }
   res.json({ result: await geo.reverse({ lat, lng }) });
-});
+}));
 
 module.exports = router;

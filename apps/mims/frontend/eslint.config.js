@@ -31,4 +31,9 @@ export default defineConfig([
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
+  {
+    // The build config runs in Node, not the browser.
+    files: ['vite.config.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

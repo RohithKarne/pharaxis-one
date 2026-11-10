@@ -69,5 +69,7 @@ ecosystem.config*.js
 !**/migrations/*.sql
 !**/migrations/**/*.sql
 
-# Test console run artifacts (registry.json IS committed — it is the corpus)
+# The e2e stack's run folder (docs/scripts/e2e-stack.sh) and the sign-in the
+# saved-views suite writes for itself on every run.
 .e2e-stack/
+apps/mims/e2e/.savedviews-session.json

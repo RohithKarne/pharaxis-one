@@ -28,6 +28,7 @@ const { notifyIntakeArrival } = require('../services/intakeAlertService');
 const { eraseReporterIdentity } = require('../services/reporterErasureService');
 
 const router = express.Router();
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // Coerce a loose date input to a MySQL DATE ('YYYY-MM-DD') or null. Intake data
 // arrives from an external portal, so never throw on a bad date — drop it.
@@ -174,7 +175,7 @@ router.use('/api/v1', apiKeyAuth, publicApiRateLimiter, (req, res, next) => {
   next();
 });
 
-router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
+router.get('/api/v1/cases', scopeGuard('cases:read'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT c.id, c.case_number, c.case_type, ws.name AS status, c.priority, c.created_at
        FROM cases c
@@ -184,7 +185,7 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
     [req.apiClient.org_id]
   );
   res.json({ rows, pagination: { limit: 100 } });
-});
+}));
 
 // Fetch a single case's current status — used by the CP portal close-sync poller.
 // Bridge plan P4: a case this connection created that MIMS merged into another is
@@ -338,7 +339,7 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
 // (`keys`: [{ id, key }]), so reports sent before keys existed are covered by the
 // comparison below. A key is stored only on a case of this connection that has none;
 // `keyed` lists the cases that took one, and the portal keeps a key only for those.
-router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) => {
+router.post('/api/v1/cases/claim', scopeGuard('cases:write'), forwardErrors(async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 1000) : [];
   if (!ids.length) return res.status(400).json({ error: 'ids must be a list of case ids (at most 1000).' });
   const [r] = await pool.execute(
@@ -356,7 +357,7 @@ router.post('/api/v1/cases/claim', scopeGuard('cases:write'), async (req, res) =
     if (u.affectedRows) keyed.push(id);
   }
   res.json({ claimed: r.affectedRows, sent: ids.length, keyed });
-});
+}));
 
 // Bridge plan P6: the sending portal checks its list against MIMS. It sends the key
 // and fingerprint of each report it believes MIMS holds; MIMS answers which keys it
@@ -391,7 +392,7 @@ router.post('/api/v1/cases/reconcile', scopeGuard('cases:read'), async (req, res
   }
 });
 
-router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
+router.get('/api/v1/cases/:id', scopeGuard('cases:read'), forwardErrors(async (req, res) => {
   const [[row]] = await pool.execute(
     `SELECT c.id, c.case_number, c.case_type, ws.name AS status, COALESCE(ws.is_closed, 0) = 1 AS closed, c.priority, c.created_at, c.updated_at
        FROM cases c
@@ -402,7 +403,7 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   );
   if (!row) return res.status(404).json({ error: 'Case not found.' });
   res.json(row);
-});
+}));
 
 // CPPM-11: remove the reporter's identity from a case, keeping the case itself.
 // The source portal calls this when a person exercises their right to erasure:
@@ -1050,29 +1051,29 @@ router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUploa
 // description and priority with no line in the case history (Rohith, 2026-10-10,
 // bridge plan decision 3). A case changes in MIMS; the portal adds follow-ups.
 
-router.get('/api/v1/picklists', scopeGuard('picklists:read'), async (req, res) => {
+router.get('/api/v1/picklists', scopeGuard('picklists:read'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute('SELECT id, category, field_type, value, status FROM picklists WHERE org_id=? AND (? IS NULL OR category=?) AND (? IS NULL OR field_type=?) ORDER BY sort_order ASC, value ASC', [req.apiClient.org_id, req.query.category || null, req.query.category || null, req.query.field_type || null, req.query.field_type || null]);
   res.json({ rows });
-});
+}));
 
 // T16 — read a `product_dictionary` table that does not exist, and the catch
 // turned the error into 200 + zero rows: a client read it as "no products"
 // (same trap as PAUD-3 contacts below). The org's products live in `products`.
-router.get('/api/v1/products', scopeGuard('products:read'), async (req, res) => {
+router.get('/api/v1/products', scopeGuard('products:read'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT id, trade_name AS product_name, mah, dosage, atc_code, authorization_country, is_active
        FROM products WHERE org_id = ? ORDER BY trade_name ASC LIMIT 100`,
     [req.apiClient.org_id]
   );
   res.json({ rows });
-});
+}));
 
 // PAUD-3 item 9 — was a hardcoded empty array behind a scope guard, so a client
 // got 200 + zero rows and read it as "we have no contacts".
 // Columns are listed explicitly rather than SELECT *: `notes` is unbounded free
 // text and `do_not_update_master` is an internal flag, neither belongs on an
 // external API surface.
-router.get('/api/v1/contacts', scopeGuard('contacts:read'), async (req, res) => {
+router.get('/api/v1/contacts', scopeGuard('contacts:read'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT id, type, specialty, first_name, last_name, email, phone,
             institution, address, org_id, site_id, is_active, created_at, updated_at
@@ -1083,8 +1084,8 @@ router.get('/api/v1/contacts', scopeGuard('contacts:read'), async (req, res) => 
     [req.apiClient.org_id]
   );
   res.json({ rows });
-});
-router.get('/api/v1/users', scopeGuard('admin:read'), async (req, res) => {
+}));
+router.get('/api/v1/users', scopeGuard('admin:read'), forwardErrors(async (req, res) => {
   // WP1: scope to the API client's org — was leaking every tenant's user roster.
   const [rows] = await pool.execute(
     `SELECT u.id, u.name, u.email, u.role
@@ -1095,16 +1096,16 @@ router.get('/api/v1/users', scopeGuard('admin:read'), async (req, res) => {
     [req.apiClient.org_id]
   );
   res.json({ rows });
-});
-router.get('/api/v1/organisations', scopeGuard('admin:read'), async (req, res) => {
+}));
+router.get('/api/v1/organisations', scopeGuard('admin:read'), forwardErrors(async (req, res) => {
   // WP1: a client only ever sees its own organisation — was leaking the full org list.
   const [rows] = await pool.execute('SELECT id, name, data_region FROM organisations WHERE id = ? LIMIT 1', [req.apiClient.org_id]);
   res.json({ rows });
-});
-router.get('/api/v1/transmissions', scopeGuard('transmissions:read'), async (req, res) => {
+}));
+router.get('/api/v1/transmissions', scopeGuard('transmissions:read'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute('SELECT t.* FROM transmission_audit_trail t JOIN cases c ON c.id=t.case_id WHERE c.org_id=? ORDER BY t.timestamp DESC LIMIT 100', [req.apiClient.org_id]);
   res.json({ rows });
-});
+}));
 // PAUD-3 item 9 — deliberately 501, not an empty 200. Which table backs a
 // client-facing document list is an open question (backend/routes/admin/documents.js
 // is case attachments, not content-management documents), and returning a
@@ -1116,10 +1117,10 @@ router.get('/api/v1/content/documents', scopeGuard('content:read'), async (_req,
   })
 );
 
-router.get('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), async (req, res) => {
+router.get('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute('SELECT * FROM webhook_subscriptions WHERE client_id=? ORDER BY created_at DESC', [req.apiClient.id]);
   res.json({ rows });
-});
+}));
 router.post('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), async (req, res) => {
   // H-01: reject non-public / internal URLs at store time (SSRF).
   let safeUrl;
@@ -1138,15 +1139,15 @@ router.put('/api/v1/webhook-subscriptions/:id', scopeGuard('webhooks:write'), as
   await pool.execute('UPDATE webhook_subscriptions SET url=COALESCE(?, url), events=COALESCE(?, events), status=COALESCE(?, status) WHERE id=? AND client_id=?', [safeUrl, req.body.events ? JSON.stringify(req.body.events) : null, req.body.status || null, req.params.id, req.apiClient.id]);
   res.json({ id: Number(req.params.id) });
 });
-router.delete('/api/v1/webhook-subscriptions/:id', scopeGuard('webhooks:write'), async (req, res) => {
+router.delete('/api/v1/webhook-subscriptions/:id', scopeGuard('webhooks:write'), forwardErrors(async (req, res) => {
   await pool.execute('UPDATE webhook_subscriptions SET status="revoked" WHERE id=? AND client_id=?', [req.params.id, req.apiClient.id]);
   res.json({ revoked: true });
-});
-router.get('/api/v1/webhook-subscriptions/:id/deliveries', scopeGuard('webhooks:write'), async (req, res) => {
+}));
+router.get('/api/v1/webhook-subscriptions/:id/deliveries', scopeGuard('webhooks:write'), forwardErrors(async (req, res) => {
   const [rows] = await pool.execute('SELECT d.* FROM webhook_deliveries d JOIN webhook_subscriptions s ON s.id=d.subscription_id WHERE s.id=? AND s.client_id=? ORDER BY d.id DESC LIMIT 100', [req.params.id, req.apiClient.id]);
   res.json({ rows });
-});
-router.post('/api/v1/webhook-subscriptions/:id/deliveries/:dId/replay', scopeGuard('webhooks:write'), async (req, res) => {
+}));
+router.post('/api/v1/webhook-subscriptions/:id/deliveries/:dId/replay', scopeGuard('webhooks:write'), forwardErrors(async (req, res) => {
   // C-05: scope the replay to the caller's own subscription + client, not the bare delivery id,
   // otherwise any client could re-fire another org's webhook delivery by enumerating :dId.
   const [r] = await pool.execute(
@@ -1158,12 +1159,12 @@ router.post('/api/v1/webhook-subscriptions/:id/deliveries/:dId/replay', scopeGua
   );
   if (r.affectedRows === 0) return res.status(404).json({ error: 'Delivery not found' });
   res.json({ queued: true });
-});
+}));
 
-router.post('/api/v1/webhook-deliveries/flush', scopeGuard('webhooks:write'), async (_req, res) => {
+router.post('/api/v1/webhook-deliveries/flush', scopeGuard('webhooks:write'), forwardErrors(async (_req, res) => {
   const results = await deliverPendingWebhooks(25);
   res.json({ results });
-});
+}));
 
 // CUT (product rationalization): GraphQL was a stub endpoint duplicating REST; removed.
 

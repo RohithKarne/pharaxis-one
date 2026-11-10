@@ -31,23 +31,35 @@ async function getScopedConsent(req, id) {
 }
 
 router.get('/consent/records', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const orgId = orgScope(req);
-  if (!orgId) return res.status(400).json({ error: 'org_id required.' });
-  const [rows] = await pool.execute('SELECT * FROM consent_records WHERE org_id = ? ORDER BY updated_at DESC', [orgId]);
-  res.json({ records: rows });
+  try {
+    const orgId = orgScope(req);
+    if (!orgId) return res.status(400).json({ error: 'org_id required.' });
+    const [rows] = await pool.execute('SELECT * FROM consent_records WHERE org_id = ? ORDER BY updated_at DESC', [orgId]);
+    res.json({ records: rows });
+  } catch (err) {
+    logger.error({ err }, 'consent list failed');
+    res.status(500).json({ error: 'Failed to load consent records.' });
+  }
 });
 
 router.post('/consent/records', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const orgId = orgScope(req);
-  if (!orgId) return res.status(400).json({ error: 'org_id required.' });
-  const body = req.body || {};
-  const [result] = await pool.execute(
-    `INSERT INTO consent_records
-      (org_id, subject_identifier, consent_type, status, granted_at, expires_at, evidence_url, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [orgId, body.subject_identifier, body.consent_type || 'processing', body.status || 'granted', body.granted_at || new Date(), body.expires_at || null, body.evidence_url || null, req.user.userId]
-  );
-  res.status(201).json({ id: result.insertId });
+  try {
+    const orgId = orgScope(req);
+    if (!orgId) return res.status(400).json({ error: 'org_id required.' });
+    const body = req.body || {};
+    // With no subject the insert threw outside any try and the request never answered.
+    if (!String(body.subject_identifier || '').trim()) return res.status(400).json({ error: 'subject_identifier required.' });
+    const [result] = await pool.execute(
+      `INSERT INTO consent_records
+        (org_id, subject_identifier, consent_type, status, granted_at, expires_at, evidence_url, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orgId, body.subject_identifier, body.consent_type || 'processing', body.status || 'granted', body.granted_at || new Date(), body.expires_at || null, body.evidence_url || null, req.user.userId]
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    logger.error({ err }, 'consent create failed');
+    res.status(500).json({ error: 'Failed to create consent record.' });
+  }
 });
 
 router.put('/consent/records/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {

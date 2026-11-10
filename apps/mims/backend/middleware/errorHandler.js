@@ -36,4 +36,10 @@ function errorHandler(err, req, res, _next) {
   });
 }
 
-module.exports = { notFoundHandler, errorHandler };
+// Express 4 does not catch a rejected async handler: with no try of its own the
+// request never answered. Wrap such a handler so the failure reaches errorHandler.
+function forwardErrors(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+module.exports = { notFoundHandler, errorHandler, forwardErrors };

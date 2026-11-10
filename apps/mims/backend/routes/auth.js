@@ -2,6 +2,7 @@
 
 const express        = require('express');
 const router         = express.Router();
+const { forwardErrors } = require('../middleware/errorHandler');
 const authController = require('../controllers/authController');
 const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs, sessionIdle } = require('../middleware/auth');
 const { sessionKey } = require('../utils/sessionKey');
@@ -192,7 +193,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
 });
 
 // Logout — records logout time in login_audit (AUD-03) + clears tracked session
-router.post('/logout', authenticateAllowingPasswordReset, async (req, res) => {
+router.post('/logout', authenticateAllowingPasswordReset, forwardErrors(async (req, res) => {
   const token = extractBearerToken(req);
   await pool.execute(
     `UPDATE login_audit SET logout_time = NOW()
@@ -207,7 +208,7 @@ router.post('/logout', authenticateAllowingPasswordReset, async (req, res) => {
   logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
   res.clearCookie('mims_token', { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
   res.json({ message: 'Logged out.' });
-});
+}));
 
 // POST /api/auth/unlock-user — admin manually unlocks a locked account (AC-E6)
 router.post('/unlock-user', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {

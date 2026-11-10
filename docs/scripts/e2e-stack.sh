@@ -12,9 +12,9 @@
 #     dev   backend :3000  ->  pharaxis_mims_dev    frontend :5173   (untouched)
 #     e2e   backend :3001  ->  pharaxis_mims_test   frontend :5273
 #
-# The test console points its MIMS suites at :5273 and never touches :5173.
+# The browser suites point at :5273 and never touch :5173.
 #
-#   ./scripts/e2e-stack.sh start | stop | status
+#   docs/scripts/e2e-stack.sh start | stop | status
 #
 set -uo pipefail
 

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const express = require('express');
 const router = express.Router();
+const { forwardErrors } = require('../../middleware/errorHandler');
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -245,7 +246,7 @@ router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'platform
   }
 });
 
-router.get('/data-portability/:subjectId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.get('/data-portability/:subjectId', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const orgId = orgScope(req);
   if (!orgId) return res.status(400).json({ error: 'org_id required.' });
   const subjectId = req.params.subjectId;
@@ -257,6 +258,6 @@ router.get('/data-portability/:subjectId', authenticate, requireRole('admin', 'p
   const manifest = { subject_id: subjectId, org_id: orgId, generated_at: new Date().toISOString(), files: ['cases.json'] };
   const hash = crypto.createHash('sha256').update(JSON.stringify({ manifest, cases })).digest('hex');
   res.json({ manifest: { ...manifest, sha256: hash }, cases });
-});
+}));
 
 module.exports = router;

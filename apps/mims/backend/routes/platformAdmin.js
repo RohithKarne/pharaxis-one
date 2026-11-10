@@ -622,7 +622,6 @@ router.post('/users/create', authenticate, requireRole('platform_admin'), accoun
       name,
       email,
       role: userRole,
-      modules,
       temporary_password: '[GENERATED]',
     });
     res.status(201).json({
@@ -631,7 +630,6 @@ router.post('/users/create', authenticate, requireRole('platform_admin'), accoun
       email,
       role: userRole,
       is_active: 1,
-      modules,
       temporary_password: temporaryPassword,
       password_reset_required: 1,
     });
