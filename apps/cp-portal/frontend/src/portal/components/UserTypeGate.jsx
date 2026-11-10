@@ -3,9 +3,12 @@ import { usePortal } from '../context/PortalContext'
 import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
 
 export default function UserTypeGate() {
-  const { portalConfig, clientCode, login, t } = usePortal()
+  const { portalConfig, clientCode, login, user, t } = usePortal()
   const gate = portalConfig?.gate
-  const [selected, setSelected]     = useState(null)
+  // The role the portal team approved. The gate confirms it; the server refuses a
+  // different one, so the other cards are shown but cannot be chosen.
+  const approvedType = (gate?.userTypes || []).some(x => x.type_key === user?.user_type) ? user.user_type : null
+  const [selected, setSelected]     = useState(approvedType)
   const [accepted, setAccepted]     = useState(false)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState(null)
@@ -58,6 +61,7 @@ export default function UserTypeGate() {
               type="button"
               role="radio"
               aria-checked={selected === t.type_key}
+              disabled={!!approvedType && t.type_key !== approvedType}
               className={`pp-gate-type-card ${selected === t.type_key ? 'pp-gate-type-selected' : ''}`}
               onClick={() => setSelected(t.type_key)}
             >
@@ -67,6 +71,9 @@ export default function UserTypeGate() {
             </button>
           ))}
         </div>
+        {approvedType && (
+          <p className="pp-gate-subtitle">{t('Your role was set when your access was approved. To change it, please contact the portal team.')}</p>
+        )}
 
         {gate.require_disclaimer && gate.disclaimer_text && (
           <div className="pp-gate-disclaimer">

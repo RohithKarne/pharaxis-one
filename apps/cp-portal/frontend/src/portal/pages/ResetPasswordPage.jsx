@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
 
         {done ? (
           <>
-            <p style={{ color: '#166534', fontSize: 14 }}>{t('Your password has been reset.')}</p>
+            <p style={{ color: '#166534', fontSize: 14 }}>{t('Your password is set. You can now sign in.')}</p>
             <button className="pp-btn pp-btn-primary pp-btn-full" style={{ marginTop: 16 }} onClick={() => navigate(`${base}/login`)}>
               {t('Go to Sign In')}
             </button>
@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
                 <input type={show ? 'text' : 'password'} required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" />
               </div>
               <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>
-                {loading ? 'Resetting…' : 'Reset password'}
+                {loading ? t('Saving…') : t('Save password')}
               </button>
             </form>
           </>

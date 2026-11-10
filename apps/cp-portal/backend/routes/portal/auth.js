@@ -321,6 +321,15 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
     const validTypes = await getValidTypes(req.portalUser.clientId);
     if (!user_type || !validTypes.includes(user_type)) return res.status(400).json({ error: 'Invalid user_type.' });
 
+    // The role is set when the person asks for access (or an admin adds them), and the
+    // portal team approves it. This gate confirms it; it must not change it. Before, a
+    // user approved as a patient could pick "Healthcare Professional" here and see
+    // HCP-only content. Only the portal team changes a role (Portal Users).
+    const [[current]] = await pool.execute('SELECT user_type FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    if (current && validTypes.includes(current.user_type) && current.user_type !== user_type) {
+      return res.status(403).json({ error: 'Your role was set when your access was approved. To change it, please contact the portal team.' });
+    }
+
     await pool.execute(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`, [user_type, req.portalUser.userId]);
 
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
