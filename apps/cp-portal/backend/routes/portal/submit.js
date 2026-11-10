@@ -756,6 +756,9 @@ function toDateOnly(d) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
 
+// Form keys that hold a person's whole name in one answer.
+const FULL_NAME_KEYS = ['reporter_name', 'name', 'full_name', 'contact_name'];
+
 // `used` collects every form key the payload reads, so the caller can send the rest
 // as other answers.
 function buildMimsPayload(formType, formData, submissionId, submittedAt, used = new Set()) {
@@ -774,7 +777,7 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt, used = 
   // `first_name`, `email`, `event_description`, `inquiry_details`). Read a broad set
   // of aliases so real submissions carry their content into MIMS instead of syncing
   // an empty case. A single full-name field is split into first/last.
-  const fullName = pick('reporter_name', 'name', 'full_name', 'contact_name');
+  const fullName = pick(...FULL_NAME_KEYS);
   const nameParts = fullName ? String(fullName).trim().split(/\s+/) : [];
   const firstName = pick('first_name') || (nameParts.length ? nameParts[0] : null);
   const lastName  = pick('last_name')  || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : null);
@@ -936,6 +939,13 @@ async function addMappedAndOtherAnswers({ clientId, integrationId, formType, for
   // NEW-C: dot-path targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into
   // the nested payload the MIMS API actually reads — a flat assignment would silently no-op.
   for (const m of mappings) {
+    // A single full-name answer is already split into first and last name by
+    // buildMimsPayload. Mapping it whole onto one of them sent MIMS the surname
+    // twice ("Walk Doctor Doctor"). Keep the split.
+    if (FULL_NAME_KEYS.includes(m.cp_field) && /^reporter\.(first|last)_name$/.test(m.target_field)) {
+      used.add(m.cp_field);
+      continue;
+    }
     let value = formData[m.cp_field] ?? m.default_value ?? null;
     if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
     if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
