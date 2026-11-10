@@ -80,7 +80,7 @@ export default function TrainingPage() {
                     {!user ? t('Sign in to start') : pass ? t('Open module') : last ? t('Try again') : t('Start module')}
                   </button>
                 ) : (
-                  <div style={{ fontSize: 12, color: '#4B5563' }}>{t('Not open yet.')}</div>
+                  <div style={{ fontSize: 12, color: '#4B5563' }}>{mod.not_for_you ? t('Not available for your account type.') : t('Not open yet.')}</div>
                 )}
               </div>
             )
