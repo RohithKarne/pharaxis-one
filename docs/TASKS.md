@@ -44,7 +44,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9b | See the files rendered on GitHub — every table and diagram renders | Kiranmai | ✅ |
 | 10 | Review the whole change | Varun | ✅ |
 | 11 | Push and open the pull request — pushed on Rohith's word, PR #802 | Varun | ✅ |
-| 12 | New session-opening prompt written into RULES.md in full (2026-11-10); Rohith checks any cloud routine that names the old SOP | Rohith | ⏳ |
+| 12 | New session-opening prompt written into RULES.md in full (PR #804, merged 2026-11-10); Rohith checks any cloud routine that names the old SOP | Rohith | ⏳ |
 | 13 | After the merge: point Claude's memory files at the six documents | Saad | ⏳ |
 
 ## Now — new team: Tim and Medical Affairs (no Jira; locked by Rohith 2026-11-10)
@@ -57,9 +57,21 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 4 | PROGRESS.md: clinical gap closed, new gap recorded | Saad | ✅ |
 | 5 | Fix what was found while reading: a password in ARCHITECTURE.md, broken references in PROGRESS.md, removed people still named | Kiranmai | ✅ |
 | 6 | Check every link (28), heading reference (34) and table in the changed files | Kiranmai | ✅ |
-| 6b | Open a new session and try `/tim`, `/john`, `/meera`, `/daniel` — a running session does not see new commands | Rohith | ⏳ |
-| 7 | Review the change | Varun | ⏳ |
-| 8 | Push and open the pull request — only with Rohith's word | Varun | ⏳ |
+| 6b | Open a new session and try `/tim`, `/john`, `/meera`, `/daniel` — a running session does not see new commands. All four seen listed in the 2026-11-10 session that followed; not yet invoked | Rohith | ⏳ |
+| 7 | Review the change | Varun | ✅ |
+| 8 | Push and open the pull request — pushed on Rohith's word, PR #803, merged 2026-11-10 | Varun | ✅ |
+
+## Now — actions from the first team meeting (no Jira; locked by Rohith 2026-11-10)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Push this TASKS.md change and open the pull request — PR #805 | Varun | ✅ |
+| 2 | Review the five Dependabot pull requests (#797–#801): all green; pdfkit and mailparser seen working on the walk copy; #801 replaces #797. Merge only on Rohith's word | Varun | ⏳ merge |
+| 3 | One-page view on "safety alerts go live with no review step" (decision of 2026-10-10), for Rohith to decide — given in chat 2026-11-10 | Daniel, Saad | ⏳ Rohith |
+| 4 | Fresh screen walk of CP Portal — 33 admin screens, sign-up, reports, safety alerts, PDFs; 4 fixes on `fix/cp-portal-walk-1110` | Kiranmai | ✅ |
+| 5 | Fresh screen walk of MIMS — 25 screens, 56 admin settings, email intake, portal cases; 1 fix on `fix/mims-walk-1110` | Kiranmai, Meera | ✅ |
+| 6 | Medical walk: side-effect and question flows from CP Portal into MIMS, and the AI assistant on an off-label question. Findings given in chat 2026-11-10; decisions with Rohith | John | ✅ |
+| 7 | Report: what was found, what was fixed, what was not checked | Tim | ⏳ |
 
 ## Waiting on a decision
 

@@ -6,7 +6,7 @@ changed" but "does this make us revalidate?"
 
 > **This file answers PAUD-3 item 1.** Before it existed, neither MIMS nor CP
 > Portal could tell a client what a release contained. See
-> `docs/TEAM_OPERATING_SOP.md` §26 — nothing here is evidence of verification.
+> `docs/RULES.md` › Proving it works — nothing here is evidence of verification.
 
 ## How to read the impact flag
 
