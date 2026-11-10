@@ -44,7 +44,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9b | See the files rendered on GitHub — every table and diagram renders | Kiranmai | ✅ |
 | 10 | Review the whole change | Varun | ✅ |
 | 11 | Push and open the pull request — pushed on Rohith's word, PR #802 | Varun | ✅ |
-| 12 | Rohith updates the session-opening prompt and any cloud routine that names the old SOP | Rohith | ⏳ |
+| 12 | New session-opening prompt written into RULES.md in full (2026-11-10); Rohith checks any cloud routine that names the old SOP | Rohith | ⏳ |
 | 13 | After the merge: point Claude's memory files at the six documents | Saad | ⏳ |
 
 ## Now — new team: Tim and Medical Affairs (no Jira; locked by Rohith 2026-11-10)
