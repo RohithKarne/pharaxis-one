@@ -114,11 +114,12 @@ export default function SubmitPage() {
         for (const [k, v] of Object.entries(mine)) if (keys.has(k) && v && !filled[k]) filled[k] = v
         // "You are a" asked again for the role the profile already holds (phase 2 row 11).
         // The client words its own choices, so match the profile's type to one of them.
-        const roleField = (d.fields || []).find(f => f.field_key === 'user_type' && ['select', 'radio'].includes(f.field_type))
-        if (roleField && user?.user_type && !filled.user_type) {
+        // The side-effect and complaint forms call the same question "Reporter Type".
+        const roleField = (d.fields || []).find(f => ['user_type', 'reporter_type'].includes(f.field_key) && ['select', 'radio'].includes(f.field_type))
+        if (roleField && user?.user_type && !filled[roleField.field_key]) {
           const plain = x => String(x).toLowerCase().replace(/[^a-z]/g, '')
           const match = optionList(roleField.options).find(o => plain(o) === plain(user.user_type))
-          if (match) filled.user_type = match
+          if (match) filled[roleField.field_key] = match
         }
         // CPPM-110: "Ask about this" brings the product and the item it was pressed on.
         if (selectedType === requestedType) {
