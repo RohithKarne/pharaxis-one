@@ -65,12 +65,12 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 
 | # | Step | Who | Done |
 |---|---|---|---|
-| 1 | Push this TASKS.md change and open the pull request | Varun | ⏳ |
-| 2 | Review the five Dependabot pull requests (#797–#801); merge only on Rohith's word | Varun | ⏳ |
-| 3 | One-page view on "safety alerts go live with no review step" (decision of 2026-10-10), for Rohith to decide | Daniel, Saad | ⏳ |
-| 4 | Fresh screen walk of CP Portal — every admin screen and portal page | Kiranmai | ⏳ |
-| 5 | Fresh screen walk of MIMS, with Meera on the medical-information and safety flows | Kiranmai, Meera | ⏳ |
-| 6 | Medical walk: side-effect, complaint and question flows from CP Portal into MIMS, and the AI assistant on an off-label question. Findings only; nothing built until locked | John | ⏳ |
+| 1 | Push this TASKS.md change and open the pull request — PR #805 | Varun | ✅ |
+| 2 | Review the five Dependabot pull requests (#797–#801): all green; pdfkit and mailparser seen working on the walk copy; #801 replaces #797. Merge only on Rohith's word | Varun | ⏳ merge |
+| 3 | One-page view on "safety alerts go live with no review step" (decision of 2026-10-10), for Rohith to decide — given in chat 2026-11-10 | Daniel, Saad | ⏳ Rohith |
+| 4 | Fresh screen walk of CP Portal — 33 admin screens, sign-up, reports, safety alerts, PDFs; 4 fixes on `fix/cp-portal-walk-1110` | Kiranmai | ✅ |
+| 5 | Fresh screen walk of MIMS — 25 screens, 56 admin settings, email intake, portal cases; 1 fix on `fix/mims-walk-1110` | Kiranmai, Meera | ✅ |
+| 6 | Medical walk: side-effect and question flows from CP Portal into MIMS, and the AI assistant on an off-label question. Findings given in chat 2026-11-10; decisions with Rohith | John | ✅ |
 | 7 | Report: what was found, what was fixed, what was not checked | Tim | ⏳ |
 
 ## Waiting on a decision
