@@ -331,6 +331,9 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
     }
 
     await pool.execute(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`, [user_type, req.portalUser.userId]);
+    // Rohith, 10 Nov 2026: the confirmation is recorded, so a role is always traceable.
+    await systemAudit('portal first sign-in', req.portalUser.clientId, 'ROLE_CONFIRMED', 'portal_user', req.portalUser.userId,
+      { user_type, role_before: current?.user_type ?? null });
 
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
