@@ -61,6 +61,18 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 7 | Review the change | Varun | ✅ |
 | 8 | Push and open the pull request — pushed on Rohith's word, PR #803, merged 2026-11-10 | Varun | ✅ |
 
+## Now — actions from the first team meeting (no Jira; locked by Rohith 2026-11-10)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Push this TASKS.md change and open the pull request | Varun | ⏳ |
+| 2 | Review the five Dependabot pull requests (#797–#801); merge only on Rohith's word | Varun | ⏳ |
+| 3 | One-page view on "safety alerts go live with no review step" (decision of 2026-10-10), for Rohith to decide | Daniel, Saad | ⏳ |
+| 4 | Fresh screen walk of CP Portal — every admin screen and portal page | Kiranmai | ⏳ |
+| 5 | Fresh screen walk of MIMS, with Meera on the medical-information and safety flows | Kiranmai, Meera | ⏳ |
+| 6 | Medical walk: side-effect, complaint and question flows from CP Portal into MIMS, and the AI assistant on an off-label question. Findings only; nothing built until locked | John | ⏳ |
+| 7 | Report: what was found, what was fixed, what was not checked | Tim | ⏳ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |
