@@ -772,7 +772,7 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt, used = 
     return null;
   };
 
-  // FIX-3: clients configure their own form field keys (e.g. Novartis uses
+  // FIX-3: clients configure their own form field keys (e.g. one portal uses
   // `reporter_name`, `reporter_email`, `description`, `question`; the seed used
   // `first_name`, `email`, `event_description`, `inquiry_details`). Read a broad set
   // of aliases so real submissions carry their content into MIMS instead of syncing
