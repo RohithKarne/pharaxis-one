@@ -756,6 +756,34 @@ function toDateOnly(d) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
 
+// Words that suggest a side effect, a special situation (pregnancy, overdose, wrong use)
+// or someone becoming unwell. Kept short and broad on purpose: a missed report costs more
+// than an agent reading one extra line. Owned by Meera (Medical Information & Safety).
+const SIDE_EFFECT_WORDS = [
+  'side effect', 'side-effect', 'adverse', 'reaction', 'allerg', 'rash', 'itch', 'hives', 'swell', 'swollen',
+  'unwell', 'ill ', 'sick', 'nause', 'vomit', 'diarrh', 'dizz', 'faint', 'headache', 'pain', 'ache',
+  'bleed', 'bruis', 'fever', 'breath', 'palpitat', 'seizure', 'fit ', 'jaundice', 'hospital', 'emergency',
+  'died', 'death', 'fatal', 'overdose', 'too much', 'wrong dose', 'by mistake', 'pregnan', 'breastfe',
+];
+
+// The hint for a medical question answered "No" to the side-effect screen whose text
+// mentions one; null when there is nothing to say.
+function sideEffectHint(formData) {
+  if (String(formData?.ae_screen_answer || '').toLowerCase() !== 'no') return null;
+  const text = REQUEST_TEXT_KEYS.map(k => formData[k]).filter(Boolean).join(' ').toLowerCase();
+  // Quote the person's own words ("swelling"), not the stem the list holds ("swell").
+  const found = SIDE_EFFECT_WORDS.filter(w => text.includes(w)).map(w => {
+    const stem = w.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = text.match(new RegExp(`[a-z-]*${stem}[a-z-]*`));
+    return m ? m[0] : w.trim();
+  });
+  if (!found.length) return null;
+  return {
+    question: 'Possible side effect in the question text',
+    answer: `The person answered "No" to the side-effect question, but their question mentions: ${[...new Set(found)].slice(0, 6).join(', ')}. Read it before answering the AE/PC screening.`,
+  };
+}
+
 // Form keys that hold a person's whole name in one answer.
 const FULL_NAME_KEYS = ['reporter_name', 'name', 'full_name', 'contact_name'];
 
@@ -1022,6 +1050,11 @@ async function syncToIntegration(clientId, submissionId, formType) {
     payload.reporter_can_reply = !!(submission.user_id || submission.visitor_token_hash);
 
     await addMappedAndOtherAnswers({ clientId, integrationId: integration.id, formType, formData, payload, used });
+    // Rohith, 2026-11-10 (word list: Meera). A question answered "No" to the side-effect
+    // screen whose own text mentions one reaches MIMS with that said, so the agent reads it
+    // before answering MIMS's screening question. A hint only: nothing is decided here.
+    const hint = formType === 'medical_inquiry' ? sideEffectHint(formData) : null;
+    if (hint) payload.other_answers = [hint, ...(payload.other_answers || [])].slice(0, 50);
     // Bridge plan P5: MIMS checks the report arrived as sent, and answers with the same value.
     payload.payload_sha256 = reportFingerprint(payload);
   } catch (err) {
@@ -1280,5 +1313,6 @@ module.exports.toDateOnly = toDateOnly;
 module.exports.raiseSafetyTaskAlert = raiseSafetyTaskAlert;
 module.exports.forwardFollowUp = forwardFollowUp;
 module.exports.buildMimsPayload = buildMimsPayload;
+module.exports.sideEffectHint = sideEffectHint;
 module.exports.addMappedAndOtherAnswers = addMappedAndOtherAnswers;
 module.exports.FORM_TYPE_TO_CASE_TYPE = FORM_TYPE_TO_CASE_TYPE;
