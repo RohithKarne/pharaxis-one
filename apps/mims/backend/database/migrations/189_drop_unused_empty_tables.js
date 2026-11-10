@@ -40,8 +40,10 @@ async function up(conn) {
   const dropped = [];
   const kept = [];
   for (const table of TABLES) {
-    const [found] = await conn.execute('SHOW TABLES LIKE ?', [table]);
-    if (!found.length) continue;
+    const [[found]] = await conn.execute(
+      'SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', [table]
+    );
+    if (!found.n) continue;
     const [[{ n }]] = await conn.execute(`SELECT COUNT(*) AS n FROM ${table}`);
     if (Number(n) > 0) { kept.push(`${table} (${n} rows)`); continue; }
     await conn.execute(`DROP TABLE ${table}`);
