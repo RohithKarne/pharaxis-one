@@ -362,7 +362,7 @@ Medical Affairs:
 | CM owner lock | Owner set on first check-in; only the owner publishes |
 | AuthContext | Any async function used in an effect's dependency list is a `useCallback` |
 | Exception popup | Silenced; logs to console only |
-| MI responses | Always created as DRAFT. Every advance goes through the transition route with password and reason. SENT is immutable; VOIDED is final. Column default is `'DRAFT'` |
+| MI responses | Always created as DRAFT. Advance to READY submits for review; APPROVE and SEND require electronic signatures with password and reason. SENT is immutable; VOIDED is final. Column default is `'DRAFT'` |
 | MI email | Sent in a try-catch after SENT is committed; failure logged to the transmission audit trail; never thrown |
 | Route order | `GET /api/cases/mi-responses/log` before `GET /api/cases/:id` |
 | 401 handling | Only in `shared/api/httpFetch.js`; no manual 401 checks in components |

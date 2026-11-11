@@ -775,6 +775,22 @@ async function establishRegularSession({ res, req, user, context, trustedDeviceT
   });
 }
 
+async function issuePasswordResetSession(res, user, privileges) {
+  const resetToken = issueToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    passwordResetRequired: true,
+    platformAdmin: !!privileges?.platformAdmin,
+  }, '10m');
+  attachAuthCookie(res, resetToken, 10 * 60 * 1000);
+  await trackSessionToken(user.id, resetToken);
+  return {
+    passwordResetRequired: true,
+    user: toRuntimeUser(user, privileges),
+  };
+}
+
 async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
   const payload = await establishRegularSession({ res, req, user, context, trustedDeviceToken, authEvent });
   return res.status(200).json(payload);
@@ -1493,26 +1509,6 @@ const authController = {
 
       const privileges = await resolveUserRuntimePrivileges(user);
 
-      if (user.password_reset_required) {
-        // Ten minutes, the same as its cookie: the token and its session row expire with it.
-        const resetToken = issueToken({
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          passwordResetRequired: true,
-          platformAdmin: privileges.platformAdmin,
-        }, '10m');
-        attachAuthCookie(res, resetToken, 10 * 60 * 1000);
-        // Every other sign-in path records the session; without this the reset
-        // screen's first request is rejected as SESSION_REVOKED and the user is
-        // bounced back to login before they can set a password.
-        await trackSessionToken(user.id, resetToken);
-        return res.status(200).json({
-          passwordResetRequired: true,
-          user: toRuntimeUser(user, privileges),
-        });
-      }
-
       if (privileges.platformAdmin) {
         const platformContext = await resolvePlatformAdminContext(user, requestedOrgId);
         const config = await getSystemConfig();
@@ -1565,6 +1561,9 @@ const authController = {
           }
           authEvent = '2fa_trusted_device_bypass';
         }
+        if (user.password_reset_required) {
+          return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+        }
         const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config, authEvent });
         return res.status(200).json(payload);
       }
@@ -1576,6 +1575,9 @@ const authController = {
       }
 
       if (!context.twoFactorEnabled) {
+        if (user.password_reset_required) {
+          return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+        }
         return finalizeRegularLogin({ res, req, user, context });
       }
 
@@ -1594,6 +1596,9 @@ const authController = {
       }
 
       if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
+        if (user.password_reset_required) {
+          return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+        }
         return finalizeRegularLogin({ res, req, user, context, authEvent: '2fa_trusted_device_bypass' });
       }
 
@@ -1782,6 +1787,10 @@ const authController = {
         orgRows: pending.allOrgs || [],
         sessionTimeout: pending.sessionTimeout ?? 30,
       };
+      const privileges = await resolveUserRuntimePrivileges(user);
+      if (user.password_reset_required) {
+        return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+      }
       return finalizeRegularLogin({ res, req, user: { ...user, email: pending.email, role: pending.role }, context, authEvent: '2fa_setup_skipped' });
     } catch (err) {
       console.error('skipTwoFactorSetup error:', err);
@@ -1860,6 +1869,9 @@ const authController = {
           metadata: { platform: true, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice }, req,
         });
         const privileges = await resolveUserRuntimePrivileges(user);
+        if (user.password_reset_required) {
+          return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+        }
         const config = await getSystemConfig();
         const platformContext = await resolvePlatformAdminContext(user, pending.requestedOrgId || null);
         const payload = await establishPlatformSession({ res, req, user, privileges, platformContext, config });
@@ -1884,6 +1896,10 @@ const authController = {
         authEvent,
         metadata: { orgId: pending.orgId, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice },
       });
+      const privileges = await resolveUserRuntimePrivileges(user);
+      if (user.password_reset_required) {
+        return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+      }
       const token = issueToken({
         userId: pending.userId,
         email: pending.email,

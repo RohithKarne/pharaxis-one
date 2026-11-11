@@ -35,6 +35,7 @@ async function addNotification(userId, title, message, metadata) {
 async function runCmContentAutoArchive() {
   let archivedDocs = 0;
   let archivedFaqs = 0;
+  let archivedTemplates = 0;
 
   const [expiredDocs] = await pool.execute(
     `SELECT d.id, d.doc_id, d.name, d.version_major, d.version_minor,
@@ -89,7 +90,33 @@ async function runCmContentAutoArchive() {
     archivedFaqs++;
   }
 
-  return { archivedDocs, archivedFaqs };
+  const [expiredTemplates] = await pool.execute(
+    `SELECT t.id, t.name, t.version_major, t.version_minor,
+            t.created_by AS notify_user_id
+     FROM cm_templates t
+     WHERE t.status = 'Published'
+       AND t.expiry_date IS NOT NULL
+       AND t.expiry_date < CURDATE()`
+  );
+
+  for (const tmpl of expiredTemplates) {
+    await pool.execute(
+      `UPDATE cm_templates SET status = 'Archived', updated_at = NOW() WHERE id = ?`,
+      [tmpl.id]
+    );
+    const versionStr = `${tmpl.version_major || 1}.${tmpl.version_minor || 0}`;
+    await addVersionHistory('template', tmpl.id, versionStr, 'Archived', 'Auto-archived: expiry date passed.');
+    await addAuditLog('AUTO_ARCHIVE_EXPIRED', 'cm_template', tmpl.id, { name: tmpl.name });
+    await addNotification(
+      tmpl.notify_user_id,
+      'Template Auto-Archived',
+      `Template "${tmpl.name}" has been automatically archived as its expiry date has passed.`,
+      { template_id: tmpl.id }
+    );
+    archivedTemplates++;
+  }
+
+  return { archivedDocs, archivedFaqs, archivedTemplates };
 }
 
 // A check-out holds a document for two hours. The screen said it "auto-releases"

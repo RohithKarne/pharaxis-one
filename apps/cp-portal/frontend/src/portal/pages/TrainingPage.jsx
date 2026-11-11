@@ -43,7 +43,9 @@ export default function TrainingPage() {
         <p>{t('Read each module’s document, answer its questions, and download a certificate when you pass.')}</p>
       </div>
 
-      {loading ? <SkeletonCards count={3} /> : modules.length === 0 ? (
+      {user?.user_type === 'patient' ? (
+        <div className="pp-empty-state"><p>{t('CME and training modules are restricted to healthcare professionals.')}</p></div>
+      ) : loading ? <SkeletonCards count={3} /> : modules.length === 0 ? (
         <div className="pp-empty-state"><p>{t('No training modules currently available.')}</p></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>

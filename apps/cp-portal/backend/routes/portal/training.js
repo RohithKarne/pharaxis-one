@@ -25,6 +25,9 @@ async function openModule(req) {
   const [[module]] = await pool.execute(
     'SELECT * FROM cp_training_modules WHERE id = ? AND client_id = ? AND is_active = 1', [req.params.moduleId, client.id]);
   if (!module) return { status: 404, error: 'Module not found.' };
+  if (req.portalUser?.user_type === 'patient') {
+    return { status: 403, error: 'CME training is restricted to healthcare professionals.' };
+  }
   if (module.status !== training.AVAILABLE || await training.questionCount(pool, module.id) === 0) {
     return { status: 409, error: 'This module is not open yet.' };
   }

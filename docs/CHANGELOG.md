@@ -33,6 +33,19 @@ until he confirms it.
 
 ## Unreleased
 
+### Table 1 Core Fixes (CP Portal and MIMS — 2026-11-11)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-11.*
+**Why:** Access control changed for portal training (gated to healthcare professionals); MIMS authentication reordered (two-step identity check before password reset); Adverse Event validation added four-factor ICSR criteria; electronic signature documentation aligned with code.
+
+- **Gate CME Training to Doctors:** CME training modules and navigation are hidden from patients; backend endpoints return 403 refusal on patient attempts (`routes/portal/content.js`, `routes/portal/training.js`, `PortalLayout.jsx`, `TrainingPage.jsx`).
+- **Harmonize Product Catalogs:** MIMS migration 191 seeds Calder CP Portal products across organizations, ensuring intake submissions match cleanly without unmatched product alerts (`database/migrations/191_harmonize_calder_portal_products.js`).
+- **Enforce Four-Factor AE Validation:** Adverse event reports require an identifiable patient, identifiable reporter, suspect product, and reaction description before acceptance on portal and API intake (`routes/portal/submit.js`, `routes/apiPlatform.js`).
+- **Reorder Forced Password Reset:** Users must complete two-step identity verification before being prompted to reset temporary or expired credentials, preventing account hijacking (`backend/controllers/authController.js`).
+- **Prominent Side-Effect Hint on Case Header:** High-visibility alert banner displayed on MIMS case header when inquiry notes describe illness or side effects despite "No" screening (`components/CaseBridgePanel.jsx`).
+- **Auto-Archive Expired Response Templates:** Standard response templates past their expiration date are automatically retired by the daily scheduler (`services/cmContentLifecycleService.js`).
+- **Align Signature Documentation:** PRD and RULES updated to reflect that 21 CFR Part 11 electronic signatures (password + reason) are required at Approve and Send stages (`docs/PRD.md`, `docs/RULES.md`).
+
 ### MIMS
 
 **Revalidation impact:** Partial — *revised by Vasu Ranabothu (CCO), 2026-08-05.

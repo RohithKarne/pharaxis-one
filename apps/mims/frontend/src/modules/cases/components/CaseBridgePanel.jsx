@@ -45,6 +45,8 @@ export default function CaseBridgePanel({ caseId, headers }) {
 
   if (!info || (!info.source && !info.possible_duplicate && !info.notes?.length)) return null
 
+  const sideEffectAlert = info.notes?.flatMap(n => String(n.comment).split('\n')).find(line => /^Possible side effect/i.test(line))
+
   async function post(url, body) {
     setBusy(true)
     setError('')
@@ -72,6 +74,12 @@ export default function CaseBridgePanel({ caseId, headers }) {
 
   return (
     <div className="cf-bridge-panel">
+      {sideEffectAlert && (
+        <div style={{ background: '#FEE2E2', border: '1px solid #B91C1C', color: '#B91C1C', padding: '10px 14px', borderRadius: 4, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }} role="alert">
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <span>{sideEffectAlert} — Review clinical symptom details before finalizing response or triage.</span>
+        </div>
+      )}
       {info.possible_duplicate && (
         <div className="cf-bridge-duplicate" role="status">
           Possibly the same report as case{' '}

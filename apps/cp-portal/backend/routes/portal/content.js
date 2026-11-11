@@ -257,12 +257,12 @@ router.get('/:clientCode/training', authenticatePortal, async (req, res) => {
       [client.id]
     );
     // CPPM-15: can_start says whether the module can be taken today — Available,
-    // with questions and a readable document. 10 Nov 2026 walk: a signed-in patient
-    // was offered "Start module" and then told the module was not for their account,
-    // so for a signed-in reader the document is checked against their own role here
-    // too (not_for_you). A signed-out visitor still sees "Sign in to start".
+    // with questions and a readable document. Clinical governance: patients are excluded
+    // from CME training to prevent promotional/complex study exposure (EFPIA/FDA).
+    // A signed-out visitor still sees "Sign in to start".
     const items = [];
     for (const { client_id, document_id, ...m } of rows) {
+      if (req.portalUser?.user_type === 'patient') continue;
       const open = m.status === training.AVAILABLE && m.question_count > 0
         && await training.readableDocument(pool, { client_id, document_id });
       const forYou = !open || !req.portalUser
