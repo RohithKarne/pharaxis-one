@@ -177,7 +177,31 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
     const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [before?.case_id]);
     const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', { ...before, ...body }, CONTACT_FIELDS);
     if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
+    // Compliance Controls on: changing a stored contact detail needs a reason,
+    // sent with this save and kept with each change.
+    const reason = String(body.reason || '').trim().slice(0, 1000);
+    const sentKeys = sets.map(s => s.split(' ')[0]);
+    const storedChanges = sentKeys
+      .map((key, i) => [key, before?.[key], values[i]])
+      .filter(([, was, now]) => String(was ?? '') !== '' && String(was ?? '') !== String(now ?? ''));
+    const reasonOn = storedChanges.length > 0
+      && await require('../services/featureFlagsService').isEnabledForOrg('cf.theme9_compliance', caseRow?.org_id);
+    if (reasonOn && !reason) {
+      return res.status(422).json({
+        error: `A reason is needed to change: ${storedChanges.map(([key]) => key).join(', ')}.`,
+        code: 'REASON_REQUIRED', reason_required: true,
+      });
+    }
     await pool.execute(`UPDATE case_contacts SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.ccId]);
+    if (reasonOn) {
+      for (const [key, was, now] of storedChanges) {
+        await require('../services/complianceService').recordReason({
+          orgId: caseRow.org_id, entityType: 'case', entityId: before.case_id,
+          section: 'case_contacts', field: key, oldValue: String(was), newValue: String(now ?? ''),
+          reason, changedBy: req.user.userId, requestId: req.id || null,
+        });
+      }
+    }
     const { first_name, specialty, institution, phone, email } = body;
 
     const [[cc]] = await pool.execute(

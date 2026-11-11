@@ -44,6 +44,7 @@ export default function useCaseForm(id, token) {
   const autoSaveTimer = useRef(null)
   // Last loaded/saved additional-field values, so Save Case knows if they changed.
   const dynSaved = useRef('{}')
+  const heldReason = useRef('')
   const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
 
   // WP6: clear the pending autosave timer on unmount — otherwise the 15s timer can fire
@@ -173,7 +174,83 @@ export default function useCaseForm(id, token) {
     }
   }
 
+  // One reason for one save. Shows every stored value the save changes.
+  // Resolves to the reason, or '' when the user cancels.
+  async function askReason(changes) {
+    const reason = await new Promise(resolve => setReasonRequest({ changes, resolve }))
+    setReasonRequest(null)
+    return reason
+  }
+
+  // The case's own fields whose stored value this save would change.
+  function coreChanges() {
+    if (!caseData) return []
+    const day = v => (v ? String(v).slice(0, 10) : '')
+    const nameIn = (list, key) => v => {
+      const hit = list.find(x => String(x.id) === String(v))
+      return hit ? (hit[key] || hit.name || hit.email || String(v)) : String(v ?? '')
+    }
+    const rows = [
+      ['Status', caseData.status_id, infoForm.status_id, nameIn(statuses, 'name')],
+      ['Case Owner', caseData.case_owner_id, infoForm.case_owner_id, nameIn(users, 'name')],
+      ['Priority', caseData.priority, infoForm.priority],
+      ['Date Received', day(caseData.date_received), infoForm.date_received],
+      ['Awareness Date', day(caseData.awareness_date), infoForm.awareness_date],
+      ['Latest Information Date', day(caseData.latest_information_date), infoForm.latest_information_date],
+      ['Learn of Validity Date', day(caseData.learn_of_validity_date), infoForm.learn_of_validity_date],
+      ['Follow-up Received Date', day(caseData.follow_up_received_date), infoForm.follow_up_received_date],
+      ['Description', caseData.description, infoForm.description],
+      ['Internal Notes', caseData.internal_notes, infoForm.internal_notes],
+      ['Intake Channel', caseData.intake_channel, infoForm.intake_channel],
+    ]
+    return rows
+      .filter(([, was, now]) => hasValue(was) && String(was) !== String(now ?? ''))
+      .map(([label, was, now, show]) => ({
+        label, oldValue: show ? show(was) : was, newValue: hasValue(now) ? (show ? show(now) : now) : '',
+      }))
+  }
+
+  // The additional fields whose stored value this save would change.
+  function dynChanges() {
+    const saved = JSON.parse(dynSaved.current || '{}')
+    const labelOf = {}
+    for (const section of formConfig?.sections || []) {
+      for (const field of section.fields || []) labelOf[field.id] = field.field_label || field.field_name
+    }
+    return Object.keys(saved)
+      .filter(fid => hasValue(saved[fid]) && String(saved[fid]) !== String(dynFieldValues[fid] ?? ''))
+      .map(fid => ({ label: labelOf[fid] || `Field ${fid}`, oldValue: saved[fid], newValue: dynFieldValues[fid] ?? '' }))
+  }
+
+  // Save Case asks once for everything it is about to save. Returns the reason,
+  // '' when none is needed, or null when the user cancelled.
+  async function askSaveReason() {
+    if (!reasonOn) return ''
+    const changes = [...coreChanges(), ...(dynFieldsChanged() ? dynChanges() : [])]
+    if (!changes.length) return ''
+    const reason = await askReason(changes)
+    if (!reason) {
+      toast.error('Nothing was saved: a reason is needed for the changed fields.')
+      return null
+    }
+    return reason
+  }
+
+  // Returns false when nothing was saved because no reason was given.
   async function saveInfo(isAutoSave = false, changeControl = {}) {
+    // A reason typed for this save is kept while the e-signature is asked for.
+    if (!changeControl.reason && heldReason.current) changeControl = { ...changeControl, reason: heldReason.current }
+    if (reasonOn && !isAutoSave && !changeControl.reason) {
+      const changes = coreChanges()
+      if (changes.length) {
+        const reason = await askReason(changes)
+        if (!reason) {
+          toast.error('Nothing was saved: a reason is needed for the changed fields.')
+          return false
+        }
+        changeControl = { ...changeControl, reason }
+      }
+    }
     setSaving(true)
     try {
       const payload = {
@@ -197,9 +274,11 @@ export default function useCaseForm(id, token) {
       // reason or the e-signature and save again, instead of a dead-end "Save failed".
       if (!res.ok && (data.code === 'REASON_REQUIRED' || data.code === 'PASSWORD_REQUIRED')) {
         if (!isAutoSave) setChangeControlAsk({ needs: data.code === 'PASSWORD_REQUIRED' ? 'password' : 'reason', message: data.error })
+        heldReason.current = data.code === 'PASSWORD_REQUIRED' ? (changeControl.reason || '') : ''
         setSavedMsg('')
         return
       }
+      heldReason.current = ''
       if (!res.ok) {
         // The server returns field-level validation detail, but this used to be
         // collapsed into a bare "Save failed". With the wizard split across
@@ -310,7 +389,8 @@ export default function useCaseForm(id, token) {
   }
 
   // Returns true when saved, false when it failed (the error is already shown).
-  async function saveDynFields() {
+  // `given` is the reason Save Case already collected for this save, if any.
+  async function saveDynFields(given) {
     if (dynFieldSaving || !formConfig) return false
     setDynFieldSaving(true)
     try {
@@ -336,19 +416,11 @@ export default function useCaseForm(id, token) {
         throw new Error(`Please fix before saving: ${validateData.errors.map(e => e.message).join(' ')}`)
       }
       setDynFieldErrors({})
-      let reason = ''
-      if (reasonOn) {
-        const saved = JSON.parse(dynSaved.current || '{}')
-        const labelOf = {}
-        for (const section of formConfig?.sections || []) {
-          for (const field of section.fields || []) labelOf[field.id] = field.field_label || field.field_name
-        }
-        const changes = Object.keys(saved)
-          .filter(fid => hasValue(saved[fid]) && String(saved[fid]) !== String(dynFieldValues[fid] ?? ''))
-          .map(fid => ({ label: labelOf[fid] || `Field ${fid}`, oldValue: saved[fid], newValue: dynFieldValues[fid] ?? '' }))
+      let reason = typeof given === 'string' ? given : ''
+      if (reasonOn && !reason) {
+        const changes = dynChanges()
         if (changes.length) {
-          reason = await new Promise(resolve => setReasonRequest({ changes, resolve }))
-          setReasonRequest(null)
+          reason = await askReason(changes)
           if (!reason) throw new Error('Nothing was saved: a reason is needed for the changed fields.')
         }
       }
@@ -372,7 +444,7 @@ export default function useCaseForm(id, token) {
   // Only fields with a value are sent; a missing one reads as empty on the
   // server. Sending every field (blank ones too) put 200+ keys in one object on
   // AE cases, which the input guard refuses — so validate never ran there.
-  const hasValue = (v) => v !== undefined && v !== null && String(v).trim() !== ''
+  function hasValue(v) { return v !== undefined && v !== null && String(v).trim() !== '' }
 
   function buildDynamicPayload() {
     const payload = {}
@@ -418,7 +490,7 @@ export default function useCaseForm(id, token) {
     draftStatus, draftRestored, discardDraft,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
     changeControlAsk, setChangeControlAsk,
-    loadDynFields, saveDynFields, dynFieldsChanged, reasonRequest,
+    loadDynFields, saveDynFields, dynFieldsChanged, reasonRequest, askSaveReason,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,
   }

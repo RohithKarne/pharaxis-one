@@ -2024,6 +2024,34 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     }
     const nextIntakeChannel = hasOwn(body, 'intake_channel') ? (body.intake_channel ?? null) : currentCase.intake_channel;
 
+    // Compliance Controls on: changing a value that was already stored needs a
+    // reason, sent with this save and kept with each change. The screen used to
+    // ask on every keystroke and then drop what was typed, so no reason was
+    // ever stored for a case's own fields.
+    const changeReason = String(body.reason || '').trim().slice(0, 1000);
+    const storedDate = (v) => (v ? toDateOnlyOrNull(v) : null);
+    const storedChanges = [
+      ['status_id', currentCase.status_id, nextStatusId],
+      ['case_owner_id', currentCase.case_owner_id, nextOwnerId],
+      ['priority', currentCase.priority, nextPriority],
+      ['date_received', storedDate(currentCase.date_received), storedDate(nextDateReceived)],
+      ['awareness_date', storedDate(currentCase.awareness_date), storedDate(nextAwarenessDate)],
+      ['latest_information_date', storedDate(currentCase.latest_information_date), storedDate(nextLatestInformationDate)],
+      ['learn_of_validity_date', storedDate(currentCase.learn_of_validity_date), storedDate(nextLearnOfValidityDate)],
+      ['follow_up_received_date', storedDate(currentCase.follow_up_received_date), storedDate(nextFollowUpReceivedDate)],
+      ['description', currentCase.description, nextDescription],
+      ['internal_notes', currentCase.internal_notes, nextInternalNotes],
+      ['intake_channel', currentCase.intake_channel, nextIntakeChannel],
+    ].filter(([, was, now]) => String(was ?? '') !== '' && String(was ?? '') !== String(now ?? ''));
+    const reasonOn = storedChanges.length > 0
+      && await require('../services/featureFlagsService').isEnabledForOrg('cf.theme9_compliance', currentCase.org_id);
+    if (reasonOn && !changeReason) {
+      return res.status(422).json({
+        error: `A reason is needed to change: ${storedChanges.map(([field]) => field).join(', ')}.`,
+        code: 'REASON_REQUIRED', reason_required: true,
+      });
+    }
+
     // C-09: the field update AND its status/owner audit rows commit atomically —
     // a case can never change state on a PV record without its audit trail.
     let updated, previousStatusId, updatedStatusId, statusChanged;
@@ -2106,6 +2134,16 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', field, before ?? null, after ?? null, conn);
       }
     });
+
+    if (reasonOn) {
+      for (const [field, was, now] of storedChanges) {
+        await require('../services/complianceService').recordReason({
+          orgId: currentCase.org_id, entityType: 'case', entityId: req.params.id,
+          section: 'case_meta', field, oldValue: String(was), newValue: String(now ?? ''),
+          reason: changeReason, changedBy: req.user.userId, requestId: req.id || null,
+        });
+      }
+    }
 
     // Notifications fire only after the update + audit have durably committed (best-effort).
     if (statusChanged && updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {

@@ -42,7 +42,7 @@ export default function CaseFormPage() {
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus, draftRestored, discardDraft,
-    saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged, reasonRequest,
+    saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged, reasonRequest, askSaveReason,
     getFieldConfig, getPicklistOptions,
     headers, changeControlAsk, setChangeControlAsk,
   } = useCaseForm(id, token)
@@ -61,10 +61,13 @@ export default function CaseFormPage() {
   }, [])
 
   async function saveCaseAndSections() {
-    await saveInfo(false)
+    // Compliance Controls: one reason covers everything this click saves.
+    const reason = await askSaveReason()
+    if (reason === null) return
+    if ((await saveInfo(false, reason ? { reason } : {})) === false) return
     const sections = [
       ...sectionSaves.current.values(),
-      { label: 'Additional fields', isDirty: dynFieldsChanged, save: saveDynFields },
+      { label: 'Additional fields', isDirty: dynFieldsChanged, save: () => saveDynFields(reason) },
     ]
     const failed = []
     for (const section of sections.filter(s => s.isDirty())) {

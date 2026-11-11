@@ -4,7 +4,8 @@
  *
  *   - Theme 3 (validation)        — useFieldValidation: error/warn under the input
  *   - Theme 5 (presence)          — FieldPresenceBadge + focus/blur push to WS
- *   - Theme 9 (locks + reason)    — LockedFieldBadge + ReasonForChangeModal interception
+ *   - Theme 9 (locks)             — LockedFieldBadge. The reason for a change is asked
+ *                                   once at Save by the form that saves, not here per keystroke.
  *   - Wave 0 #2 (history popover) — FieldHistoryPopover next to the label
  *
  * Use:
@@ -24,12 +25,10 @@
  * HTML element — so this is safe to drop in everywhere.
  */
 
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext } from 'react'
 import FieldHistoryPopover from './FieldHistoryPopover'
 import LockedFieldBadge from './compliance/LockedFieldBadge'
-import ReasonForChangeModal from './compliance/ReasonForChangeModal'
 import FieldPresenceBadge from './collab/FieldPresenceBadge'
-import { useFeatureFlag } from '../context/FeatureFlagsContext'
 
 // ── Context — populated by CaseFormShell so wrapped tabs inherit case info ─
 
@@ -81,31 +80,6 @@ function FieldFooter({ error, warning }) {
   )
 }
 
-// ── Reason-for-change interceptor (Theme 9) ─────────────────────────────────
-
-function useReasonGuard(field, oldValue, applyNew) {
-  const t9 = useFeatureFlag('cf.theme9_compliance')
-  const [pending, setPending] = useState(null)
-  function gated(newValue) {
-    if (t9 && oldValue != null && oldValue !== '' && oldValue !== newValue) {
-      setPending({ field, oldValue, newValue }); return
-    }
-    applyNew(newValue)
-  }
-  function modal() {
-    return (
-      <ReasonForChangeModal
-        open={!!pending} onClose={() => setPending(null)}
-        onConfirm={() => { applyNew(pending.newValue); setPending(null) }}
-        field={pending?.field}
-        oldValue={pending?.oldValue}
-        newValue={pending?.newValue}
-      />
-    )
-  }
-  return { gated, modal }
-}
-
 // ── WiredField — input + optional asSelect ───────────────────────────────────
 
 export function WiredField({
@@ -115,7 +89,6 @@ export function WiredField({
   error, warning, fullWidth, className,
 }) {
   const ctx = useCaseFieldContext()
-  const guard = useReasonGuard(field, value, (v) => onChange?.(v))
 
   const onFocus = () => ctx?.presence?.actions?.focus?.(field)
   const onBlur  = () => ctx?.presence?.actions?.blur?.(field)
@@ -125,14 +98,13 @@ export function WiredField({
       <FieldLabel label={label} required={required} section={section} field={field} />
       {children}
       <FieldFooter error={error} warning={warning} />
-      {guard.modal()}
     </div>
   )
 
   if (asSelect) {
     return wrap(
       <select value={value ?? ''} disabled={disabled} required={required}
-        onChange={e => guard.gated(e.target.value)} onFocus={onFocus} onBlur={onBlur}>
+        onChange={e => onChange?.(e.target.value)} onFocus={onFocus} onBlur={onBlur}>
         {options.map(o => (
           <option key={o.value ?? o.label} value={o.value ?? ''}>{o.label ?? o.value}</option>
         ))}
@@ -144,7 +116,7 @@ export function WiredField({
     return wrap(
       <textarea rows={rows} value={value ?? ''} placeholder={placeholder}
         disabled={disabled} required={required}
-        onChange={e => guard.gated(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
+        onChange={e => onChange?.(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
     )
   }
 
@@ -158,7 +130,7 @@ export function WiredField({
   return wrap(
     <input type={type} value={renderedValue} placeholder={placeholder}
       disabled={disabled} required={required}
-      onChange={e => guard.gated(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
+      onChange={e => onChange?.(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
   )
 }
 
