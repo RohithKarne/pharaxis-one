@@ -6,7 +6,7 @@ Claude Code reads this file at the start of every session. It only points the wa
 |---|---|
 | [`docs/RULES.md`](docs/RULES.md) | Team, how work flows, proving it works, getting to `main`, how we talk, how the AI works, never-do list, lessons |
 | [`docs/PRD.md`](docs/PRD.md) | What we build and for whom |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, folders, data flow, how to run each app |
+| [`docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md`](docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md) | Architecture & System Design: building blocks, stack, security, decisions; then flows, jobs, data, routes, how to run each app |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Colours, fonts, components |
 | [`docs/TASKS.md`](docs/TASKS.md) | The work in hand |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | What is done, what broke, what is next |

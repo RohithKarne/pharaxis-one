@@ -124,7 +124,7 @@ packaging only. Runtime verification is done against local app services.
 Six core documents, one job each:
 
 - What we build and for whom: [docs/PRD.md](docs/PRD.md)
-- Stack, folders, data flow, how to run: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Architecture & System Design — stack, security, flows, jobs, how to run: [docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md](docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md)
 - Colours, fonts, components: [docs/DESIGN.md](docs/DESIGN.md)
 - How we work and what the AI must never do: [docs/RULES.md](docs/RULES.md)
 - The work in hand: [docs/TASKS.md](docs/TASKS.md)
