@@ -44,9 +44,6 @@ const PATCHES = [
   { title: 'Security Groups & Permissions', audience: ['admin', 'platform_admin'] },
   { title: 'Case Numbering Configuration', audience: ['admin', 'platform_admin'] },
   { title: 'Organisation Management',      audience: ['platform_admin'] },
-  { title: 'Content Intelligence — Overview', audience: ['cm_admin','admin','platform_admin'] },
-  { title: 'Evidence Chain Analysis',       audience: ['cm_admin','admin','platform_admin'] },
-  { title: 'Policy Graph',                  audience: ['cm_admin','admin','platform_admin'] },
 ];
 
 async function main() {
