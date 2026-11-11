@@ -616,6 +616,10 @@ CREATE TABLE IF NOT EXISTS cp_safety_alerts (
   view_count        INT          NOT NULL DEFAULT 0,
   translations_json MEDIUMTEXT   NULL,
   publish_at        DATETIME     NULL,
+  written_by          INT      NULL,
+  second_check_due_at DATETIME NULL,
+  second_check_by     INT      NULL,
+  second_check_at     DATETIME NULL,
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -1550,4 +1554,6 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0058_add_document_search_text.sql',        NULL),
   ('0059_add_search_terms.sql',                 NULL),
   ('0060_add_portal_trusted_devices.sql',      NULL),
-  ('0061_add_event_registrations.sql',         NULL);
+  ('0061_add_event_registrations.sql',         NULL),
+  ('0062_add_patient_identifier_to_ae_forms.sql', NULL),
+  ('0063_add_safety_alert_second_check.sql',   NULL);

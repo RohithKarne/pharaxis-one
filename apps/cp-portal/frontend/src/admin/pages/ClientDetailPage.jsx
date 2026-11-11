@@ -16,6 +16,7 @@ import { activityActor } from '../../shared/utils/activityActor'
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 const WAITING = [
   { key: 'safety',      path: 'safety-queue',    sev: 'red',   check: 'side-effect reports',  text: n => `${plural(n, 'side-effect report', 'side-effect reports')} to review`, hint: 'Someone reported becoming unwell' },
+  { key: 'alertcheck',  path: 'safety',          sev: 'red',   check: 'safety alert second checks', text: n => `${plural(n, 'live safety alert', 'live safety alerts')} waiting for a second check`, hint: 'Doctors already see it; a second person reads it within 24 hours' },
   { key: 'failed',      path: 'sync-health',     sev: 'red',   check: 'deliveries to MIMS',   text: n => `${plural(n, 'submission', 'submissions')} did not reach MIMS`, hint: 'Send them again from Sync Health' },
   { key: 'access',      path: 'access-requests', sev: 'amber', check: 'access requests',      text: n => `${plural(n, 'doctor', 'doctors')} waiting for an account` },
   { key: 'review',      path: 'review-queue',    sev: 'amber', check: 'approvals',            text: n => `${plural(n, 'item', 'items')} waiting for approval` },
@@ -137,7 +138,8 @@ export default function ClientDetailPage() {
       count(`/api/admin/users/${clientId}/access-requests/count`, d => d.count),
       count(`/api/admin/submissions/${clientId}?limit=1&status=failed_sync`, d => d.matched),
       count(`/api/admin/data-requests/${clientId}`, d => d.requests?.filter(r => r.status === 'pending').length),
-    ]).then(([submissions, safety, review, access, failed, data]) => setWaiting({ submissions, safety, review, access, failed, data, done: true }))
+      count(`/api/admin/safety/${clientId}/second-check/count`, d => d.count),
+    ]).then(([submissions, safety, review, access, failed, data, alertcheck]) => setWaiting({ submissions, safety, review, access, failed, data, alertcheck, done: true }))
   }, [clientId])
 
   // MIMS retries filled Recent Activity, each labelled "Admin" (CP screen review, 10 Oct 2026).

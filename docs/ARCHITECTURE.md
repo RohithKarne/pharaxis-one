@@ -15,7 +15,7 @@ Stack, folders, data flow, how to run it. One part for the whole repository, the
  │                                        │   │                    cp_portal_dev│
  │                                        │   └──► ClamAV :3310 (virus check)   │
  │                         OAuth token +  │                                     │
- │                         POST cases     ▼   ▲ polls status every 5 min        │
+ │                         POST cases     ▼   ▲ reads changes every 5 min       │
  │  MIMS frontend :5173 ──/api──► MIMS backend :3000 ──────────────► MySQL      │
  │   (Vite + React)                (Node + Express)                 pharaxis_   │
  │                                   │                              mims_dev    │
@@ -36,12 +36,17 @@ POST /api/v1/cases  (idempotent on the CP reference; attachments after virus che
    │                         │
    │ fails                   ▼
    ▼                  MIMS case appears (contacts, AE/PC versions, MI tab — what the case screen reads)
-retry every minute           │
+retry 1, 2, 4, 8, 16 min     │
    │                         ▼
-   ▼                  agent works and closes the case
-Sync Health shows            │
+   ▼                  agent works the case; may leave a question for the doctor
+Sync Health shows            │   (stored on the case — MIMS does not send it)
 late / failed / not covered  ▼
-                      CP Portal poller sees "closed" ──► CP inquiry closed, doctor told
+                      every 5 min CP Portal asks MIMS "what changed?" ──► doctor sees
+                      the question, the answer sent, closed or reopened
+                             │
+                             ▼
+                      hourly (side effects) and nightly (all) CP Portal compares its list
+                      with MIMS ──► a missing report is sent again; a different one alerts
 ```
 
 `other_inquiry` stays in CP Portal by design.
@@ -352,7 +357,9 @@ All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 This section described the integration as a future plan long after it shipped. Corrected 2026-09-13.
 
 - **CP Portal → MIMS:** MI/AE/PC submissions post to MIMS `POST /api/v1/cases`, idempotent on the CP reference, attachments forwarded
-- **MIMS → CP Portal:** a poller reads MIMS case status and auto-closes the matching CP inquiry
+- **Back from MIMS (the portal asks; MIMS never calls):** every 5 minutes the portal reads what changed on its cases since its last check: closed, reopened, an answer sent, or a question for the reporter. It shows each on the request, and the reporter answers on the portal.
+- **Comparing lists:** every hour for side effects and every night for all reports, the portal asks MIMS whether it still holds each one, unchanged. A missing report is sent again; a different version raises an alert for a person.
+- **Retries:** a failed send is tried again after 1, 2, 4, 8 and 16 minutes (six tries in all), then a person is alerted
 - **Auth:** OAuth client-credentials with auto-refresh, secrets encrypted at rest
 - **Admin surface:** Integration page (credentials, field mapping, test connection) and the Sync Health page
 

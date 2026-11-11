@@ -43,7 +43,7 @@ export default function CaseBridgePanel({ caseId, headers }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, headers?.Authorization])
 
-  if (!info || (!info.source && !info.possible_duplicate)) return null
+  if (!info || (!info.source && !info.possible_duplicate && !info.notes?.length)) return null
 
   async function post(url, body) {
     setBusy(true)
@@ -113,13 +113,26 @@ export default function CaseBridgePanel({ caseId, headers }) {
         </form>
       )}
       {error && <div className="cf-bridge-error" role="alert">{error}</div>}
+      {/* 10 Nov 2026: the portal's notes were on no screen (the comments drawer is
+          behind a feature flag). A possible side effect is shown in red. */}
+      {info.notes?.length > 0 && (
+        <div className="cf-bridge-notes">
+          {info.notes.map(n => (
+            <div key={n.id} className="cf-bridge-note" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>
+              {String(n.comment).split('\n').map((line, i) => (
+                <div key={i} style={/^Possible side effect/.test(line) ? { color: '#B91C1C', fontWeight: 600 } : undefined}>{line}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       {info.questions.length > 0 && (
         <ul className="cf-bridge-questions">
           {info.questions.map(q => (
             <li key={q.id}>
               <div className="cf-bridge-q-head">
                 {q.asked_by_name || 'Someone'} asked, {formatWhen(q.asked_at)} ·{' '}
-                {q.answered_at ? `Answered ${formatWhen(q.answered_at)} (see comments)`
+                {q.answered_at ? `Answered ${formatWhen(q.answered_at)}`
                   : q.withdrawn_at ? `Withdrawn ${formatWhen(q.withdrawn_at)}`
                     : 'Waiting for the reporter'}
                 {!q.answered_at && !q.withdrawn_at && (
@@ -130,6 +143,7 @@ export default function CaseBridgePanel({ caseId, headers }) {
                 )}
               </div>
               <div className="cf-bridge-q-text">{q.question}</div>
+              {q.answer_text && <div className="cf-bridge-note" style={{ whiteSpace: 'pre-wrap' }}>{q.answer_text}</div>}
             </li>
           ))}
         </ul>

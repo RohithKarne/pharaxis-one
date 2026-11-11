@@ -243,7 +243,7 @@ router.get('/:clientCode/trials', async (req, res) => {
 });
 
 // GET /api/portal/content/:clientCode/training — CME and REMS training modules
-router.get('/:clientCode/training', async (req, res) => {
+router.get('/:clientCode/training', authenticatePortal, async (req, res) => {
   try {
     const client = await getClient(req.params.clientCode);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -257,13 +257,17 @@ router.get('/:clientCode/training', async (req, res) => {
       [client.id]
     );
     // CPPM-15: can_start says whether the module can be taken today — Available,
-    // with questions and a readable document. Whether this particular reader's
-    // account may see the document is checked when they open it.
+    // with questions and a readable document. 10 Nov 2026 walk: a signed-in patient
+    // was offered "Start module" and then told the module was not for their account,
+    // so for a signed-in reader the document is checked against their own role here
+    // too (not_for_you). A signed-out visitor still sees "Sign in to start".
     const items = [];
     for (const { client_id, document_id, ...m } of rows) {
-      const readable = m.status === training.AVAILABLE && m.question_count > 0
+      const open = m.status === training.AVAILABLE && m.question_count > 0
         && await training.readableDocument(pool, { client_id, document_id });
-      items.push({ ...m, question_count: Number(m.question_count), can_start: !!readable });
+      const forYou = !open || !req.portalUser
+        || await training.readableDocument(pool, { client_id, document_id }, req.portalUser.user_type || 'other');
+      items.push({ ...m, question_count: Number(m.question_count), can_start: !!open && !!forYou, not_for_you: !!open && !forYou });
     }
     res.json({ items });
   } catch (err) {

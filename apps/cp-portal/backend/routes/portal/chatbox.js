@@ -14,6 +14,12 @@ const { resolveConversation, recordMessage, bestEffort } = require('../../utils/
 const { chatStubEnabled, stubReply } = require('../../utils/chatStub');
 const { systemAudit } = require('../../utils/audit');
 
+// Rohith, 2026-11-10 (wording: John, Head of Medical Affairs). A question about a use
+// the approved content does not cover goes to Medical Information, where a person
+// answers it and the answer is recorded. The assistant does not answer it from
+// nearby content. Applies to every client's prompt and cannot be switched off.
+const OFF_LABEL_RULE = '\n\nOFF-LABEL QUESTIONS: If the question asks about a use the approved content does not state as approved — another indication, another patient group, another dose, schedule or route, or a combination with another medicine — do not answer it and do not guess, even if some content looks related. Say in one or two sentences that questions about uses outside the approved prescribing information are answered by the Medical Information team, and that the person can send their question with "Submit Inquiry". Do not say whether the use is safe or effective.';
+
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
   return row ? row.is_enabled === 1 : false;
@@ -95,6 +101,7 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
         ? `\n\nUse ONLY the following approved portal content to answer. Cite sources by their [number]. If the answer is not in this content, say you don't have that information and suggest contacting the medical team.\n\n--- APPROVED CONTENT ---\n${contextBlock}\n--- END CONTENT ---`
         : `\n\nYou have no matching approved content for this question. Do not invent specifics — say you don't have that information and suggest contacting the medical team.`,
       '\n\nIMPORTANT: You provide general information only, grounded in the approved content above. Always advise users to consult their healthcare provider for medical decisions. Never provide diagnoses or treatment recommendations beyond the approved content.',
+      OFF_LABEL_RULE,
     ].join('');
 
     // Sources surfaced to the client for citation display.
