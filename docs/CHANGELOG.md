@@ -122,7 +122,7 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 **Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
 **Why:** No case record, calculation or access rule changed. One audit-trail gap is closed (a user created through the platform route now gets its audit record), and two columns move from run-time creation into the schema.
 
-**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation; reason for change on Additional Fields where Compliance Controls is on.
+**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation; reason for change where Compliance Controls is on (a case's own fields, Additional Fields, contact edits, bulk changes on the Cases page).
 
 - Platform create-user route: the user was created but the reply said "Email already exists", with no temporary password and no audit record. Now answers correctly — `backend/routes/platformAdmin.js`
 - Consent records and 19 other routes (bridge API, address lookup, case presence, data portability, sign-out) could leave a request unanswered when a query failed. They now answer with an error — `backend/middleware/errorHandler.js` and the route files
@@ -130,7 +130,9 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Clone Organisation called an address that does not exist and always failed; it now calls the working one — `frontend/src/modules/mimsadmin/components/OrganisationsView.jsx`
 - Ten routes answer bad input as a request error (400, 404 or 409) instead of a server error — `backend/routes/admin/accessConfigurations.js`, `workflowEngine.js`, `aiAssistant.js`, `backend/routes/integrations/`
 - ICSR gateway settings are read from the columns that exist; behaviour is still mock, as nothing saves these settings yet — `backend/services/pv/gatewayConfig.js`
-- Reason for change (Compliance Controls, off by default): asked once at Save for the Additional Fields block, required by the server, and stored in the field history with who, when, old and new value. Before, it was asked per keystroke and never stored. The core case fields still ask per keystroke and drop the reason: not changed here — `frontend/src/modules/cases/hooks/useCaseForm.js`, `backend/routes/cases.js`
+- Reason for change (Compliance Controls, off by default): asked once at Save, required by the server (422 `REASON_REQUIRED`), and stored in the field history with who, when, old and new value. Covers a case's own fields (status, owner, priority, dates, description, notes), Additional Fields, editing a contact, and bulk changes on the Cases page. Before, it was asked per keystroke and never stored — `backend/routes/cases.js`, `backend/routes/caseContacts.js`, `frontend/src/modules/cases/hooks/useCaseForm.js`, `frontend/src/shared/components/WiredField.jsx`
+- 37 more routes that ran a query before their error handling began could leave a request unanswered; each now passes the failure on — route files under `backend/routes/`
+- Migration 190: the help topics for the removed Policy Graph and Content Intelligence screens are marked inactive and no longer seeded or counted — `backend/database/migrations/190_retire_help_topics_for_removed_screens.js`, `help-seed/help_articles_seed.json`
 - Migration 189 drops twenty tables no running code uses, each only where it holds no rows; the outcome is in `audit_logs` (entity `unused_tables`) — `backend/database/migrations/189_drop_unused_empty_tables.js`
 - Removed the policy graph routes (no screen used them)
 - Frontend lint runs in CI; 585 style rules no screen names removed
@@ -163,7 +165,8 @@ the ones a validation plan should name.
 - Removed eight unused files, including an old script with passwords written in it — `browser-verify.js`, three unused services, four unused screen helpers
 - Removed two unused packages: `openai` (the chat calls that provider directly) and `react-grid-layout`
 - Admin Users: a "Reset two-step" button (the route existed, no button reached it). Language: "Retranslate All Content", shown only while machine translation is on
-- Removed the reply templates routes (no screen used them) and 219 style rules no screen names
+- Removed the reply templates routes (no screen used them) and 219 style rules no screen names. The `cp_templates` table stays: it holds two rows in dev
+- Tests only: the two portal session tests run on a user the test seed creates; one test file that checked removed buttons is gone — `e2e/`, `backend/tests/seed-e2e.js`
 
 ### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
 
