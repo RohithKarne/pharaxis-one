@@ -229,6 +229,8 @@ app.use('/api/portal/search',        require('./routes/portal/search'));
 app.use('/api/portal/personal',      require('./routes/portal/personal'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 app.use('/api/portal/training',      require('./routes/portal/training'));   // CPPM-15
+app.use('/api/portal/clarifications',  require('./routes/portal/clarifications'));
+app.use('/api/portal/field-insights',   require('./routes/portal/fieldInsights'));
 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 // CP-14: returns the tick fn (no side effects) so it can be driven either by the

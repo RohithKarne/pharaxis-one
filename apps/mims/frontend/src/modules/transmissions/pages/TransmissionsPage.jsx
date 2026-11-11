@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import SafetyReconciliationPanel from '../components/SafetyReconciliationPanel'
 import '../transmissions.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import useRememberedFilters from '../../../shared/hooks/useRememberedFilters.js'
@@ -64,6 +65,7 @@ export default function TransmissionsPage() {
   const [error,      setError]      = useState(null)
   const [statusCounts, setStatusCounts] = useState({})
   const [systems,    setSystems]    = useState([])
+  const [activeView, setActiveView] = useState('transmissions')
 
   // filters, kept for this user so they are still set on return
   const [filters, setFilters] = useRememberedFilters('transmissions', { search: '', system: 'All', status: 'All', fromDate: '', toDate: '' })
@@ -128,12 +130,53 @@ export default function TransmissionsPage() {
         <div className="tx-header">
           <div className="tx-header-left">
             <h1 className="tx-title">Transmissions</h1>
-            <span className="tx-subtitle">Outbound case transmissions to external systems</span>
+            <span className="tx-subtitle">Outbound case transmissions and pharmacovigilance reconciliation</span>
           </div>
           <button className="tx-refresh-btn" onClick={() => { logScreenEvent(token, 'REFRESH', {}); fetchEntries() }} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
+
+        {/* ── Subtab Navigation ───────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 10, margin: '14px 0 18px 0', borderBottom: '1px solid #E2E8F0', paddingBottom: 10 }}>
+          <button
+            type="button"
+            onClick={() => setActiveView('transmissions')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: 'none',
+              background: activeView === 'transmissions' ? '#2563EB' : '#F1F5F9',
+              color: activeView === 'transmissions' ? '#fff' : '#475569',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Outbound Transmissions Log
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('reconciliation')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: 'none',
+              background: activeView === 'reconciliation' ? '#2563EB' : '#F1F5F9',
+              color: activeView === 'reconciliation' ? '#fff' : '#475569',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Safety Reconciliation Engine (GVP VI)
+          </button>
+        </div>
+
+        {activeView === 'reconciliation' ? (
+          <SafetyReconciliationPanel headers={headers} />
+        ) : (
+          <>
 
         {/* ── Filters ─────────────────────────────────────────────────── */}
         {/* Reconciliation (14 Oct 2026): AE and PC cases that have not left MIMS. */}
@@ -311,6 +354,8 @@ export default function TransmissionsPage() {
               Next
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
     </MIMSLayout>

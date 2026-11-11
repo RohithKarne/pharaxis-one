@@ -151,7 +151,29 @@ export default function CaseBridgePanel({ caseId, headers }) {
                 )}
               </div>
               <div className="cf-bridge-q-text">{q.question}</div>
-              {q.answer_text && <div className="cf-bridge-note" style={{ whiteSpace: 'pre-wrap' }}>{q.answer_text}</div>}
+              {!q.answered_at && !q.withdrawn_at && q.token && (
+                <div style={{ marginTop: 6, padding: '6px 10px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                  <span style={{ color: '#047857', fontWeight: 600 }}>🔗 Magic Link (72h):</span>
+                  <code style={{ color: '#334155' }}>{`/portal/clarification?token=${q.token.slice(0, 12)}...`}</code>
+                  <button
+                    type="button"
+                    className="cf-bridge-link"
+                    style={{ marginLeft: 'auto', fontWeight: 600 }}
+                    onClick={() => {
+                      const link = `${window.location.origin}/portal/clarification?token=${q.token}`
+                      navigator.clipboard?.writeText(link)
+                      alert('Copied direct clarification magic link to clipboard!')
+                    }}
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              )}
+              {q.answer_text && (
+                <div className="cf-bridge-note" style={{ whiteSpace: 'pre-wrap', marginTop: 6, background: '#F0FDF4', border: '1px solid #86EFAC', padding: '6px 10px', borderRadius: 4, color: '#166534' }}>
+                  <strong>✓ Physician Clarification:</strong> {q.answer_text}
+                </div>
+              )}
             </li>
           ))}
         </ul>

@@ -391,6 +391,7 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/caseContacts'));
   r.use(prefix || '/', require('./routes/caseMI'));
   r.use(prefix || '/', require('./routes/caseAE'));
+  r.use(prefix || '/', require('./routes/pvReconciliation'));
   r.use(prefix || '/', require('./routes/casePC'));
   r.use(prefix || '/', require('./routes/caseQA'));
   r.use(prefix || '/', require('./routes/notifications'));

@@ -12,6 +12,7 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const pool = require('../database/db');
 const { authenticate } = require('../middleware/auth');
@@ -28,7 +29,8 @@ async function bridgeInfo(caseId) {
       WHERE c.id = ? LIMIT 1`, [caseId]);
   if (!c) return null;
   const [questions] = await pool.execute(
-    `SELECT q.id, q.question, q.asked_at, q.answered_at, q.answer_comment_id, q.withdrawn_at, COALESCE(u.name, u.email) AS asked_by_name,
+    `SELECT q.id, q.question, q.asked_at, q.answered_at, q.answer_comment_id, q.withdrawn_at, q.token, q.token_expires_at, q.token_used_at,
+            COALESCE(u.name, u.email) AS asked_by_name,
             ac.comment AS answer_text
        FROM case_reporter_questions q LEFT JOIN users u ON u.id = q.asked_by
        LEFT JOIN case_comments ac ON ac.id = q.answer_comment_id AND ac.case_id = q.case_id
@@ -90,13 +92,15 @@ router.post('/cases/:id/reporter-questions', authenticate, async (req, res) => {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 72 * 3600 * 1000);
       const [r] = await conn.execute(
-        'INSERT INTO case_reporter_questions (org_id, case_id, question, asked_by) VALUES (?, ?, ?, ?)',
-        [owned.org_id, owned.id, question, req.user.userId]);
+        'INSERT INTO case_reporter_questions (org_id, case_id, question, asked_by, token, token_expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [owned.org_id, owned.id, question, req.user.userId, token, expiresAt]);
       // The portal reads what changed by this time; without it the question never leaves.
       await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [owned.id]);
       await writeCaseAudit(owned.id, req.user.userId, req.user.email, 'REPORTER_QUESTION_ASKED', 'reporter_question', null,
-        `#${r.insertId} via ${info.source.name}: ${question}`, conn);
+        `#${r.insertId} via ${info.source.name} (magic link generated): ${question}`, conn);
       await conn.commit();
     } catch (err) {
       await conn.rollback().catch(() => {});
@@ -126,6 +130,123 @@ router.post('/cases/:id/reporter-questions/:qid/withdraw', authenticate, async (
   } catch (err) {
     logger.error({ err, case_id: req.params.id }, 'reporter question withdraw failed');
     res.status(500).json({ error: 'The question could not be withdrawn.' });
+  }
+});
+
+// ─── PUBLIC MAGIC-LINK TWO-WAY REPORTER DIALOGUE ENDPOINTS ──────────────────
+
+// Read question details using magic link token
+router.get('/bridge/clarifications/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token || token.length < 16) return res.status(400).json({ error: 'Invalid verification token.' });
+
+    const [[q]] = await pool.execute(
+      `SELECT q.id, q.case_id, q.question, q.asked_at, q.answered_at, q.withdrawn_at,
+              q.token_expires_at, q.token_used_at, c.case_number, c.product_name, c.case_type,
+              ac.comment AS answer_text
+         FROM case_reporter_questions q
+         JOIN cases c ON c.id = q.case_id
+         LEFT JOIN case_comments ac ON ac.id = q.answer_comment_id
+        WHERE q.token = ? LIMIT 1`,
+      [token]
+    );
+
+    if (!q) return res.status(404).json({ error: 'Clarification request not found or invalid link.' });
+
+    const isExpired = q.token_expires_at ? new Date(q.token_expires_at) < new Date() : false;
+    const isAnswered = !!q.answered_at || !!q.token_used_at;
+    const isWithdrawn = !!q.withdrawn_at;
+
+    res.json({
+      question_id: q.id,
+      case_number: q.case_number,
+      product_name: q.product_name,
+      case_type: q.case_type,
+      question: q.question,
+      asked_at: q.asked_at,
+      expires_at: q.token_expires_at,
+      is_expired: isExpired,
+      is_answered: isAnswered,
+      is_withdrawn: isWithdrawn,
+      answer_text: q.answer_text,
+    });
+  } catch (err) {
+    logger.error({ err }, 'bridge clarification lookup failed');
+    res.status(500).json({ error: 'Could not retrieve clarification details.' });
+  }
+});
+
+// Submit doctor response using magic link token
+router.post('/bridge/clarifications/:token/reply', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const answer = String(req.body?.answer || '').trim();
+    const reporterName = String(req.body?.reporter_name || 'Reporting Physician').trim();
+
+    if (!answer || answer.length < 5) {
+      return res.status(400).json({ error: 'Please enter your clinical response (minimum 5 characters).' });
+    }
+
+    const [[q]] = await pool.execute(
+      `SELECT q.id, q.case_id, q.org_id, q.token_expires_at, q.answered_at, q.withdrawn_at, c.case_number
+         FROM case_reporter_questions q
+         JOIN cases c ON c.id = q.case_id
+        WHERE q.token = ? LIMIT 1`,
+      [token]
+    );
+
+    if (!q) return res.status(404).json({ error: 'Clarification request not found.' });
+    if (q.withdrawn_at) return res.status(410).json({ error: 'This clarification request was withdrawn by Medical Affairs.' });
+    if (q.answered_at) return res.status(409).json({ error: 'This clarification has already been answered.' });
+    if (q.token_expires_at && new Date(q.token_expires_at) < new Date()) {
+      return res.status(410).json({ error: 'This clarification request has expired (72-hour limit exceeded). Please contact Medical Affairs directly.' });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Insert into case comments as external reporter comment
+      const commentText = `[Physician Response from ${reporterName}]: ${answer}`;
+      const [commentRes] = await conn.execute(
+        'INSERT INTO case_comments (case_id, org_id, user_id, comment, created_at) VALUES (?, ?, NULL, ?, NOW())',
+        [q.case_id, q.org_id, commentText]
+      );
+
+      // Update question record
+      await conn.execute(
+        'UPDATE case_reporter_questions SET answered_at = NOW(), token_used_at = NOW(), answer_comment_id = ? WHERE id = ?',
+        [commentRes.insertId, q.id]
+      );
+
+      // Move case change time and audit
+      await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [q.case_id]);
+      await writeCaseAudit(
+        q.case_id,
+        null,
+        reporterName,
+        'REPORTER_QUESTION_ANSWERED',
+        'reporter_question',
+        null,
+        `Question #${q.id} answered via portal magic link: ${answer.slice(0, 100)}`,
+        conn
+      );
+
+      await conn.commit();
+      res.json({
+        success: true,
+        message: 'Thank you. Your clinical clarification has been received and added to the case record.',
+      });
+    } catch (err) {
+      await conn.rollback().catch(() => {});
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    logger.error({ err }, 'bridge clarification reply failed');
+    res.status(500).json({ error: 'Could not record your clarification.' });
   }
 });
 

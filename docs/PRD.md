@@ -103,7 +103,7 @@ Medical Information Management System. One installation serves many pharma organ
 
 | Item | Problem | Status |
 |---|---|---|
-| **Inspector Export (cross-case)** — MIMS-62 | An inspector asks for a body of records; MIMS signs exports for one case only. Hand-assembling 400 exports invites errors | Candidate. Needs the lock. Owner: Saad. First pass would: export the field-level audit across cases by user, date, type, organisation; sign it; lift the 10,000-row cap; generate in the background; log the export itself; PDF and CSV; state the filter and row count; enforce organisation scope; add the button |
+| **Inspector Export (cross-case)** — MIMS-62 | An inspector asks for a body of records; MIMS signs exports for one case only. Hand-assembling 400 exports invites errors | Implemented on feat/strategic-enhancements-seven-features (locked by Rohith 2026-11-11). Exports field-level audit across cases by user, date, type, organisation with SHA-256 seal, PDF and CSV |
 | Safety and CRM integrations (Argus, Veeva, TrackWise, Salesforce) | — | Future |
 | MIMS Analytics screen | Placeholder only | Deferred by Rohith |
 | A demo environment anyone outside can open | Nothing is deployed | Waits on Rohith choosing a cloud |

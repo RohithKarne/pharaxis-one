@@ -20,6 +20,7 @@ const { raiseAlert, releaseResolved } = require('../../services/adminAlerts');
 const passwordRules = require('../../utils/passwordRules');
 const sessions = require('../../utils/sessions');
 const twoFactor = require('../../utils/twoFactor');
+const { verifyDoctorCredentials } = require('../../services/credentialVerificationService');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 // E5: a browser the doctor asked us to remember skips the sign-in code for this long.
@@ -75,6 +76,17 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// POST /api/portal/auth/verify-license — Feature 7: Doctor credential verification
+router.post('/verify-license', async (req, res) => {
+  try {
+    const { license_number, registry_type, country } = req.body || {};
+    const result = await verifyDoctorCredentials({ licenseNumber: license_number, registryType: registry_type, country });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/portal/auth/request-access — CPPM-113. A doctor with no account asks for
 // one: name, email, role and country. Nothing can sign in until the client's admin
 // approves it, which sends the same set-password invitation an admin-created account
@@ -82,7 +94,7 @@ router.post('/register', async (req, res) => {
 // used to find out who has an account.
 router.post('/request-access', async (req, res) => {
   try {
-    const { client_code, first_name, last_name, email, user_type, country, weekly_email } = req.body || {};
+    const { client_code, first_name, last_name, email, user_type, country, weekly_email, license_number, registry_type } = req.body || {};
     const f = String(first_name || '').trim(), l = String(last_name || '').trim();
     const e = String(email || '').trim().toLowerCase(), c = String(country || '').trim();
     if (!client_code || !f || !l || !e || !c || !user_type) {
@@ -90,6 +102,19 @@ router.post('/request-access', async (req, res) => {
     }
     if (e.length > 254 || f.length > 255 || l.length > 255 || c.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+
+    // Feature 7: Validate doctor credentials before accepting access request
+    let licenseVerified = 0;
+    if (['doctor', 'healthcare_professional', 'hcp'].includes(user_type)) {
+      const v = await verifyDoctorCredentials({ licenseNumber: license_number, registryType: registry_type, country: c });
+      if (!v.valid) {
+        return res.status(422).json({
+          error: v.error || 'Medical professional registration requires a valid, active medical license number.',
+          status: v.status,
+        });
+      }
+      licenseVerified = 1;
+    }
 
     const [[client]] = await pool.execute('SELECT id, code, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -105,14 +130,29 @@ router.post('/request-access', async (req, res) => {
     const weeklyEmail = weekly_email === true;
     const prefs = JSON.stringify({ news: true, documents: true, safety: true, weekly_email: weeklyEmail });
     try {
-      const [info] = await pool.execute(
-        `INSERT INTO cp_portal_users
-           (client_id, first_name, last_name, email, password, user_type, country,
-            is_active, is_verified, user_type_confirmed, email_verified, token_version,
-            access_status, access_requested_at, notif_prefs_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP(), ?)`,
-        [client.id, f, l, e, unusablePassword, user_type, c, prefs]
-      );
+      let info;
+      try {
+        const [resIns] = await pool.execute(
+          `INSERT INTO cp_portal_users
+             (client_id, first_name, last_name, email, password, user_type, country,
+              is_active, is_verified, user_type_confirmed, email_verified, token_version,
+              access_status, access_requested_at, notif_prefs_json,
+              license_number, registry_type, license_verified, license_verified_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP(), ?, ?, ?, ?, IF(?=1, UTC_TIMESTAMP(), NULL))`,
+          [client.id, f, l, e, unusablePassword, user_type, c, prefs, license_number || null, registry_type || null, licenseVerified, licenseVerified]
+        );
+        info = resIns;
+      } catch (colErr) {
+        const [resIns] = await pool.execute(
+          `INSERT INTO cp_portal_users
+             (client_id, first_name, last_name, email, password, user_type, country,
+              is_active, is_verified, user_type_confirmed, email_verified, token_version,
+              access_status, access_requested_at, notif_prefs_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 'requested', UTC_TIMESTAMP(), ?)`,
+          [client.id, f, l, e, unusablePassword, user_type, c, prefs]
+        );
+        info = resIns;
+      }
       await systemAudit('portal access request', client.id, 'ACCESS_REQUESTED', 'portal_user', info.insertId, { user_type, weekly_email: weeklyEmail });
       // Tell the client's admins. One open alert per portal, however many requests
       // arrive, so a burst of requests cannot become a burst of emails. It carries no
