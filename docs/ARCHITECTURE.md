@@ -1001,7 +1001,7 @@ One-time script to seed defaults for orgs created before Sprint 10.
 node mims/backend/scripts/backfill-existing-orgs.js
 ```
 
-Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Novartis) + org 26 (Vanaja Review Co.).
+Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Calder Therapeutics) + org 26 (Vanaja Review Co.).
 
 ## In-app help articles (was MIMS Help Memory File)
 *Sprint 21 — In-App Help System*

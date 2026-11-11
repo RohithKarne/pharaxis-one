@@ -24,7 +24,7 @@ test.describe('CP Portal Negative & Edge Tests', () => {
   // that refusal into a context value nothing read, so any invented code served
   // the default portal shell — header, safety panel, chat widget and all.
   test('an unknown client code does not serve a portal', async ({ page }) => {
-    await page.goto('/portal/zzzznotreal/');
+    await page.goto('portal/zzzznotreal/');
     await expect(page.getByRole('heading', { name: /portal not available/i })).toBeVisible();
     await expect(page.getByText(/Welcome to the Medical Portal/i)).toHaveCount(0);
   });

@@ -34,6 +34,7 @@ uploads/
 # Runtime outputs
 test-results/
 playwright-report/
+apps/cp-portal/e2e/.e2e-seed.json
 .playwright-cli/
 .playwright-mcp/
 .claude/worktrees/
@@ -41,7 +42,7 @@ docs/tasks/todo.md
 
 # Local generated backup/archive artifacts
 apps/**/backend/scripts/cleanup-backups/
-apps/**/backend/scripts/novartis-full-scope-backups/
+apps/**/backend/scripts/*-full-scope-backups/
 
 # Runtime storage/data artifacts
 apps/**/backend/storage/email_attachments/

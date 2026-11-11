@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { seededHcp } from './seedSession.js';
 
 // CP-62 regression: the fake "HCP License Verification" card on the portal Profile
 // page (hardcoded "Verified HCP" badge, fake NPI, no-op Re-Verify) was removed.
@@ -56,8 +57,8 @@ const PORTAL_SECRET =
   readEnvValue(PORTAL_ENV_FILE, 'CP_PORTAL_JWT_SECRET') ||
   DEV_FALLBACK_SECRET;
 
-// Seeded active, email-verified HCP for the Novartis (client_id 4) portal.
-const HCP = { userId: 2, clientId: 4, email: 'hcp1@novartis-demo.com', name: 'Dr. Sarah Chen', user_type: 'hcp', tv: 0 };
+// The active, email-verified HCP that backend/tests/seed-e2e.js creates.
+const { clientCode: CLIENT, session: HCP } = seededHcp();
 
 // Minimal HS256 JWT signer (no external dependency) — the backend verifies with
 // the same secret and algorithm, so a self-signed dev token authenticates.
@@ -72,21 +73,19 @@ function signHs256(payload, secret) {
 }
 
 test.describe('CP-62 — HCP License Verification card removed', () => {
-  test.beforeEach(async ({ context }) => {
+  test.beforeEach(async ({ context, page, baseURL }) => {
     const token = signHs256(HCP, PORTAL_SECRET);
     await context.addCookies([{
-      name: 'cp_portal_token', value: token, domain: 'localhost', path: '/',
+      name: 'cp_portal_token', value: token, domain: new URL(baseURL).hostname, path: '/',
     }]);
 
-    // Fail loudly on a rejected session instead of letting the run land on the
-    // login page and report a missing element. A 401 here means the secret this
-    // spec signed with is not the one the running backend verifies with.
-    const res = await context.request.get('/api/portal/auth/me');
-    expect(res.status(),
-      `Portal session was rejected (HTTP ${res.status()}). The signed token does not match ` +
-      `the running backend's CP_PORTAL_JWT_SECRET — check that ${PORTAL_ENV_FILE} belongs to ` +
-      `the backend serving this run, or export CP_PORTAL_JWT_SECRET to match it.`,
-    ).toBe(200);
+    // The portal now keeps a server-side record of every session (sign-in
+    // Tier 1, 12 Oct 2026), so a self-signed token alone reads as signed out.
+    // This spec is about the Profile screen, not sign-in: answer the session
+    // probe here, as cp64 does.
+    await page.route('**/api/portal/auth/me', route =>
+      route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ user: { id: HCP.userId, first_name: 'Sarah', last_name: 'Chen', email: HCP.email, user_type: 'hcp' }, submissions: [] }) }));
   });
 
   test('Profile page shows no fake license-verification control', async ({ page }) => {
@@ -94,7 +93,7 @@ test.describe('CP-62 — HCP License Verification card removed', () => {
     // fetch can win that race and bounce to /login. Retry the load so this test
     // measures the license card, not that pre-existing app race.
     for (let attempt = 0; attempt < 3; attempt++) {
-      await page.goto('http://localhost:5174/portal/novartis/profile');
+      await page.goto(`portal/${CLIENT}/profile`);
       try {
         await expect(page.getByText('Profile Details')).toBeVisible({ timeout: 5000 });
         break;

@@ -30,7 +30,6 @@
     "case-transmission-sla": "/transmissions",
     "inbox-operational-sla": "/mims-admin",
     "notification-delivery-retry": "/mims-admin",
-    "novartis-daily-simulation": "/mims-admin",
     "extra-org-daily-simulation": "/mims-admin",
     "login-audit-archive": "/mims-admin",
     "session-cleanup": "/session-management",
