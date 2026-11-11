@@ -1,29 +1,108 @@
-# Architecture — Pharaxis One
+# Architecture & System Design — Pharaxis One
 
-Stack, folders, data flow, how to run it. One part for the whole repository, then one part per app.
+What the system is made of and why (Part A), then how each part works (Part B). One document for the whole repository.
 
-> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Built 2026-11-10 from the old SOP's CP Portal and MIMS sections, the old architecture and database notes, the backup and bridge runbooks, the MIMS help index and the two app READMEs (all now in git history). Stale lines fixed on the way: both apps keep the sign-in token in an HttpOnly cookie, not browser storage; push is enabled through pull requests.
+> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Renamed from `ARCHITECTURE.md` and split into two parts on 2026-11-11 (Rohith); every fact below was checked against `main` that day. Built 2026-11-10 from the old SOP's CP Portal and MIMS sections, the old architecture and database notes, the backup and bridge runbooks, the MIMS help index and the two app READMEs (all in git history).
 
-## The whole picture
+**How to read it.** If a statement would stay true after the code was rewritten in another language, it belongs in Part A. If it names a table, route, job, setting or file, it belongs in Part B.
+
+| Part | Answers | Sections |
+|---|---|---|
+| **A. Architecture** | What is it made of? Where does it run? Who may do what? What did we decide, and why? | A1 Context · A2 Building blocks · A3 Technology · A4 Where it runs · A5 Security model · A6 The bridge · A7 Key decisions · A8 Targets and limits |
+| **B. System Design** | How does each flow, job, table, route and screen work? How do we run, back up and go live? | B1 Folders · B2 Key flows · B3 Background jobs · B4 CP Portal design · B5 MIMS design · B6 Running it · B7 Go-live runbook · Appendix: help articles |
+
+---
+
+# Part A — Architecture
+
+## A1. Context
+
+Two products, sold separately, joined by one bridge. Pharaxis One has no customers; a "client" or "organisation" below is a pharma company in the data.
 
 ```
-                          developer machine (local only — no cloud yet)
- ┌──────────────────────────────────────────────────────────────────────────────┐
- │                                                                              │
- │  CP Portal frontend :5174 ──/api──► CP Portal backend :4000 ──► MySQL        │
- │   (Vite + React)                     (Node + Express)           pharaxis_    │
- │                                        │   │                    cp_portal_dev│
- │                                        │   └──► ClamAV :3310 (virus check)   │
- │                         OAuth token +  │                                     │
- │                         POST cases     ▼   ▲ reads changes every 5 min       │
- │  MIMS frontend :5173 ──/api──► MIMS backend :3000 ──────────────► MySQL      │
- │   (Vite + React)                (Node + Express)                 pharaxis_   │
- │                                   │                              mims_dev    │
- │                                   └──► mailboxes (IMAP in, SMTP out)         │
- └──────────────────────────────────────────────────────────────────────────────┘
+        doctors, patients, visitors                    medical-information team
+                    │                                            │
+                    ▼                                            ▼
+     ┌──────────────────────────────┐    reports, files   ┌──────────────────────────────┐
+     │ CP Portal  (outside)          │ ──────────────────► │ MIMS  (inside)               │
+     │ one branded portal per client │ ◄────────────────── │ one installation, many       │
+     │ + admin panel for the client  │  portal asks: what  │ organisations, each separate │
+     └──────────────────────────────┘  changed? (status,  └──────────────────────────────┘
+                    │                   answers, questions)        │        │
+                    ▼                                               ▼        ▼
+              ClamAV, SMTP, AI                                IMAP/SMTP   AI, OCR, S3
 ```
 
-**The bridge.** The portal always starts the exchange; MIMS never calls the portal.
+- **CP Portal** faces the outside world: content, questions, side-effect and complaint reports, a reader's own requests.
+- **MIMS** is the inside system of record: cases (MI, AE, PC), signed answer letters, content management, hand-offs to safety and quality, reports.
+- **The portal always starts the exchange.** MIMS never calls the portal, so MIMS needs no route to the portal.
+
+## A2. Building blocks
+
+```
+ CP Portal                                         MIMS
+ ─────────────────────────────────────────         ─────────────────────────────────────────────
+ Browser: React SPA (admin + portal)               Browser: React SPA (one app, screens by grant)
+   │  /api, /uploads (same origin)                    │  /api (same origin), WebSocket
+   ▼                                                  ▼
+ Node/Express API (one process)                    Node/Express API (main process)
+   ├─ in-process timers (or external cron)           ├─ child process: email poller (IMAP in)
+   ├─ ClamAV over TCP (every upload)                 ├─ child process: scheduler (≈20 cron jobs,
+   ├─ SMTP per client (outbox with retries)          │                  email worker)
+   ├─ AI provider (assistant, per client)            ├─ Redis (optional: cache, presence, events)
+   └─ MySQL database: CP Portal                      ├─ AI providers, OCR, file store (disk or S3)
+                                                     └─ MySQL database: MIMS
+```
+
+| Block | CP Portal | MIMS |
+|---|---|---|
+| User interface | One React app with two halves: Admin Panel (`/admin`) and the client portals (`/portal/<code>`) | One React app; menu and routes follow the person's screens |
+| Server | One Express process; timers run inside it unless `CP_SCHEDULER=external` | Express main process plus two forked workers (email poller, scheduler); WebSocket for presence and live updates |
+| Data | One MySQL database; files on local disk | One MySQL database (many organisations, separated by `org_id`); files on disk or S3 |
+| Cache and messaging | None | Redis when present; the app falls back to the database without it |
+| Outside services | ClamAV, client SMTP, AI provider (OpenAI or Anthropic), free machine translation (opt-in, news and FAQs only) | Organisation mailboxes (IMAP/SMTP), platform SMTP, AI providers (OpenAI or Anthropic), OCR, S3 |
+| Integration surface | Calls MIMS's public API (`/api/v1`) | Public API platform (`/api/v1`, OAuth client credentials, scopes, webhooks) |
+
+## A3. Technology
+
+Versions are those in each `package.json` on `main` (2026-11-11). CI builds on **Node 20**.
+
+| Layer | CP Portal | MIMS |
+|---|---|---|
+| Server | Express 4.22, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.4, nodemailer 10.3, pdfkit 0.20, express-rate-limit 8.7, @simplewebauthn/server 13, jose 6 | Express 4.18, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.5, nodemailer 10.1, imapflow 1.6, mailparser 3.14, node-cron 4.2, ioredis 5.10, ws 8.22, express-rate-limit 7.5, @simplewebauthn/server 13, jose 6, joi 18.3 |
+| AI | openai 6.29, @anthropic-ai/sdk 0.78 (portal assistant) | Provider abstraction for OpenAI and Anthropic (inbox classifier, response drafter, summariser) |
+| Browser | React 18.3, Vite 7.3, react-router-dom 6.30, DOMPurify 3.4 | React 19.2, Vite 8.0, react-router-dom 7.18, TipTap 3.31, jsPDF 4.2, DOMPurify 3.4 |
+| Database | MySQL 8.0 (native install, no Docker); numbered SQL migrations folded into `0000_baseline.sql` | MySQL 8.0; numbered JavaScript migrations, run at start-up |
+| Tests (kept, run in CI) | Fresh-database checks, unit scripts | Jest, Supertest, Vitest, Testing Library; Playwright installed, not run in CI |
+
+## A4. Where it runs
+
+**Local only.** Both products run on one developer machine; no cloud, no deploy pipeline, no demo environment until Rohith picks a cloud (RULES.md › Getting a change to main).
+
+| | CP Portal | MIMS |
+|---|---|---|
+| Browser app | `:5174` (Vite dev server) | `:5173` (Vite dev server) |
+| API | `:4000` | `:3000` (bound to 127.0.0.1) |
+| Database | `pharaxis_cp_portal_dev` | `pharaxis_mims_dev` |
+| Shared services | MySQL 8 on `:3306` (one server, both databases); ClamAV on `:3310` | Same MySQL server; Redis on `:6379` when running |
+
+- **Environments:** dev only. Tests use their own databases (`*_test`); screen walks use throwaway copies whose mail and outside links are first pointed at local stand-ins (RULES.md › Never do).
+- **CI:** GitHub Actions per product, path-filtered, markdown ignored. Each runs Backend Syntax, Frontend Build, Quality Gate, Security Scan and Unit Tests (against a MySQL 8 service, Node 20). Not a required check: a person reads it and never merges red.
+- **Releases:** not tagged (paused 2026-10-04). Every change goes into `docs/CHANGELOG.md` with a revalidation flag.
+
+## A5. Security model
+
+| Concern | CP Portal | MIMS |
+|---|---|---|
+| Sign-in | Admin: password + second step (email code, authenticator app, backup code or passkey). Portal: password, optional emailed code per client, or single sign-on | Email/username, organisation choice, password; two-step per organisation (email code or authenticator app) and for platform admins; Google or Microsoft single sign-on per organisation; passkeys |
+| Session | JWT in an HttpOnly cookie (`cp_admin_token`, `cp_portal_token`); a `token_version` revokes old tokens; sessions recorded | JWT in an HttpOnly cookie (`mims_token`); sessions recorded and revocable; idle timeout per organisation (30 min default, 60 for platform admins) |
+| Who sees what | Five admin roles, one write table (`middleware/adminWritePolicy.js`); a reader's role (HCP, patient…) gates content; the role is set by the portal team and only confirmed by the reader | Tenancy by `org_id` from the token; seven screens per person (role default + personal differences); 32 server-checked permissions; case access own/all; platform admin above all |
+| Records | Audit trail of admin actions; reader confirmations of safety letters; consent records | Field-level case audit, transmission audit, login audit (kept 7 years), general audit; MI answers and content signed with password and reason (21 CFR Part 11) |
+| Data at rest | Integration secrets, cached MIMS token and visitors' private links encrypted (`CP_SECRET_ENCRYPTION_KEY`) | Mailbox passwords AES-256-GCM; SSO provider secrets encrypted (`SSO_CONFIG_ENCRYPTION_KEY`); outbound keys encrypted |
+| Inputs and outputs | Every upload virus-checked before download or forwarding; HTML sanitised; outbound calls refused to private addresses unless named (`CP_INTERNAL_INTEGRATION_HOSTS`); rate limits; `nosniff`, `SAMEORIGIN` headers | Rate limits on sign-in and account creation; security headers with a content-security policy (report-only by default); one mail gate: alert mail off unless `MIMS_ALERT_EMAIL` is on |
+| Password rules | History blocks reuse; reset by emailed link | Current + last 5 blocked; forced reset on first sign-in (known gap: it is asked before the two-step code — Varun) |
+
+## A6. The bridge
 
 ```
 Doctor sends a report in CP Portal
@@ -35,8 +114,8 @@ CP Portal saves it ──► gets a MIMS token (OAuth client credentials, 1 hour
 POST /api/v1/cases  (idempotent on the CP reference; attachments after virus check)
    │                         │
    │ fails                   ▼
-   ▼                  MIMS case appears (contacts, AE/PC versions, MI tab — what the case screen reads)
-retry 1, 2, 4, 8, 16 min     │
+   ▼                  MIMS case appears with the portal's notes under its header
+retry 1, 2, 4, 8, 16 min     │   (other answers, unmatched product, a possible side effect)
    │                         ▼
    ▼                  agent works the case; may leave a question for the doctor
 Sync Health shows            │   (stored on the case — MIMS does not send it)
@@ -49,135 +128,130 @@ late / failed / not covered  ▼
                       with MIMS ──► a missing report is sent again; a different one alerts
 ```
 
-`other_inquiry` stays in CP Portal by design.
+- **Principles:** the portal starts every exchange; every send is idempotent; nothing the bridge carries may be lost unseen (heartbeat, delivery targets, comparisons, the monthly Zero-Loss Report).
+- `other_inquiry` stays in CP Portal by design. Details: B2 and B4.
 
-## Folders
+## A7. Key decisions
+
+| Decision | What it means | Where recorded |
+|---|---|---|
+| Local only until a cloud is chosen | No deploy pipeline, no demo environment, no off-machine backup | Rohith; RULES.md › Getting a change to main (deploys removed 2026-09-24) |
+| Two products, one repository, sold separately | CP Portal and MIMS can each stand alone | PRD.md |
+| The portal always starts the bridge | MIMS needs no route to the portal | Go-live runbook (B7) |
+| Sessions in HttpOnly cookies, not browser storage | Page scripts cannot read a session | Both apps' auth code |
+| Safety alerts go live at once; a second person checks within 24 hours | A warning is never held back, and every alert is read twice | Rohith, 2026-10-10 and 2026-11-10 (PRD.md) |
+| A clinical trial needs a second person to publish | Whoever sent it for review cannot publish it | Rohith, 2026-10-10 (PRD.md) |
+| Outside machine translation off by default; never for safety alerts or documents | Regulated text does not leave for a free service | CP-65 (2026-07-31), CPPM-9 |
+| MI answers always start as DRAFT; SENT is final; Approve and Send are signed | 21 CFR Part 11 records | RULES.md › MIMS critical technical rules |
+| Case form fields with values are hidden, never deleted | Records keep their history | RULES.md › MIMS critical technical rules (2026-10-13) |
+| No new automated tests; existing ones run in CI | Regressions are found on screen | Rohith, 2026-09-20 (RULES.md › Proving it works) |
+
+## A8. Targets and limits
+
+| What | Target or limit |
+|---|---|
+| Report reaches MIMS | 15 minutes; 5 for a serious side effect; alert at twice the target |
+| Bridge job silent | Alert after three missed runs |
+| Inquiry Ledger (MIMS) | Red when waiting for an owner 8 h, serious side effect 2 h, with an owner 5 days |
+| Safety alert second check | 24 hours after it goes live |
+| Sign-in | Idle timeout 30 min (min 30) per organisation, 60 for platform admins; two-step locks after 3 wrong codes |
+| Content check-out (MIMS) | 2 hours, then released by a job |
+| Help articles | Stale after 90 days without review |
+| Login audit (MIMS) | Kept 7 years |
+| Backups | By hand, newest 14 kept, same machine — not disaster recovery |
+
+---
+
+# Part B — System Design
+
+## B1. Folders
 
 | Path | Holds |
 |---|---|
-| `apps/cp-portal/backend` | Express server, `routes/admin` (26 files), `routes/portal` (15), `database/migrations`, `utils`, `services` |
+| `apps/cp-portal/backend` | Express server (`server.js`), `routes/admin` (33 files), `routes/portal` (18), `services` (20), `utils` (39), `middleware`, `database/migrations` (62, ending 0063) |
 | `apps/cp-portal/frontend` | React app: `src/admin` (35 pages), `src/portal` (31 pages), `src/shared` |
-| `apps/mims/backend` | Express server, `routes`, `services`, `middleware`, `catalogs`, `database/migrations`, `regression-tests` |
-| `apps/mims/frontend` | React app; the real entry is `src/modules/max/App.jsx` |
+| `apps/mims/backend` | Express server, `routes` (121 files), `services` (153), `middleware` (14), `workers`, `catalogs`, `controllers`, `database/migrations` (167, ending 190), `regression-tests` |
+| `apps/mims/frontend` | React app; the entry is `index.html` → `src/modules/max/main.jsx` → `src/modules/max/App.jsx` |
 | `docs/scripts` | Developer scripts (each climbs to the repository root from its own folder) |
-| `.github/workflows` | CI per product (`ci-mims.yml`, `ci-cp-portal.yml`, shared `_app-ci.yml`), path-filtered, markdown ignored; release workflows (never run); PR labeler and label sync from `.github/labels.yml` |
+| `.github/workflows` | CI per product (`ci-mims.yml`, `ci-cp-portal.yml`, shared `_app-ci.yml`); release workflows (never run); PR labeler and label sync from `.github/labels.yml` |
 | `docs/scripts/github` | `bootstrap-product-ops.sh` (labels, environments), `apply-main-branch-protection.sh` |
 
-## Run it locally
+## B2. Key flows
 
-**Prerequisites:** Node 18+ (20 for CP Portal PDF reading), MySQL 8 at `/usr/local/mysql` on port 3306, ClamAV for CP Portal.
+**A side-effect report, end to end**
 
-```bash
-# CP Portal — backend (starts ClamAV too) and frontend, two terminals
-cd apps/cp-portal/backend && npm install && npm run dev
-cd apps/cp-portal/frontend && npm install && npm run dev
-
-# MIMS — backend and frontend together
-cd apps/mims && npm install && npm run dev:all
+```
+Portal form ──► CP saves submission ──► sync: build payload (reporter split, patient,
+(check your answers)                    other answers, side-effect hint on questions)
+                                            │
+                                            ▼
+                         MIMS POST /api/v1/cases ──► case + contacts + AE version
+                                            │        + bridge note (case comment)
+                                            ▼
+                         unassigned AE: supervisors told; serious: critical alert
+                                            │
+             CP receipt (fingerprint) ◄─────┘
 ```
 
-| App | Backend | Frontend | Health | Settings file |
-|---|---|---|---|---|
-| CP Portal | 4000 (`CP_PORT`) | 5174 | `GET /api/health` | `apps/cp-portal/backend/.env` from `.env.example` |
-| MIMS | 3000 (127.0.0.1) | 5173 | `GET /api/health` | `apps/mims/backend/.env` from `.env.example` |
+**An MI answer**
 
-Both Vite servers proxy `/api` (and `/uploads` for CP Portal) to their backend. Never commit a `.env`.
+```
+MIMS agent: screening answered ──► Build MI Response (template + published content)
+                                         │
+                       DRAFT ──Submit for Review──► READY ──Approve (password + reason,
+                                                            not the author)──► APPROVED
+                                                                                  │
+                                         SENT ◄──Send (password + reason)─────────┘
+                                          │  email in try/catch, logged on failure
+                                          ▼
+                       CP close-sync (5 min) ──► doctor sees the answer, PDF copy
+```
 
-**ClamAV (CP Portal).** Every uploaded file is checked before it can be downloaded or sent to MIMS. Without the scanner, portal attachments are held and admin uploads refused.
-- `brew install clamav`, then `freshclam` once.
-- `npm run dev` and `npm start` run `scripts/start-scanner.sh`, which starts `clamd` and `freshclam` in daemon mode.
-- `clamd.conf` needs `TCPSocket 3310`, `TCPAddr 127.0.0.1` and the same `DatabaseDirectory` as `freshclam.conf`. If `freshclam` fails with "NULL X509 store", add `CVDCertsDirectory /opt/homebrew/etc/clamav/certs` to both.
-- Settings: `CLAMAV_HOST` (127.0.0.1), `CLAMAV_PORT` (3310), `CLAMAV_TIMEOUT_MS` (30000). Held files are rescanned every minute.
+**A safety alert**
 
-**MIMS single sign-on and Microsoft 365.** Google and Microsoft sign-in are set per organisation in Admin Console › Access Configurations › Auth Policy (local only, SSO only, or both). Users pick their organisation first. Microsoft 365 authoring stores the edit link on the CM document; approvals stay in MIMS. Needs `MIMS_FRONTEND_BASE_URL`, `MIMS_BACKEND_BASE_URL`, `MIMS_ALLOWED_FRONTEND_ORIGINS`, `SSO_CONFIG_ENCRYPTION_KEY`. Provider secrets are stored encrypted; the screen shows only Configured or Missing.
+```
+Admin or content manager saves ──► live to doctors at once (or at its time) ──► readers told
+          │                                                                         │
+          ▼                                                                         ▼
+second_check_due_at = live + 24 h ──► To do today: "waiting for a second check"   high/critical:
+          │                                (red once overdue)                     "I have read this"
+          ▼
+another admin presses Second check (writer refused, 403) ──► SECOND_CHECK in the audit trail
+          │
+a change to what doctors read ──► check needed again
+```
 
-**MIMS tests.** `MYSQL_DATABASE=pharaxis_mims_test npm run test` and `npm run test:e2e` in `apps/mims`. Never against the dev database.
+## B3. Background jobs
 
-## Databases
+**CP Portal** — in-process timers, or the same work through `/api/internal/cron/…` with `CP_SCHEDULER=external` and `CP_CRON_SECRET`. A MySQL advisory lock stops two runs overlapping.
 
-| App | Database | Schema |
+| Timer | Every | Does |
 |---|---|---|
-| CP Portal | `pharaxis_cp_portal_dev` | `backend/database/migrations/0000_baseline.sql` plus numbered migrations |
-| MIMS | `pharaxis_mims_dev` | `backend/database/migrations`, run at start-up |
+| `scheduler-tick` | 1 min | Publishes scheduled news, documents and safety alerts and tells readers; weekly digest (Mon 08:00); email outbox retries; chat and consent clean-up past retention; rescans files held while ClamAV was down; alerts on waiting safety tasks, held files, late deliveries and waiting Other requests; safety-letter reminders |
+| `mims-retry` | 1 min (`MIMS_RETRY_INTERVAL_MS`) | Re-sends failed reports (1, 2, 4, 8, 16 min, then alert) |
+| `mims-close-sync` | 5 min (`MIMS_CLOSE_SYNC_INTERVAL_MS`) | Reads what changed in MIMS: answers, questions, closed, reopened |
+| `mims-reconcile` | 1 h (`MIMS_RECONCILE_INTERVAL_MS`) | Compares lists: side effects hourly, all reports nightly |
 
-- MySQL 8, native install (no Docker), one database per app, same server.
-- Settings: `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`.
-- Bootstrap accounts exist in code for local use only (`cpadmin`, `platform_admin`); change them anywhere shared.
-- Never commit `.env` files or SQL dumps.
-- Every new migration is folded into the baseline.
+**MIMS** — the scheduler child process runs these (`services/schedulerRegistry.js`); times are server time.
 
-## Backups
+| Job | When | Does |
+|---|---|---|
+| `workflow-sla-timers` | every minute | Workflow timers |
+| `webhook-delivery-dispatch` | every 2 min | Outbound webhook deliveries |
+| `runtime-health-watch`, `emir-poller`, `inquiry-ledger-watch` | every 5 min | Health checks; EMIR mailbox; red cases on the Inquiry Ledger |
+| `notification-delivery-retry` | every 10 min | Retries notifications |
+| `cm-release-stale-checkouts`, `scheduled-exports`, `case-state-sla` | every 15 min | Returns 2-hour check-outs; scheduled report sends; case state limits |
+| `case-transmission-sla`, `ae-handoff-deadlines`, `inbox-operational-sla`, `session-cleanup` | every 30 min | Hand-off and inbox limits; prunes expired sessions |
+| `login-audit-archive`, `dppr-enforcement` | daily 02:00 | Deletes login audit past retention; data-privacy rules (off unless `ENABLE_SCHEDULED_DPPR=true`) |
+| `pv-signal-detection` | daily 03:00 | Product-reaction signal detection |
+| `cm-content-auto-archive`, `cm-module-lifecycle`, `cm-expiry-alerts`, `cm-pre-expiry-reminders`, `cm-review-overdue` | daily 05:00–07:05 | Content lifecycle, expiry alerts and reminders |
+| `cm-review-reminders` | Mondays 08:00 | Review reminders |
+| `email-worker` (standalone) | polls every 15 s | Sends queued MI answer emails |
+| Email poller (child process) | every minute, per-mailbox intervals | IMAP intake; Email Case Import SLA every 15 min |
 
-- **CP Portal:** `docs/scripts/backup-cp-portal.sh` copies uploads and the database to `~/Pharaxis-Backups/cp-portal/<date>`, keeping the newest 14. Run by hand (Rohith declined a nightly schedule, 2026-10-27). Same machine, unencrypted: not disaster recovery.
-- **A database backup holds only where each file sits, not the file.** Back up each app's upload folder with its database and restore them together.
+## B4. CP Portal design
 
-| App | Files on disk |
-|---|---|
-| MIMS | `apps/mims/backend/storage` — org logos, CM documents, case attachments (or `STORAGE_LOCAL_ROOT`, or S3 with `STORAGE_PROVIDER=s3`), email attachments, original emails |
-| CP Portal | `apps/cp-portal/backend/uploads` — logos, documents, safety attachments, submission attachments. Local disk only |
-
-```bash
-# backup: database first, then files
-mysqldump -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" > backup.sql
-tar -czf mims-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/mims/backend storage
-tar -czf cp-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/cp-portal/backend uploads
-
-# restore, app stopped: database, then move the folder aside and unpack
-mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$RESTORE_DATABASE" < backup.sql
-mv apps/mims/backend/storage apps/mims/backend/storage.pre-restore
-tar -xzf mims-files-<stamp>.tar.gz -C apps/mims/backend
-```
-
-After a restore, open one logo and download one document named in the restored database. MIMS answers a missing logo with its home page, not an error — check it is an image.
-
----
-
-# CP Portal
-
-## Full Tech Stack
-
-### Backend
-| Component | Technology | Version / Detail |
-|-----------|-----------|-----------------|
-| Runtime | Node.js | v18+ |
-| Framework | Express | Latest stable |
-| Authentication | JSON Web Token | In an HttpOnly cookie (`cp_admin_token`, `cp_portal_token`) |
-| Database driver | mysql2/promise | Latest stable |
-| Email sending | nodemailer | Latest stable |
-| Translation engine | MyMemory API | Free, no API key, chunked text, fire-and-forget |
-
-### Frontend
-| Component | Technology | Version / Detail |
-|-----------|-----------|-----------------|
-| Framework | React | Latest stable |
-| Build tool | Vite | Latest stable |
-| Routing | react-router-dom | Latest stable |
-
-### Database
-| Component | Detail |
-|-----------|--------|
-| Engine | MySQL 8.0.45 (native install, NOT Docker) |
-| Location | `/usr/local/mysql/` on Mac |
-| Port | 3306 |
-| Database name | `pharaxis_cp_portal_dev` |
-| User | `devuser` / `devpass` |
-| Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass pharaxis_cp_portal_dev` |
-| GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
-| Note | Migrated from SQLite → Docker MySQL (2026-03-24), then Docker removed — now same native MySQL instance as MIMS |
-
-### Infrastructure
-| Component | Detail |
-|-----------|--------|
-| Backend port | 4000 |
-| Frontend port | 5174 (Vite dev server) |
-| API proxy | Vite proxies `/api` and `/uploads` → `http://localhost:4000` |
-| Git | `https://github.com/RohithKarne/pharaxis-one` — branch and pull request; never push to `main` |
-
----
-
-
-## System Architecture
+### Code layout
 
 ```
 cp-portal/
@@ -185,13 +259,13 @@ cp-portal/
     server.js              — Express app, all route registrations
     database/db.js         — MySQL pool + the original table definitions; the full schema is migrations/0000_baseline.sql plus numbered migrations
     middleware/auth.js     — JWT auth for admin + portal, requireClientAccess
-    routes/admin/          — 27 admin API route files
-    routes/portal/         — 15 portal API route files
+    routes/admin/          — 33 admin API route files
+    routes/portal/         — 18 portal API route files
     utils/
       audit.js             — audit(admin, clientId, action, entity, entityId, meta)
       mailer.js            — email sending via nodemailer
       notify.js            — portal notifications helper
-      translator.js        — MyMemory auto-translation engine
+      translator.js        — outside machine translation (MyMemory), opt-in per client
   frontend/
     src/
       admin/
@@ -205,52 +279,50 @@ cp-portal/
         utils/translations.js         — UI string translations (en/fr/de/es/ja/zh)
 ```
 
-### Authentication
+#### Authentication
+- **First sign-in:** the reader confirms the role the portal team approved; the popup locks the other roles and the server refuses a different one (403). Each confirmation is audited (`ROLE_CONFIRMED`).
 - **Admin:** a password, then a second step (emailed code, authenticator app, backup code or passkey). The session is an HttpOnly cookie, `cp_admin_token`, never readable by page scripts.
 - **Portal:** a password — then, where the client turns it on, a code emailed to the doctor (from 2026-10-27) — or single sign-on. The session is an HttpOnly cookie, `cp_portal_token`. `portalFetch()` in `PortalContext` handles 401 → sign-out.
 - **Portal session restore:** `GET /api/portal/auth/me` called on mount to verify token against DB.
 
-### Feature Flags
+#### Feature Flags
 - Stored in `cp_features` table per client
 - Read via `GET /api/portal/config/:clientCode` → returns `{ features: { key: bool } }`
 - `isFeatureEnabled(key)` in PortalContext handles gate access matrix
 - Portal pages are hidden/shown based on feature flags per client
 
-### Auto-Translation
-- Engine: `backend/utils/translator.js` — MyMemory API (free, no key), chunked text, fire-and-forget
-- Storage: `translations_json` column on `cp_news_posts`, `cp_safety_alerts`, `cp_faq_items`, `cp_documents`
-- On save: Admin routes call `autoTranslate(clientId, table, rowId, fields).catch(() => {})` — non-blocking
-- On read: Portal routes call `applyTranslation(row, lang, fields)` — reads stored JSON, falls back to English
-- Languages: `en`, `fr`, `de`, `es`, `ja`, `zh` (Chinese uses `zh-CN` for MyMemory API — mapped in `translator.js`)
-- Backfill: Admin Language Settings page → "Retranslate All Content" → `POST /api/admin/language/:id/retranslate`. The button shows only while outside machine translation is on for the client (off by default); with it off, translations are typed in by the team.
-- Language switcher only shows in portal header when 2+ languages are enabled by admin
+#### Translation
+- Readers see stored translations: `translations_json` on `cp_news_posts`, `cp_safety_alerts`, `cp_faq_items`, `cp_documents`, read by `applyTranslation(row, lang, fields)`, falling back to English.
+- Outside machine translation (`utils/translator.js`, MyMemory, free, no key) is **off by default**; a client opts in with `"machine_translation": true` in its language config. Even then only news and FAQs are sent (`FREE_TRANSLATION_ALLOWLIST`); safety alerts and documents never leave (CP-65, CPPM-9). Otherwise the team types translations in.
+- Languages: `en`, `fr`, `de`, `es`, `ja`, `zh` (`zh-CN` for MyMemory). The switcher shows when two or more are enabled.
+- Backfill: Language page → "Retranslate All Content" (`POST /api/admin/language/:id/retranslate`), shown only while machine translation is on.
 
-### Audit Trail
+#### Audit Trail
 - `audit(adminObj, clientId, action, entity, entityId, meta)` in `backend/utils/audit.js`
-- Actions: `CREATE`, `UPDATE`, `DELETE`, `ENABLE`, `DISABLE`, `UPLOAD`
+- Actions include `CREATE`, `UPDATE`, `DELETE`, `ENABLE`, `DISABLE`, `UPLOAD`, `EXPORT`, `SECOND_CHECK` (safety alerts) and, from the portal, `ROLE_CONFIRMED` and `ACCESS_REQUESTED`
 - `ClientDetailPage` cockpit fetches `GET /api/admin/audit/:clientId?limit=5` for real recent activity
 
-### Notifications
+#### Notifications
 - `notify.js` creates rows in `cp_notifications` per portal user
 - Portal layout fetches on mount — bell icon shows unread count
 
-### Process Explorer — removed
+#### Process Explorer — removed
 No longer in the product: no screen, no route and no `cp_process_logs` table (checked 2026-10-27).
 
 ---
 
-## Database Tables (75 in the database on 2026-10-27; the core ones below)
+### Database tables (79 in the dev database on 2026-11-11; the core ones below)
 
-### Admin & Config
+#### Admin & Config
 | Table | Purpose |
 |-------|---------|
 | `cp_admin_users` | Admin panel login accounts |
 | `cp_clients` | One row per client — code, name, language_config_json |
 | `cp_branding` | Colors, fonts, logos, portal name per client |
 | `cp_features` | Feature flags per client (is_enabled) |
-| `cp_form_config` | Medical inquiry form field config per client |
-| `cp_integration_config` | CRM/external system integration settings |
-| `cp_field_mapping` | Form field → CRM field mapping |
+| `cp_form_config` | The questions on each form (question, side effect, complaint, other) per client |
+| `cp_integration_config` | The MIMS connection per client (OAuth, addresses, change cursor) |
+| `cp_field_mapping` | Form question → MIMS field; a full-name question keeps the reporter's first/last split |
 | `cp_gate_config` | User type gate config per client |
 | `cp_gate_user_types` | HCP / Patient / Other user type definitions |
 | `cp_feature_access` | Per-feature access by user type |
@@ -259,7 +331,7 @@ No longer in the product: no screen, no route and no `cp_process_logs` table (ch
 | `cp_email_config` | SMTP config per client |
 | `cp_chatbox_config` | AI chatbox config per client |
 
-### Portal Users & Activity
+#### Portal Users & Activity
 | Table | Purpose |
 |-------|---------|
 | `cp_portal_users` | HCP/patient accounts per client portal |
@@ -270,7 +342,7 @@ No longer in the product: no screen, no route and no `cp_process_logs` table (ch
 | `cp_feedback` | Portal user feedback submissions |
 | `cp_msl_bookings` | MSL meeting requests |
 
-### Content
+#### Content
 | Table | Purpose |
 |-------|---------|
 | `cp_therapeutic_areas` | TA content per client |
@@ -279,32 +351,32 @@ No longer in the product: no screen, no route and no `cp_process_logs` table (ch
 | `cp_resources` | Resource links per client |
 | `cp_msls` | MSL directory per client |
 | `cp_news_posts` | News/announcements — has `translations_json` |
-| `cp_safety_alerts` | Safety alerts with severity — has `translations_json` |
+| `cp_safety_alerts` | Safety alerts with severity — `translations_json`; `written_by`, `second_check_due_at`, `second_check_by`, `second_check_at` (migration 0063) |
 | `cp_documents` | PDF/doc uploads — has `translations_json` |
 | `cp_document_categories` | Document category groups |
 | `cp_faq_items` | FAQ Q&A per client — has `translations_json` |
 
-### Analytics & Reporting
+#### Analytics & Reporting
 | Table | Purpose |
 |-------|---------|
 | `cp_audit_logs` | Every admin action logged (action, entity, admin_email) |
 
 ---
 
-## Admin Panel Pages (35 on 2026-10-27; the main ones below)
+### Admin Panel pages (35 on 2026-11-11; the main ones below)
 
-All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients list, and Process Explorer.
+All admin routes under `/admin/clients/:clientId/` except Dashboard and the Clients list.
 
 | Page | Route | What It Does |
 |------|-------|-------------|
 | DashboardPage | `/admin` | Stats, open submissions, recent activity across all clients |
 | ClientsPage | `/admin/clients` | List all clients, create new client |
-| ClientDetailPage | `/admin/clients/:id` | Overview — a "To do today" list of what is waiting, alerts, recent activity, setup checklist |
+| ClientDetailPage | `/admin/clients/:id` | Overview — a "To do today" list of what is waiting (including live safety alerts waiting for a second check), alerts, recent activity, setup checklist |
 | BrandingPage | `:id/branding` | Four ready themes with a live preview; single colours under Advanced; fonts, logo, portal name |
 | FeaturesPage | `:id/features` | Feature switches grouped into Content, Asking and reporting, and Accounts |
 | ContentPage | `:id/content` | TAs, drugs, events, resources tabs |
 | NewsPage | `:id/news` | Create/edit news posts (rich text, auto-translated) |
-| SafetyPage | `:id/safety` | Create/edit safety alerts with severity. No review step: an alert reaches doctors when saved as live, or at its scheduled time (Rohith, 2026-10-10) |
+| SafetyPage | `:id/safety` | Create/edit safety alerts (type "DHPC / Dear HCP letter" and others). Live when saved or at its time; then a second person checks within 24 hours — Waiting / Overdue / Checked by, writer locked out (Rohith, 2026-10-10 and 2026-11-10) |
 | TrialsAdminPage | `:id/trials` | Clinical trials: Draft → Needs review → Live in portal. Whoever sent a trial for review cannot publish it; the server enforces this (Rohith, 2026-10-10) |
 | DocumentsPage | `:id/documents` | Upload PDFs, manage document library |
 | MSLPage | `:id/msls` | Add/edit MSL profiles |
@@ -312,8 +384,8 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 | CompliancePage | `:id/compliance` | GDPR jurisdiction config |
 | FormsPage | `:id/forms` | Medical inquiry form field builder |
 | GatePage | `:id/gate` | User type gate setup + feature access matrix |
-| ChatboxConfigPage | `:id/chatbox` | AI chatbox welcome message, enable/disable |
-| IntegrationPage | `:id/integration` | CRM field mappings |
+| ChatboxConfigPage | `:id/chatbox` | AI assistant: provider (OpenAI or Anthropic), model, key, prompt, welcome message. A built-in rule sends off-label questions to Medical Information |
+| IntegrationPage | `:id/integration` | MIMS connection, field mappings, Test Connection |
 | PortalUsersPage | `:id/users` | View/manage portal user accounts |
 | SubmissionsPage | `:id/submissions` | Inbox: the case opens beside the list, side-effect reports are flagged, MIMS links open the case |
 | AuditTrailPage | `:id/audit` | Full audit log with filters; times in UTC to the second |
@@ -326,7 +398,7 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 
 ---
 
-## Portal Pages (31 on 2026-10-27; the main ones below)
+### Portal pages (31 on 2026-11-11; the main ones below)
 
 All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 
@@ -335,7 +407,7 @@ All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 | PortalHomePage | `/` | None |
 | LoginPage | `login` | None (public) |
 | VerifyEmailPage | `verify-email` | None |
-| SubmitPage | `submit` | `medical_inquiry` |
+| SubmitPage | `submit` | `medical_inquiry`; the side-effect form asks optional Patient Initials and Patient Sex (migration 0062) |
 | TherapeuticAreasPage | `therapeutic-areas` | `therapeutic_areas` |
 | EventsPage | `events` | `events` |
 | ResourcesPage | `resources` | `resources` |
@@ -352,7 +424,7 @@ All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 | PreferencesPage | `preferences` | Auth required |
 
 
-## Integration with MIMS — LIVE since 2026-07-15
+### Integration with MIMS — LIVE since 2026-07-15
 
 This section described the integration as a future plan long after it shipped. Corrected 2026-09-13.
 
@@ -361,6 +433,7 @@ This section described the integration as a future plan long after it shipped. C
 - **Comparing lists:** every hour for side effects and every night for all reports, the portal asks MIMS whether it still holds each one, unchanged. A missing report is sent again; a different version raises an alert for a person.
 - **Retries:** a failed send is tried again after 1, 2, 4, 8 and 16 minutes (six tries in all), then a person is alerted
 - **Auth:** OAuth client-credentials with auto-refresh, secrets encrypted at rest
+- **What MIMS receives besides the fields:** every other answer under its question, a product it could not match, and, on a question answered "No" to the side-effect screen whose text mentions one, a line quoting those words. MIMS shows these under the case header.
 - **Admin surface:** Integration page (credentials, field mapping, test connection) and the Sync Health page
 
 `other_inquiry` stays CP-only by design. See Version History 2026-07-15.
@@ -374,85 +447,23 @@ This section described the integration as a future plan long after it shipped. C
 - **Zero-Loss Report** (Reports) — one page per month accounting for every report, print or PDF, fingerprint in the audit trail. It is not an electronic signature.
 - MIMS's side of the watch is the Inquiry Ledger (PRD.md › MIMS).
 
----
----
-
-# MIMS
-
-## Full Tech Stack
-
-### Backend
-| Component | Technology | Version / Detail |
-|-----------|-----------|-----------------|
-| Runtime | Node.js | v18+ |
-| Framework | Express | ^4.18.2 |
-| Authentication | JSON Web Token (jsonwebtoken) | ^9.0.2 |
-| Password hashing | bcrypt | ^6.0.0 |
-| Database driver | mysql2 | ^3.20.0 |
-| File upload | multer | ^2.1.1 |
-| Email receiving | imapflow | ^1.2.13 |
-| Email sending | nodemailer | ^8.0.2 |
-| Email parsing | mailparser | ^3.9.4 |
-| Scheduled jobs | node-cron | ^4.2.1 |
-| CORS | cors | ^2.8.5 |
-| Dev server | nodemon | ^3.0.3 |
-
-### Frontend
-| Component | Technology | Version / Detail |
-|-----------|-----------|-----------------|
-| Framework | React | ^19.2.0 |
-| Build tool | Vite | ^7.3.1 |
-| Routing | react-router-dom | ^7.13.1 |
-| Rich text editor | TipTap | ^3.20.4 |
-| PDF generation | jspdf | ^4.2.1 |
-| Excel export | xlsx | ^0.18.5 |
-
-### Database
-| Component | Detail |
-|-----------|--------|
-| Engine | MySQL 8.0.45 (native install, NOT Docker) |
-| Location | `/usr/local/mysql/` on Mac |
-| Port | 3306 |
-| Database name | `pharaxis_mims_dev` |
-| User | `devuser` / `__SET_MYSQL_PASSWORD__` |
-| Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -p__SET_MYSQL_PASSWORD__ pharaxis_mims_dev` |
-| GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
-
-### Infrastructure
-| Component | Detail |
-|-----------|--------|
-| Backend port | 3000 |
-| Frontend port | 5173 (Vite dev server) |
-| API proxy | Vite proxies `/api` → `http://localhost:3000` |
-| Git | `https://github.com/RohithKarne/pharaxis-one` — branch and pull request; never push to `main` |
-| Docker | Fully removed. MySQL runs natively. |
-
-### Testing
-| Component | Detail |
-|-----------|--------|
-| API + integration tests | Custom Node.js scripts using `curl` via `execSync` |
-| Browser tests | puppeteer-core + Chrome |
-| Test files | `sprint6-phase1a-test.js`, `sprint6-phase1b-test.js`, `sprint6-phase2-test.js`, `sprint7-qa-test.js`, `sprint8-session-timeout-test.js`, `mims/backend/tests/smoke-2fa.js`, `mims/backend/tests/smoke-sprint9.js` (26/27 PASS), `mims/backend/tests/smoke-sprint10-seeds.js` (9/9 PASS), `mims/backend/tests/smoke-sprint10-formconfig.js` (8/8 PASS), `mims/backend/tests/smoke-sprint10-caseformui.js` (10/10 PASS — static analysis), `mims/backend/tests/smoke-sprint10-fieldsetupui.js` (10/10 PASS — static analysis) |
-| Backfill script | `mims/backend/scripts/backfill-existing-orgs.js` — one-time run to seed org defaults for orgs created before Sprint 10. Run with `node mims/backend/scripts/backfill-existing-orgs.js`. |
-| Run command | `node <test-file>.js` from project root. Both servers + MySQL must be running. |
-| Backend test libs | Jest ^30.3.0, Supertest ^7.2.2 |
-| Frontend test libs | Vitest ^4.0.18, @testing-library/react ^16.3.2 |
-| E2E | @playwright/test ^1.58.2 |
 
 ---
 
+## B5. MIMS design
 
-## System Architecture
+### Code structure and rules
 
-### Entry Point (CRITICAL)
+#### Entry Point (CRITICAL)
 Real app entry point:
 ```
 index.html → src/modules/max/main.jsx → src/modules/max/App.jsx
 ```
-Top-level `src/App.jsx` and `src/main.jsx` are **legacy files — do not edit**. All route additions go into `src/modules/max/App.jsx`.
+All routes are in `src/modules/max/App.jsx`. The old top-level `src/App.jsx` and `src/main.jsx` no longer exist.
 
-### Auth Flow
+**Processes.** `server.js` serves the API and, through `services/processManager.js`, forks two workers: `workers/pollerProcess.js` (email intake) and `workers/schedulerProcess.js` (jobs, B3). Presence, chat and live updates go over WebSocket and Redis pub/sub (`services/redisClient.js`); without Redis the app falls back to the database. Files go through `services/fileStorageService.js` (`STORAGE_PROVIDER` local or s3); OCR through `services/ocrService.js`; AI through `services/ai/providerAbstraction.js`.
+
+#### Auth Flow
 1. User POSTs `/api/auth/login` with email + password
 2. Server verifies password (bcrypt), checks `user_org_access` for org assignment
 3. Returns JWT: `{ userId, email, role, orgId, siteId }`
@@ -461,13 +472,13 @@ Top-level `src/App.jsx` and `src/main.jsx` are **legacy files — do not edit**.
 6. `requireAuth` middleware decodes JWT, attaches `req.user`
 7. `requireOrg` blocks non-platform-admin users without `orgId` in JWT (403)
 
-### JWT Decode Pattern
+#### JWT Decode Pattern
 ```js
 // ALWAYS use req.user.userId — NEVER req.user.id
 req.user = decoded  // { userId, email, role, orgId, siteId }
 ```
 
-### Multi-Org Data Isolation Pattern
+#### Multi-Org Data Isolation Pattern
 ```js
 // Applied on every data-scoped route since Sprint 7
 if (req.user.role !== 'platform_admin') {
@@ -477,7 +488,7 @@ if (req.user.role !== 'platform_admin') {
 // Platform Admin has orgId = null in JWT → bypasses all org filters
 ```
 
-### Module Access (screens)
+#### Module Access (screens)
 - Screens: `mims_core` (Cases), `inbox`, `transmissions`, `browse_content`, `content_mgmt`, `reports`, `admin_console` (MIMS Admin). Nothing else (access review, 2026-10-14; migration 185 removed six keys with no screen).
 - A person's screens are their role's defaults (`role_permissions`, shared by all organisations, changed only by a migration) plus their own differences (`user_module_permissions`, `can_access` 1 or 0), read by `utils/userModules.js` `getUserModules`.
 - An administrator sets a person's screens on Add / Edit Users › Screens (`PUT /api/admin/users/:id/modules`); only differences from the role are stored (`setUserModules`). MIMS Admin is not set there: it needs the administrator role as well as the module, in the menu and at the address (`ModuleAccessGuard adminOnly`).
@@ -485,20 +496,20 @@ if (req.user.role !== 'platform_admin') {
 - Platform Admin bypasses all module checks
 - The User Access Review report lists each person's screens as the server gives them and, under Differs from role, every screen added or taken away for them personally. It is where a screen given by mistake (e.g. Cases on a content manager) is found; it is removed on Edit User (2026-10-14).
 
-### Case access (access review, 2026-10-14)
+#### Case access (access review, 2026-10-14)
 - Every request about a case — the case, its AE / PC versions and rows, MI tabs, letters, comments, contacts, attachments, field history, rich text, emails filed on it — needs Cases and View cases for that case (own or all); a change needs Update case. Pinning, following and presence need only View. Route checks (close, assign, escalate, letters, transmissions) apply after it.
 - Without Update case the case page opens read only: a Read only label instead of Save Case, no version, transmit, add or delete buttons, fields locked.
 - Reports follow the same rule (2026-10-14): every case report and the operations summary count all cases, only those the viewer owns or created, or none without Cases. A schedule uses its owner's access. The scope is set on the server; a filter cannot widen it (`services/reportDatasetService.js` `caseScopeOf`).
 - The path a check compares is decoded and lower-cased first (`utils/gatePath.js`), as the server routes it.
 
-### Permissions (Group Security)
+#### Permissions (Group Security)
 - 32 permissions, each checked by the server (`access_activity_privileges`, migration 184 removed 46 that nothing checked). A group adds rights to its members' role and never removes them (MIPM-192): the role's rights show ticked and locked.
 - Platform Admin hidden from User Management + Module Access screens — `WHERE role != 'platform_admin'` on both `/api/admin/platform/users` and `/api/admin/platform/all-users`
 
-### In-app regression suite
+#### In-app regression suite
 - Off unless the server sets `ENABLE_INAPP_REGRESSION=true`; run by an administrator from MIMS Admin or `POST /api/admin/regression/run`, signed in as `REGRESSION_EMAIL`. Run it on a local or test copy only: it creates and deletes records. Its access-configuration check puts the organisation's sign-in policy back after it runs (2026-10-14). On 14 Oct: 178 checks, 150 pass; the 28 that fail expect behaviour later rounds changed on purpose.
 
-### Session Timeout
+#### Session Timeout
 - Per-org idle timeout set by platform admin. Stored as `session_timeout_minutes` in `organisations` table.
 - Platform Admin global timeout in `system_config` (`key: platform_admin_session_timeout_minutes`).
 - Defaults: **30 min** per org, **60 min** platform admin. Min enforced: **30 min**.
@@ -506,9 +517,9 @@ if (req.user.role !== 'platform_admin') {
 - Frontend: `useIdleTimer.js` tracks mouse/keyboard/scroll. `SessionTimeoutModal.jsx` warns 2 min before logout. "Stay Logged In" resets timer.
 - `sessionTimeout` stored in localStorage as `mims_session_timeout`. Wired into `App.jsx` via `AppRoutes`.
 
-### User 2FA Architecture
-- 2FA applies to **MIMS users only**. Platform Admin login does **not** use this flow.
-- Platform Admin controls 2FA per org from `2FA Configuration` screen.
+#### User 2FA Architecture
+- Organisation users: 2FA per organisation, set by a platform admin on the `2FA Configuration` screen.
+- Platform admins: their own two-step when the platform setting requires it (`platformTwoFactorRequired`), with its own trusted devices.
 - Supported methods: `Email OTP` and `Authenticator App (TOTP)`.
 - Login flow (same screen):
   1. User enters username/email + password
@@ -520,14 +531,13 @@ if (req.user.role !== 'platform_admin') {
 - Platform SMTP for 2FA emails in `system_config` — separate from org-level Email Accounts.
 - Security challenge expiry must use **DB time** (`NOW()` / `DATE_ADD`), not JS timestamps. Real QA defect — fixed.
 
-### Password Reset Flow
-1. New users created with `password_reset_required = 1` and default password `__SET_SMOKE_TEST_PASSWORD__`
-2. On login, if flag set, server returns `{ passwordResetRequired: true, token: resetToken }`
-3. Frontend redirects to `/reset-password` (NOT `/dashboard`)
-4. After reset, flag cleared, user gets fresh JWT with modules + org context
-5. User navigates to `/dashboard` normally
+#### Password Reset Flow
+1. A user with `password_reset_required = 1` signs in with email and password.
+2. The server sets a 10-minute reset cookie and answers `{ passwordResetRequired: true }`; the screen opens `/reset-password`. (Known gap: this comes before the two-step code — Varun.)
+3. The new password must not match the current or last five.
+4. The flag clears; the person signs in again, now with the two-step code.
 
-### CSS Namespace Convention
+#### CSS Namespace Convention
 | Prefix | Used For |
 |--------|----------|
 | `mims-` | Shared layout components |
@@ -539,7 +549,7 @@ if (req.user.role !== 'platform_admin') {
 
 ---
 
-## Frontend Route Map
+### Frontend Route Map
 
 All routes in `mims/frontend/src/modules/max/App.jsx`.
 
@@ -555,11 +565,10 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/case-query` | CaseQueryPage | `mims_core` |
 | `/session-management` | SessionManagementPage | `mims_core` |
 | `/exceptions` | ExceptionLogsPage | `mims_core` |
-| `/process-explorer` | ProcessExplorerPage | `mims_core` |
 | `/regression` | RegressionPage | ProtectedRoute only (admin/platform-admin) |
 | `/admin-console/*` | AdminConsoleRouter | `admin_console` |
 | `/content` | ContentPage | `content_mgmt` |
-| `/analytics` | AnalyticsPage | `data_visualization` |
+| `/analytics` | Redirect | → `/reports` |
 | `/reports` | ReportsPage | `reports` |
 | `/transmissions` | TransmissionsPage | `mims_core` |
 | `/browse-content` | BrowseContentPage | `content_mgmt` |
@@ -567,7 +576,7 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/inquiry-ledger` | InquiryLedgerPage (MIPM-223) | `mims_core` |
 | `*` | Redirect | → `/dashboard` |
 
-### Navbar Structure (MIMSNavbar.jsx)
+#### Navbar Structure (MIMSNavbar.jsx)
 Left menu (`shared/components/MIMSNavbar.jsx`, Rohith 2026-10-14):
 
 **New Case** (top; shown to people who may create cases) · **Work:** Overview · Inbox · Cases ▾ · Transmissions · **Knowledge:** Browse Content · Content Management · **Reporting:** Reports · **Administration:** MIMS Admin
@@ -579,11 +588,11 @@ Left menu (`shared/components/MIMSNavbar.jsx`, Rohith 2026-10-14):
 - Session Management is in the user menu; the logs and audit trails are in MIMS Admin.
 
 
-## Backend API Map
+### Backend API Map
 
 Backend on port 3000. All routes under `/api/`.
 
-### Auth
+#### Auth
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/auth/register` | User registration |
@@ -601,7 +610,7 @@ Backend on port 3000. All routes under `/api/`.
 | POST | `/api/auth/change-password` | In-app authenticated password change using current password |
 | POST | `/api/auth/logout` | Record logout in login_audit |
 
-### Cases
+#### Cases
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/cases` | List with filters + pagination |
@@ -624,18 +633,18 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/cases/dashboard-summary` | Dashboard stats + MI KPIs (pending, pending_approval, sent_today, sla_breached) + recent cases + alerts |
 | GET | `/api/cases/:id/mi-responses` | List MI responses with workflow status |
 | POST | `/api/cases/:id/mi-responses` | Create MI response (always DRAFT — 21 CFR Part 11) |
-| PATCH | `/api/cases/:id/mi-responses/:rid/status` | Transition MI response status with e-sign (DRAFT→READY→APPROVED→SENT). SENT triggers nodemailer delivery + transmission_audit_trail log. |
+| PATCH | `/api/cases/:id/mi-responses/:rid/status` | Move an MI response DRAFT→READY→APPROVED→SENT. Approve and Send need password and reason (e-signature); the approver is not the author. SENT queues the email and logs it in `transmission_audit_trail`. |
 | PATCH | `/api/cases/:id/mi-responses/:rid/discard` | Void a DRAFT response (VOIDED terminal state) |
 | POST | `/api/admin/impact-preview` | Blast-radius impact preview for workflow/field/taxonomy changes (5-min TTL cache) |
 
-### Inbox
+#### Inbox
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/inbox` | List inquiries from DB (real emails only) |
 | GET | `/api/inbox/users` | Users for assign dropdown |
 | GET/POST/PATCH | `/api/inbox/templates/:tid` | Reply templates |
 
-### Admin Console
+#### Admin Console
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET/POST/PUT/DELETE | `/api/admin/picklists` | Dropdown values per org |
@@ -662,7 +671,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/admin/service-logs` | Platform-wide service log |
 | GET | `/api/admin/system-activity` | Email import activity log |
 
-### Platform Admin
+#### Platform Admin
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/admin/platform/all-users` | Full user list with org assignments (excludes platform admin role) |
@@ -692,7 +701,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/admin/platform/notifications` | Platform Admin in-app notifications |
 | POST | `/api/admin/platform/notifications/:id/read` | Mark notification as read |
 
-### Content Management
+#### Content Management
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/cm/folders` | Active content folders the user may open (`?include_inactive=true` for Folder Manager), with published counts for Browse |
@@ -723,7 +732,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers. A decision is Accepted, Accepted with Changes, Declined or Rejected (a reason for all but Accepted). A review nobody accepted returns the document to Pending; a rejection to Draft. `GET /reviews/all?mine=true` is Reviews I Started (progress, End, Transfer to someone who can author content). Reviews past their end date remind reviewers and owner daily (`cm-review-overdue`). |
 | CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
 
-### Reports
+#### Reports
 All under `/api/reports/module/`, behind the Reports module grant. Who may see a report or dashboard is its audience (`visibility_scope`: `shared` Everyone with Reports, `managers` Report managers, `admin_only` Administrators); outside it a report reads as not found. Data rules: `services/reportDatasetService.js` (day 0 = Date Received; closed = a state marked closed; MI answered = first sent letter; MI due from MI Response Settings; hand-off due and sent as on the Transmission screen).
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -734,7 +743,7 @@ All under `/api/reports/module/`, behind the Reports module grant. Who may see a
 | GET/POST/PUT/DELETE | `/schedules[/:id]`, `…/pause`, `…/resume`, `/recipients` | Schedules — need Schedule reports (`reports.schedule`). Daily, weekly or monthly (the 1st); a period each send covers on the schedule's own calendar; recipients must be people in the organisation who can see the target (`services/reportRecipients.js`), checked on save and on every send; the run is made as the person who set it up |
 Removed 2026-10-14: `/summary`, certify/publish/versions, templates, shares, role defaults, anomalies, recommendations, usage analytics, delivery rules, config validation; `/api/reports/*` (legacy) and `/api/presets`; `/api/admin/exports/scheduled`; the Reports Access routes (`/api/admin/reports-access`, `/api/admin/platform/reports`, `/api/admin/reports/access`).
 
-### Regression Testing Suite
+#### Regression Testing Suite
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/admin/regression/run` | Run full test suite (rate-limited: 5 min per user) |
@@ -744,7 +753,7 @@ Removed 2026-10-14: `/summary`, certify/publish/versions, templates, shares, rol
 | GET | `/api/admin/regression/api-catalog` | All registered Express routes |
 | GET | `/api/admin/regression/coverage` | Uncovered routes vs tests |
 
-### Admin (additional)
+#### Admin (additional)
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/admin/mi-categories` | MI categories (org-scoped; platform admin needs `?org_id=`) |
@@ -754,15 +763,16 @@ Removed 2026-10-14: `/summary`, certify/publish/versions, templates, shares, rol
 | GET | `/api/admin/security-groups` | Security groups |
 | GET | `/api/admin/field-setup` | Field setup |
 
-### Misc
+#### Misc
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/health` | Backend health check |
+| GET | `/api/cases/:id/bridge` | Where a portal case came from, questions to the reporter with their answers, and the portal's notes (shown under the case header) |
 | GET | `/api/users` | Active users list (for case owner dropdown) |
 
 ---
 
-## Admin Console Sections
+### Admin Console Sections
 
 All under `/admin-console/*` (requires `admin_console` module).
 
@@ -793,7 +803,7 @@ All under `/admin-console/*` (requires `admin_console` module).
 
 **Case form screens (2026-10-13).** Customize Forms (`sys-setup-customize-forms`) and Validation Rules (`sys-setup-validation`) are retired and their files and server endpoints removed; Setup › Medical Information holds **MI Response Settings** (`sys-setup-mi-response`) and **Transmission Setup** (`sys-setup-int-transmission`, the safety and quality hand-off targets — it was an empty page); an old link opens Case Form Fields (`RETIRED_SYSTEM_ITEMS` in `configItems.js`). A show-only-when rule appears under its field on Case Form Fields, read-only. Smart Field Rules, Grid Section Templates and Case Actions are hidden from the menu unless the **Advanced form tools** switch on Case Form Fields is on (a per-browser preference, not a permission).
 
-### Platform Admin Console Pages
+#### Platform Admin Console Pages
 
 Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias compatibility. Sidebar-based nav — no URL routing between pages.
 
@@ -810,9 +820,9 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `login-audit` | Login Audit | Paginated login/logout event log with status filter |
 
 
-## Database Tables Reference
+### Database tables (287 in the dev database on 2026-11-11, before migration 189 drops 20 unused ones)
 
-### User & Access
+#### User & Access
 | Table | Purpose |
 |-------|---------|
 | `users` | System users — email, role, password hash, active, password_reset_required |
@@ -830,7 +840,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `security_group_users` | User → security group mappings |
 | `role_permissions` | Default access per role per module |
 
-### Organisation & Sites
+#### Organisation & Sites
 | Table | Purpose |
 |-------|---------|
 | `organisations` | Pharma client orgs — name, is_active, `session_timeout_minutes` (default 30), `two_factor_enabled`, `two_factor_methods`, `two_factor_remember_days` |
@@ -843,7 +853,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `site_data_retention` | GDPR right-to-forget rules per site |
 | `site_alerts` | Threshold-based alert rules per site |
 
-### Cases
+#### Cases
 | Table | Purpose |
 |-------|---------|
 | `cases` | Core case record — case_number, type (MI/AE/PC), org, site, status, owner, priority |
@@ -858,7 +868,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `case_ae_medical_history` | AE medical history (multi-row) |
 | `case_ae_medical_notes` | AE medical notes |
 | `case_ae_product_info` | AE product information (multi-row) |
-| `case_mi_responses` | MI response records — `response_status` ENUM: DRAFT/READY/APPROVED/SENT/VOIDED. `DEFAULT 'DRAFT'` enforced. SENT = immutable. VOIDED = terminal discard. Each status transition records e-sign password + reason. 21 CFR Part 11 compliant. |
+| `case_mi_responses` | MI response records — `response_status` ENUM: DRAFT/READY/APPROVED/SENT/VOIDED. `DEFAULT 'DRAFT'` enforced. SENT = immutable. VOIDED = terminal discard. Approve and Send record e-sign password + reason. 21 CFR Part 11. |
 | `case_mi_response_transitions` | Immutable audit log of each MI response status change — who, when, target_status, e-sign reason |
 | `case_pc_versions` | PC version control — copy-forward on new version |
 | `case_pc_general` | PC general tab |
@@ -868,7 +878,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `case_pc_replacement` | PC replacement tab |
 | `case_pc_refund_credit` | PC refund/credit tab |
 
-### Configuration
+#### Configuration
 | Table | Purpose |
 |-------|---------|
 | `workflow_states` | Case status definitions |
@@ -889,7 +899,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 
 **Case form clean-up (2026-10-13, migrations 170–175).** A cut field is a `field_setup` row with `is_hidden = 1` — its values and history kept (the one deletion is migration 170: 23 contact settings the screen never showed, removed only where no case stored a value); a cut section is `case_form_definition.is_visible = 0`. Each organisation's outcome is an `audit_logs` row, action `case_form_cleanup`. `case_form_rules` required and validation rules and the Validation Rules phase list (`field_phase_required`) no longer refuse a save, and their admin endpoints are gone; the tables are kept. `case_form_rules` visibility rules are still seeded and applied. New columns: `cases.latest_information_date`; `case_ae_events.verbatim_reaction`, `hospitalization_start_date`, `hospitalization_end_date`; `case_ae_product_info.product_role`; `case_ae_patient_info.pregnancy_trimester`; `icsr_reactions.reaction_verbatim`.
 
-### Email & Inbox
+#### Email & Inbox
 | Table | Purpose |
 |-------|---------|
 | `email_accounts` | IMAP/SMTP mailbox connectors per org — polling settings |
@@ -898,7 +908,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `inquiry_attachments` | Email attachment metadata |
 | `reply_templates` | Global email reply templates |
 
-### Content Management
+#### Content Management
 | Table | Purpose |
 |-------|---------|
 | `cm_folders` | Top-level content folders |
@@ -913,12 +923,12 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `cm_reviewers` | Individual reviewer assignments per review session |
 | `cm_version_history` | Version tracking per document/FAQ/merge-report |
 
-### Regression & Monitoring
+#### Regression & Monitoring
 | Table | Purpose |
 |-------|---------|
 | `regression_runs` | Regression test run history — `run_by`, `started_at`, `completed_at`, `total_tests`, `passed`, `failed`, `skipped`, `health_score`, `results` (LONGTEXT — full JSON report) |
 
-### Audit & Monitoring
+#### Audit & Monitoring
 | Table | Purpose |
 |-------|---------|
 | `audit_logs` | General audit — case operations + entity changes |
@@ -930,9 +940,9 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 
 ---
 
-## Services and Scripts Reference
+### Services and Scripts Reference
 
-### `mims/backend/services/regressionRunner.js` (NEW — Sprint 15)
+#### `mims/backend/services/regressionRunner.js`
 
 Full regression test engine. Auto-discovers `*.tests.js` files from `mims/backend/regression-tests/`, runs them sequentially (50ms gaps), stores full JSON report in `regression_runs` table.
 
@@ -950,11 +960,11 @@ Key functions:
 
 **Rate limit:** 5 minutes per user (in-memory, resets on backend restart).
 
-### `mims/backend/services/cmExpiryAlertService.js` (NEW — Sprint 15)
+#### `mims/backend/services/cmExpiryAlertService.js`
 
 Daily cron at 07:00 UTC. Checks `cm_documents` for expiring documents. Per-doc config (`alert_days` JSON + `alert_email_account_id`) with org-level default fallback from `cm_org_settings`. Sends via nodemailer using stored SMTP account. Always fires on day 1 of expiry.
 
-### `mims/backend/routes/admin/impactPreview.js` (NEW — Sprint 17)
+#### `mims/backend/routes/admin/impactPreview.js`
 
 POST `/api/admin/impact-preview` with 5-min in-memory TTL cache (Map-based).
 
@@ -965,7 +975,7 @@ Supports 3 `change_type` values:
 
 Returns: `{ affected_cases, risk_level (LOW/MEDIUM/HIGH), breakdown_by_case_type[], warnings[], ... }`. Used by AdminWorkflowSection.jsx and AdminPicklistsSection.jsx to show blast-radius before admin changes.
 
-### `mims/backend/services/seedService.js` (NEW — Sprint 10)
+#### `mims/backend/services/seedService.js`
 
 Master org seed service. Called when new org created.
 
@@ -985,7 +995,7 @@ All 3 run in single MySQL transaction — any failure rolls back all.
 
 **Wired into:** `mims/backend/routes/admin/orgs.js` POST `/` handler — called after INSERT INTO organisations, before SELECT created_at.
 
-### Case form clean-up files (NEW — 2026-10-13)
+#### Case form clean-up files
 
 | File | What it does |
 |------|--------------|
@@ -1000,7 +1010,7 @@ All 3 run in single MySQL transaction — any failure rolls back all.
 | `mims/backend/utils/workingDays.js` | Working days (Mon–Fri, no holidays) for due dates: MI answer-by, Field Alert Report, hand-off. |
 | `mims/backend/services/pcHandoffCheck.js` | What a complaint needs before Route to Quality: product, description, and a linked AE case for an injury (lot a warning); shows the counterfeit flag and the Field Alert Report due date. Read by the PC card and the hand-off route. |
 
-### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
+#### `mims/backend/scripts/backfill-existing-orgs.js`
 
 One-time script to seed defaults for orgs created before Sprint 10.
 
@@ -1008,211 +1018,98 @@ One-time script to seed defaults for orgs created before Sprint 10.
 node mims/backend/scripts/backfill-existing-orgs.js
 ```
 
-Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Calder Therapeutics) + org 26 (Vanaja Review Co.).
+Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for orgs 1 and 26 in the dev data.
 
-## In-app help articles (was MIMS Help Memory File)
-*Sprint 21 — In-App Help System*
-*Created: 2026-04-24 | Kept current by Saad (RULES.md › Keeping these documents current)*
 
 ---
 
-### Purpose
+## B6. Running it
 
-This file is the **canonical index of all help articles** in MIMS. When new articles need to be added in future sprints, consult this file to:
-1. Find the correct `feature_key` and `feature_group` to use
-2. Follow the established 4-block article structure
-3. Ensure audience targeting is consistent with existing articles
-4. Run the bulk-import endpoint to upsert new content
+### Run it locally
 
----
-
-### Article Structure (4-Block Standard)
-
-Every help article MUST follow this HTML structure:
-
-```html
-<h4>What is this?</h4>
-<p>Brief explanation of what the feature/section is.</p>
-
-<h4>When to use it</h4>
-<p>Context — when the user would encounter or need this feature.</p>
-
-<h4>How to do it</h4>
-<ol>
-  <li>Step one</li>
-  <li>Step two</li>
-</ol>
-
-<h4>What happens next?</h4>
-<p>Outcome — what the system does after the user takes the action.</p>
-```
-
----
-
-### Audience Values
-
-| Value | Who it targets |
-|-------|----------------|
-| `all` | Every logged-in user (use for orientation articles) |
-| `agent` | Case processing agents only |
-| `cm_admin` | Content Management admins |
-| `admin` | Org admins |
-| `platform_admin` | Platform admins only |
-
-Multiple values can be combined: `["agent", "cm_admin"]`
-
----
-
-### Feature Key Convention
-
-Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spaces)
-
-| feature_key | feature_group | Description |
-|-------------|---------------|-------------|
-| `general` | *(null)* | Platform orientation, navigation, general |
-| `cases` | `cases` | Cases module overview, statuses |
-| `cases.create` | `cases` | New case creation form |
-| `cases.detail` | `cases` | Case detail page |
-| `cases.contacts` | `cases` | Case contacts tab |
-| `cases.mi` | `cases` | Medical information tab |
-| `cases.ae` | `cases` | Adverse events tab |
-| `cases.pc` | `cases` | Product complaints tab |
-| `cases.workflow` | `cases` | Assignments, escalation, closure |
-| `cm.folders` | `cm` | Content Management folders |
-| `cm.documents` | `cm` | Documents — upload, versioning, bulk actions |
-| `cm.modules` | `cm` | Reusable content modules |
-| `cm.templates` | `cm` | Letter templates (Response, Acknowledgment, Correspondence, Email); Make letter for a case |
-| `cm.merge_reports` | `cm` | Retired 2026-10-14 — letters for a case are made from Templates |
-| `cm.faqs` | `cm` | FAQs — create, approve, expire |
-| `cm.reviews` | `cm` | Periodic content review cycles |
-| `browse` | `browse` | Browse Content module — agents viewing approved content |
-| `reports` | `reports` | Reports & analytics |
-| `inbox` | `inbox` | Notification inbox |
-| `admin.picklists` | `admin` | Dropdown values configuration |
-| `admin.field_setup` | `admin` | Custom fields on case forms |
-| `admin.workflow` | `admin` | Workflow stages and transition rules |
-| `admin.product_dictionary` | `admin` | Product and brand list |
-| `admin.security_groups` | `admin` | Role-based access control |
-| `admin.case_numbering` | `admin` | Auto case number format |
-| `admin.organisations` | `admin` | Organisation and site management |
-| `admin.content_intelligence` | `admin` | AI content analysis tools |
-| `admin.policy_graph` | `admin` | Policy relationship visualisation |
-
----
-
-### Current Article Index (Sprint 21 Seed — v1)
-
-| # | Title | feature_key | Audience | Sort |
-|---|-------|-------------|----------|------|
-| 1 | Welcome to MIMS | `general` | all | 1 |
-| 2 | Navigating the Platform | `general` | all | 2 |
-| 3 | Cases Overview | `cases` | agent, cm_admin, admin, platform_admin | 10 |
-| 4 | Case Statuses Explained | `cases` | agent, cm_admin, admin | 11 |
-| 5 | Creating a New Case | `cases.create` | agent, admin | 12 |
-| 6 | Case Detail Page Guide | `cases.detail` | agent, cm_admin, admin | 13 |
-| 7 | Managing Case Contacts | `cases.contacts` | agent, admin | 14 |
-| 8 | Medical Information (MI) Section | `cases.mi` | agent, admin | 15 |
-| 9 | Adverse Event (AE) Reporting | `cases.ae` | agent, admin | 16 |
-| 10 | Product Complaint (PC) Reporting | `cases.pc` | agent, admin | 17 |
-| 11 | Case Workflow & Assignments | `cases.workflow` | agent, admin | 18 |
-| 12 | Content Folders | `cm.folders` | cm_admin, admin, platform_admin | 20 |
-| 13 | Managing Documents | `cm.documents` | cm_admin, admin, platform_admin | 21 |
-| 14 | Document Versioning & Checkout | `cm.documents` | cm_admin, admin | 22 |
-| 15 | Bulk Document Actions | `cm.documents` | cm_admin, admin | 23 |
-| 16 | Content Modules | `cm.modules` | cm_admin, admin | 30 |
-| 17 | Response Templates | `cm.templates` | cm_admin, admin | 40 |
-| 18 | Template Merge Fields Reference | `cm.templates` | cm_admin, admin | 41 |
-| 19 | Merge Reports (retired 2026-10-14 — see Templates, Make letter) | `cm.merge_reports` | cm_admin, admin, agent | 50 |
-| 20 | FAQs Management | `cm.faqs` | cm_admin, admin | 60 |
-| 21 | FAQ Approval Workflow | `cm.faqs` | cm_admin, admin | 61 |
-| 22 | Content Reviews | `cm.reviews` | cm_admin, admin | 70 |
-| 23 | Browse Content | `browse` | agent, cm_admin, admin | 80 |
-| 24 | Previewing Documents & Modules | `browse` | agent, cm_admin, admin | 81 |
-| 25 | Reports & Analytics | `reports` | agent, cm_admin, admin, platform_admin | 90 |
-| 26 | Inbox & Notifications | `inbox` | all | 95 |
-| 27 | Managing Picklists | `admin.picklists` | admin, platform_admin | 100 |
-| 28 | Field Setup & Custom Fields | `admin.field_setup` | admin, platform_admin | 101 |
-| 29 | Workflow Activities | `admin.workflow` | admin, platform_admin | 102 |
-| 30 | Product Dictionary | `admin.product_dictionary` | admin, platform_admin | 103 |
-| 31 | Security Groups & Permissions | `admin.security_groups` | admin, platform_admin | 104 |
-| 32 | Case Numbering Configuration | `admin.case_numbering` | admin, platform_admin | 105 |
-| 33 | Organisation Management | `admin.organisations` | platform_admin | 110 |
-| 34 | Content Intelligence — Overview | `admin.content_intelligence` | admin, platform_admin | 120 |
-| 35 | Evidence Chain Analysis | `admin.content_intelligence` | admin, platform_admin | 121 |
-| 36 | Policy Graph | `admin.policy_graph` | admin, platform_admin | 130 |
-
----
-
-### How to Import Articles
-
-Send the seed file to the bulk-import endpoint:
+**Prerequisites:** Node 20, MySQL 8 at `/usr/local/mysql` on port 3306, ClamAV for CP Portal, Redis for MIMS (optional).
 
 ```bash
-curl -X POST https://<host>/api/admin/help/bulk-import \
-  -H "Authorization: Bearer <admin_token>" \
-  -H "Content-Type: application/json" \
-  -d @help-seed/help_articles_seed.json
+# CP Portal — backend (starts ClamAV too) and frontend, two terminals
+cd apps/cp-portal/backend && npm install && npm run dev
+cd apps/cp-portal/frontend && npm install && npm run dev
+
+# MIMS — backend and frontend together
+cd apps/mims && npm install && npm run dev:all
 ```
 
-Expected response:
-```json
-{ "message": "Bulk import complete.", "inserted": 36, "updated": 0, "skipped": 0, "errors": [] }
+| App | Backend | Frontend | Health | Settings file |
+|---|---|---|---|---|
+| CP Portal | 4000 (`CP_PORT`) | 5174 | `GET /api/health` | `apps/cp-portal/backend/.env` from `.env.example` |
+| MIMS | 3000 (127.0.0.1) | 5173 | `GET /api/health` | `apps/mims/backend/.env` from `.env.example` |
+
+Both Vite servers proxy `/api` (and `/uploads` for CP Portal) to their backend. Never commit a `.env`.
+
+**ClamAV (CP Portal).** Every uploaded file is checked before it can be downloaded or sent to MIMS. Without the scanner, portal attachments are held and admin uploads refused.
+- `brew install clamav`, then `freshclam` once. The updater runs only while the CP Portal server runs; the Admin Panel warns when the virus list is over 7 days old.
+- `npm run dev` and `npm start` run `scripts/start-scanner.sh`, which starts `clamd` and `freshclam` in daemon mode.
+- `clamd.conf` needs `TCPSocket 3310`, `TCPAddr 127.0.0.1` and the same `DatabaseDirectory` as `freshclam.conf`. If `freshclam` fails with "NULL X509 store", add `CVDCertsDirectory /opt/homebrew/etc/clamav/certs` to both.
+- Settings: `CLAMAV_HOST` (127.0.0.1), `CLAMAV_PORT` (3310), `CLAMAV_TIMEOUT_MS` (30000). Held files are rescanned every minute.
+
+**MIMS single sign-on and Microsoft 365.** Google and Microsoft sign-in are set per organisation in Admin Console › Access Configurations › Auth Policy (local only, SSO only, or both). Users pick their organisation first. Microsoft 365 authoring stores the edit link on the CM document; approvals stay in MIMS. Needs `MIMS_FRONTEND_BASE_URL`, `MIMS_BACKEND_BASE_URL`, `MIMS_ALLOWED_FRONTEND_ORIGINS`, `SSO_CONFIG_ENCRYPTION_KEY`. Provider secrets are stored encrypted; the screen shows only Configured or Missing.
+
+**MIMS tests.** `MYSQL_DATABASE=pharaxis_mims_test npm run test` and `npm run test:e2e` in `apps/mims`. Never against the dev database.
+
+### Databases
+
+| App | Database | Schema |
+|---|---|---|
+| CP Portal | `pharaxis_cp_portal_dev` | `backend/database/migrations/0000_baseline.sql` plus numbered migrations |
+| MIMS | `pharaxis_mims_dev` | `backend/database/migrations`, run at start-up |
+
+- MySQL 8, native install (no Docker), one database per app, same server.
+- Settings: `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`.
+- Connect: `/usr/local/mysql/bin/mysql -u devuser -p <database>`; DBeaver on `localhost:3306` with allowPublicKeyRetrieval on and SSL off. Passwords live only in each app's `.env`.
+- Bootstrap accounts exist in code for local use only (`cpadmin`, `platform_admin`); change them anywhere shared.
+- Never commit `.env` files or SQL dumps.
+- Every new migration is folded into the baseline.
+
+### Backups
+
+- **CP Portal:** `docs/scripts/backup-cp-portal.sh` copies uploads and the database to `~/Pharaxis-Backups/cp-portal/<date>`, keeping the newest 14. Run by hand (Rohith declined a nightly schedule, 2026-10-27). Same machine, unencrypted: not disaster recovery.
+- **A database backup holds only where each file sits, not the file.** Back up each app's upload folder with its database and restore them together.
+
+| App | Files on disk |
+|---|---|
+| MIMS | `apps/mims/backend/storage` — org logos, CM documents, case attachments (or `STORAGE_LOCAL_ROOT`, or S3 with `STORAGE_PROVIDER=s3`), email attachments, original emails |
+| CP Portal | `apps/cp-portal/backend/uploads` — logos, documents, safety attachments, submission attachments. Local disk only |
+
+```bash
+# backup: database first, then files
+mysqldump -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" > backup.sql
+tar -czf mims-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/mims/backend storage
+tar -czf cp-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/cp-portal/backend uploads
+
+# restore, app stopped: database, then move the folder aside and unpack
+mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$RESTORE_DATABASE" < backup.sql
+mv apps/mims/backend/storage apps/mims/backend/storage.pre-restore
+tar -xzf mims-files-<stamp>.tar.gz -C apps/mims/backend
 ```
 
----
+After a restore, open one logo and download one document named in the restored database. MIMS answers a missing logo with its home page, not an error — check it is an image.
 
-### How to Add New Articles (Future Sprints)
-
-1. **Identify the feature_key** from the table above, or define a new one following the naming convention.
-2. **Write the article** using the 4-block HTML structure.
-3. **Set audience** — be specific; don't use `all` unless genuinely applicable to every role.
-4. **Choose sort_order** — higher numbers appear lower in the list; use gaps of 10 between related articles.
-5. **Add to seed JSON** or POST directly to `/api/admin/help`.
-6. **Update this file** — add the article to the index table and, if a new feature_key, to the feature key table.
-7. **Mark reviewed** — after Kiranmai checks the article against the live screen, call `PATCH /api/admin/help/:id/reviewed`.
 
 ---
 
-### Stale Article Policy
-
-Articles are flagged as stale when `last_reviewed_at` is NULL or older than **90 days**.
-
-- View stale articles: **Platform Admin → Help Content → Needs Attention** tab
-- Or via API: `GET /api/admin/help/stale`
-- Each article should be reviewed and marked via `PATCH /api/admin/help/:id/reviewed` at least quarterly.
-
----
-
-### Technical Notes
-
-- **Cache**: Public help endpoints cache for 10 minutes (in-memory Map). Cache busts automatically on any admin write.
-- **Search**: MySQL FULLTEXT index on `(title, content_html, summary)` — searches use BOOLEAN MODE.
-- **Fallback chain**: Contextual fetch tries exact key → parent key → feature_group → `general`.
-- **view_count**: Incremented fire-and-forget on every `GET /api/help` hit — used to track article popularity.
-- **Org-specific articles**: Set `org_id` on an article to show it only to that organisation's users (takes priority over global articles with the same key).
-
----
-
-*Next update: after Sprint 22 features are added. Kiranmai checks every article against the live screen.*
-
----
-
-# Going live (when a cloud is chosen)
-
-## CP Portal to MIMS bridge — go-live runbook
+## B7. Go-live runbook — CP Portal to MIMS bridge
 
 > **Status, 10 October 2026: local only.** Both apps run on one developer machine, and no hosting has been chosen (RULES.md › Getting a change to main). This page is what has to be true the day the bridge runs anywhere else. Until then, follow it on a fresh local install to prove it still works.
 
 The bridge sends reports from CP Portal into MIMS. **The portal always starts the exchange; MIMS never calls the portal.** So MIMS needs to be reachable from the portal, and nothing needs to reach the portal from MIMS.
 
-### Before you start
+#### Before you start
 
 - Both apps on the same version of `main`.
 - A backup of both databases, taken and restored once to prove it works (see the backup runbook).
 - The portal's public address and MIMS's address decided, both on HTTPS.
 - A person in MIMS with MIMS Admin rights, and a portal administrator.
 
-### Settings
+#### Settings
 
 Set these on each server, outside the repository. Never commit a filled-in settings file.
 
@@ -1220,7 +1117,7 @@ Set these on each server, outside the repository. Never commit a filled-in setti
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| `ENABLE_API_PLATFORM` | `bridge` | Turns on only what the portal uses: the sign-in token, the cases routes and the API connections screen. `true` would turn on the whole public interface, including parts parked over security findings. Leave it unset and the bridge is off. |
+| `ENABLE_API_PLATFORM` | `bridge` | (Local dev runs `true`, the whole interface; never in production.) Turns on only what the portal uses: the sign-in token, the cases routes and the API connections screen. `true` would turn on the whole public interface, including parts parked over security findings. Leave it unset and the bridge is off. |
 | `MIMS_FRONTEND_BASE_URL`, `MIMS_BACKEND_BASE_URL` | MIMS's real addresses | Links in MIMS emails and alerts. |
 
 **CP Portal**
@@ -1234,7 +1131,7 @@ Set these on each server, outside the repository. Never commit a filled-in setti
 | `CP_CRON_SECRET` | A long random value, only with `CP_SCHEDULER=external` | The scheduler sends it with each call. |
 | `MIMS_CLOSE_SYNC_INTERVAL_MS`, `MIMS_RETRY_INTERVAL_MS`, `MIMS_RECONCILE_INTERVAL_MS` | Leave at the defaults | How often the portal reads MIMS's changes, retries failed sends, and compares lists. |
 
-### Secrets
+#### Secrets
 
 1. In MIMS: **MIMS Admin → API connections → New connection.** Name it after the portal. Give it `cases:read` and `cases:write`, nothing else. Copy the client ID and secret; the secret is shown once.
 2. In the portal: **Admin → client → Integration.** Auth type OAuth, API base URL = MIMS's backend address, client ID and secret from step 1, MIMS case URL base = MIMS's case address ending `/mims/cases/`. Save.
@@ -1242,7 +1139,7 @@ Set these on each server, outside the repository. Never commit a filled-in setti
 
 **Changing the secret.** In MIMS, **New secret** on the connection. The old secret keeps working for 7 days, so enter the new one in the portal's Integration page within that week, then run Test Connection. After 7 days the old secret gets 401.
 
-### Migrations, in this order
+#### Migrations, in this order
 
 Both apps run their own migrations when they start, and each is safe to run twice. Start **MIMS first**, then the portal: the portal's first contact checks MIMS's bridge version.
 
@@ -1258,7 +1155,7 @@ Both apps run their own migrations when they start, and each is safe to run twic
 
 After starting, check each app's log says the migrations applied, and nothing failed. On the portal, `cp_schema_migrations` lists them; on MIMS, `schema_migrations`.
 
-### First-start checks
+#### First-start checks
 
 Do these in order. Stop at the first one that fails.
 
@@ -1271,18 +1168,29 @@ Do these in order. Stop at the first one that fails.
 
 Write down what you saw for each, with the date, in the release record.
 
-### Watching it
+#### Watching it
 
 - **Sync Health** on the portal: the last comparisons, failures and the monthly CSV.
 - **Alerts** on the portal go to the integration team when a report keeps failing, MIMS deletes a case, a question cannot be shown, or more than 20 reports are missing at once (nothing is re-sent then; a person decides).
 - In MIMS, serious side effects raise a critical alert that must be acknowledged.
 
-### Rolling back
+#### Rolling back
 
 - **Stop the bridge, keep both apps.** In the portal, switch the integration off on the Integration page. Reports stay on the portal, marked as not sent; when it is switched back on, the retry job sends them. Nothing is lost.
 - **Stop MIMS accepting.** Unset `ENABLE_API_PLATFORM` and restart MIMS. The portal retries with growing gaps, then alerts. Same recovery as above.
 - **Undo a release.** Put back the previous version of the code. The migrations above only add columns and tables, so the older code runs on the newer database; do not drop them. Restoring a database backup instead loses every report since the backup: run a comparison (Sync Health) afterwards, which finds and re-sends what MIMS lost, unless more than 20 are missing, in which case it alerts and a person decides.
 - **A leaked secret.** In MIMS, press **New secret** twice. Only one old secret is kept, so the second press ends the leaked one at once. Enter the second new secret on the portal straight away and run Test Connection.
+
+
+---
+
+## Appendix — In-app help articles (MIMS)
+
+- **Where:** articles live in `help_articles`; the seed is `apps/mims/help-seed/help_articles_seed.json`, imported through `POST /api/admin/help/bulk-import`. The full index is in the seed file, not here.
+- **Standard:** every article has four blocks — *What is this? · When to use it · How to do it · What happens next?* — a `feature_key` (`{module}.{sub-feature}`, e.g. `cases.mi`, `cm.templates`, `admin.workflow`), a `feature_group` and an audience (`all`, `agent`, `cm_admin`, `admin`, `platform_admin`).
+- **Coverage:** the required topics are `REQUIRED_HELP_KEYS` in `services/orgBootstrapService.js`; MIMS Admin home shows how many an organisation has. Topics for removed screens (Policy Graph, Content Intelligence) are switched off (migration 190).
+- **Review:** an article is stale after 90 days without review (`GET /api/admin/help/stale`); Kiranmai checks it against the live screen, then `PATCH /api/admin/help/:id/reviewed`.
+- **Technical:** public reads cached 10 minutes (cleared on any admin write); FULLTEXT search on title, content and summary; contextual fetch falls back key → parent key → group → `general`; an article with `org_id` overrides the global one for that organisation.
 
 ---
 

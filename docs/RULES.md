@@ -7,7 +7,7 @@ Six documents, one job each:
 | File | Holds |
 |---|---|
 | [PRD.md](PRD.md) | What we build and for whom |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, folders, data flow, how to run it |
+| [ARCHITECTURE_AND_SYSTEM_DESIGN.md](ARCHITECTURE_AND_SYSTEM_DESIGN.md) | Architecture (building blocks, stack, security, decisions) and System Design (flows, jobs, data, routes, how to run it) |
 | [DESIGN.md](DESIGN.md) | Colours, fonts, components, look and feel |
 | **RULES.md** | This file |
 | [TASKS.md](TASKS.md) | The work in hand, one small step at a time |
@@ -16,6 +16,8 @@ Six documents, one job each:
 Records stay where they are and are not rewritten here: the change log, validation, compliance, postmortems and accessibility reports (see PROGRESS.md › *Records*).
 
 > Replaced `docs/TEAM_OPERATING_SOP.md`, `docs/lessons.md` and the rules in `CLAUDE.md` on 2026-11-10 (Rohith). The old text is in git history.
+>
+> 2026-11-11 (Rohith): `ARCHITECTURE.md` renamed `ARCHITECTURE_AND_SYSTEM_DESIGN.md` and split into Architecture and System Design; the MIMS entry-point rule no longer names the deleted legacy files.
 
 ---
 
@@ -227,7 +229,7 @@ Rohith asks ─► Overview (product · test · development) ─► Rohith appro
 
 ```text
 Hi Team. Before we start, read docs/RULES.md. Then read docs/PRD.md and
-docs/ARCHITECTURE.md for today's app: CP Portal or MIMS. Read docs/DESIGN.md
+docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md for today's app: CP Portal or MIMS. Read docs/DESIGN.md
 when the work changes a screen. Check docs/TASKS.md and docs/PROGRESS.md for
 where we left off.
 
@@ -328,7 +330,7 @@ Medical Affairs:
 - Switch branches in the main checkout.
 - Create a file or folder at the top level.
 - Delete a record: change log, validation, compliance, postmortem, accessibility report.
-- Edit `docs/PRD.md` or `docs/ARCHITECTURE.md` product facts without Rohith's confirmation (§11).
+- Edit `docs/PRD.md` or `docs/ARCHITECTURE_AND_SYSTEM_DESIGN.md` product facts without Rohith's confirmation (§11).
 - Delete a test, or leave CI red.
 - Run subagents or parallel sessions unasked.
 - Run a copy of a database before sealing it: every mail server, mailbox and outbound connection pointed at a local stand-in.
@@ -338,7 +340,7 @@ Medical Affairs:
 
 | Rule | Detail |
 |---|---|
-| Real entry point | `index.html` → `src/modules/max/main.jsx` → `src/modules/max/App.jsx`. Not `src/App.jsx` (legacy, do not edit) |
+| Real entry point | `index.html` → `src/modules/max/main.jsx` → `src/modules/max/App.jsx`. The old top-level `src/App.jsx` and `src/main.jsx` no longer exist (2026-11-11) |
 | JWT field | `req.user.userId`, never `req.user.id` |
 | MySQL LIMIT/OFFSET | Never `?` placeholders. Inline: `` LIMIT ${parseInt(limit,10)} OFFSET ${offset} `` |
 | Reserved words | Backtick them in template literals |
@@ -420,7 +422,7 @@ Medical Affairs:
 ## 11. Keeping these documents current
 
 - **Saad keeps all six current.** Anyone may say "plain English, please" and be answered.
-- **PRD.md and ARCHITECTURE.md** change only when Rohith confirms ("Saad, update the PRD — …"). Each change adds a line to PROGRESS.md.
+- **PRD.md and ARCHITECTURE_AND_SYSTEM_DESIGN.md** change only when Rohith confirms ("Saad, update the PRD — …"). Each change adds a line to PROGRESS.md.
 - **RULES.md** changes only on Rohith's instruction. Note the date.
 - **TASKS.md and PROGRESS.md** are updated by whoever does the work, as it happens.
 - A rule that cannot be said briefly gets its own short part here, not a seventh file.
