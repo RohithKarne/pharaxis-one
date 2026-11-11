@@ -22,6 +22,7 @@ const {
 } = require('../services/inboxGovernanceService');
 const { getUserModules } = require('../utils/userModules');
 const { verifyCaseOrg } = require('../services/caseHelpers');
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // The Inbox needs the Inbox module (access review, 2026-10-14). Its menu
 // followed the module but the routes checked only sign-in, so a content
@@ -1397,7 +1398,7 @@ router.post('/:id/forward', authenticate, requireCapability('inbox.forward'), as
 
 // PATCH /api/inbox/:id — update status, lock state, or color (DB-backed inquiries only)
 // H4 FIX: wrapped in a DB transaction with SELECT FOR UPDATE to prevent concurrent-write races
-router.patch('/:id', authenticate, requireModule('inbox'), async (req, res) => {
+router.patch('/:id', authenticate, requireModule('inbox'), forwardErrors(async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -1555,7 +1556,7 @@ router.patch('/:id', authenticate, requireModule('inbox'), async (req, res) => {
   } finally {
     connection.release();
   }
-});
+}));
 
 // POST /api/inbox/:id/link-case — link inquiry to a case and move to processed
 router.post('/:id/link-case', authenticate, requireModule('inbox'), async (req, res) => {

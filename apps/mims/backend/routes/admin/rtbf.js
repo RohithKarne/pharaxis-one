@@ -174,7 +174,7 @@ router.post('/rtbf/:id/review', authenticate, requireRole('admin', 'platform_adm
   }
 });
 
-router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), async (req, res) => {
+router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -218,7 +218,7 @@ router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), as
     if (!err.statusCode) logger.error({ err, id: req.params.id }, 'rtbf execute failed');
     res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to execute RTBF request.' });
   } finally { conn.release(); }
-});
+}));
 
 router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {

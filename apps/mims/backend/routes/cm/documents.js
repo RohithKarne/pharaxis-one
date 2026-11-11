@@ -22,6 +22,7 @@ const { logAudit } = require('../../utils/auditLog');
 const { getUserModules } = require('../../utils/userModules');
 const { userHasActivityPrivilege } = require('../../services/accessConfigurationService');
 const { createNotification } = require('../../services/notificationCenterService');
+const { forwardErrors } = require('../../middleware/errorHandler');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -347,7 +348,7 @@ router.get('/documents', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents — create document (status=Draft, auto-generate doc_id)
-router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
+router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -459,7 +460,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
   } finally {
     conn.release();
   }
-});
+}));
 
 // GET /api/cm/products — the organisation's products, for tagging content. The
 // admin product list refuses content managers.
@@ -644,7 +645,7 @@ router.get('/documents/:id/attachments/:attId/download', authenticate, async (re
 });
 
 // PUT /api/cm/documents/:id — update (only Draft or CheckedOut-by-me)
-router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
+router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc']), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -787,7 +788,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
   } finally {
     conn.release();
   }
-});
+}));
 
 // When a revision is published, the version it replaces leaves use: archived,
 // with the reason in its history. Runs inside the publish transaction.
@@ -808,7 +809,7 @@ async function supersedeRevised(conn, doc, newVersion, user) {
 // POST /api/cm/documents/:id/revise — start the next version of a published
 // document. The published version stays in letters and Browse Content until
 // this draft is published, which archives it as superseded.
-router.post('/documents/:id/revise', authenticate, async (req, res) => {
+router.post('/documents/:id/revise', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const src = await getScopedDocument(req, req.params.id);
@@ -865,7 +866,7 @@ router.post('/documents/:id/revise', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // POST /api/cm/documents/:id/checkout — check out a Draft document
 router.post('/documents/:id/checkout', authenticate, async (req, res) => {
@@ -1725,7 +1726,7 @@ router.post('/documents/:id/view', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/clone — duplicate document as Draft (#8)
-router.post('/documents/:id/clone', authenticate, async (req, res) => {
+router.post('/documents/:id/clone', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const src = await getScopedDocument(req, req.params.id);
@@ -1769,6 +1770,6 @@ router.post('/documents/:id/clone', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 module.exports = router;

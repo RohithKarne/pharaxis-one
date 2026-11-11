@@ -18,6 +18,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 function requirePlatformAdmin(req, res, next) {
   if (hasGlobalAdminScope(req.user)) return next();
@@ -237,7 +238,7 @@ router.post('/copy-division/preview', authenticate, requirePlatformAdmin, async 
 });
 
 // POST /api/admin/copy-division/execute — run the copy
-router.post('/copy-division/execute', authenticate, requirePlatformAdmin, async (req, res) => {
+router.post('/copy-division/execute', authenticate, requirePlatformAdmin, forwardErrors(async (req, res) => {
   const { source_org_id, target_org_id, categories, overwrite = false } = req.body;
 
   if (!source_org_id || !target_org_id) {
@@ -293,6 +294,6 @@ router.post('/copy-division/execute', authenticate, requirePlatformAdmin, async 
   } finally {
     conn.release();
   }
-});
+}));
 
 module.exports = router;

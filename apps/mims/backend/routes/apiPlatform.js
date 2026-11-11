@@ -220,7 +220,7 @@ router.get('/api/v1/cases/bridge', scopeGuard('cases:read'), (req, res) => {
 // guess from its name, so a renamed state and a reopened case both come through.
 // Paged by (updated_at, id); times are UTC 'YYYY-MM-DD HH:MM:SS'. Registered before
 // '/api/v1/cases/:id' so 'changes' is not read as a case id.
-router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) => {
+router.get('/api/v1/cases/changes', scopeGuard('cases:read'), forwardErrors(async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
   const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(req.query.since) ? req.query.since : null;
   if (req.query.since && !since) return res.status(400).json({ error: "since must be 'YYYY-MM-DD HH:MM:SS' (UTC)." });
@@ -329,7 +329,7 @@ router.get('/api/v1/cases/changes', scopeGuard('cases:read'), async (req, res) =
     has_more: rows.length > limit,
     next: last ? { since: last.updated_at, after_id: last.id } : null,
   });
-});
+}));
 
 // Bridge row 4: a connection claims the cases it created before MIMS recorded which
 // connection created each case. The portal stores the MIMS id of every case it made,
@@ -413,7 +413,7 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), forwardErrors(async (r
 // the case (patient, AE/PC detail, attachments, workflow) is touched.
 // Org-scoped by the API key exactly like the routes above, and idempotent: a
 // repeat call on an already-redacted case succeeds and changes nothing.
-router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), async (req, res) => {
+router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     // Only a case this connection created, as for follow-ups: another system in the
@@ -442,7 +442,7 @@ router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), asyn
   } finally {
     conn.release();
   }
-});
+}));
 
 // 'YYYY-MM-DD', a real calendar date, not in the future (one day of slack for
 // time zones). Anything else → null.
@@ -515,7 +515,7 @@ function intakeFailure(err, req, what) {
   return { error: `${what} MIMS log reference: ${req.id || 'none'}.`, request_id: req.id || null };
 }
 
-router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
+router.post('/api/v1/cases', scopeGuard('cases:write'), forwardErrors(async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
   const orgId = req.apiClient.org_id;
@@ -932,13 +932,13 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // Bridge row 9: the person adds information to a report already sent. It becomes a case
 // comment, a history line and the case's follow-up date, and the case owner (or the
 // supervisors) is told — new information can change how a side effect is assessed.
 // Only on a case this connection created; once per sender's follow-up id.
-router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (req, res) => {
+router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), forwardErrors(async (req, res) => {
   const text = String(req.body?.text || '').trim();
   const followupId = String(req.body?.followup_id || '').slice(0, 100);
   if (text.length < 2 || text.length > 5000) return res.status(400).json({ error: 'text must be 2 to 5000 characters.' });
@@ -1005,7 +1005,7 @@ router.post('/api/v1/cases/:id/follow-ups', scopeGuard('cases:write'), async (re
   } finally {
     conn.release();
   }
-});
+}));
 
 // C1: attach a file to a case. Stored via the shared file-storage service and
 // recorded in the generic attachments table (entity_type='case'). Org-scoped by key.

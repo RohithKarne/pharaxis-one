@@ -74,6 +74,7 @@ const { folderFilterSql } = require('../services/cmFolderAccess');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const { auditChanges } = require('../services/componentAudit');
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -912,7 +913,7 @@ router.get('/cases/:id/erase-reporter/preview', authenticate, async (req, res) =
 // a reason and the user's password (electronic signature), because it cannot be undone.
 // A case sent by a portal is then reported on the change feed, and the portal blanks
 // its own copy.
-router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const reason = String(req.body?.reason || '').trim();
   if (reason.length < 3) return res.status(400).json({ error: 'Give the reason for the erasure (for example, the request it answers).', code: 'REASON_REQUIRED' });
   if (!(await changeControl.verifyPassword(req.user.userId, req.body?.password))) {
@@ -938,7 +939,7 @@ router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'pla
   } finally {
     conn.release();
   }
-});
+}));
 
 // GET /api/cases/:id/comments — list case comments newest-first
 router.get('/cases/:id/comments', authenticate, async (req, res) => {
@@ -1230,7 +1231,7 @@ router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) =
 // ─── CREATE CASE (F-13) ───────────────────────────────────────────────────────
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
-router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), async (req, res) => {
+router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1540,11 +1541,11 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
   } finally {
     conn.release();
   }
-});
+}));
 
 // POST /api/cases/:id/assign-number — generate + lock case number on first Save
 // RAJEEV REVIEW: FOR UPDATE row-lock guarantees no two concurrent saves get the same sequence
-router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
+router.post('/cases/:id/assign-number', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1647,7 +1648,7 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // No POST /api/cases/bulk-update: the Cases screen applies a bulk action by sending
 // each selected case through PUT /api/cases/:id or DELETE /api/cases/:id, so every
@@ -2294,7 +2295,7 @@ router.delete('/cases/:id/links/:linkId', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const source = await verifyCaseOrg(req.params.id, req);
@@ -2324,7 +2325,7 @@ router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_adm
     try { await conn.rollback(); } catch (_) {}
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
 // GET /api/cases/:id/mi-response-builder/context — template/document context for MI response builder
 router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, res) => {
