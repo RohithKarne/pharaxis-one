@@ -85,12 +85,24 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 6 | Role confirmation audited | Varun | ✅ |
 | 7 | Found: MIMS hid the portal's notes and the reporter's answers — shown in the bridge bar | Kiranmai | ✅ |
 | 8 | Found: training list offered modules a reader cannot open | Kiranmai | ✅ |
-| 9 | Push `feat/meeting-decisions-1110` and open the pull request | Varun | ⏳ Rohith's word |
-| 10 | MIMS dev product list is real brand names and does not match Calder's portal products | Saad | ⏳ |
-| 11 | Wording: PRD and RULES say "password and reason at each step"; MIMS asks at Approve and Send only | Saad | ⏳ Rohith confirms |
-| 12 | Forced password reset happens before the two-step code in MIMS | Varun | ⏳ |
-| 13 | Calder lets patients see CME training; Calder's AI key is invalid | John, Varun | ⏳ |
+| 9 | Push `feat/meeting-decisions-1110` and open the pull request | Varun | ✅ Merged in PR #809 |
+| 10 | MIMS dev product list is real brand names and does not match Calder's portal products | Saad | ✅ Migration 191 |
+| 11 | Wording: PRD and RULES say "password and reason at each step"; MIMS asks at Approve and Send only | Saad | ✅ Aligned in PRD and RULES |
+| 12 | Forced password reset happens before the two-step code in MIMS | Varun | ✅ Reordered after 2FA |
+| 13 | Calder lets patients see CME training; Calder's AI key is invalid | John, Varun | ✅ CME gated from patients |
 | 14 | Three switched-off routines (The Job, MIMS-PM, CP-PM) still name the old SOP | Rohith | ⏳ |
+
+## Now — Table 1 core fixes (no Jira; locked by Rohith 2026-11-11)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Gate CME training to doctors; patients blocked from viewing or starting modules | Kiranmai, John | ✅ |
+| 2 | Harmonize product catalogs: migration 191 seeds Calder portal products in MIMS | Kiranmai, Saad | ✅ |
+| 3 | Enforce four-factor validation for adverse event reports on portal and case API | Kiranmai, Meera | ✅ |
+| 4 | Reorder MIMS forced password reset sequence: 2FA verified before password reset | Kiranmai, Varun | ✅ |
+| 5 | Side-effect hint rendered as high-visibility alert banner on MIMS case header | Kiranmai, Meera | ✅ |
+| 6 | Auto-archive expired response templates in daily content lifecycle scheduler | Kiranmai, Daniel | ✅ |
+| 7 | Align signature documentation in RULES.md and PRD.md to Approve and Send only | Saad | ✅ |
 
 ## Waiting on a decision
 

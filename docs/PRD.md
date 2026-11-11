@@ -85,7 +85,7 @@ Medical Information Management System. One installation serves many pharma organ
 ### What it does
 - **Intake:** an email inbox triaged by agents; reports from CP Portal arrive as cases.
 - **Cases** of three types: Medical Information (MI), Adverse Event (AE), Product Complaint (PC). Case numbers, owners, workflow states, comments, attachments, history.
-- **MI:** the answer is a signed letter (Draft → Ready → Approved → Sent, password and reason at each step). Before sending, the AE/PC screening question must be answered; a "yes" needs a linked AE or PC case.
+- **MI:** the answer is a signed letter (Draft → Ready → Approved → Sent; password and reason required at Approve and Send). Before sending, the AE/PC screening question must be answered; a "yes" needs a linked AE or PC case.
 - **AE:** versioned; events, patient, labs, history, products; an E2B file for safety hand-off.
 - **PC:** versioned; checks before Route to Quality; counterfeit makes a case urgent.
 - **Hand-offs** to safety and quality with due dates and a reconciliation list.

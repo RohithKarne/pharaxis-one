@@ -196,7 +196,7 @@ export default function PortalLayout({ children }) {
     isFeatureEnabled('document_library') && { label: t('nav.documents'),  path: 'documents' },
     // CPPM-109: on only when switched on and something is published.
     isFeatureEnabled('clinical_trials')  && { label: 'Clinical Trials', path: 'trials' },
-    isFeatureEnabled('cme_training')     && { label: 'CME & Training',  path: 'training' },
+    isFeatureEnabled('cme_training')     && user?.user_type !== 'patient' && { label: 'CME & Training',  path: 'training' },
   ].filter(Boolean)
 
   // Nine menu items and a UTC clock made the header two rows tall on a phone (CP ease-of-use
