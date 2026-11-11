@@ -110,9 +110,17 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 - Migration 187: `inquiry_ledger_alerts`, so each case and stage is notified once
 - `POST /api/v1/cases/claim` also takes `keys` and answers `keyed`; older callers unaffected — `backend/routes/apiPlatform.js`
 
+### MIMS — portal notes on the case, 10 Nov (no Jira; branch `feat/meeting-decisions-1110`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** what an agent sees on a case changed; no record, audit trail, calculation or access rule changed.
+**Revalidate:** a case from CP Portal shows the portal's notes and the reporter's answers under its header.
+
+- The bridge bar under a case header lists the portal's notes (other answers, unmatched product, a possible side effect in red, added information) and each answer under its question. They were in the comments drawer, which is behind the `cf.theme5_realtime_collab` flag and is off, so no agent saw them — `backend/routes/caseBridge.js`, `frontend/src/modules/cases/components/CaseBridgePanel.jsx`
+
 ### MIMS — setup check fix, 10 Nov (no Jira; branch `fix/mims-walk-1110`)
 
-**Revalidation impact:** None — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Revalidation impact:** None — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-11-10; merged on Rohith's word (#807).*
 **Why:** an admin setup indicator only; no record, audit trail, calculation or access rule changed.
 
 - Admin home › Setup checks › Help baseline counts only the 28 required help topics; it showed "88/28" and a red cross — `backend/services/orgBootstrapService.js`
@@ -134,9 +142,24 @@ is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
 
-### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
+### CP Portal — team meeting decisions, 10 Nov (no Jira; branch `feat/meeting-decisions-1110`; locked by Rohith in chat)
 
 **Revalidation impact:** Full — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** a new control on safety communications (a second person checks every live alert), a new audited record of role confirmations, and new questions on the side-effect report.
+**Revalidate:** publishing and changing a safety alert, its second check and To do today; the side-effect form and what reaches MIMS; first sign-in; the AI assistant's answers; the training list.
+
+- Safety alerts: live at once, then a second person checks within 24 hours (Waiting / Overdue on the list, on To do today); the writer cannot check (403); a change to what doctors read asks for a new check; audited SECOND_CHECK. Migration 0063 — `backend/routes/admin/safety.js`, `frontend/src/admin/pages/SafetyPage.jsx`, `frontend/src/admin/pages/ClientDetailPage.jsx`
+- Side-effect form: optional Patient Initials and Patient Sex after Patient Age, on forms in use. Migration 0062 — `backend/database/migrations/0062_add_patient_identifier_to_ae_forms.sql`
+- A medical question answered "No" to the side-effect screen whose text mentions one reaches MIMS with a line quoting those words — `backend/routes/portal/submit.js`
+- AI assistant: a fixed rule sends off-label questions to Medical Information — `backend/routes/portal/chatbox.js`
+- First sign-in role confirmation is audited (ROLE_CONFIRMED, role before and after) — `backend/routes/portal/auth.js`
+- Safety alert type label reads "DHPC / Dear HCP letter"; stored value unchanged — `frontend/src/admin/pages/SafetyPage.jsx`, `frontend/src/shared/utils/labels.js`
+- Found on the way (defect): the training list offered "Start module" to a reader whose role cannot open the module's document; it now says "Not available for your account type." — `backend/routes/portal/content.js`, `frontend/src/portal/pages/TrainingPage.jsx`
+- A code comment no longer names a real company as a portal client — `backend/routes/portal/submit.js`
+
+### CP Portal — screen walk fixes, 10 Nov (no Jira; branch `fix/cp-portal-walk-1110`)
+
+**Revalidation impact:** Full — *proposed by engineering (Varun Karne) and confirmed by Saad Rahman (compliance owner), 2026-11-10; merged on Rohith's word (#806).*
 **Why:** an access control changed: a portal user's role, which decides who sees HCP-only content, can no longer be changed by the user at first sign-in.
 **Revalidate:** first sign-in for each role; who sees HCP-only content; the reporter's name on a side-effect case in MIMS.
 

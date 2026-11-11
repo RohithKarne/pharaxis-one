@@ -60,10 +60,19 @@ const VALID_SEVERITIES = ['critical','high','medium','informational'];
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const { status } = req.query;
-    let query = 'SELECT * FROM cp_safety_alerts WHERE client_id = ?';
-    const params = [req.params.clientId];
-    if (status) { query += ' AND status = ?'; params.push(status); }
-    query += ' ORDER BY effective_date DESC';
+    // Second check (Rohith, 10 Nov 2026): who wrote and who checked each alert, and
+    // whether the person asking may do the check — never the one who wrote it.
+    let query = `SELECT s.*, w.name AS written_by_name, c.name AS second_check_by_name,
+                        (s.second_check_due_at IS NOT NULL AND s.second_check_at IS NULL) AS second_check_waiting,
+                        (s.second_check_due_at < UTC_TIMESTAMP()) AS second_check_overdue,
+                        (s.written_by IS NULL OR s.written_by <> ?) AS can_second_check
+                   FROM cp_safety_alerts s
+                   LEFT JOIN cp_admin_users w ON w.id = s.written_by
+                   LEFT JOIN cp_admin_users c ON c.id = s.second_check_by
+                  WHERE s.client_id = ?`;
+    const params = [req.admin.adminId || 0, req.params.clientId];
+    if (status) { query += ' AND s.status = ?'; params.push(status); }
+    query += ' ORDER BY s.effective_date DESC';
     const [alerts] = await pool.execute(query, params);
     res.json({ alerts });
   } catch (err) {
@@ -178,8 +187,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 
       const [result] = await pool.execute(`
         INSERT INTO cp_safety_alerts
-          (client_id, title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types_json, attachment_path, attachment_name, status, publish_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (client_id, title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types_json, attachment_path, attachment_name, status, publish_at,
+           written_by, second_check_due_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 24 HOUR))
       `, [
         req.params.clientId, title, alert_type, severity,
         product_name || null, ref_number || null,
@@ -190,6 +200,8 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
         JSON.stringify(targetTypes),
         attachmentPath, attachmentName,
         status || 'active',
+        goesLiveLater ? publishAt : nowUtc,
+        req.admin.adminId || null,
         goesLiveLater ? publishAt : nowUtc,
       ]);
 
@@ -267,6 +279,15 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
     if (!before) return res.status(404).json({ error: 'Alert not found.' });
     await pool.execute(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     const [[after]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
+    // A change to what doctors read needs a second person to read it again, within 24 hours.
+    const READ_BY_DOCTORS = ['title', 'alert_type', 'severity', 'product_name', 'ref_number', 'body_html', 'attachment_name'];
+    if (READ_BY_DOCTORS.some(k => String(before[k] ?? '') !== String(after[k] ?? ''))) {
+      await pool.execute(
+        `UPDATE cp_safety_alerts SET written_by = ?, second_check_by = NULL, second_check_at = NULL,
+                second_check_due_at = DATE_ADD(GREATEST(UTC_TIMESTAMP(), COALESCE(publish_at, UTC_TIMESTAMP())), INTERVAL 24 HOUR)
+          WHERE id = ? AND client_id = ?`,
+        [req.admin.adminId || null, req.params.alertId, req.params.clientId]);
+    }
     // CPPM-43: what changed, from → to, with the alert body in full — for a safety
     // communication the old wording is exactly what an auditor needs.
     await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { changes: changesBetween(before, after,
@@ -281,6 +302,44 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
     res.status(500).json({ error: 'Server error.' });
   }
   });
+});
+
+// GET /api/admin/safety/:clientId/second-check/count — live alerts still waiting for a
+// second person, and how many of them are past their 24 hours. For "To do today".
+router.get('/:clientId/second-check/count', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [[row]] = await pool.execute(
+      `SELECT COUNT(*) AS count, COALESCE(SUM(second_check_due_at < UTC_TIMESTAMP()), 0) AS overdue
+         FROM cp_safety_alerts
+        WHERE client_id = ? AND status = 'active' AND second_check_due_at IS NOT NULL AND second_check_at IS NULL`,
+      [req.params.clientId]);
+    res.json({ count: Number(row.count), overdue: Number(row.overdue) });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId/second-check/count', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/safety/:clientId/:alertId/second-check — a second person confirms they
+// have read the live alert. Never the person who wrote it or last changed its content.
+router.post('/:clientId/:alertId/second-check', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [[alert]] = await pool.execute('SELECT * FROM cp_safety_alerts WHERE id = ? AND client_id = ?', [req.params.alertId, req.params.clientId]);
+    if (!alert) return res.status(404).json({ error: 'Alert not found.' });
+    if (!alert.second_check_due_at) return res.status(400).json({ error: 'This alert was published before second checks began; it does not need one.' });
+    if (alert.second_check_at) return res.status(409).json({ error: 'This alert has already had its second check.' });
+    if (alert.written_by && alert.written_by === req.admin.adminId) {
+      return res.status(403).json({ error: 'You wrote or last changed this alert. A different person must do the second check.' });
+    }
+    await pool.execute('UPDATE cp_safety_alerts SET second_check_by = ?, second_check_at = UTC_TIMESTAMP() WHERE id = ? AND client_id = ? AND second_check_at IS NULL',
+      [req.admin.adminId, req.params.alertId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'SECOND_CHECK', 'safety_alert', req.params.alertId,
+      { title: alert.title, written_by: alert.written_by, due: alert.second_check_due_at });
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('admin.safety.error', { err, route: 'POST /:clientId/:alertId/second-check', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // PATCH /api/admin/safety/:clientId/:alertId/resolve — mark as resolved

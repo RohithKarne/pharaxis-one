@@ -39,7 +39,7 @@ const WORDS = {
     cme_training:          'CME and training',
   },
   alertType: {
-    dhcp_letter:               'DHCP Letter',
+    dhcp_letter:               'DHPC / Dear HCP letter', // EU name / US name; the stored key is unchanged
     product_recall:            'Product Recall',
     urgent_safety_restriction: 'Urgent Safety Restriction',
     field_safety_notice:       'Field Safety Notice',
