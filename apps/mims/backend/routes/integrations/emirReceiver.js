@@ -71,7 +71,7 @@ router.post('/admin/emir/receive', authenticate, requireRole('admin', 'platform_
       ack_message: ackMessage,
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(/not configured/i.test(error.message) ? 409 : 500).json({ error: error.message });
   }
 });
 

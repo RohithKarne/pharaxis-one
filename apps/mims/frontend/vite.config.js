@@ -46,7 +46,6 @@ export default defineConfig({
           groups: [
             { name: 'vendor',      test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/, priority: 3 },
             { name: 'editor',      test: /node_modules[\\/]@tiptap[\\/]/,                                              priority: 2 },
-            { name: 'export-libs', test: /node_modules[\\/](jspdf|xlsx)[\\/]/,                                       priority: 1 },
           ],
         },
       },

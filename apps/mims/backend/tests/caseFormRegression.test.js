@@ -130,3 +130,22 @@ describe('field_setup resolution — one row per field, org wins', () => {
     expect(resolved.map(r => r.field_name).sort()).toEqual(['Org Field', 'Platform Only']);
   });
 });
+
+// Compliance Controls asked for a reason on every keystroke in a case's own
+// fields and then dropped it (full audit, 2026-11-11). The reason is now asked
+// once at Save and sent with the save; the field itself must not ask.
+describe('reason for change — asked at Save, not per keystroke', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const read = (p) => fs.readFileSync(path.join(__dirname, '..', '..', p), 'utf8');
+
+  test('the shared case field does not open the reason dialog', () => {
+    expect(read('frontend/src/shared/components/WiredField.jsx')).not.toMatch(/import ReasonForChangeModal/);
+  });
+
+  test('a case save and a contact save may carry a reason', () => {
+    expect(schemas.updateCase.validate({ priority: 'high', reason: 'Corrected after call back' }).error).toBeUndefined();
+    expect(read('backend/routes/cases.js')).toMatch(/section: 'case_meta', field, oldValue/);
+    expect(read('backend/routes/caseContacts.js')).toMatch(/section: 'case_contacts', field: key/);
+  });
+});

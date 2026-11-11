@@ -329,36 +329,6 @@
       "audience": ["platform_admin"],
       "sort_order": 110,
       "tags": ["admin","organisations","platform_admin","sites"]
-    },
-    {
-      "feature_key": "admin.content_intelligence",
-      "feature_group": "admin",
-      "title": "Content Intelligence — Overview",
-      "summary": "Introduction to the four AI-powered content analysis features.",
-      "content_html": "<h4>What is this?</h4><p>Content Intelligence is a suite of AI-powered tools in the Admin Console that help you analyse, validate, and manage the quality of your content library.</p><h4>The four features</h4><ul><li><strong>Evidence Chain</strong> — traces the source evidence behind content claims.</li><li><strong>Contradiction Radar</strong> — identifies conflicting statements across documents.</li><li><strong>Digital Twin</strong> — creates a regulatory profile snapshot for a product.</li><li><strong>Adaptive Risk</strong> — scores the regulatory risk of your current content state.</li></ul><h4>When to use it</h4><p>Use Content Intelligence during content audits, before regulatory submissions, or when reviewing newly uploaded materials.</p><h4>What happens next?</h4><p>Each tool generates an analysis report viewable on screen. Results are not automatically acted upon — you review and take action based on the findings.</p>",
-      "audience": ["admin","platform_admin"],
-      "sort_order": 120,
-      "tags": ["admin","content intelligence","AI","evidence","contradiction","risk"]
-    },
-    {
-      "feature_key": "admin.content_intelligence",
-      "feature_group": "admin",
-      "title": "Evidence Chain Analysis",
-      "summary": "How to trace the scientific evidence behind a content claim.",
-      "content_html": "<h4>What is this?</h4><p>Evidence Chain traces how a claim in your approved content is supported by source evidence — clinical studies, product labels, and regulatory documents.</p><h4>When to use it</h4><p>Use Evidence Chain when you need to verify that a claim is backed by current, valid evidence — e.g. before publishing new content or responding to a regulatory query.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Content Intelligence → Evidence Chain</strong>.</li><li>Select the document or enter a content claim.</li><li>Click <strong>Analyse</strong>.</li></ul><h4>What happens next?</h4><p>The system returns a chain of evidence nodes showing supporting sources, confidence levels, and gaps where evidence is missing or weak.</p>",
-      "audience": ["admin","platform_admin"],
-      "sort_order": 121,
-      "tags": ["admin","content intelligence","evidence chain"]
-    },
-    {
-      "feature_key": "admin.policy_graph",
-      "feature_group": "admin",
-      "title": "Policy Graph",
-      "summary": "Visualising and managing your medical affairs policy relationships.",
-      "content_html": "<h4>What is this?</h4><p>The Policy Graph is a visual map of your medical affairs policies — showing how internal policies, SOPs, regulations, and content interconnect.</p><h4>When to use it</h4><p>Use the Policy Graph to understand the impact of a regulatory change on your existing policies, or to identify policy gaps before an audit.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Policy Graph</strong>.</li><li>Click <strong>+ Add Node</strong> to add a policy or regulation.</li><li>Draw connections between related nodes.</li><li>Use <strong>Evaluate</strong> to run an impact analysis from a selected node.</li></ul><h4>What happens next?</h4><p>The graph updates in real-time. The evaluate function returns a risk propagation report showing which downstream policies are affected by a change at the selected node.</p>",
-      "audience": ["admin","platform_admin"],
-      "sort_order": 130,
-      "tags": ["admin","policy graph","compliance","regulations"]
     }
   ]
 }

@@ -33,6 +33,7 @@ const { validate, schemas } = require('../../middleware/validate');
 const { applyDpprRules, isScheduledDpprEnabled } = require('../../services/dpprScheduler');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 // ── Data domains catalogue ────────────────────────────────────────────────────
 const DPPR_DOMAINS = [
@@ -271,7 +272,7 @@ router.get('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_adm
   }
 });
 
-router.post('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const { entity_type, case_number, entity_id } = req.body || {};
   if (!['case', 'inquiry'].includes(entity_type)) {
     return res.status(400).json({ error: 'entity_type must be case or inquiry.' });
@@ -328,9 +329,9 @@ router.post('/dppr/legal-holds', authenticate, requireRole('admin', 'platform_ad
     console.error('POST /api/admin/dppr/legal-holds error:', err);
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
-router.post('/dppr/legal-holds/:id/release', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/dppr/legal-holds/:id/release', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const { reason, error } = holdReason(req.body);
   if (error) return res.status(400).json({ error });
 
@@ -358,7 +359,7 @@ router.post('/dppr/legal-holds/:id/release', authenticate, requireRole('admin', 
     console.error('POST /api/admin/dppr/legal-holds/:id/release error:', err);
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
 // ── GET /api/admin/dppr ───────────────────────────────────────────────────────
 router.get('/dppr', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {

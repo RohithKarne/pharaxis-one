@@ -17,6 +17,8 @@ import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import ReasonForChangeModal from '../../../shared/components/compliance/ReasonForChangeModal'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -120,6 +122,9 @@ export default function CasesPage() {
   const [bulkNewOwnerId, setBulkNewOwnerId] = useState('')
   const [bulkStatusId, setBulkStatusId] = useState('')
   const [bulkPriority, setBulkPriority] = useState('')
+  // Compliance Controls: a bulk change asks for one reason, sent with every case.
+  const reasonOn = useFeatureFlag('cf.theme9_compliance')
+  const [reasonRequest, setReasonRequest] = useState(null)
 
   useEffect(() => {
     if (selectedCaseIds.length > 0 && bulkUsers.length === 0 && !bulkLoading) {
@@ -170,6 +175,19 @@ export default function CasesPage() {
       payload = { priority: bulkPriority }
     } else if (action === 'delete') {
       if (!await confirm(`Delete ${selectedCaseIds.length} selected case(s)?`)) return
+    }
+    if (reasonOn && action !== 'delete') {
+      const what = { reassign: 'Case Owner', update_status: 'Status', update_priority: 'Priority' }[action]
+      const to = action === 'update_priority' ? bulkPriority
+        : action === 'update_status' ? (bulkStatuses.find(s => String(s.id) === String(bulkStatusId))?.name || bulkStatusId)
+        : (bulkNewOwnerId === 'null' ? 'Unassigned' : (bulkUsers.find(u => String(u.id) === String(bulkNewOwnerId))?.name || bulkNewOwnerId))
+      const reason = await new Promise(resolve => setReasonRequest({
+        changes: [{ label: `${what} on ${selectedCaseIds.length} case(s)`, oldValue: 'current value', newValue: to }],
+        resolve,
+      }))
+      setReasonRequest(null)
+      if (!reason) return toast.error('Nothing was changed: a reason is needed.')
+      payload.reason = reason
     }
 
     setBulkActionLoading(true)
@@ -1169,6 +1187,12 @@ export default function CasesPage() {
         </div>
       )}
     </div>
+      <ReasonForChangeModal
+        open={!!reasonRequest}
+        changes={reasonRequest?.changes}
+        onClose={() => reasonRequest?.resolve('')}
+        onConfirm={({ reason }) => reasonRequest?.resolve(reason)}
+      />
     </MIMSLayout>
   )
 }

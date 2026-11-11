@@ -50,7 +50,7 @@ async function main() {
       inquiries: await count(conn, 'SELECT COUNT(*) AS cnt FROM inquiries WHERE org_id = ?', [orgId]),
       inquiry_read_receipts: await count(conn, 'SELECT COUNT(*) AS cnt FROM inquiry_read_receipts WHERE org_id = ?', [orgId]),
       cases: await count(conn, 'SELECT COUNT(*) AS cnt FROM cases WHERE org_id = ? AND is_deleted = 0', [orgId]),
-      archived_generated_cases: await count(conn, 'SELECT COUNT(*) AS cnt FROM cases WHERE org_id = ? AND is_deleted = 1 AND internal_notes LIKE ?', [orgId, '%[novartis-simulation]%']),
+      archived_generated_cases: await count(conn, 'SELECT COUNT(*) AS cnt FROM cases WHERE org_id = ? AND is_deleted = 1 AND internal_notes LIKE ?', [orgId, '%-simulation]%']),
       contacts: await count(conn, 'SELECT COUNT(*) AS cnt FROM contacts WHERE org_id = ? AND is_active = 1', [orgId]),
       product_families: await count(conn, 'SELECT COUNT(*) AS cnt FROM product_families WHERE org_id = ? AND is_active = 1', [orgId]),
       products: await count(conn, 'SELECT COUNT(*) AS cnt FROM products WHERE org_id = ? AND is_active = 1', [orgId]),
@@ -68,9 +68,8 @@ async function main() {
       cm_faqs: await count(conn, 'SELECT COUNT(*) AS cnt FROM cm_faqs q JOIN cm_folders f ON f.id = q.folder_id WHERE f.org_id = ?', [orgId]),
       help_articles: await count(conn, 'SELECT COUNT(*) AS cnt FROM help_articles WHERE org_id = ? AND is_active = 1', [orgId]),
       scheduled_jobs: await count(conn, 'SELECT COUNT(*) AS cnt FROM scheduled_jobs WHERE org_id = ?', [orgId]),
-      novartis_simulation_jobs: await count(conn, 'SELECT COUNT(*) AS cnt FROM scheduled_jobs WHERE org_id = ? AND job_type = ?', [orgId, 'novartis_simulation']),
+      simulation_jobs: await count(conn, 'SELECT COUNT(*) AS cnt FROM scheduled_jobs WHERE org_id = ? AND job_type LIKE ?', [orgId, '%simulation']),
       chat_conversations: await count(conn, 'SELECT COUNT(*) AS cnt FROM chat_conversations WHERE org_id = ?', [orgId]),
-      report_access_requests: await count(conn, 'SELECT COUNT(*) AS cnt FROM report_access_requests WHERE org_id = ?', [orgId]),
     };
 
     const anomalies = {
@@ -85,7 +84,7 @@ async function main() {
       product_families_missing: counts.product_families === 0 ? 1 : 0,
       contacts_missing: counts.contacts === 0 ? 1 : 0,
       security_groups_too_thin: counts.security_groups < 3 ? 1 : 0,
-      novartis_simulation_schedule_missing: counts.novartis_simulation_jobs === 0 ? 1 : 0,
+      simulation_schedule_missing: counts.simulation_jobs === 0 ? 1 : 0,
     };
 
     const [sampleInquiries] = await conn.execute(

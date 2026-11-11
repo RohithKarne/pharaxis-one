@@ -24,6 +24,7 @@ const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { isPlatformAdmin } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 const ROLE = ['admin', 'platform_admin'];
 const NOT_YOUR_ORG = "You can only manage your own organisation's picklists.";
@@ -276,7 +277,7 @@ router.get('/picklists-table/values', authenticate, requireRole(...ROLE), async 
 // Body: { category, field_type, value, org_id|'all', department?, status? }
 // If org_id === 'all', creates one row per active tenant.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/picklists-table/values', authenticate, requireRole(...ROLE), async (req, res) => {
+router.post('/picklists-table/values', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const { category, field_type, value, org_id, department, status = 'Active', description, external_codes, translations, parent_value_id, sort_order = 0 } = req.body;
 
   if (!category?.trim())   return res.status(400).json({ error: 'Category is required.' });
@@ -346,7 +347,7 @@ router.post('/picklists-table/values', authenticate, requireRole(...ROLE), async
   } finally {
     conn.release();
   }
-});
+}));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/picklists-table/values/:id
@@ -397,7 +398,7 @@ router.put('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROL
   }
 });
 
-router.put('/picklists-table/values/reorder', authenticate, requireRole(...ROLE), async (req, res) => {
+router.put('/picklists-table/values/reorder', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const rows = Array.isArray(req.body) ? req.body : (req.body?.items || []);
   if (!rows.length) return res.status(400).json({ error: 'Reorder body is required.' });
   const rowIds = rows.map(r => Number(r?.id)).filter(Boolean);
@@ -416,9 +417,9 @@ router.put('/picklists-table/values/reorder', authenticate, requireRole(...ROLE)
     await conn.rollback();
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
-router.post('/picklists-table/values/bulk-status', authenticate, requireRole(...ROLE), async (req, res) => {
+router.post('/picklists-table/values/bulk-status', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
   const status = req.body?.status;
   if (!ids.length || !['Active', 'Inactive'].includes(status)) return res.status(400).json({ error: 'ids and valid status are required.' });
@@ -437,7 +438,7 @@ router.post('/picklists-table/values/bulk-status', authenticate, requireRole(...
     await conn.rollback();
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
 router.get('/picklists-table/values/:id/where-used', authenticate, requireRole(...ROLE), async (req, res) => {
   try {
@@ -736,7 +737,7 @@ router.post('/picklists-table/schema/categories', authenticate, requireRole(...R
 });
 
 // PUT /api/admin/picklists-table/schema/categories/:id — body {name?, is_active?}
-router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const { name, is_active } = req.body || {};
   if (!(await allIdsInScope(pool, req, 'picklist_categories', [Number(req.params.id)]))) return res.status(404).json({ error: 'Category not found.' });
   try {
@@ -754,10 +755,10 @@ router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(.
     console.error('PUT schema/categories/:id error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // DELETE /api/admin/picklists-table/schema/categories/:id — soft delete (is_active = 0)
-router.delete('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+router.delete('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   if (!(await allIdsInScope(pool, req, 'picklist_categories', [Number(req.params.id)]))) return res.status(404).json({ error: 'Category not found.' });
   try {
     await pool.execute('UPDATE picklist_categories SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
@@ -767,7 +768,7 @@ router.delete('/picklists-table/schema/categories/:id', authenticate, requireRol
     console.error('DELETE schema/categories/:id error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // GET /api/admin/picklists-table/schema/fields?tenant_id=&category_id=
 router.get('/picklists-table/schema/fields', authenticate, requireRole(...ROLE), async (req, res) => {
@@ -796,7 +797,7 @@ router.get('/picklists-table/schema/fields', authenticate, requireRole(...ROLE),
 });
 
 // POST /api/admin/picklists-table/schema/fields — body {tenant_id, category_id, name, field_type?}
-router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE), async (req, res) => {
+router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const { tenant_id, category_id, name, field_type } = req.body || {};
   if (!tenant_id || !category_id || !name?.trim()) {
     return res.status(400).json({ error: 'tenant_id, category_id, and name are required.' });
@@ -817,10 +818,10 @@ router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE)
     console.error('POST schema/fields error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // PUT /api/admin/picklists-table/schema/fields/:id — body {name?, is_active?}
-router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   const { name, is_active } = req.body || {};
   if (!(await allIdsInScope(pool, req, 'picklist_fields', [Number(req.params.id)]))) return res.status(404).json({ error: 'Field not found.' });
   try {
@@ -838,10 +839,10 @@ router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...RO
     console.error('PUT schema/fields/:id error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // DELETE /api/admin/picklists-table/schema/fields/:id — soft delete
-router.delete('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+router.delete('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), forwardErrors(async (req, res) => {
   if (!(await allIdsInScope(pool, req, 'picklist_fields', [Number(req.params.id)]))) return res.status(404).json({ error: 'Field not found.' });
   try {
     await pool.execute('UPDATE picklist_fields SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
@@ -851,6 +852,6 @@ router.delete('/picklists-table/schema/fields/:id', authenticate, requireRole(..
     console.error('DELETE schema/fields/:id error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 module.exports = router;

@@ -3,6 +3,8 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { WiredField, WiredSelect, WiredTextarea } from '../../../shared/components/WiredField'
+import ReasonForChangeModal from '../../../shared/components/compliance/ReasonForChangeModal'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const CONTACT_SECTION = 'Contact / Requestor'
@@ -80,6 +82,9 @@ export default function CaseContactsTab({
   // A case contact can be edited in place; it could only be removed and added
   // again, e.g. to give the reporter a missing email (M-104).
   const [editingId, setEditingId] = useState(null)
+  // Compliance Controls: editing a stored contact detail asks for one reason at Save.
+  const reasonOn = useFeatureFlag('cf.theme9_compliance')
+  const [reasonRequest, setReasonRequest] = useState(null)
   // Bridge row 10: an administrator can erase the reporter's identity on this case.
   const [erasing, setErasing] = useState(false)
   // What an erasure here would touch, and whether the reporter's details sit only on the
@@ -193,12 +198,34 @@ export default function CaseContactsTab({
     setAddContactForm(BLANK_CONTACT)
   }
 
+  // The stored details of the contact being edited that this save would change.
+  function contactChanges() {
+    const stored = contacts.find(c => c.id === editingId)
+    if (!stored) return []
+    const text = v => (typeof v === 'boolean' ? (v ? '1' : '0') : String(v ?? '').trim())
+    return Object.keys(BLANK_CONTACT)
+      .filter(key => key !== 'contact_id' && text(stored[key]) !== '' && text(stored[key]) !== text(addContactForm[key]))
+      .map(key => ({
+        label: key.replace(/_/g, ' ').replace(/^./, ch => ch.toUpperCase()),
+        oldValue: stored[key], newValue: addContactForm[key] ?? '',
+      }))
+  }
+
   async function saveContact() {
     try {
+      let reason = ''
+      if (editingId && reasonOn) {
+        const changes = contactChanges()
+        if (changes.length) {
+          reason = await new Promise(resolve => setReasonRequest({ changes, resolve }))
+          setReasonRequest(null)
+          if (!reason) throw new Error('Nothing was saved: a reason is needed for the changed details.')
+        }
+      }
       const res = await httpFetch(editingId ? `${API}/cases/contacts/${editingId}` : `${API}/cases/${id}/contacts`, {
         method: editingId ? 'PUT' : 'POST',
         headers,
-        body: JSON.stringify(addContactForm),
+        body: JSON.stringify(reason ? { ...addContactForm, reason } : addContactForm),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -382,6 +409,12 @@ export default function CaseContactsTab({
           </div>
         </div>
       )}
+      <ReasonForChangeModal
+        open={!!reasonRequest}
+        changes={reasonRequest?.changes}
+        onClose={() => reasonRequest?.resolve('')}
+        onConfirm={({ reason }) => reasonRequest?.resolve(reason)}
+      />
     </div>
   )
 }

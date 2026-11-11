@@ -90,7 +90,7 @@ CP Portal reopened to feature development on 2026-08-08, when `docs/CP_PM.md` in
 |---|------|------|----------|
 | 1 | `Unknown column 'client_code'` in `cp_clients` — appears in some edge queries | Low-severity bug | Low |
 | 2 | ~~npm vulnerabilities~~ — **closed 2026-10-27**: none left in the backend; in the frontend two moderate `react-router` advisories remain, fixed only by a major upgrade and not reachable here (no server rendering, no redirect read from a link) | Security debt | Low |
-| 3 | Translation coverage — existing content before 2026-03-21 has empty `translations_json`. Admin must click "Retranslate All Content" once per client to backfill. | Data gap | Low |
+| 3 | Translation coverage — existing content before 2026-03-21 has empty `translations_json`. Where machine translation is on, an admin clicks "Retranslate All Content" once per client to backfill; where it is off, the team supplies the translations. | Data gap | Low |
 | 4 | Bundle size — 1.1MB JS bundle (single chunk). Should split with `React.lazy()` per route when performance matters. | Performance debt | Low |
 | 5 | Uploads are gitignored. **From 2026-10-27** `docs/scripts/backup-cp-portal.sh` copies uploads and the database to `~/Pharaxis-Backups/cp-portal` (newest 14; a restore was checked). Run by hand — Rohith declined a nightly schedule, 2026-10-27. Same machine and unencrypted, so not disaster recovery; any deployment still needs persistent storage. | Deployment risk | Medium |
 | 6 | ~~MIMS → CP Portal integration not built~~ — **closed 2026-07-15.** Shipped both directions and browser-verified; see Version History | Closed | — |

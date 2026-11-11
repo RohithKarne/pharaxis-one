@@ -4,8 +4,8 @@
 /**
  * seed-e2e.js — deterministic test data for the CP Portal E2E suite.
  *
- * The negative tests post to /api/portal/submit/novartis/... and expect a 400
- * for an invalid form type. Without a `novartis` client that route returns 404
+ * The negative tests post to /api/portal/submit/demopharma/... and expect a 400
+ * for an invalid form type. Without a `demopharma` client that route returns 404
  * instead, so the test fails for the wrong reason. This creates the fixtures
  * those tests assume.
  *
@@ -28,9 +28,9 @@ const PASSWORD = process.env.MYSQL_PASSWORD || 'devpass';
 const ADMIN_EMAIL    = process.env.E2E_CP_ADMIN_EMAIL    || 'cpadmin';
 const ADMIN_PASSWORD = process.env.E2E_CP_ADMIN_PASSWORD || 'Test@1234';
 
-// `novartis` is referenced directly by e2e/negative.spec.js.
+// `demopharma` is referenced directly by e2e/negative.spec.js.
 const CLIENTS = [
-  { name: 'Novartis',        code: 'novartis', active: 1 },
+  { name: 'Demo Pharma',        code: 'demopharma', active: 1 },
   { name: 'E2E Test Client', code: 'e2etest',  active: 1 },
   { name: 'Inactive Client', code: 'inactive', active: 0 },
 ];
@@ -85,6 +85,32 @@ async function upsertSuperadmin(conn) {
   return res.insertId;
 }
 
+// cp62 and cp64 sign their own portal session for this user. They used to name
+// a user in the dev data that no longer exists.
+const HCP_EMAIL = 'hcp.e2e@demopharma.test';
+
+async function upsertPortalHcp(conn, clientId) {
+  // Nobody signs in as this user with a password; the hash is of random bytes.
+  const hash = await bcrypt.hash(require('crypto').randomBytes(24).toString('hex'), 4);
+  const [existing] = await conn.query('SELECT id FROM cp_portal_users WHERE email = ? AND client_id = ?', [HCP_EMAIL, clientId]);
+  if (existing.length) {
+    await conn.query(
+      `UPDATE cp_portal_users SET is_active = 1, is_verified = 1, email_verified = 1,
+              user_type = 'hcp', user_type_confirmed = 1, token_version = 0 WHERE id = ?`,
+      [existing[0].id]
+    );
+    return existing[0].id;
+  }
+  const [res] = await conn.query(
+    `INSERT INTO cp_portal_users
+       (client_id, first_name, last_name, email, password, user_type,
+        is_active, is_verified, user_type_confirmed, email_verified, token_version)
+     VALUES (?, 'Sarah', 'Chen', ?, ?, 'hcp', 1, 1, 1, 1, 0)`,
+    [clientId, HCP_EMAIL, hash]
+  );
+  return res.insertId;
+}
+
 async function main() {
   guardDatabaseName(DB);
 
@@ -100,6 +126,13 @@ async function main() {
 
     const adminId = await upsertSuperadmin(conn);
     console.log(`[seed-e2e:cp-portal] superadmin=${adminId} (${ADMIN_EMAIL})`);
+
+    const hcpId = await upsertPortalHcp(conn, clientIds.demopharma);
+    const seedFile = require('path').join(__dirname, '..', '..', 'e2e', '.e2e-seed.json');
+    require('fs').writeFileSync(seedFile, JSON.stringify({
+      clientCode: 'demopharma', clientId: clientIds.demopharma, hcp: { userId: hcpId, email: HCP_EMAIL },
+    }, null, 2) + '\n');
+    console.log(`[seed-e2e:cp-portal] portal hcp=${hcpId} (${HCP_EMAIL}); wrote e2e/.e2e-seed.json`);
 
     const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM cp_clients');
     console.log(`[seed-e2e:cp-portal] done — ${n} clients present`);

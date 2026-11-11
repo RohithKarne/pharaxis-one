@@ -55,7 +55,7 @@ late / failed / not covered  ▼
 
 | Path | Holds |
 |---|---|
-| `apps/cp-portal/backend` | Express server, `routes/admin` (27 files), `routes/portal` (15), `database/migrations`, `utils`, `services` |
+| `apps/cp-portal/backend` | Express server, `routes/admin` (26 files), `routes/portal` (15), `database/migrations`, `utils`, `services` |
 | `apps/cp-portal/frontend` | React app: `src/admin` (35 pages), `src/portal` (31 pages), `src/shared` |
 | `apps/mims/backend` | Express server, `routes`, `services`, `middleware`, `catalogs`, `database/migrations`, `regression-tests` |
 | `apps/mims/frontend` | React app; the real entry is `src/modules/max/App.jsx` |
@@ -222,7 +222,7 @@ cp-portal/
 - On save: Admin routes call `autoTranslate(clientId, table, rowId, fields).catch(() => {})` — non-blocking
 - On read: Portal routes call `applyTranslation(row, lang, fields)` — reads stored JSON, falls back to English
 - Languages: `en`, `fr`, `de`, `es`, `ja`, `zh` (Chinese uses `zh-CN` for MyMemory API — mapped in `translator.js`)
-- Backfill: Admin Language Settings page → "Retranslate All Content" → `POST /api/admin/language/:id/retranslate`
+- Backfill: Admin Language Settings page → "Retranslate All Content" → `POST /api/admin/language/:id/retranslate`. The button shows only while outside machine translation is on for the client (off by default); with it off, translations are typed in by the team.
 - Language switcher only shows in portal header when 2+ languages are enabled by admin
 
 ### Audit Trail
@@ -322,7 +322,7 @@ All admin routes under `/admin/clients/:clientId/` except Dashboard, Clients lis
 | ReviewQueuePage | `:id/review-queue` | Content pending review (badge count in nav) |
 | AdminUsersPage | `:id/admin-users` | Per-client admin user management |
 | EmailSettingsPage | `:id/email-settings` | SMTP + template config |
-| LanguagePage | `:id/language` | Enable languages + Retranslate All Content button |
+| LanguagePage | `:id/language` | Enable languages; Retranslate All Content button when machine translation is on |
 
 ---
 
@@ -897,7 +897,6 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `inquiry_notes` | Internal notes per inquiry |
 | `inquiry_attachments` | Email attachment metadata |
 | `reply_templates` | Global email reply templates |
-| `email_retry_log` | Retry attempts for failed notification emails |
 
 ### Content Management
 | Table | Purpose |
@@ -1009,7 +1008,7 @@ One-time script to seed defaults for orgs created before Sprint 10.
 node mims/backend/scripts/backfill-existing-orgs.js
 ```
 
-Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Novartis) + org 26 (Vanaja Review Co.).
+Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Calder Therapeutics) + org 26 (Vanaja Review Co.).
 
 ## In-app help articles (was MIMS Help Memory File)
 *Sprint 21 — In-App Help System*

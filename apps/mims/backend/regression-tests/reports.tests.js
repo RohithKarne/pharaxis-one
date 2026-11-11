@@ -26,7 +26,6 @@ async function cleanupDashboard(id) {
   if (!id) return;
   await pool.execute("DELETE FROM report_entity_versions WHERE entity_type = 'dashboard' AND entity_id = ?", [id]).catch(() => {});
   await pool.execute("DELETE FROM report_favorites WHERE target_type = 'dashboard' AND target_id = ?", [id]).catch(() => {});
-  await pool.execute('DELETE FROM report_role_default_dashboards WHERE dashboard_id = ?', [id]).catch(() => {});
   await pool.execute('DELETE FROM report_dashboards WHERE id = ?', [id]).catch(() => {});
 }
 

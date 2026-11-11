@@ -7,7 +7,7 @@ test.describe('CP Portal Negative & Edge Tests', () => {
   });
 
   test('invalid submission form type fails with 400', async ({ request }) => {
-    const response = await request.post('/api/portal/submit/novartis/invalid_form_type', {
+    const response = await request.post('/api/portal/submit/demopharma/invalid_form_type', {
       data: { name: 'Test User' },
     });
     expect(response.status()).toBe(400);
@@ -24,7 +24,7 @@ test.describe('CP Portal Negative & Edge Tests', () => {
   // that refusal into a context value nothing read, so any invented code served
   // the default portal shell — header, safety panel, chat widget and all.
   test('an unknown client code does not serve a portal', async ({ page }) => {
-    await page.goto('/portal/zzzznotreal/');
+    await page.goto('portal/zzzznotreal/');
     await expect(page.getByRole('heading', { name: /portal not available/i })).toBeVisible();
     await expect(page.getByText(/Welcome to the Medical Portal/i)).toHaveCount(0);
   });

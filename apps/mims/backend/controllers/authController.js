@@ -890,35 +890,9 @@ async function verifyEmailChallenge(userId, orgId, challengeType, code) {
 // so a valid code could be brute-forced within its expiry window. We mirror the
 // exact mechanism verifyEmailVerificationChallenge uses (gate on attempts < 5,
 // increment on every guess, invalidate on success). The user_2fa_challenges
-// table predates the `attempts` column, so we ensure it exists once (idempotent).
-let ensured2faChallengeAttemptsColumn = null;
-async function ensure2faChallengeAttemptsColumn() {
-  if (!ensured2faChallengeAttemptsColumn) {
-    ensured2faChallengeAttemptsColumn = (async () => {
-      const [[existing]] = await pool.execute(
-        `SELECT COUNT(*) AS c
-         FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'user_2fa_challenges'
-           AND COLUMN_NAME = 'attempts'`
-      );
-      if (!existing || Number(existing.c) === 0) {
-        await pool.execute(
-          `ALTER TABLE user_2fa_challenges ADD COLUMN attempts INT NOT NULL DEFAULT 0`
-        );
-      }
-    })().catch((err) => {
-      // If the ensure fails, reset so a later call can retry; surface to caller
-      // which treats DB errors as verification failure (fail closed).
-      ensured2faChallengeAttemptsColumn = null;
-      throw err;
-    });
-  }
-  return ensured2faChallengeAttemptsColumn;
-}
+// column `attempts` comes from migration 188.
 
 async function verifyEmailChallengeWithoutOrg(userId, challengeType, code) {
-  await ensure2faChallengeAttemptsColumn();
   const [[row]] = await pool.execute(
     `SELECT id, code_hash, attempts FROM user_2fa_challenges
      WHERE user_id = ? AND challenge_type = ? AND is_consumed = 0 AND expires_at > NOW() AND attempts < 5

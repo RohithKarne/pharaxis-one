@@ -772,7 +772,6 @@ module.exports = [
           await pool.execute(`DELETE FROM cm_content_usage WHERE content_type = 'document' AND content_id IN (${placeholders})`, docIds).catch(() => {});
           await pool.execute(`DELETE FROM cm_document_alert_subs WHERE document_id IN (${placeholders})`, docIds).catch(() => {});
           await pool.execute(`DELETE FROM cm_document_relations WHERE doc_id IN (${placeholders}) OR related_doc_id IN (${placeholders})`, [...docIds, ...docIds]).catch(() => {});
-          await pool.execute(`DELETE FROM cm_document_activity_log WHERE doc_id IN (${placeholders})`, docIds).catch(() => {});
           await pool.execute(`DELETE FROM cm_version_history WHERE entity_type = 'document' AND entity_id IN (${placeholders})`, docIds).catch(() => {});
           await pool.execute(`DELETE FROM cm_documents WHERE id IN (${placeholders})`, docIds).catch(() => {});
         }

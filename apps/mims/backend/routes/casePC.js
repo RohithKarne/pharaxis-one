@@ -30,6 +30,7 @@ const PC_VERSION_TABLES = ['case_pc_general', 'case_pc_patient_info', 'case_pc_p
   'case_pc_replacement', 'case_pc_refund_credit', 'case_pc_flex_fields'];
 const { auditChanges, versionCase } = require('../services/componentAudit');
 const { writeCaseAudit } = require('../services/caseHelpers');
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // MIPM-169: every PC change goes to the case audit trail, field by field.
 async function audit(req, versionId, section, before, after, action = 'PC_UPDATED') {
@@ -83,7 +84,7 @@ router.get('/cases/:id/pc/versions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/pc/versions — create new version, lock previous, copy description
-router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
+router.post('/cases/:id/pc/versions', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
@@ -187,7 +188,7 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // PUT /api/cases/pc/versions/:versionId/status
 router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res) => {

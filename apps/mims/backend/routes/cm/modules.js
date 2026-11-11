@@ -23,6 +23,7 @@ const { publishedOnly } = require('../../middleware/cmAccess');
 const { folderFilterSql } = require('../../services/cmFolderAccess');
 const { lineageHistory } = require('../../services/cmLineage');
 const bcrypt = require('bcrypt');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 // MIPM-191: a module's status came straight from the request, so an author could
 // save one as Published — no review, no approval — and the response builder
@@ -361,7 +362,7 @@ router.get('/modules/:id', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/modules — create module
-router.post('/modules', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.post('/modules', authenticate, upload.single('file'), validateUpload(['doc']), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await ensureCmModulesSchema();
@@ -469,10 +470,10 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
   } finally {
     conn.release();
   }
-});
+}));
 
 // PUT /api/cm/modules/:id — update module
-router.put('/modules/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.put('/modules/:id', authenticate, upload.single('file'), validateUpload(['doc']), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await ensureCmModulesSchema();
@@ -632,7 +633,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
   } finally {
     conn.release();
   }
-});
+}));
 
 // Publishing a revision: documents built from the old version now use the new
 // one, and the old version is archived as superseded — without the archive

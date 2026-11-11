@@ -123,6 +123,7 @@ router.get('/workflow-instances/:id/timeline', ...guard, async (req, res) => {
 
 router.post('/workflow-events/fire', ...guard, async (req, res) => {
   try {
+    if (!req.body?.event_name || !req.body?.entity_id) return res.status(400).json({ error: 'event_name and entity_id are required.' });
     const instances = await fireWorkflowEvent({
       orgId: hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId, // MIPM-5
       eventName: req.body.event_name,

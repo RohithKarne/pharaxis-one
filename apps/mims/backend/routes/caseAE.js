@@ -37,6 +37,7 @@ router.post('/cases/ae/versions/:versionId/:tab', authenticate,
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 const { auditChanges, versionCase } = require('../services/componentAudit');
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // MIPM-169: every AE change goes to the case audit trail, field by field.
 async function audit(req, versionId, section, before, after, action = 'AE_UPDATED') {
@@ -135,7 +136,7 @@ router.get('/cases/:id/ae/versions', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/ae/versions — create new version (locks current latest)
-router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
+router.post('/cases/:id/ae/versions', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
@@ -247,7 +248,7 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // PUT /api/cases/ae/versions/:versionId/status — update version status
 router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res) => {

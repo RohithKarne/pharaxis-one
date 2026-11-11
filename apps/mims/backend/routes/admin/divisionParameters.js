@@ -19,6 +19,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 // Universal, system-provided country list (ISO 3166-1 alpha-2). Canonical source
 // for every division country dropdown. Trimmed to active pharma markets for P1;
@@ -183,7 +184,7 @@ router.get('/division-parameters/:orgId', authenticate, requireRole('admin', 'pl
 });
 
 // ── POST /division-parameters — create a new division (draft) ───────────────
-router.post('/division-parameters', authenticate, requireRole('platform_admin'), async (req, res) => {
+router.post('/division-parameters', authenticate, requireRole('platform_admin'), forwardErrors(async (req, res) => {
   const name = String(req.body?.name || '').trim();
   const divisionCode = String(req.body?.division_code || '').trim() || null;
   if (!name) return res.status(400).json({ error: 'Division name is required' });
@@ -215,7 +216,7 @@ router.post('/division-parameters', authenticate, requireRole('platform_admin'),
   } finally {
     conn.release();
   }
-});
+}));
 
 // ── PUT /division-parameters/:orgId/save/:section — save any wizard section ──
 router.put('/division-parameters/:orgId/save/:section', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -279,7 +280,7 @@ router.get('/division-parameters/:orgId/client-fields/:kind', authenticate, requ
   }
 });
 
-router.put('/division-parameters/:orgId/client-fields/:kind', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/division-parameters/:orgId/client-fields/:kind', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const orgId = Number(req.params.orgId);
   if (!assertOrgAccess(req, orgId)) return res.status(403).json({ error: 'Forbidden' });
   const section = CLIENT_FIELD_SECTIONS[req.params.kind];
@@ -311,10 +312,10 @@ router.put('/division-parameters/:orgId/client-fields/:kind', authenticate, requ
   } finally {
     conn.release();
   }
-});
+}));
 
 // ── PUT /division-parameters/:orgId/users — set assigned users ──────────────
-router.put('/division-parameters/:orgId/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/division-parameters/:orgId/users', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const orgId = Number(req.params.orgId);
   if (!assertOrgAccess(req, orgId)) return res.status(403).json({ error: 'Forbidden' });
   const userIds = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number).filter(Boolean) : [];
@@ -344,7 +345,7 @@ router.put('/division-parameters/:orgId/users', authenticate, requireRole('admin
   } finally {
     conn.release();
   }
-});
+}));
 
 // ── POST /division-parameters/:orgId/activate ───────────────────────────────
 router.post('/division-parameters/:orgId/activate', authenticate, requireRole('platform_admin'), async (req, res) => {

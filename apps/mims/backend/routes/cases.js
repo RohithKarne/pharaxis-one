@@ -74,6 +74,7 @@ const { folderFilterSql } = require('../services/cmFolderAccess');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 const { auditChanges } = require('../services/componentAudit');
+const { forwardErrors } = require('../middleware/errorHandler');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -912,7 +913,7 @@ router.get('/cases/:id/erase-reporter/preview', authenticate, async (req, res) =
 // a reason and the user's password (electronic signature), because it cannot be undone.
 // A case sent by a portal is then reported on the change feed, and the portal blanks
 // its own copy.
-router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const reason = String(req.body?.reason || '').trim();
   if (reason.length < 3) return res.status(400).json({ error: 'Give the reason for the erasure (for example, the request it answers).', code: 'REASON_REQUIRED' });
   if (!(await changeControl.verifyPassword(req.user.userId, req.body?.password))) {
@@ -938,7 +939,7 @@ router.post('/cases/:id/erase-reporter', authenticate, requireRole('admin', 'pla
   } finally {
     conn.release();
   }
-});
+}));
 
 // GET /api/cases/:id/comments — list case comments newest-first
 router.get('/cases/:id/comments', authenticate, async (req, res) => {
@@ -1230,7 +1231,7 @@ router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) =
 // ─── CREATE CASE (F-13) ───────────────────────────────────────────────────────
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
-router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), async (req, res) => {
+router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1540,11 +1541,11 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
   } finally {
     conn.release();
   }
-});
+}));
 
 // POST /api/cases/:id/assign-number — generate + lock case number on first Save
 // RAJEEV REVIEW: FOR UPDATE row-lock guarantees no two concurrent saves get the same sequence
-router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
+router.post('/cases/:id/assign-number', authenticate, forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1647,7 +1648,7 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}));
 
 // No POST /api/cases/bulk-update: the Cases screen applies a bulk action by sending
 // each selected case through PUT /api/cases/:id or DELETE /api/cases/:id, so every
@@ -2024,6 +2025,34 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     }
     const nextIntakeChannel = hasOwn(body, 'intake_channel') ? (body.intake_channel ?? null) : currentCase.intake_channel;
 
+    // Compliance Controls on: changing a value that was already stored needs a
+    // reason, sent with this save and kept with each change. The screen used to
+    // ask on every keystroke and then drop what was typed, so no reason was
+    // ever stored for a case's own fields.
+    const changeReason = String(body.reason || '').trim().slice(0, 1000);
+    const storedDate = (v) => (v ? toDateOnlyOrNull(v) : null);
+    const storedChanges = [
+      ['status_id', currentCase.status_id, nextStatusId],
+      ['case_owner_id', currentCase.case_owner_id, nextOwnerId],
+      ['priority', currentCase.priority, nextPriority],
+      ['date_received', storedDate(currentCase.date_received), storedDate(nextDateReceived)],
+      ['awareness_date', storedDate(currentCase.awareness_date), storedDate(nextAwarenessDate)],
+      ['latest_information_date', storedDate(currentCase.latest_information_date), storedDate(nextLatestInformationDate)],
+      ['learn_of_validity_date', storedDate(currentCase.learn_of_validity_date), storedDate(nextLearnOfValidityDate)],
+      ['follow_up_received_date', storedDate(currentCase.follow_up_received_date), storedDate(nextFollowUpReceivedDate)],
+      ['description', currentCase.description, nextDescription],
+      ['internal_notes', currentCase.internal_notes, nextInternalNotes],
+      ['intake_channel', currentCase.intake_channel, nextIntakeChannel],
+    ].filter(([, was, now]) => String(was ?? '') !== '' && String(was ?? '') !== String(now ?? ''));
+    const reasonOn = storedChanges.length > 0
+      && await require('../services/featureFlagsService').isEnabledForOrg('cf.theme9_compliance', currentCase.org_id);
+    if (reasonOn && !changeReason) {
+      return res.status(422).json({
+        error: `A reason is needed to change: ${storedChanges.map(([field]) => field).join(', ')}.`,
+        code: 'REASON_REQUIRED', reason_required: true,
+      });
+    }
+
     // C-09: the field update AND its status/owner audit rows commit atomically —
     // a case can never change state on a PV record without its audit trail.
     let updated, previousStatusId, updatedStatusId, statusChanged;
@@ -2106,6 +2135,16 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', field, before ?? null, after ?? null, conn);
       }
     });
+
+    if (reasonOn) {
+      for (const [field, was, now] of storedChanges) {
+        await require('../services/complianceService').recordReason({
+          orgId: currentCase.org_id, entityType: 'case', entityId: req.params.id,
+          section: 'case_meta', field, oldValue: String(was), newValue: String(now ?? ''),
+          reason: changeReason, changedBy: req.user.userId, requestId: req.id || null,
+        });
+      }
+    }
 
     // Notifications fire only after the update + audit have durably committed (best-effort).
     if (statusChanged && updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {
@@ -2256,7 +2295,7 @@ router.delete('/cases/:id/links/:linkId', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const source = await verifyCaseOrg(req.params.id, req);
@@ -2286,7 +2325,7 @@ router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_adm
     try { await conn.rollback(); } catch (_) {}
     res.status(500).json({ error: err.message });
   } finally { conn.release(); }
-});
+}));
 
 // GET /api/cases/:id/mi-response-builder/context — template/document context for MI response builder
 router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, res) => {
@@ -3263,6 +3302,12 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
     // Nothing typed is not an error (M-38 — was a raw "fields array required.").
     if (!fields.length) return res.json({ message: 'Nothing to save.' });
 
+    // Compliance Controls on: changing a value that was already stored needs a
+    // reason, sent with this save and kept with the change. The screen used to
+    // ask per keystroke and post the reason to an address that did not exist.
+    const reason = String(req.body.reason || '').trim().slice(0, 1000);
+    const reasonNeeded = await require('../services/featureFlagsService').isEnabledForOrg('cf.theme9_compliance', owned.org_id);
+
     // Every changed value goes into the case history, before and after. These
     // saves wrote no history at all, so a configured value could change with no
     // record of who changed it or from what (found in the case form clean-up,
@@ -3273,6 +3318,18 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
       ? await pool.execute(`SELECT id, section_name, field_name FROM field_setup WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
       : [[]];
     const nameOf = new Map(names.map(n => [Number(n.id), `${n.section_name} / ${n.field_name}`]));
+    if (reasonNeeded && !reason) {
+      const changed = fields.filter(f => {
+        const fieldId = Number(f.field_id || f.field_definition_id || 0);
+        const was = String(before.get(fieldId) ?? '');
+        const now = String((Object.prototype.hasOwnProperty.call(f, 'field_value') ? f.field_value : f.value) ?? '');
+        return fieldId && was !== '' && was !== now;
+      }).map(f => nameOf.get(Number(f.field_id || f.field_definition_id)) || 'a field');
+      if (changed.length) {
+        return res.status(400).json({ error: `A reason is needed to change: ${changed.join(', ')}.`, reason_required: true });
+      }
+    }
+    const sectionOf = new Map(names.map(n => [Number(n.id), n]));
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;
@@ -3287,6 +3344,15 @@ router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('
       if (String(was) !== String(now)) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED',
           nameOf.get(fieldId) || `field ${fieldId}`, was === '' ? null : String(was), now === '' ? null : String(now));
+        if (reason && was !== '') {
+          const def = sectionOf.get(fieldId);
+          await require('../services/complianceService').recordReason({
+            orgId: owned.org_id, entityType: 'case', entityId: req.params.id,
+            section: def?.section_name || '', field: def?.field_name || `field ${fieldId}`,
+            oldValue: String(was), newValue: String(now), reason,
+            changedBy: req.user.userId, requestId: req.id || null,
+          });
+        }
       }
     }
     res.json({ message: 'Dynamic fields saved.' });

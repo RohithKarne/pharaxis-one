@@ -69,6 +69,21 @@ export default function LanguagePage() {
     })
   }
 
+  // Only offered while outside machine translation is on for the client; with it
+  // off the server refuses, because there is nothing it could translate.
+  async function retranslate() {
+    if (!confirm('Translate all existing news, safety alerts, FAQ entries and document titles again? This replaces the stored machine translations.')) return
+    setSaved(''); setError('')
+    try {
+      const res = await fetch(`/api/admin/language/${clientId}/retranslate`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Could not start the translation.')
+      setSaved('Translation started. It runs in the background; reload this page in a few minutes to see the coverage.')
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   async function save() {
     setSaving(true); setError(''); setSaved('')
     try {
@@ -134,6 +149,9 @@ export default function LanguagePage() {
           anything without one is shown in the language it was written in.
           {coverage && !coverage.machine_translation && ' Outside machine translation is off for this client, so translations are supplied by the team.'}
         </p>
+        {coverage && coverage.machine_translation && coverage.languages.length > 0 && (
+          <button type="button" className="cp-btn cp-btn-outline" onClick={retranslate}>Retranslate All Content</button>
+        )}
         {coverage && coverage.languages.length === 0 && (
           <p style={{ fontSize: 13, color: '#5F6B7A', margin: 0 }}>Only one language is on, so there is nothing to translate.</p>
         )}

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
+import { seededHcp } from './seedSession.js';
 
 // CP-64 — HIPAA §164.312(a)(2)(iii) automatic logoff. Verifies the idle session
 // timeout end-to-end at the REAL production duration (portal = 30 min) using
@@ -9,8 +10,8 @@ import crypto from 'node:crypto';
 // Self-provisions a portal session (dev JWT, backend's dev fallback secret).
 
 const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-local-dev-only-change-me';
-const HCP = { userId: 2, clientId: 4, email: 'hcp1@novartis-demo.com', name: 'Dr. Sarah Chen', user_type: 'hcp', tv: 0 };
-const PROFILE = 'http://localhost:5174/portal/novartis/profile';
+const { clientCode: CLIENT, session: HCP } = seededHcp();
+const PROFILE = `portal/${CLIENT}/profile`;
 const MIN = 60 * 1000;
 
 function signHs256(payload, secret) {
@@ -23,14 +24,14 @@ function signHs256(payload, secret) {
 }
 
 test.describe('CP-64 — idle session auto-logout (HIPAA automatic logoff)', () => {
-  test.beforeEach(async ({ context, page }) => {
-    await context.addCookies([{ name: 'cp_portal_token', value: signHs256(HCP, PORTAL_SECRET), domain: 'localhost', path: '/' }]);
+  test.beforeEach(async ({ context, page, baseURL }) => {
+    await context.addCookies([{ name: 'cp_portal_token', value: signHs256(HCP, PORTAL_SECRET), domain: new URL(baseURL).hostname, path: '/' }]);
     // Deterministically authenticate: this test exercises the idle timer, not the
     // auth probe, so stub /me to always resolve the signed-in user (the app's async
     // probe otherwise races the route guard and flakes the login state).
     await page.route('**/api/portal/auth/me', route =>
       route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify({ user: { id: 2, first_name: 'Dr. Sarah', last_name: 'Chen', email: HCP.email, user_type: 'hcp' } }) }));
+        body: JSON.stringify({ user: { id: HCP.userId, first_name: 'Sarah', last_name: 'Chen', email: HCP.email, user_type: 'hcp' } }) }));
   });
 
   const dialog = (page) => page.getByRole('dialog', { name: 'Session expiring' });
@@ -66,7 +67,7 @@ test.describe('CP-64 — idle session auto-logout (HIPAA automatic logoff)', () 
     await expect(dialog(page)).toBeVisible();
 
     await page.clock.fastForward(2 * MIN + 1000);  // past the full timeout
-    await expect(page).toHaveURL(/\/portal\/novartis\/login/); // logged out
+    await expect(page).toHaveURL(new RegExp(`/portal/${CLIENT}/login`)); // logged out
   });
 
   test('"Stay Logged In" resets the idle timer', async ({ page }) => {

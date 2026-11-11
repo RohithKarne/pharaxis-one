@@ -1857,8 +1857,6 @@ module.exports = [
     covers: [
       'GET /api/admin/cases/export',
       'GET /api/admin/cases/export/e2b',
-      'GET /api/admin/cases/export/xlsx',
-      'GET /api/admin/cases/export/pdf',
       'POST /api/admin/cases/import/upload',
       'GET /api/admin/cases/import/jobs',
       'GET /api/admin/cases/import/jobs/:id',
@@ -1902,8 +1900,6 @@ module.exports = [
 
         const exportCsv = await makeRequest('GET', '/api/admin/cases/export?case_type=AE', null, token)
         const exportE2b = await makeRequest('GET', `/api/admin/cases/export/e2b?case_id=${caseId}`, null, token)
-        const exportXlsx = await makeRequest('GET', '/api/admin/cases/export/xlsx?case_type=AE', null, token)
-        const exportPdf = await makeRequest('GET', '/api/admin/cases/export/pdf?case_type=AE', null, token)
         const importUpload = await makeRequest('POST', '/api/admin/cases/import/upload', {}, token)
         const importJobs = await makeRequest('GET', '/api/admin/cases/import/jobs', null, token)
         const importJobDetail = importJobId
@@ -1911,20 +1907,11 @@ module.exports = [
           : { status: 0, body: null }
         const transmissionSummary = await makeRequest('GET', `/api/admin/transmission-audit-trail/cases-summary?search=${caseId}`, null, token)
 
-        const xlsxPass = exportXlsx.status === 200
-          ? String(exportXlsx.headers?.['content-type'] || '').includes('spreadsheetml')
-          : exportXlsx.status === 500 && String(exportXlsx.body?.error || '').includes('exceljs')
-        const pdfPass = exportPdf.status === 200
-          ? String(exportPdf.headers?.['content-type'] || '').includes('application/pdf')
-          : exportPdf.status === 500 && String(exportPdf.body?.error || '').includes('pdfkit')
-
         return {
           pass: exportCsv.status === 200 &&
             String(exportCsv.headers?.['content-type'] || '').includes('text/csv') &&
             exportE2b.status === 200 &&
             String(exportE2b.headers?.['content-type'] || '').includes('application/xml') &&
-            xlsxPass &&
-            pdfPass &&
             importUpload.status === 400 &&
             importJobs.status === 200 &&
             Array.isArray(importJobs.body?.jobs) &&
@@ -1933,7 +1920,7 @@ module.exports = [
             Number(importJobDetail.body?.job?.id || 0) === importJobId &&
             transmissionSummary.status === 200 &&
             Array.isArray(transmissionSummary.body?.cases),
-          details: `csv=${exportCsv.status}, e2b=${exportE2b.status}, xlsx=${exportXlsx.status}, pdf=${exportPdf.status}, importUpload=${importUpload.status}, importJobs=${importJobs.status}, importJobDetail=${importJobDetail.status}, transmissionSummary=${transmissionSummary.status}`,
+          details: `csv=${exportCsv.status}, e2b=${exportE2b.status}, importUpload=${importUpload.status}, importJobs=${importJobs.status}, importJobDetail=${importJobDetail.status}, transmissionSummary=${transmissionSummary.status}`,
         }
       } finally {
         if (importJobId) await pool.execute('DELETE FROM case_import_jobs WHERE id = ?', [importJobId]).catch(() => {})

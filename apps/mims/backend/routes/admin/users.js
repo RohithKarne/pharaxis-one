@@ -21,6 +21,7 @@ const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 const { logAudit } = require('../../utils/auditLog');
 const { getUserModules, getRoleModules, setUserModules, SCREEN_MODULES } = require('../../utils/userModules');
+const { forwardErrors } = require('../../middleware/errorHandler');
 
 const SALT_ROUNDS = 12;
 
@@ -221,7 +222,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 // given Transmissions, an auditor could not lose Reports. MIMS Admin follows
 // the administrator role and is not set here.
 const PERSON_SCREENS = SCREEN_MODULES.filter((m) => m !== 'admin_console');
-router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const modules = req.body?.modules;
   if (!Array.isArray(modules) || modules.some((m) => !PERSON_SCREENS.includes(m))) {
     return res.status(400).json({ error: `modules must list screens from: ${PERSON_SCREENS.join(', ')}.` });
@@ -245,7 +246,7 @@ router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_ad
   } finally {
     conn.release();
   }
-});
+}));
 
 // Roles a non-global (tenant) admin may never assign. (H-02 / H-13)
 const ELEVATED_ROLES = new Set(['platform_admin']);
@@ -283,7 +284,7 @@ async function callerAssignableOrgIds(req) {
 }
 
 // ── POST /api/admin/users — create user ───────────────────────────────────────
-router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/users', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const {
     user_id, name, email, initials, role = 'agent',
     security_group_id, network_user_id, department,
@@ -416,14 +417,14 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
   } finally {
     conn.release();
   }
-});
+}));
 
 // ── POST /api/admin/users/bulk — create many users in one batch ──────────────
 // PAUD-4 item 2. Applied all-or-nothing inside a single transaction: user
 // provisioning is access control, and a half-applied batch leaves an admin
 // unsure who exists. Every row is validated first and the whole batch is
 // rejected with per-row reasons if any row fails.
-router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const { valid, errors, normalized } = validateBulkUserRows(req.body?.users);
   if (!valid) {
     return res.status(400).json({ error: 'Batch rejected. No users were created.', errors });
@@ -532,7 +533,7 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
   } finally {
     conn.release();
   }
-});
+}));
 
 // ── PUT /api/admin/users/:id — update user fields ─────────────────────────────
 router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -722,7 +723,7 @@ router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'pl
 });
 
 // ── PUT /api/admin/users/:id/change-password — admin sets new password ─────────
-router.put('/users/:id/change-password', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/users/:id/change-password', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const { new_password } = req.body;
 
   // Run shared complexity policy
@@ -759,7 +760,7 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'pla
     console.error('PUT /users/:id/change-password error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // ── GET /api/admin/users/:id/tenants ─────────────────────────────────────────
 router.get('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -779,7 +780,7 @@ router.get('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
 });
 
 // ── PUT /api/admin/users/:id/tenants — full replace of tenant assignments ──────
-router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const { tenant_ids = [] } = req.body;
   if (!tenant_ids.length) {
     return res.status(400).json({ error: 'At least one tenant must be assigned.' });
@@ -859,6 +860,6 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
   } finally {
     conn.release();
   }
-});
+}));
 
 module.exports = router;

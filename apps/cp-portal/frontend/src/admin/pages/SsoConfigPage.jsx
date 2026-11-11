@@ -164,7 +164,7 @@ export default function SsoConfigPage() {
 
             <div className="cp-field">
               <label>Allowed email domains <span style={{ color: 'var(--cp-text-muted, #9ca3af)', fontWeight: 400 }}>— optional</span></label>
-              <input type="text" value={p.allowed_domains} onChange={e => updateProvider(p.provider_key, { allowed_domains: e.target.value })} placeholder="e.g. novartis.com, example.org" />
+              <input type="text" value={p.allowed_domains} onChange={e => updateProvider(p.provider_key, { allowed_domains: e.target.value })} placeholder="e.g. example.com, example.org" />
               <small style={{ color: 'var(--cp-text-muted, #6b7280)' }}>Comma-separated. Leave blank to allow any domain the provider returns.</small>
             </div>
           </div>

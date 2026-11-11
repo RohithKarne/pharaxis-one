@@ -76,8 +76,6 @@ function deriveKey(pathname, search) {
         'security-groups':   'admin.security_groups',
         'case-numbering':    'admin.case_numbering',
         organisations:       'admin.organisations',
-        'content-intelligence': 'admin.content_intelligence',
-        'policy-graph':      'admin.policy_graph',
       }
       const subSectionMap = {
         picklists:           'admin.picklists',
@@ -87,8 +85,6 @@ function deriveKey(pathname, search) {
         'security-groups':   'admin.security_groups',
         'case-numbering':    'admin.case_numbering',
         organisations:       'admin.organisations',
-        'content-intelligence': 'admin.content_intelligence',
-        'policy-graph':      'admin.policy_graph',
       }
       // Section can come from either ?section= param or /admin-console/:section url segment
       const key = sectionMap[section] || subSectionMap[sub] || 'admin.picklists'

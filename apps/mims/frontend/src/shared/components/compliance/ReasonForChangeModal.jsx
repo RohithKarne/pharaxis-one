@@ -3,7 +3,8 @@
  *
  * Intercepts a field-save when compliance is on. Caller passes:
  *   open, onClose, onConfirm({reason})
- *   field, oldValue, newValue
+ *   field, oldValue, newValue   (one change), or
+ *   changes: [{ label, oldValue, newValue }]   (every change in one save)
  *
  * The reason is sent into fieldHistoryService.record() server-side by the
  * caller's PUT handler (or via the compliance route directly).
@@ -11,7 +12,7 @@
 
 import { useEffect, useState } from 'react'
 
-export default function ReasonForChangeModal({ open, onClose, onConfirm, field, oldValue, newValue }) {
+export default function ReasonForChangeModal({ open, onClose, onConfirm, field, oldValue, newValue, changes }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -23,7 +24,7 @@ export default function ReasonForChangeModal({ open, onClose, onConfirm, field, 
     if (!reason.trim()) return
     setBusy(true)
     try { await onConfirm?.({ reason: reason.trim() }) }
-    finally { setBusy(false); onClose?.() }
+    finally { setBusy(false); if (!changes) onClose?.() }
   }
 
   return (
@@ -42,14 +43,16 @@ export default function ReasonForChangeModal({ open, onClose, onConfirm, field, 
           </div>
         </div>
         <div style={{ padding: 16 }}>
-          <div style={{ fontSize: 12, marginBottom: 8 }}>
-            <strong>{field}</strong>:
-            <span style={{ color: '#b91c1c', textDecoration: 'line-through', marginLeft: 6 }}>
-              {String(oldValue ?? '∅')}
-            </span>
-            <span style={{ margin: '0 6px' }}>→</span>
-            <span style={{ color: '#1a7a3f' }}>{String(newValue ?? '∅')}</span>
-          </div>
+          {(changes || [{ label: field, oldValue, newValue }]).map((c, i) => (
+            <div key={i} style={{ fontSize: 12, marginBottom: 8 }}>
+              <strong>{c.label}</strong>:
+              <span style={{ color: '#b91c1c', textDecoration: 'line-through', marginLeft: 6 }}>
+                {String(c.oldValue ?? '∅')}
+              </span>
+              <span style={{ margin: '0 6px' }}>→</span>
+              <span style={{ color: '#1a7a3f' }}>{String(c.newValue === '' ? '∅' : c.newValue ?? '∅')}</span>
+            </div>
+          ))}
           <textarea
             autoFocus
             value={reason}

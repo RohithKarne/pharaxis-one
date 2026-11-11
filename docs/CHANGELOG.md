@@ -125,6 +125,27 @@ content review, approval and publication (documents, FAQs, modules), sign-in ses
 
 - Admin home › Setup checks › Help baseline counts only the 28 required help topics; it showed "88/28" and a red cross — `backend/services/orgBootstrapService.js`
 
+### MIMS — full audit fixes, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+**Why:** No case record, calculation or access rule changed. One audit-trail gap is closed (a user created through the platform route now gets its audit record), and two columns move from run-time creation into the schema.
+
+**Revalidate:** user creation by a platform administrator; the forgot-password code check; Clone Organisation; reason for change where Compliance Controls is on (a case's own fields, Additional Fields, contact edits, bulk changes on the Cases page).
+
+- Platform create-user route: the user was created but the reply said "Email already exists", with no temporary password and no audit record. Now answers correctly — `backend/routes/platformAdmin.js`
+- Consent records and 19 other routes (bridge API, address lookup, case presence, data portability, sign-out) could leave a request unanswered when a query failed. They now answer with an error — `backend/middleware/errorHandler.js` and the route files
+- Migration 188: `cm_faqs.view_count` and `user_2fa_challenges.attempts` come from the schema. A new database never got the FAQ view counter — `backend/database/migrations/188_faq_view_count_and_challenge_attempts.js`
+- Clone Organisation called an address that does not exist and always failed; it now calls the working one — `frontend/src/modules/mimsadmin/components/OrganisationsView.jsx`
+- Ten routes answer bad input as a request error (400, 404 or 409) instead of a server error — `backend/routes/admin/accessConfigurations.js`, `workflowEngine.js`, `aiAssistant.js`, `backend/routes/integrations/`
+- ICSR gateway settings are read from the columns that exist; behaviour is still mock, as nothing saves these settings yet — `backend/services/pv/gatewayConfig.js`
+- Reason for change (Compliance Controls, off by default): asked once at Save, required by the server (422 `REASON_REQUIRED`), and stored in the field history with who, when, old and new value. Covers a case's own fields (status, owner, priority, dates, description, notes), Additional Fields, editing a contact, and bulk changes on the Cases page. Before, it was asked per keystroke and never stored — `backend/routes/cases.js`, `backend/routes/caseContacts.js`, `frontend/src/modules/cases/hooks/useCaseForm.js`, `frontend/src/shared/components/WiredField.jsx`
+- 37 more routes that ran a query before their error handling began could leave a request unanswered; each now passes the failure on — route files under `backend/routes/`
+- Migration 190: the help topics for the removed Policy Graph and Content Intelligence screens are marked inactive and no longer seeded or counted — `backend/database/migrations/190_retire_help_topics_for_removed_screens.js`, `help-seed/help_articles_seed.json`
+- Migration 189 drops twenty tables no running code uses, each only where it holds no rows; the outcome is in `audit_logs` (entity `unused_tables`) — `backend/database/migrations/189_drop_unused_empty_tables.js`
+- Removed the policy graph routes (no screen used them)
+- Frontend lint runs in CI; 585 style rules no screen names removed
+- Removed: the Excel and PDF case exports, which never ran (their packages were never installed; CSV and E2B exports unchanged); four unused files; three unused frontend packages
+
 ## Unreleased — CP Portal
 
 **Not tagged.** On 4 Oct 2026 Rohith decided not to tag CP Portal releases for now, and
@@ -141,6 +162,19 @@ confirmations, training attempts, consent proof, access requests). Each of these
 is "Full" under the table above.
 **Revalidate:** the whole application, as an initial validation. The areas below are
 the ones a validation plan should name.
+
+### CP Portal — full audit clean-up, 10 Nov (no Jira; branch `chore/full-audit-2026-11-10`)
+
+**Revalidation impact:** Partial — *proposed by engineering (Varun Karne), 2026-11-10; Saad Rahman (compliance owner) to confirm.*
+
+**Revalidate:** resetting an administrator's two-step sign-in from Admin Users.
+**Why:** No record, calculation or access rule changed. Two buttons were added for actions the server already had; the rest removes files, packages and styles nothing used.
+
+- Removed eight unused files, including an old script with passwords written in it — `browser-verify.js`, three unused services, four unused screen helpers
+- Removed two unused packages: `openai` (the chat calls that provider directly) and `react-grid-layout`
+- Admin Users: a "Reset two-step" button (the route existed, no button reached it). Language: "Retranslate All Content", shown only while machine translation is on
+- Removed the reply templates routes (no screen used them) and 219 style rules no screen names. The `cp_templates` table stays: it holds two rows in dev
+- Tests only: the two portal session tests run on a user the test seed creates; one test file that checked removed buttons is gone — `e2e/`, `backend/tests/seed-e2e.js`
 
 ### CP Portal — team meeting decisions, 10 Nov (no Jira; branch `feat/meeting-decisions-1110`; locked by Rohith in chat)
 

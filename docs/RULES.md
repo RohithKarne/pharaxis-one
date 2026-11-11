@@ -411,6 +411,9 @@ Medical Affairs:
 | L-019 | Seal a database copy before starting anything on it: mail, mailboxes and connections to local stand-ins |
 | L-020 | Filter schema metadata by the exact marker (`VIRTUAL GENERATED`, `STORED GENERATED`); spot-check a copied date |
 | L-021 | A check that can skip items reports how many it could not cover, on screen |
+| L-022 | Before saying a route, screen or feature does not exist, search the whole app for its last path segment, not only the file its address points to |
+| L-023 | A setting's or a file's name is not evidence of what it does: open the code that reads it before calling a feature dead |
+| L-024 | Before saying what the data holds (empty, renamed, how much), count it in that database, the same day. A test database or an old file is not the dev data |
 
 ---
 

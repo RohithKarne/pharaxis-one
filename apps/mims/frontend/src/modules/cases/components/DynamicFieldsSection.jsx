@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { evaluateRule } from '../../../shared/ruleEvaluator.js'
 import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 import useFieldValidation from '../../../shared/hooks/useFieldValidation'
@@ -6,7 +6,6 @@ import useSmartFields from '../../../shared/hooks/useSmartFields'
 import FieldHistoryPopover from '../../../shared/components/FieldHistoryPopover'
 import LockedFieldBadge from '../../../shared/components/compliance/LockedFieldBadge'
 import MaskedRevealButton from '../../../shared/components/compliance/MaskedRevealButton'
-import ReasonForChangeModal from '../../../shared/components/compliance/ReasonForChangeModal'
 import FieldPresenceBadge from '../../../shared/components/collab/FieldPresenceBadge'
 import RichFieldRenderer from '../../../shared/components/richFields/RichFieldRenderer'
 import TypeaheadInput from '../../../shared/components/TypeaheadInput'
@@ -158,14 +157,9 @@ export default function DynamicFieldsSection({
     })
   }, [ruleState.defaults, activeSections, onChange])
 
-  // Theme 9: pending reason capture
-  const [pendingReason, setPendingReason] = useState(null) // { fid, field, oldValue, newValue }
+  // Compliance Controls asks for the reason once, at Save (useCaseForm). Asking
+  // here opened a dialog on every keystroke and its reason was never stored.
   function attemptSet(field, newValue) {
-    const oldValue = values[field.id]
-    if (themeFlag9 && oldValue != null && oldValue !== '' && oldValue !== newValue) {
-      setPendingReason({ fid: field.id, field: field.field_name, oldValue, newValue })
-      return
-    }
     commitSet(field.id, newValue)
   }
   function commitSet(fid, newValue) {
@@ -389,30 +383,6 @@ export default function DynamicFieldsSection({
           </button>
         </div>
       )}
-
-      <ReasonForChangeModal
-        open={!!pendingReason}
-        onClose={() => setPendingReason(null)}
-        onConfirm={async ({ reason }) => {
-          if (!pendingReason) return
-          commitSet(pendingReason.fid, pendingReason.newValue)
-          // Best-effort persist via field history (server still records on save)
-          try {
-            const headers = { 'Content-Type': 'application/json' }
-            await fetch('/api/field-history/manual', {
-              method: 'POST', headers,
-              body: JSON.stringify({
-                entity_type: 'case', entity_id: caseId,
-                section: caseSection, field: pendingReason.field,
-                old_value: pendingReason.oldValue, new_value: pendingReason.newValue, reason,
-              }),
-            }).catch(() => {})
-          } catch { /* best-effort history note */ }
-        }}
-        field={pendingReason?.field}
-        oldValue={pendingReason?.oldValue}
-        newValue={pendingReason?.newValue}
-      />
     </div>
   )
 }

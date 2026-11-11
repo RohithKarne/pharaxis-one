@@ -38,17 +38,17 @@ function assert(condition, message) {
 
   const orgsRes = await req('/api/admin/platform/orgs-for-assignment', { token: superToken });
   assert(orgsRes.res.ok, `Load orgs-for-assignment failed: ${JSON.stringify(orgsRes.data)}`);
-  const novartis = (orgsRes.data.orgs || []).find(o => o.id === 1 || o.name === 'Novartis');
-  assert(novartis, 'Novartis org not found.');
-  const primarySite = (novartis.sites || [])[0];
-  assert(primarySite, 'No active Novartis site available for smoke test.');
-  summary.push(['Novartis org lookup', 'PASS']);
+  const org = (orgsRes.data.orgs || []).find(o => o.id === 1);
+  assert(org, 'Organisation 1 not found.');
+  const primarySite = (org.sites || [])[0];
+  assert(primarySite, 'No active site in organisation 1 for the smoke test.');
+  summary.push(['Organisation lookup', 'PASS']);
 
   const enable2fa = await req('/api/admin/platform/orgs/1', {
     method: 'PUT',
     token: superToken,
     body: {
-      name: 'Novartis',
+      name: org.name,
       is_active: 1,
       session_timeout_minutes: 30,
       two_factor_enabled: true,
@@ -57,7 +57,7 @@ function assert(condition, message) {
     },
   });
   assert(enable2fa.res.ok, `Enable org 2FA failed: ${JSON.stringify(enable2fa.data)}`);
-  summary.push(['Enable Novartis 2FA', 'PASS']);
+  summary.push(['Enable organisation 2FA', 'PASS']);
 
   const createUser = await req('/api/admin/platform/users/create', {
     method: 'POST',
@@ -71,10 +71,10 @@ function assert(condition, message) {
   const assignOrg = await req(`/api/admin/platform/users/${userId}/org-access`, {
     method: 'POST',
     token: superToken,
-    body: { org_id: novartis.id, primary_site_id: primarySite.id, role_at_org: 'agent', site_permission: 'full' },
+    body: { org_id: org.id, primary_site_id: primarySite.id, role_at_org: 'agent', site_permission: 'full' },
   });
   assert(assignOrg.res.ok, `Assign org failed: ${JSON.stringify(assignOrg.data)}`);
-  summary.push(['Assign Novartis org', 'PASS']);
+  summary.push(['Assign organisation', 'PASS']);
 
   const initialLogin = await req('/api/auth/login', {
     method: 'POST',

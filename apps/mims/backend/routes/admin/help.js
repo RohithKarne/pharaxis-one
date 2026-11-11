@@ -87,8 +87,6 @@ const KNOWN_FEATURE_KEYS = [
   'admin.security_groups',
   'admin.case_numbering',
   'admin.organisations',
-  'admin.content_intelligence',
-  'admin.policy_graph',
   'reports',
   'inbox',
   'browse',

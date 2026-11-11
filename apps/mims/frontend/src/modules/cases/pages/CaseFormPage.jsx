@@ -18,6 +18,7 @@ import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 import toast from '../../../shared/utils/toast'
 import CaseChangeControlModal from '../components/CaseChangeControlModal'
+import ReasonForChangeModal from '../../../shared/components/compliance/ReasonForChangeModal'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -41,7 +42,7 @@ export default function CaseFormPage() {
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus, draftRestored, discardDraft,
-    saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged,
+    saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged, reasonRequest, askSaveReason,
     getFieldConfig, getPicklistOptions,
     headers, changeControlAsk, setChangeControlAsk,
   } = useCaseForm(id, token)
@@ -60,10 +61,13 @@ export default function CaseFormPage() {
   }, [])
 
   async function saveCaseAndSections() {
-    await saveInfo(false)
+    // Compliance Controls: one reason covers everything this click saves.
+    const reason = await askSaveReason()
+    if (reason === null) return
+    if ((await saveInfo(false, reason ? { reason } : {})) === false) return
     const sections = [
       ...sectionSaves.current.values(),
-      { label: 'Additional fields', isDirty: dynFieldsChanged, save: saveDynFields },
+      { label: 'Additional fields', isDirty: dynFieldsChanged, save: () => saveDynFields(reason) },
     ]
     const failed = []
     for (const section of sections.filter(s => s.isDirty())) {
@@ -380,6 +384,13 @@ export default function CaseFormPage() {
         ask={changeControlAsk}
         onCancel={() => setChangeControlAsk(null)}
         onSubmit={values => { setChangeControlAsk(null); saveInfo(false, values) }}
+      />
+      {/* Compliance Controls: one reason for the stored values this save changes. */}
+      <ReasonForChangeModal
+        open={!!reasonRequest}
+        changes={reasonRequest?.changes}
+        onClose={() => reasonRequest?.resolve('')}
+        onConfirm={({ reason }) => reasonRequest?.resolve(reason)}
       />
 
       {/* PARK: AI Assistant panel removed from the case form — the AI suite ships as a

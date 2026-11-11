@@ -20,6 +20,7 @@ router.get('/admin/emir/sender-rules', authenticate, requireRole('admin', 'platf
 router.post('/admin/emir/sender-rules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { sender_email, sender_name, is_trusted, notes } = req.body;
+    if (!sender_email) return res.status(400).json({ error: 'sender_email is required.' });
     const [result] = await pool.query(
       `INSERT INTO emir_sender_rules (org_id, sender_email, sender_name, is_trusted, notes)
        VALUES (?, ?, ?, ?, ?)`,
@@ -98,6 +99,7 @@ router.post('/admin/emir/routing-rules', authenticate, requireRole('admin', 'pla
       priority,
       is_active,
     } = req.body;
+    if (!rule_name || !match_field) return res.status(400).json({ error: 'rule_name and match_field are required.' });
 
     const [result] = await pool.query(
       `INSERT INTO emir_routing_rules

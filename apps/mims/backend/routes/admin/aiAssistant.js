@@ -56,6 +56,7 @@ router.post('/admin/ai-config', authenticate, requireRole('admin', 'platform_adm
   try {
     const orgId = targetOrgId(req);
     if (!orgId && !hasGlobalAdminScope(req.user)) return res.status(403).json({ error: 'No active organisation.' });
+    if (!req.body?.provider_key) return res.status(400).json({ error: 'provider_key is required.' });
     const id = await saveProviderConfig(orgId || 0, req.body || {});
     await audit(req, 'UPSERT', 'ai_provider_config', id, { provider_key: req.body.provider_key, enabled: Boolean(req.body.enabled) });
     res.json({ id, message: 'AI provider configuration saved.' });

@@ -14,7 +14,7 @@
 const http = require('http');
 
 const BASE   = process.env.TEST_BASE_URL || 'http://localhost:4000';
-const CLIENT = process.env.TEST_CLIENT || 'novartis';
+const CLIENT = process.env.TEST_CLIENT || 'demopharma';
 
 function req(method, pathname) {
   return new Promise((resolve, reject) => {

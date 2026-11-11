@@ -128,6 +128,21 @@ export default function AdminUsersPage() {
     }
   }
 
+  // A lost phone or three wrong codes: another administrator starts the person's
+  // two-step sign-in over. The route existed; no button reached it.
+  async function resetTwoStep(user) {
+    if (!confirm(`Reset two-step sign-in for ${user.name || user.email}? They will set it up again at their next sign-in.`)) return
+    try {
+      const res = await fetch(`/api/admin/admin-users/${clientId}/${user.id}/reset-2fa`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Reset failed.')
+      setListMsg({ type: 'success', text: d.message || 'Two-step sign-in reset.' })
+      loadUsers()
+    } catch (e) {
+      setListMsg({ type: 'error', text: e.message })
+    }
+  }
+
   function roleBadge(role) {
     const r = ROLE_BADGE[role] || ROLE_BADGE.viewer
     return (
@@ -214,6 +229,9 @@ export default function AdminUsersPage() {
                         )}
                         {u.locked_until && (
                           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => unlock(u)}>Unlock</button>
+                        )}
+                        {u.id !== admin?.id && (
+                          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => resetTwoStep(u)}>Reset two-step</button>
                         )}
                       </>
                     )}

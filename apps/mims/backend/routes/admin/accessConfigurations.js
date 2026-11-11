@@ -26,7 +26,8 @@ function resolveOrgId(req, source = {}) {
 }
 
 function handleError(res, err, fallback = 'Server error.') {
-  const status = err.status || (/not found/i.test(err.message) ? 404 : 500);
+  // A missing or wrong field is the caller's mistake, not a server failure.
+  const status = err.status || (/not found/i.test(err.message) ? 404 : /\b(required|must be)\b/i.test(err.message) ? 400 : 500);
   return res.status(status).json({ error: err.message || fallback });
 }
 
@@ -307,6 +308,7 @@ router.get('/access-config/requests', authenticate, requireAccessAdmin, async (r
 router.post('/access-config/requests', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
+    if (!req.body?.target_type || !req.body?.action) return res.status(400).json({ error: 'target_type and action are required.' });
     const id = await accessService.createAccessRequest({
       orgId,
       requestedBy: req.user.userId,
