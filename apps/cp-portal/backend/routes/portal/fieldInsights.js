@@ -2,9 +2,10 @@
 
 const express = require('express');
 const router = express.Router();
-const pool = require('../../database/db');
+const { pool } = require('../../database/db');
 const { safeFetch } = require('../../utils/networkGuard');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 const MIMS_BASE_URL = process.env.MIMS_API_URL || 'http://localhost:3000/api';
 
@@ -88,6 +89,7 @@ router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
       message: 'Field medical insight captured and queued for central Medical Affairs.',
     });
   } catch (err) {
+    log.error('portal.field_insight.save_failed', { err: { name: err.name, message: err.message } });
     res.status(500).json({ error: 'The insight could not be saved. Please try again.' });
   }
 });
