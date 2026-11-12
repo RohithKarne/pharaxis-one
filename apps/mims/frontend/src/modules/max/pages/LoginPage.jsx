@@ -149,6 +149,13 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   }
 
   async function finishLogin(data) {
+    // A forced password reset can also come back from the two-step step
+    // (verify, skip-setup, backup codes): send it to the reset page, not the menu.
+    if (data.passwordResetRequired) {
+      login(data.user, data.token, [], {})
+      navigate('/reset-password')
+      return
+    }
     if (activeMode !== 'app' && !hasTargetAccess(data)) {
       await discardRejectedSession(data)
       showAlert(`This account does not have access to ${modeConfig.title}.`)
