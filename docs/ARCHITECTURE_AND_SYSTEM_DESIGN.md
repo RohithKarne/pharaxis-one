@@ -65,14 +65,14 @@ Two products, sold separately, joined by one bridge. Pharaxis One has no custome
 
 ## A3. Technology
 
-Versions are those in each `package.json` on `main` (2026-11-11). CI builds on **Node 20**.
+Versions are those in each `package.json` after the toolchain upgrade (2026-11-12). Both apps and CI run on **Node 26 LTS**; the database is **MySQL 9.7 LTS**.
 
 | Layer | CP Portal | MIMS |
 |---|---|---|
-| Server | Express 4.22, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.4, nodemailer 10.3, pdfkit 0.20, express-rate-limit 8.7, @simplewebauthn/server 13, jose 6 | Express 4.18, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.5, nodemailer 10.1, imapflow 1.6, mailparser 3.14, node-cron 4.2, ioredis 5.10, ws 8.22, express-rate-limit 7.5, @simplewebauthn/server 13, jose 6, joi 18.3 |
-| AI | openai 6.29, @anthropic-ai/sdk 0.78 (portal assistant) | Provider abstraction for OpenAI and Anthropic (inbox classifier, response drafter, summariser) |
-| Browser | React 18.3, Vite 7.3, react-router-dom 6.30, DOMPurify 3.4 | React 19.2, Vite 8.0, react-router-dom 7.18, TipTap 3.31, jsPDF 4.2, DOMPurify 3.4 |
-| Database | MySQL 8.0 (native install, no Docker); numbered SQL migrations folded into `0000_baseline.sql` | MySQL 8.0; numbered JavaScript migrations, run at start-up |
+| Server | Express 5.3, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.4, nodemailer 10.5, pdfkit 0.20, express-rate-limit 8.7, @simplewebauthn/server 14, jose 6, dotenv 18, pdfjs-dist 6 | Express 5.3, mysql2 3.24, jsonwebtoken 9, bcrypt 6, multer 2.5, nodemailer 10.5, imapflow 2.11, mailparser 3.14, node-cron 4.2, ioredis 6, ws 8.22, express-rate-limit 8.7, rate-limit-redis 6, @simplewebauthn/server 14, jose 6, joi 18.3 |
+| AI | openai 6.29, @anthropic-ai/sdk 1.8 (portal assistant) | Provider abstraction for OpenAI and Anthropic (inbox classifier, response drafter, summariser) |
+| Browser | React 19.3, Vite 8.3, react-router-dom 7.18, DOMPurify 3.4 | React 19.3, Vite 8.3, react-router-dom 7.18, TipTap 3.33, jsPDF 4.2, DOMPurify 3.4 |
+| Database | MySQL 9.7 LTS (native install, no Docker); numbered SQL migrations folded into `0000_baseline.sql` | MySQL 9.7 LTS; numbered JavaScript migrations, run at start-up |
 | Tests (kept, run in CI) | Fresh-database checks, unit scripts | Jest, Supertest, Vitest, Testing Library; Playwright installed, not run in CI |
 
 ## A4. Where it runs
@@ -84,10 +84,10 @@ Versions are those in each `package.json` on `main` (2026-11-11). CI builds on *
 | Browser app | `:5174` (Vite dev server) | `:5173` (Vite dev server) |
 | API | `:4000` | `:3000` (bound to 127.0.0.1) |
 | Database | `pharaxis_cp_portal_dev` | `pharaxis_mims_dev` |
-| Shared services | MySQL 8 on `:3306` (one server, both databases); ClamAV on `:3310` | Same MySQL server; Redis on `:6379` when running |
+| Shared services | MySQL 9.7 on `:3306` (one server, both databases); ClamAV on `:3310` | Same MySQL server; Redis on `:6379` when running |
 
 - **Environments:** dev only. Tests use their own databases (`*_test`); screen walks use throwaway copies whose mail and outside links are first pointed at local stand-ins (RULES.md › Never do).
-- **CI:** GitHub Actions per product, path-filtered, markdown ignored. Each runs Backend Syntax, Frontend Build, Quality Gate, Security Scan and Unit Tests (against a MySQL 8 service, Node 20). Not a required check: a person reads it and never merges red.
+- **CI:** GitHub Actions per product, path-filtered, markdown ignored. Each runs Backend Syntax, Frontend Build, Quality Gate, Security Scan and Unit Tests (against a MySQL 9.7 service, Node 26). Not a required check: a person reads it and never merges red.
 - **Releases:** not tagged (paused 2026-10-04). Every change goes into `docs/CHANGELOG.md` with a revalidation flag.
 
 ## A5. Security model
@@ -1027,7 +1027,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 
 ### Run it locally
 
-**Prerequisites:** Node 20, MySQL 8 at `/usr/local/mysql` on port 3306, ClamAV for CP Portal, Redis for MIMS (optional).
+**Prerequisites:** Node 26 LTS, MySQL 9.7 LTS on port 3306, ClamAV for CP Portal, Redis for MIMS (optional).
 
 ```bash
 # CP Portal — backend (starts ClamAV too) and frontend, two terminals

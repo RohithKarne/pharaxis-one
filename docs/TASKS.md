@@ -119,6 +119,25 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9 | Static syntax checks & frontend Vite builds across both applications | Kiranmai, Varun | ✅ |
 | 10 | Screen walk passing and failing verification report & sign-offs | Tim, Varun, Saad, John | ✅ |
 
+## Now — toolchain upgrade to the latest stable releases (no Jira; locked by Rohith 2026-11-12, "upgrade all in one go")
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Node 26 LTS installed beside Node 22 (not yet the default); CI on Node 26 | Kiranmai | ✅ |
+| 2 | CP Portal: every package latest; Express 5 sanitiser and body fixes | Kiranmai | ✅ |
+| 3 | MIMS: every package latest; Express 5 routes, rate-limit keys, ESLint 10 finds | Kiranmai | ✅ |
+| 4 | MySQL 9.7 LTS beside 8.0 on port 3307; both dev databases loaded and counted (361 tables match) | Kiranmai | ✅ |
+| 5 | Search speed measured on 8.0 and 9.7 with the same data: no regression | Varun | ✅ |
+| 6 | Found: CP Portal could not start; field insights open to anyone and never saved — fixed | Kiranmai | ✅ |
+| 7 | Found: forced password reset skipped after two-step sign-in — fixed | Kiranmai | ✅ |
+| 8 | Found: reporter clarification links failed at every step — fixed and walked end to end | Kiranmai, Meera | ✅ |
+| 9 | Found: migrations 0064 and 191 broke fresh databases (CI red on main) — fixed | Kiranmai | ✅ |
+| 10 | Walk both apps on a sealed 9.7 copy, failing paths included | Kiranmai | ✅ |
+| 11 | Postmortem for #816/#817 | Varun | ✅ |
+| 12 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 13 | After merge: switch the dev machine to MySQL 9.7 on port 3306 and make Node 26 the default (needs Rohith's admin password once) | Rohith, Varun | ⏳ |
+| 14 | Walk the rest of #817 on screen: inspector export, E2B, document diff, reconciliation, credential check | Kiranmai, John | ⏳ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |
