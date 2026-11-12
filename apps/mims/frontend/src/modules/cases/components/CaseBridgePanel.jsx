@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+// Where reporters open a clarification link: CP Portal's web address (local copy by default).
+const CP_PORTAL_URL = (import.meta.env.VITE_CP_PORTAL_URL || 'http://localhost:5174').replace(/\/$/, '')
+
 // A case sent in by a connected portal (bridge features F1, F3, F5):
 // - where it came from, with a link to the request on that portal;
 // - an earlier case that may be the same report, for a person to judge;
@@ -154,13 +157,15 @@ export default function CaseBridgePanel({ caseId, headers }) {
               {!q.answered_at && !q.withdrawn_at && q.token && (
                 <div style={{ marginTop: 6, padding: '6px 10px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                   <span style={{ color: '#047857', fontWeight: 600 }}>🔗 Magic Link (72h):</span>
-                  <code style={{ color: '#334155' }}>{`/portal/clarification?token=${q.token.slice(0, 12)}...`}</code>
+                  <code style={{ color: '#334155' }}>{`/portal/clarification#${q.token.slice(0, 12)}...`}</code>
                   <button
                     type="button"
                     className="cf-bridge-link"
                     style={{ marginLeft: 'auto', fontWeight: 600 }}
                     onClick={() => {
-                      const link = `${window.location.origin}/portal/clarification?token=${q.token}`
+                      // The page lives in CP Portal, not MIMS. The token goes after '#', which the
+                      // browser never sends to a server, so it stays out of request logs.
+                      const link = `${CP_PORTAL_URL}/portal/clarification#${q.token}`
                       navigator.clipboard?.writeText(link)
                       alert('Copied direct clarification magic link to clipboard!')
                     }}

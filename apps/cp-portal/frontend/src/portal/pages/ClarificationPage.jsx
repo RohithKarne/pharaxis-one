@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, useLocation, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function ClarificationPage() {
   const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')
-  const { clientCode, t } = usePortal()
+  const { hash } = useLocation()
+  // New links carry the token after '#', so it never reaches a server log.
+  // Links sent before that still carry it as a query value; they expire in 72 hours.
+  const token = hash.length > 1 ? decodeURIComponent(hash.slice(1)) : searchParams.get('token')
+  // The link MIMS sends opens outside any client's portal, where there is no portal context.
+  const { clientCode } = usePortal() || {}
 
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
