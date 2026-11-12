@@ -54,8 +54,13 @@ function sanitizeValue(value, depth = 0) {
 
 function inputSecurity(req, _res, next) {
   try {
+    // Express 5 leaves req.body undefined when no parser ran; routes destructure it.
+    if (req.body === undefined) req.body = {}
     if (req.body && typeof req.body === 'object') req.body = sanitizeValue(req.body)
-    if (req.query && typeof req.query === 'object') req.query = sanitizeValue(req.query)
+    // Express 5 makes req.query a read-only getter: a plain assignment is dropped.
+    if (req.query && typeof req.query === 'object') {
+      Object.defineProperty(req, 'query', { value: sanitizeValue(req.query), writable: true, configurable: true, enumerable: true })
+    }
     if (req.params && typeof req.params === 'object') req.params = sanitizeValue(req.params)
     next()
   } catch (error) {

@@ -28,7 +28,7 @@
  *   node scripts/migrate-timestamps-to-utc.js --confirm  # apply
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { pool } = require('../database/db');
 
 const OFFSET_MINUTES = 330; // IST (+05:30) → UTC
