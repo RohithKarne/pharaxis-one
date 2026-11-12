@@ -105,6 +105,11 @@ CREATE TABLE IF NOT EXISTS cp_portal_users (
   access_status                 VARCHAR(20)  NULL,
   access_requested_at           DATETIME     NULL,
   access_decided_at             DATETIME     NULL,
+  -- license_number, registry_type, license_verified, license_verified_at folded in from 0064.
+  license_number                VARCHAR(64)  NULL,
+  registry_type                 VARCHAR(32)  NULL,
+  license_verified              TINYINT(1)   NOT NULL DEFAULT 0,
+  license_verified_at           DATETIME     NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_portal_users (client_id, email),
   CONSTRAINT fk_portal_users_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -1489,6 +1494,26 @@ CREATE TABLE IF NOT EXISTS cp_event_registrations (
   CONSTRAINT fk_cp_event_reg_user  FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- cp_field_insights folded in from 0064 (field medical insight capture).
+CREATE TABLE IF NOT EXISTS cp_field_insights (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NOT NULL,
+  reporter_name VARCHAR(255) NOT NULL,
+  reporter_email VARCHAR(255) NULL,
+  hcp_specialty VARCHAR(128) NULL,
+  institution VARCHAR(255) NULL,
+  product_name VARCHAR(128) NOT NULL,
+  insight_type VARCHAR(64) NOT NULL,
+  interaction_venue VARCHAR(128) NULL,
+  content TEXT NOT NULL,
+  urgency VARCHAR(32) NOT NULL DEFAULT 'normal',
+  follow_up_requested TINYINT(1) NOT NULL DEFAULT 0,
+  created_by_user_id INT NULL,
+  sync_status VARCHAR(32) NOT NULL DEFAULT 'synced',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_field_insights_client (client_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ── RECORD 0002-0024 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
@@ -1556,4 +1581,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0060_add_portal_trusted_devices.sql',      NULL),
   ('0061_add_event_registrations.sql',         NULL),
   ('0062_add_patient_identifier_to_ae_forms.sql', NULL),
-  ('0063_add_safety_alert_second_check.sql',   NULL);
+  ('0063_add_safety_alert_second_check.sql',   NULL),
+  ('0064_strategic_enhancements_schema.sql',   NULL);
