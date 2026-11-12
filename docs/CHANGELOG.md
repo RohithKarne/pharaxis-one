@@ -33,6 +33,14 @@ until he confirms it.
 
 ## Unreleased
 
+### S1 — side-effect reports missing a validity criterion are kept, not refused (CP Portal and MIMS — 2026-11-12)
+
+**Revalidation impact:** Partial — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.* Revalidate side-effect intake (portal form, bridge, MIMS case API) and the AE validity display only.
+**Why:** A side-effect report missing the patient, reporter, product or reaction was refused and lost (since #816). It is now kept, flagged for follow-up in both apps, and still cannot be transmitted to PV until all four are recorded (EMA GVP Module VI; 21 CFR 314.80).
+- CP Portal: the portal no longer refuses such a report; the reporter is told what the safety team may ask for; the Submissions inbox marks it "Incomplete — follow up" and names what is missing.
+- MIMS: the case API no longer refuses it; an AE case shows "Not yet a valid report — follow up for: …" under the header, from the same check that gates Transmit to PV, and the banner clears on save.
+- MIMS (found on the way): the E2B validation's four-factor check always passed, because it read placeholder values ("Suspect Product", "UNK"); it now uses the same validity check.
+
 ### Toolchain upgrade to the latest stable releases, and fixes found on the way (CP Portal and MIMS — 2026-11-12)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.*

@@ -134,9 +134,20 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9 | Found: migrations 0064 and 191 broke fresh databases (CI red on main) — fixed | Kiranmai | ✅ |
 | 10 | Walk both apps on a sealed 9.7 copy, failing paths included | Kiranmai | ✅ |
 | 11 | Postmortem for #816/#817 | Varun | ✅ |
-| 12 | Push and open the pull request | Varun | ⏳ Rohith's word |
-| 13 | After merge: switch the dev machine to MySQL 9.7 on port 3306 and make Node 26 the default (needs Rohith's admin password once) | Rohith, Varun | ⏳ |
+| 12 | Push and open the pull request — PR #818, merged | Varun | ✅ |
+| 13 | After merge: switch the dev machine to MySQL 9.7 on port 3306 and make Node 26 the default — seen 2026-11-12: Node 26.13.1, MySQL 9.7.4 on 3306 | Rohith, Varun | ✅ |
 | 14 | Walk the rest of #817 on screen: inspector export, E2B, document diff, reconciliation, credential check | Kiranmai, John | ⏳ |
+
+## Now — S1: keep incomplete side-effect reports (no Jira; locked by Rohith 2026-11-12)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | CP Portal: keep the report, name what is missing, tell the reporter, flag it in Submissions | Kiranmai | ✅ |
+| 2 | MIMS: stop refusing on the case API; banner on the AE case from the validity check | Kiranmai, Meera | ✅ |
+| 3 | Found: E2B four-factor check always passed — now uses the validity check | Varun | ✅ |
+| 4 | Walk on sealed copies: incomplete kept and flagged, complete not flagged, banner clears on save, empty description refused | Kiranmai | ✅ |
+| 5 | Decide: CP counts a reporter with only a name; MIMS needs email or phone | John | ⏳ |
+| 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
 
 ## Waiting on a decision
 
