@@ -104,9 +104,23 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 6 | Auto-archive expired response templates in daily content lifecycle scheduler | Kiranmai, Daniel | ✅ |
 | 7 | Align signature documentation in RULES.md and PRD.md to Approve and Send only | Saad | ✅ |
 
+## Now — Seven strategic enhancements (no Jira; locked by Rohith 2026-11-11)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Database migrations for enhancements in MIMS (192) and CP Portal (0064) | Kiranmai | ✅ |
+| 2 | Feature 1: Cross-Case Inspector Export Suite (MIMS-62) multi-case audit export | Kiranmai, Saad | ✅ |
+| 3 | Feature 2: Automated Safety Transmission Gateway (E2B-R3) in-app validation & export | Kiranmai, Meera | ✅ |
+| 4 | Feature 3: Interactive Two-Way Reporter Dialogue with encrypted 72h magic links | Kiranmai, Meera | ✅ |
+| 5 | Feature 4: Response Document Review Diffing Engine with inline and side-by-side view | Kiranmai, Daniel | ✅ |
+| 6 | Feature 5: Field Medical Insight Capture Screen with mobile-responsive offline intake | Kiranmai, Daniel | ✅ |
+| 7 | Feature 6: Real-Time Safety Reconciliation Engine comparing intake receipts to cases | Kiranmai, John | ✅ |
+| 8 | Feature 7: Doctor Credential Verification Gateway (NPI & GMC) during registration | Kiranmai, John | ✅ |
+| 9 | Static syntax checks & frontend Vite builds across both applications | Kiranmai, Varun | ✅ |
+| 10 | Screen walk passing and failing verification report & sign-offs | Tim, Varun, Saad, John | ✅ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |
 |---|---|
 | Which cloud, and when | Rohith — unlocks a demo environment, deploys and real backups |
-| Inspector Export (MIMS-62) | The lock (PRD.md › Later) |

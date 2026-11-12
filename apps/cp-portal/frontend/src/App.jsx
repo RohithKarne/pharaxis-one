@@ -70,6 +70,8 @@ const MyActivityPage           = lazy(() => import('./portal/pages/MyActivityPag
 const ProfilePage              = lazy(() => import('./portal/pages/ProfilePage'))
 const ForgotPasswordPage       = lazy(() => import('./portal/pages/ForgotPasswordPage'))
 const ResetPasswordPage        = lazy(() => import('./portal/pages/ResetPasswordPage'))
+const ClarificationPage        = lazy(() => import('./portal/pages/ClarificationPage'))
+const FieldInsightPage         = lazy(() => import('./portal/pages/FieldInsightPage'))
 import { ToastProvider }        from './shared/components/Toast'
 const AnalyticsPage            = lazy(() => import('./admin/pages/AnalyticsPage'))
 const FeedbackPage             = lazy(() => import('./admin/pages/FeedbackPage'))
@@ -173,6 +175,8 @@ function PortalRoutes() {
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
           <Route path="my-submissions"    element={<PortalAuthGuard><MySubmissionsPage /></PortalAuthGuard>} />
           <Route path="request/:token"    element={<VisitorRequestPage />} />
+          <Route path="clarification"     element={<ClarificationPage />} />
+          <Route path="field-insights"    element={<FieldInsightPage />} />
           <Route path="my-activity"       element={<PortalAuthGuard><MyActivityPage /></PortalAuthGuard>} />
           <Route path="contact"           element={<ContactPage />} />
           <Route path="safety"            element={<SafetyPortalPage />} />
@@ -207,6 +211,10 @@ export default function App() {
     <Routes>
       {/* Public Portal — multi-tenant by clientCode */}
       <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />
+      <Route path="/portal/clarification" element={<ClarificationPage />} />
+      <Route path="/clarification" element={<ClarificationPage />} />
+      <Route path="/portal/field-insights" element={<FieldInsightPage />} />
+      <Route path="/field-insights" element={<FieldInsightPage />} />
       <Route path="*" element={<AdminAuthProvider><AdminRoutes /></AdminAuthProvider>} />
     </Routes>
     </Suspense>

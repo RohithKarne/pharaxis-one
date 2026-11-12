@@ -219,7 +219,7 @@ const ROLE_CHOICES = [
 function RequestAccess({ clientCode, userTypes, onBack }) {
   const { t } = usePortal()
   const roles = Array.isArray(userTypes) && userTypes.length ? userTypes : ROLE_CHOICES
-  const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '', weekly_email: false })
+  const [f, setF] = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '', weekly_email: false, license_number: '', registry_type: 'npi' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
@@ -261,6 +261,31 @@ function RequestAccess({ clientCode, userTypes, onBack }) {
           {roles.map(r => <option key={r.type_key} value={r.type_key}>{r.label}</option>)}
         </select>
       </div>
+      {['hcp', 'physician', 'doctor'].includes(f.user_type) && (
+        <>
+          <div className="pp-field">
+            <label htmlFor="ra-registry">{t('Medical Registry')}</label>
+            <select id="ra-registry" value={f.registry_type || 'npi'} onChange={e => set('registry_type', e.target.value)}>
+              <option value="npi">US National Provider Identifier (NPI)</option>
+              <option value="gmc">UK General Medical Council (GMC)</option>
+              <option value="national_license">Other National Medical License</option>
+            </select>
+          </div>
+          <div className="pp-field">
+            <label htmlFor="ra-license">{t('Medical Registration / License Number')}</label>
+            <input
+              id="ra-license"
+              required
+              value={f.license_number || ''}
+              onChange={e => set('license_number', e.target.value)}
+              placeholder={f.registry_type === 'gmc' ? '7-digit GMC number' : '10-digit NPI number'}
+            />
+            <div style={{ fontSize: 12, color: 'var(--pp-text-muted, #6B7280)', marginTop: 4 }}>
+              {t('Verified medical registration is required to access Continuing Medical Education (CME) and clinical materials.')}
+            </div>
+          </div>
+        </>
+      )}
       <div className="pp-field"><label htmlFor="ra-country">{t('Country')}</label><input id="ra-country" required maxLength={100} value={f.country} onChange={e => set('country', e.target.value)} autoComplete="country-name" /></div>
       {/* CPPM-101: the reader's own yes to the weekly email, never ticked for them. */}
       <div className="pp-field">

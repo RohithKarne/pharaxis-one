@@ -33,6 +33,19 @@ until he confirms it.
 
 ## Unreleased
 
+### Seven Strategic Enhancements (CP Portal and MIMS — 2026-11-11)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-11.*
+**Why:** Added Cross-Case Inspector Export Suite (MIMS-62) with SHA-256 seal, automated ICH E2B(R3) safety transmission with schema validation, encrypted magic-link two-way doctor dialogue, response document review diffing engine, mobile-first field medical insight capture, real-time safety reconciliation engine (GVP Module VI), and NPI/GMC physician credential verification gateway.
+
+- **Cross-Case Inspector Export Suite (MIMS-62):** Multi-case audit export by date range, case type, and tenant with cryptographic SHA-256 digest, lifting 10,000-row cap and emitting signed CSV and PDF audit packages (`apps/mims/backend/routes/admin/auditInspectorExport.js`).
+- **Automated Safety Transmission Gateway (E2B-R3):** In-app ICH E2B(R3) XML generation and schema validation with missing tag checklists and audit-logged downloads (`apps/mims/backend/routes/caseHandoff.js`).
+- **Interactive Two-Way Reporter Dialogue:** Encrypted 72-hour magic links for doctors to provide clinical clarification without login friction, auto-syncing into case audit threads (`apps/mims/backend/routes/caseBridge.js`, `apps/cp-portal/backend/routes/portal/clarifications.js`, `apps/cp-portal/frontend/src/portal/pages/ClarificationPage.jsx`).
+- **Response Document Review Diffing Engine:** Visual comparison component with inline and side-by-side text diffing, highlighting additions in green and removals in strikethrough red for medical reviewers (`apps/mims/frontend/src/shared/utils/textDiff.js`, `DocumentDiffViewer.jsx`, `CaseMITab.jsx`).
+- **Field Medical Insight Capture Screen:** Mobile-first responsive intake with offline draft caching for MSLs at congresses, ingesting directly into central inquiry ledger (`apps/cp-portal/backend/routes/portal/fieldInsights.js`, `apps/cp-portal/frontend/src/portal/pages/FieldInsightPage.jsx`).
+- **Real-Time Safety Reconciliation Engine:** Automated reconciliation sweep comparing intake receipts with active cases, tracking 24-hour triage SLA and zero-loss compliance (`apps/mims/backend/services/safetyReconciliationService.js`, `apps/mims/backend/routes/pvReconciliation.js`, `SafetyReconciliationPanel.jsx`, `TransmissionsPage.jsx`).
+- **Doctor Credential Verification Gateway:** Validation of physician credentials against US NPI (10-digit Luhn-80840) and UK GMC (7-digit) registries during portal registration, gating CME clinical access (`apps/cp-portal/backend/services/credentialVerificationService.js`, `apps/cp-portal/backend/routes/portal/auth.js`, `LoginPage.jsx`).
+
 ### Table 1 Core Fixes (CP Portal and MIMS — 2026-11-11)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-11.*

@@ -8,6 +8,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 import MiApprovalPanel from '../../../shared/components/MiApprovalPanel'  // Sprint 2 #16 + #17
+import DocumentDiffViewer from '../../../shared/components/DocumentDiffViewer'
 import { useAuth } from '../../../shared/context/AuthContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -104,6 +105,7 @@ export default function CaseMITab({
   const [builderLoading, setBuilderLoading] = useState(false)
   const [builderPreview, setBuilderPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [showDiff, setShowDiff] = useState(false)
 
   useEffect(() => { loadMI(); loadMiResponses() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -923,9 +925,22 @@ export default function CaseMITab({
                     </div>
                   </div>
 
-                  <div className="cf-builder-preview-actions">
+                  <div className="cf-builder-preview-actions" style={{ display: 'flex', gap: 10 }}>
                     <button className="cf-open-btn" onClick={previewMiResponse} disabled={previewLoading || miRespSaving}>{previewLoading ? 'Rendering...' : 'Preview Response Package'}</button>
+                    <button type="button" className="cf-open-btn" style={{ background: showDiff ? '#EFF6FF' : undefined, borderColor: showDiff ? '#2563EB' : undefined, color: showDiff ? '#1D4ED8' : undefined }} onClick={() => setShowDiff(p => !p)}>
+                      {showDiff ? 'Hide Revision Diff' : 'Compare vs Template'}
+                    </button>
                   </div>
+                  {showDiff && (
+                    <div style={{ marginTop: 12, marginBottom: 12 }}>
+                      <DocumentDiffViewer
+                        originalText={templates.find(t => t.id === miRespForm.template_id)?.body_html || 'Standard response template placeholder'}
+                        modifiedText={miRespForm.body_html || miRespForm.custom_text || ''}
+                        originalLabel="Standard Template Baseline"
+                        modifiedLabel="Current Draft Revisions"
+                      />
+                    </div>
+                  )}
                   {builderPreview && (
                     <div className="cf-builder-preview">
                       <div className="cf-builder-preview-top">
