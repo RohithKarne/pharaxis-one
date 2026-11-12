@@ -19,6 +19,7 @@ const { generateE2BXml } = require('../services/pv/e2bGenerator');
 const { validateE2BXml } = require('../services/pv/e2bValidator');
 const { sha256 } = require('../services/eSignManifestService');
 const { writeCaseAudit } = require('../services/caseHelpers');
+const { assess: assessValidity } = require('../services/caseValidityService');
 
 // Same org gate as caseValidity: a case id alone must never be enough to read
 // or transmit another tenant's case.
@@ -218,13 +219,12 @@ router.get('/cases/:caseId/e2b/validate', authenticate, async (req, res) => {
     const xml = generateE2BXml(icsrData);
     const errors = validateE2BXml(xml);
 
-    // Also check the four core pharmacovigilance factors
-    const fourFactors = {
-      patient: !!(icsrData.patient?.initials || icsrData.patient?.dob || icsrData.patient?.sex),
-      reporter: !!(icsrData.reporter?.given_name || icsrData.reporter?.email),
-      suspect_drug: icsrData.drugs.length > 0 && !!icsrData.drugs[0].medicinal_product_name,
-      reaction: icsrData.reactions.length > 0 && !!icsrData.reactions[0].reaction_verbatim,
-    };
+    // The four core pharmacovigilance factors, from the one validity check that also
+    // gates Transmit to PV. Read from the ICSR above they always passed: it fills
+    // gaps with stand-ins ('Suspect Product', 'Adverse reaction', 'UNK', 'Reporter').
+    const validity = await assessValidity({ orgId: owner.org_id, caseId: Number(req.params.caseId) });
+    const met = Object.fromEntries((validity?.elements || []).map(e => [e.key, e.satisfied]));
+    const fourFactors = { patient: !!met.patient, reporter: !!met.reporter, suspect_drug: !!met.product, reaction: !!met.event };
 
     if (!fourFactors.patient) errors.push({ path: '/patient', reason: 'Patient identifier or demographics missing' });
     if (!fourFactors.reporter) errors.push({ path: '/primarysource', reason: 'Reporter details missing' });
