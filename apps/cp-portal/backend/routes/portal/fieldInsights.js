@@ -3,14 +3,16 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { safeFetch } = require('../../utils/ssrf');
+const { safeFetch } = require('../../utils/networkGuard');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 
-const MIMS_BASE_URL = process.env.MIMS_API_URL || 'http://localhost:3001/api';
+const MIMS_BASE_URL = process.env.MIMS_API_URL || 'http://localhost:3000/api';
 
-router.post('/', async (req, res) => {
+// Signed-in portal users only. The client and the user come from the session,
+// never from the request body, so an insight cannot be filed against another client.
+router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
     const {
-      client_code,
       reporter_name,
       reporter_email,
       hcp_specialty,
@@ -21,23 +23,16 @@ router.post('/', async (req, res) => {
       content,
       urgency = 'normal',
       follow_up_requested = false,
-      user_id = null,
     } = req.body || {};
+    const clientId = req.portalUser.clientId;
+    const userId = req.portalUser.userId;
 
     if (!reporter_name || !product_name || !content || !insight_type) {
       return res.status(400).json({ error: 'Please provide reporter name, product name, insight category, and clinical content.' });
     }
 
-    let clientId = 1;
-    if (client_code) {
-      const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? LIMIT 1', [client_code]);
-      if (client) clientId = client.id;
-    }
-
-    // Save in cp_field_insights
-    let insightId;
-    try {
-      const [insertRes] = await pool.execute(
+    // Save in cp_field_insights. A failed save is an error, never a made-up ID.
+    const [insertRes] = await pool.execute(
         `INSERT INTO cp_field_insights
            (client_id, reporter_name, reporter_email, hcp_specialty, institution, product_name, insight_type,
             interaction_venue, content, urgency, follow_up_requested, created_by_user_id, sync_status, created_at)
@@ -54,14 +49,10 @@ router.post('/', async (req, res) => {
           content.trim(),
           urgency,
           follow_up_requested ? 1 : 0,
-          user_id,
+          userId,
         ]
       );
-      insightId = insertRes.insertId;
-    } catch (_) {
-      // If table pending migration, generate synthetic ID
-      insightId = Date.now();
-    }
+    const insightId = insertRes.insertId;
 
     // If follow-up requested or high urgency, bridge to MIMS as unsolicited field inquiry
     let linkedCaseId = null;
@@ -97,19 +88,11 @@ router.post('/', async (req, res) => {
       message: 'Field medical insight captured and queued for central Medical Affairs.',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'The insight could not be saved. Please try again.' });
   }
 });
 
-router.get('/', async (req, res) => {
-  try {
-    const [rows] = await pool.execute(
-      'SELECT * FROM cp_field_insights ORDER BY id DESC LIMIT 50'
-    ).catch(() => [[]]);
-    res.json({ insights: rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// No list route: nothing on screen reads insights back, and an open list exposed
+// every client's reporters and clinical content to anyone.
 
 module.exports = router;
