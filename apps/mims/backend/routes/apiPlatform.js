@@ -4,6 +4,7 @@ const express = require('express');
 const { defaultResponseDue } = require('../services/miResponseSettings');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -62,7 +63,8 @@ const oauthTokenRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const raw = req.ip || req.socket?.remoteAddress;
+    const ip = raw ? ipKeyGenerator(raw) : 'unknown';
     const clientId = String((req.body && req.body.client_id) || 'unknown').slice(0, 120);
     return `${ip}:${clientId}`;
   },

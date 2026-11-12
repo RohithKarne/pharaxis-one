@@ -60,6 +60,8 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+// Express 5 defaults to the simple query parser; keep Express 4's nested (qs) parsing.
+app.set('query parser', 'extended');
 
 const API_LATEST_VERSION = 'v1';
 const API_SUPPORTED_VERSIONS = ['v1'];
@@ -479,10 +481,10 @@ mountRoutes(apiV1Router, '');
 app.use('/api', notFoundHandler)
 app.use('/oauth', notFoundHandler)
 app.get('/mims', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
-app.get('/mims/*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+app.get('/mims/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
 // Keep legacy catch-all for dev (Vite handles its own routing)
 if (process.env.NODE_ENV !== 'production') {
-  app.get('*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+  app.get('/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
 }
 app.use(notFoundHandler);
 app.use(errorHandler);

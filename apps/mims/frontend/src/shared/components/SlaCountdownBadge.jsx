@@ -31,9 +31,9 @@ export default function SlaCountdownBadge({ dueAt, slaDue, compact }) {
 
   const { diffH, days, hours, minutes, isBreached } = timeLeft;
 
-  let badgeClass = '';
-  let statusText = '';
-  let timeString = '';
+  let badgeClass;
+  let statusText;
+  let timeString;
 
   if (isBreached) {
     badgeClass = 'cf-sla-badge-red';

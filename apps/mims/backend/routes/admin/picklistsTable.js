@@ -28,6 +28,8 @@ const { forwardErrors } = require('../../middleware/errorHandler');
 
 const ROLE = ['admin', 'platform_admin'];
 const NOT_YOUR_ORG = "You can only manage your own organisation's picklists.";
+// Express 5 dropped inline regex in paths (was :id(\d+)): a non-numeric id skips to the next route, as before.
+const numericId = (req, _res, next) => (/^\d+$/.test(req.params.id) ? next() : next('route'));
 
 // A platform admin works across tenants; a tenant admin only ever reads or
 // changes their own organisation's rows. null = no tenant restriction.
@@ -353,7 +355,7 @@ router.post('/picklists-table/values', authenticate, requireRole(...ROLE), forwa
 // PUT /api/admin/picklists-table/values/:id
 // Update value name, department, status (active/inactive).
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROLE), async (req, res) => {
+router.put('/picklists-table/values/:id', numericId, authenticate, requireRole(...ROLE), async (req, res) => {
   const { value, department, status, description, external_codes, translations, parent_value_id, sort_order } = req.body;
   try {
     const [[existing]] = await pool.execute('SELECT * FROM picklists WHERE id = ? LIMIT 1', [req.params.id]);
@@ -469,7 +471,7 @@ router.get('/picklists-table/values/:id/history', authenticate, requireRole(...R
 // Hard-delete a picklist value (use with care — referenced rows in cases stay,
 // but the value will no longer appear in dropdowns).
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROLE), async (req, res) => {
+router.delete('/picklists-table/values/:id', numericId, authenticate, requireRole(...ROLE), async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT id, value, category, field_type, org_id FROM picklists WHERE id = ?', [req.params.id]);
     if (!existing || !canTouchOrg(req, existing.org_id)) return res.status(404).json({ error: 'Picklist value not found.' });

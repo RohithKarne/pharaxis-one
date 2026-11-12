@@ -120,7 +120,12 @@ function sanitizeInputBucket(value, location, req) {
 function inputSecurityMiddleware(req, res, next) {
   try {
     req.params = sanitizeInputBucket(req.params, 'params', req) || {};
-    req.query = sanitizeInputBucket(req.query, 'query', req) || {};
+    // Express 5 makes req.query a read-only getter: a plain assignment is dropped.
+    Object.defineProperty(req, 'query', {
+      value: sanitizeInputBucket(req.query, 'query', req) || {}, writable: true, configurable: true, enumerable: true,
+    });
+    // Express 5 leaves req.body undefined when no parser ran; routes destructure it.
+    if (req.body === undefined) req.body = {};
     if (req.body && typeof req.body === 'object') {
       req.body = sanitizeInputBucket(req.body, 'body', req) || {};
     }

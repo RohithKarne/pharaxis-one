@@ -726,7 +726,7 @@ export default function InboxPage() {
   // F14: exports what the current tab + filters show, fetched from the server in one request
   // (up to EXPORT_MAX_ROWS), not the page on screen.
   async function exportCSV() {
-    let matched = []
+    let matched
     try {
       const params = buildInboxListParams({
         activeTab, sortAsc, page: 1, pageSize: EXPORT_MAX_ROWS, tenantFilterOrgId,
