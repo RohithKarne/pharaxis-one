@@ -555,24 +555,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), forwardErrors(async (req
 
     const caseType = ['MI', 'AE', 'PC'].includes(req.body.case_type) ? req.body.case_type : 'MI';
 
-    // Four-factor validation for Adverse Events (GVP Module VI). An AE report must
-    // satisfy the minimum criteria for a valid ICSR: patient, reporter, suspect drug, and reaction.
-    if (caseType === 'AE') {
-      const p = req.body.patient;
-      const rep = req.body.reporter;
-      const aeIn = req.body.ae_intake || {};
-      const hasPatient = !!(p && (p.initials || p.age || p.gender));
-      const hasReporter = !!(rep && (rep.first_name || rep.last_name || rep.email));
-      const hasProduct = !!(aeIn.suspect_drug_name);
-      const hasReaction = !!(aeIn.reaction_description || req.body.description || req.body.subject);
-      if (!hasPatient || !hasReporter || !hasProduct || !hasReaction) {
-        await conn.rollback();
-        return res.status(400).json({
-          error: 'An adverse event report requires all four mandatory safety criteria: identifiable patient, identifiable reporter, suspect product, and reaction description.',
-          missing_criteria: { patient: !hasPatient, reporter: !hasReporter, product: !hasProduct, reaction: !hasReaction }
-        });
-      }
-    }
+    // S1 (Rohith, 2026-11-12): an AE missing one of the four validity criteria is
+    // kept, never refused. The case header names what is missing
+    // (caseValidityService) and Transmit to PV stays blocked until all four exist.
     // Intake data is captured at the MINIMUM at the source portal; MIMS triage
     // completes the regulated fields. Values are stored as received (no strict
     // picklist rejection) so a valid submission is never dropped at the boundary.

@@ -24,6 +24,7 @@ const { reportFingerprint } = require('../../services/reportFingerprint');
 const { raiseAlert, clearAlerts, asSentence, recordConnectionResult } = require('../../services/adminAlerts');
 const { MAX_ATTEMPTS: MAX_SYNC_ATTEMPTS } = require('../../services/mimsRetry');
 const { LINK_DAYS, newVisitorToken, visitorLink, visitorOwner } = require('../../services/visitorLink');
+const { missingAeCriteria } = require('../../utils/aeCriteria');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -184,32 +185,6 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       });
     }
 
-    // Four-factor adverse event validation (GVP Module VI). An adverse event report
-    // requires an identifiable patient, identifiable reporter, suspect product,
-    // and reaction description before acceptance.
-    if (formType === 'adverse_event') {
-      const formName = [parsedForm.first_name, parsedForm.last_name].filter(v => v && String(v).trim()).join(' ')
-        || parsedForm.reporter_name || parsedForm.full_name || parsedForm.name || '';
-      const formEmail = parsedForm.email || parsedForm.reporter_email || parsedForm.contact_email || '';
-      const hasPatient = !!(parsedForm.patient_initials || parsedForm.patient_age || parsedForm.patient_sex || parsedForm.age || parsedForm.gender || parsedForm.initials);
-      const hasReporter = !!((req.body.submitter_name && String(req.body.submitter_name).trim()) || (req.body.submitter_email && String(req.body.submitter_email).trim()) || formName || formEmail || req.portalUser?.userId);
-      const hasProduct = !!(parsedForm.product_name || parsedForm.suspect_product || parsedForm.drug_name || parsedForm.product);
-      const hasReaction = !!(parsedForm.event_description || parsedForm.description || parsedForm.reaction_description || parsedForm.event_details || parsedForm.details);
-
-      if (!hasPatient) {
-        return res.status(400).json({ error: 'An identifiable patient (initials, age, or sex) is required for an adverse event report.', field: 'patient_initials' });
-      }
-      if (!hasReporter) {
-        return res.status(400).json({ error: 'An identifiable reporter (name or email) is required for an adverse event report.', field: 'reporter_name' });
-      }
-      if (!hasProduct) {
-        return res.status(400).json({ error: 'A suspect drug or product name is required for an adverse event report.', field: 'product_name' });
-      }
-      if (!hasReaction) {
-        return res.status(400).json({ error: 'An adverse event description or reaction details is required.', field: 'event_description' });
-      }
-    }
-
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
 
@@ -316,6 +291,9 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       id: submissionId,
       message: 'Submission received. Thank you.',
       reference: `CP-${String(submissionId).padStart(6, '0')}`,
+      // S1: a side-effect report missing one of the four criteria is kept; the
+      // person is told what the safety team may ask them for.
+      ...(formType === 'adverse_event' ? { missing_criteria: missingAeCriteria(parsedForm, { submitter_name, submitter_email, user_id: req.portalUser?.userId }) } : {}),
       // CPPM-39: files removed because they contained a known virus, so the person knows.
       ...(blockedFiles.length ? { attachments_blocked: blockedFiles.map(b => b.file) } : {}),
     });
