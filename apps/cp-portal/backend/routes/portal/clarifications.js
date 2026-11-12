@@ -3,9 +3,9 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { safeFetch } = require('../../utils/ssrf');
+const { safeFetch } = require('../../utils/networkGuard');
 
-const MIMS_BASE_URL = process.env.MIMS_API_URL || 'http://localhost:3001/api';
+const MIMS_BASE_URL = process.env.MIMS_API_URL || 'http://localhost:3000/api';
 
 router.get('/:token', async (req, res) => {
   const { token } = req.params;
