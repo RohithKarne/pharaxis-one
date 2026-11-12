@@ -1,6 +1,6 @@
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 // ssoService pulls in the auth middleware, which exits the process if these are
 // unset outside development — and CI runs with NODE_ENV=test. Set before the

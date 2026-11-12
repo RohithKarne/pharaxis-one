@@ -28,7 +28,7 @@ const userModel = {
    */
   async findById(id) {
     const [[row]] = await pool.execute(
-      'SELECT id, name, email, role, is_active, is_disabled, created_at FROM users WHERE id = ?', [id]
+      'SELECT id, name, email, role, is_active, is_disabled, password_reset_required, created_at FROM users WHERE id = ?', [id]
     );
     return row || null;
   },

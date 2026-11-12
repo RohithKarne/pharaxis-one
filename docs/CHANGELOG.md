@@ -33,6 +33,17 @@ until he confirms it.
 
 ## Unreleased
 
+### Toolchain upgrade to the latest stable releases, and fixes found on the way (CP Portal and MIMS — 2026-11-12)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.*
+**Why:** The runtime (Node 26), web framework (Express 5), database engine (MySQL 9.7), sign-in libraries (passkeys 14) and screen framework (React 19, router 7 in CP Portal) all changed; forced password reset, an open data route and the reporter dialogue were fixed.
+- Node 20 → 26 LTS and MySQL 8.0 → 9.7 LTS (both old versions out of support since 30 Apr 2026); CI uses both.
+- Every package in both apps on its latest stable release; Express 5 code changes in the input sanitiser, catch-all and file routes, picklist number check, and rate-limit keys (IPv6 grouped).
+- MIMS: a forced password reset is enforced after two-step sign-in (it was skipped since the 11 Nov reorder).
+- CP Portal: field insights need a portal sign-in; the open list of every client's insights is removed; insights now actually save (none ever had).
+- Bridge: reporter clarification links open in CP Portal, keep the token out of server logs, show the product, and record the answer on the MIMS case (every step failed before).
+- CP Portal migration 0064 folded into the baseline; MIMS migration 191 names the right table (fresh databases could not be built).
+
 ### Seven Strategic Enhancements (CP Portal and MIMS — 2026-11-11)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-11.*

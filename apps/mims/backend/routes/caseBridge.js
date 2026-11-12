@@ -143,7 +143,15 @@ router.get('/bridge/clarifications/:token', async (req, res) => {
 
     const [[q]] = await pool.execute(
       `SELECT q.id, q.case_id, q.question, q.asked_at, q.answered_at, q.withdrawn_at,
-              q.token_expires_at, q.token_used_at, c.case_number, c.product_name, c.case_type,
+              q.token_expires_at, q.token_used_at, c.case_number, c.case_type,
+              -- cases has no product column: take the MI product, else the first AE product.
+              COALESCE(
+                (SELECT p.trade_name FROM case_mi mi JOIN products p ON p.id = mi.product_id
+                  WHERE mi.case_id = c.id ORDER BY mi.id LIMIT 1),
+                (SELECT aepi.product_name FROM case_ae_versions aev
+                   JOIN case_ae_product_info aepi ON aepi.version_id = aev.id
+                  WHERE aev.case_id = c.id ORDER BY aev.id DESC, aepi.id LIMIT 1)
+              ) AS product_name,
               ac.comment AS answer_text
          FROM case_reporter_questions q
          JOIN cases c ON c.id = q.case_id
@@ -210,8 +218,9 @@ router.post('/bridge/clarifications/:token/reply', async (req, res) => {
       // Insert into case comments as external reporter comment
       const commentText = `[Physician Response from ${reporterName}]: ${answer}`;
       const [commentRes] = await conn.execute(
-        'INSERT INTO case_comments (case_id, org_id, user_id, comment, created_at) VALUES (?, ?, NULL, ?, NOW())',
-        [q.case_id, q.org_id, commentText]
+        // case_comments has no org_id: the case carries the organisation.
+        'INSERT INTO case_comments (case_id, user_id, comment, created_at) VALUES (?, NULL, ?, NOW())',
+        [q.case_id, commentText]
       );
 
       // Update question record
@@ -222,10 +231,11 @@ router.post('/bridge/clarifications/:token/reply', async (req, res) => {
 
       // Move case change time and audit
       await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [q.case_id]);
+      // user_id 0 marks an outside actor, as every other bridge write does (the column is NOT NULL).
       await writeCaseAudit(
         q.case_id,
-        null,
-        reporterName,
+        0,
+        `Reporter via portal link: ${reporterName}`,
         'REPORTER_QUESTION_ANSWERED',
         'reporter_question',
         null,

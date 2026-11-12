@@ -1870,7 +1870,8 @@ const authController = {
         });
         const privileges = await resolveUserRuntimePrivileges(user);
         if (user.password_reset_required) {
-          return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+          // Keep first-time backup codes: they are generated above and shown only once.
+          return res.status(200).json({ ...(await issuePasswordResetSession(res, user, privileges)), twoFactorSetupCompleted: setupCompleted, backupCodes: generatedBackupCodes });
         }
         const config = await getSystemConfig();
         const platformContext = await resolvePlatformAdminContext(user, pending.requestedOrgId || null);
@@ -1898,7 +1899,8 @@ const authController = {
       });
       const privileges = await resolveUserRuntimePrivileges(user);
       if (user.password_reset_required) {
-        return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
+        // Keep first-time backup codes: they are generated above and shown only once.
+        return res.status(200).json({ ...(await issuePasswordResetSession(res, user, privileges)), twoFactorSetupCompleted: setupCompleted, backupCodes: generatedBackupCodes });
       }
       const token = issueToken({
         userId: pending.userId,

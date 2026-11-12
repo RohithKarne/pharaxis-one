@@ -24,7 +24,7 @@ const CALDER_PRODUCTS = [
 ];
 
 async function up(conn) {
-  const [orgs] = await conn.execute('SELECT id FROM organizations');
+  const [orgs] = await conn.execute('SELECT id FROM organisations');
   const orgIds = orgs.map(o => o.id);
   const targets = [...new Set([...orgIds, null])];
 

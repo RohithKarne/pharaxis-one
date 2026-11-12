@@ -10,7 +10,7 @@
  *
  *   node scripts/backfill-document-text.js
  */
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { pool } = require('../database/db');
 const storage = require('../utils/storage');
 const { extractPdfText } = require('../utils/pdfText');

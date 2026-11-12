@@ -37,9 +37,9 @@ docs/scripts/  developer scripts
 
 ## Prerequisites
 
-- Node.js 20+
-- npm 10+
-- MySQL 8+
+- Node.js 26 LTS
+- npm 11+
+- MySQL 9.7 LTS
 - macOS/Linux shell (examples use `zsh`/`bash`)
 
 ## Quick Start

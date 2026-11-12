@@ -1,6 +1,7 @@
 'use strict';
 
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { getClient, isReady } = require('../services/redisClient');
 
@@ -46,14 +47,17 @@ function getClientIp(req) {
   // server.js) Express derives req.ip from the trusted proxy hop rather than
   // the raw, client-spoofable X-Forwarded-For chain. Fall back to the legacy
   // header parsing only if req.ip is somehow unavailable.
-  if (req.ip) return req.ip;
+  // express-rate-limit 8: ipKeyGenerator groups an IPv6 address by its /56 network,
+  // so one client cannot rotate addresses inside its own block to dodge the limit.
+  if (req.ip) return ipKeyGenerator(req.ip);
 
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
     const firstHop = forwarded.split(',')[0].trim();
-    if (firstHop) return firstHop;
+    if (firstHop) return ipKeyGenerator(firstHop);
   }
-  return req.connection?.remoteAddress || 'unknown';
+  const remote = req.socket?.remoteAddress;
+  return remote ? ipKeyGenerator(remote) : 'unknown';
 }
 
 function getFingerprint(req) {

@@ -274,14 +274,14 @@ router.delete('/attachments/:id', authenticate, async (req, res) => {
 });
 
 // ── GET /files/:orgId/:key — local provider raw serve (used by local URLs) ──
-router.get('/files/:orgId/*', authenticate, async (req, res) => {
+router.get('/files/:orgId/*key', authenticate, async (req, res) => {
   try {
     // C-01: the :orgId path segment is attacker-controlled — only allow serving files
     // from the caller's own org (platform admins excepted).
     if (!hasGlobalAdminScope(req.user) && String(req.params.orgId) !== String(req.user.orgId)) {
       return res.status(403).end();
     }
-    const key = req.params[0]; // everything after :orgId/
+    const key = [].concat(req.params.key).join('/'); // everything after :orgId/ (Express 5 gives the segments)
     // M-09: path-traversal containment — reject keys that try to escape the org's
     // storage root before delegating to storage.get.
     if (key.split('/').some((seg) => seg === '..')) return res.status(403).end();

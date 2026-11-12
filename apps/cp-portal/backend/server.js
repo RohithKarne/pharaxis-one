@@ -6,7 +6,7 @@
  *   /api/portal — Public Portal API (anonymous + optional auth)
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const express      = require('express');
 const cors         = require('cors');
 const path         = require('path');
@@ -51,6 +51,8 @@ function applySecurityHeaders(req, res, next) {
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+// Express 5 defaults to the simple query parser; keep Express 4's nested (qs) parsing.
+app.set('query parser', 'extended');
 
 // ── Rate limiters ─────────────────────────────────────────────
 // SEC: only skip throttling for genuine local development. Previously this
