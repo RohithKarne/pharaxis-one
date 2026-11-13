@@ -210,7 +210,15 @@ async function trackSessionToken(userId, token) {
 }
 
 function parseTwoFactorToken(token) {
-  const decoded = jwt.verify(token, JWT_SECRET);
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    // The code step lasts 10 minutes; say so in plain words, not the library's.
+    throw new Error(err?.name === 'TokenExpiredError'
+      ? 'This sign-in step timed out after 10 minutes. Go back and sign in again.'
+      : 'This sign-in step is no longer valid. Go back and sign in again.');
+  }
   if (!decoded.twoFactorPending) throw new Error('Invalid 2FA token.');
   return decoded;
 }
@@ -509,7 +517,19 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
   // organisations has it on, so switching organisation later never skips it. The
   // code is held under that organisation (the one signed in to when it has two-step,
   // else the most recently used one that does).
-  const twoFactorOrg = selected.two_factor_enabled ? selected : orgRows.find((r) => r.two_factor_enabled) || null;
+  // Prefer an organisation where the person has already set two-step up, so a
+  // second organisation turning it on does not make them set it up again.
+  const tfaOrgs = orgRows.filter((r) => r.two_factor_enabled);
+  let twoFactorOrg = null;
+  if (tfaOrgs.length) {
+    const [enrolled] = await pool.query(
+      'SELECT org_id FROM user_2fa_settings WHERE user_id = ? AND is_enabled = 1 AND org_id IN (?)',
+      [user.id, tfaOrgs.map((r) => r.org_id)]);
+    const has = new Set(enrolled.map((r) => Number(r.org_id)));
+    twoFactorOrg = (has.has(Number(selected.org_id)) && selected.two_factor_enabled ? selected : null)
+      || tfaOrgs.find((r) => has.has(Number(r.org_id)))
+      || (selected.two_factor_enabled ? selected : tfaOrgs[0]);
+  }
   const platformSignIn = await getPlatformSignIn();
 
   return {
