@@ -76,7 +76,7 @@ async function checkEntity(req, res, next) {
   const caseId = await entityCaseId(req);
   if (!caseId) return next();
   const key = ['GET', 'HEAD'].includes(req.method) ? 'case.view' : 'case.update';
-  const modules = await getUserModules(req.user.userId);
+  const modules = await getUserModules(req.user.userId, req.user.orgId);
   if (modules.includes('mims_core') && await verifyCaseOrg(caseId, req, key)) return next();
   return deny(res, 403, key === 'case.view' ? 'You do not have permission to view this case.' : 'You do not have permission to change this case.');
 }
@@ -98,7 +98,7 @@ function deny(res, status, error) {
 
 async function check(req, res, next) {
   if (hasGlobalAdminScope(req.user)) return next();
-  if (!(await getUserModules(req.user.userId)).includes('mims_core')) {
+  if (!(await getUserModules(req.user.userId, req.user.orgId)).includes('mims_core')) {
     return deny(res, 403, 'You do not have access to Cases.');
   }
   const read = ['GET', 'HEAD'].includes(req.method);

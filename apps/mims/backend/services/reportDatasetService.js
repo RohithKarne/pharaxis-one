@@ -823,10 +823,13 @@ async function getUserAccessReview(orgId) {
     "SELECT role, module FROM role_permissions WHERE can_access = 1 AND module <> 'platform_admin_console'"
   );
   const [personal] = rows.length
-    ? await pool.query('SELECT user_id, module, can_access FROM user_module_permissions WHERE user_id IN (?)', [rows.map((r) => r.id)])
+    // A4: personal changes for every organisation (org_id 0) first, then this one's.
+    ? await pool.query('SELECT user_id, module, can_access FROM user_module_permissions WHERE user_id IN (?) AND org_id IN (0, ?) ORDER BY org_id ASC', [rows.map((r) => r.id), orgId])
     : [[]];
   return rows.map(({ id, user_role: userRole, ...row }) => {
-    const byRole = new Set(roleRows.filter((r) => r.role === userRole).map((r) => r.module));
+    // A4: the role in this organisation decides the screens (as getUserModules).
+    const effectiveRole = userRole === 'platform_admin' ? userRole : row.role;
+    const byRole = new Set(roleRows.filter((r) => r.role === effectiveRole).map((r) => r.module));
     const screens = new Set(byRole);
     personal.filter((p) => p.user_id === id).forEach((p) => (p.can_access ? screens.add(p.module) : screens.delete(p.module)));
     const added = [...screens].filter((m) => !byRole.has(m) && SCREEN_NAMES[m]).map((m) => `+ ${screenName(m)}`);
@@ -876,7 +879,7 @@ const BUILT_DATASETS = new Set(Object.keys(DATASETS));
 // Whose cases ctx.user may see: undefined for all, their id for their own, 0 for none.
 async function caseScopeOf(user) {
   if (!user || hasGlobalAdminScope(user)) return undefined;
-  if (!(await getUserModules(user.userId)).includes('mims_core')) return 0;
+  if (!(await getUserModules(user.userId, user.orgId)).includes('mims_core')) return 0;
   const scope = await resolveActivityScope(user, 'case.view');
   return scope === 'all' ? undefined : scope === 'own' ? Number(user.userId) : 0;
 }

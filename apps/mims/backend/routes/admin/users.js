@@ -20,7 +20,7 @@ const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 const { logAudit } = require('../../utils/auditLog');
-const { getUserModules, getRoleModules, setUserModules, SCREEN_MODULES } = require('../../utils/userModules');
+const { getUserModules, getRoleModules, setUserModules, roleIn, SCREEN_MODULES } = require('../../utils/userModules');
 const { forwardErrors } = require('../../middleware/errorHandler');
 const { updatePasswordWithHistory } = require('../../controllers/authController');
 const { checkOrgEmails } = require('../../services/orgEmailPolicy');
@@ -114,9 +114,20 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
 // GET /api/admin/users/security-groups — global list for dropdown (no requireOrg)
 router.get('/users/security-groups', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [groups] = await pool.execute(
-      `SELECT id, name, description, is_active FROM security_groups WHERE is_active = 1 AND is_template = 0 ORDER BY name ASC`
+    const [rows] = await pool.execute(
+      `SELECT id, name, description, is_active, org_id, privileges FROM security_groups WHERE is_active = 1 AND is_template = 0 ORDER BY name ASC`
     );
+    // A6 (Rohith, 2026-11-13): an organisation admin sees their organisation's groups
+    // and the shared ones, never another organisation's and never a platform group
+    // (assigning one was already refused; the list should not offer it).
+    const global = hasGlobalAdminScope(req.user);
+    const groups = rows.filter((g) => {
+      if (global) return true;
+      if (g.org_id != null && Number(g.org_id) !== Number(req.user.orgId)) return false;
+      let role = null;
+      try { role = (typeof g.privileges === 'string' ? JSON.parse(g.privileges) : g.privileges)?.role; } catch { role = null; }
+      return !ELEVATED_ROLES.has(String(role || '')) && !/platform/i.test(g.name);
+    }).map(({ privileges, org_id, ...g }) => g);
     res.json({ groups });
   } catch (err) {
     console.error('GET /users/security-groups error:', err);
@@ -225,9 +236,16 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     user.tenant_ids = tenants.map(t => t.org_id);
     // L3: a contractor's access end date (one date for their organisations).
     user.access_ends_on = tenants.map(t => t.access_ends_on).find(Boolean) || null;
-    // The screens the person opens, and which of them come with their role.
-    user.modules = await getUserModules(user.id);
-    user.role_modules = await getRoleModules(user.role);
+    // The screens the person opens, and which of them come with their role — A4: in
+    // one organisation, the caller's (a platform admin may name one with ?org_id=).
+    const screensOrg = screensOrgFor(req, req.query.org_id);
+    user.modules = await getUserModules(user.id, screensOrg);
+    user.role_modules = await getRoleModules(await roleIn(user.id, screensOrg));
+    user.screens_org_id = screensOrg;
+    if (screensOrg) {
+      const [[o]] = await pool.execute('SELECT name FROM organisations WHERE id = ?', [screensOrg]);
+      user.screens_org_name = o?.name || null;
+    }
     res.json({ user });
   } catch (err) {
     console.error('GET /users/:id error:', err);
@@ -241,6 +259,13 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 // given Transmissions, an auditor could not lose Reports. MIMS Admin follows
 // the administrator role and is not set here.
 const PERSON_SCREENS = SCREEN_MODULES.filter((m) => m !== 'admin_console');
+
+// A4: the organisation whose screens are read or set — an organisation admin's own;
+// a platform admin's choice (the TENANT picker), else their current one.
+function screensOrgFor(req, requested) {
+  if (hasGlobalAdminScope(req.user)) return parseInt(requested, 10) || req.user.orgId || null;
+  return req.user.orgId || null;
+}
 router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
   const modules = req.body?.modules;
   if (!Array.isArray(modules) || modules.some((m) => !PERSON_SCREENS.includes(m))) {
@@ -251,12 +276,14 @@ router.put('/users/:id/modules', authenticate, requireRole('admin', 'platform_ad
     const scope = orgScopeForUsers(req);
     const [[user]] = await conn.execute(`SELECT u.id FROM users u WHERE u.id = ? AND ${scope.sql}`, [req.params.id, ...scope.params]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
-    const before = await getUserModules(user.id);
+    // A4: the screens are set for one organisation only.
+    const screensOrg = screensOrgFor(req, req.body?.org_id);
+    const before = await getUserModules(user.id, screensOrg);
     await conn.beginTransaction();
-    await setUserModules(conn, user.id, modules, PERSON_SCREENS);
+    await setUserModules(conn, user.id, modules, PERSON_SCREENS, screensOrg);
     await conn.commit();
-    const after = await getUserModules(user.id);
-    await audit(req.user.userId, 'UPDATE_USER_MODULES', user.id, { before, after });
+    const after = await getUserModules(user.id, screensOrg);
+    await audit(req.user.userId, 'UPDATE_USER_MODULES', user.id, { org_id: screensOrg, before, after });
     res.json({ ok: true, modules: after });
   } catch (err) {
     await conn.rollback().catch(() => {});

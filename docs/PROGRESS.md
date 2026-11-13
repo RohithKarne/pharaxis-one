@@ -28,6 +28,10 @@ One sign-in for all of MIMS; sign-in settings on one screen (Sign-in & Security)
 
 Found while re-reading (A0): any organisation admin could set any person's password in any organisation. Fixed with A2 (role per organisation) and A3 (remove from one organisation, not every one), plus Edit User's organisation save. Checked on a sealed copy through the routes the screens call; CI suite 215/215. Edit User walked on screen with a shared person ("User not found" after removal found and fixed). Still open from the access review: C1, A4.
 
+## Done — 2026-11-13: access review closed (C1, A6, A4; locked by Rohith)
+
+Every item from the 11-13 access and organisations review is built: S1, L1–L4 (A1, A5), A0, A2, A3, C1, A6, A4. A4 walked on screen: an agent in Vanaja sees agent screens and "Case Operator", is refused MIMS Admin by address (screen and server), and has admin screens again after switching to Calder; a screen removed in Calder stays in Vanaja. CI suite 215/215, frontend 18/18. **Not checked:** a CP superadmin switching a portal off (no superadmin test user on the copy); the platform admin's TENANT choice on Edit User's Screens.
+
 ## Next
 
 The work in hand is in [TASKS.md](TASKS.md). The ticket list is Jira (CPPM for CP Portal, MIPM for MIMS).

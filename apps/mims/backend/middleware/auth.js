@@ -385,7 +385,7 @@ function requireModule(moduleKey) {
     try {
       if (hasGlobalAdminScope(req.user)) return next();
       // Same resolver as sign-in: role defaults, then personal rows (MIPM-134).
-      const modules = await getUserModules(req.user?.userId);
+      const modules = await getUserModules(req.user?.userId, req.user?.orgId);
       if (modules.includes(moduleKey)) return next();
       return res.status(403).json({
         error: 'You do not have access to this module.',
