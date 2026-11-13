@@ -44,7 +44,7 @@ const EMPTY_FORM = {
   user_id: '', name: '', email: '', initials: '', role: 'agent',
   security_group_id: '', network_user_id: '', department: '',
   is_active: true, is_disabled: false, case_admin: false,
-  tenant_ids: [],
+  tenant_ids: [], access_ends_on: '',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -370,6 +370,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       is_disabled:      !!editUser.is_disabled,
       case_admin:       !!editUser.case_admin,
       tenant_ids:       editUser.tenant_ids       || [],
+      access_ends_on:   editUser.access_ends_on   || '',
       modules:          personScreens(editUser.modules),
       inactive_reason:  '',
       reactivation_reason: '',
@@ -456,7 +457,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         // Update tenants separately
         const rt = await httpFetch(`/api/admin/users/${editUser.id}/tenants`, {
           method: 'PUT', headers: H,
-          body: JSON.stringify({ tenant_ids: form.tenant_ids }),
+          body: JSON.stringify({ tenant_ids: form.tenant_ids, access_ends_on: form.access_ends_on || null }),
         })
         const dt = await rt.json()
         if (!rt.ok) { setApiErr(dt.error || 'Failed to update tenants.'); return }
@@ -895,6 +896,19 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     </div>
                   )
                 })}
+              </div>
+
+              {/* L3: a contractor with a personal email, where the client allows it. */}
+              <div style={{ marginTop: 16 }}>
+                <label htmlFor="ma-usr-access-ends" className="ma-usr-section-title" style={{ display: 'block', marginBottom: 4 }}>
+                  Access ends on
+                </label>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Needed only for a contractor with a personal email (for example gmail), where the client allows it. At most 12 months away. On that day the person is removed from these organisations.
+                </div>
+                <input id="ma-usr-access-ends" type="date" aria-label="Access ends on"
+                  value={form.access_ends_on || ''}
+                  onChange={e => set('access_ends_on', e.target.value)} />
               </div>
             </>
           )}

@@ -149,6 +149,20 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 5 | Decide: CP counts a reporter with only a name; MIMS needs email or phone | John | ⏳ |
 | 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
 
+## Now — one MIMS sign-in (no Jira; locked by Rohith 2026-11-13; replaces A1, folds in A5)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | L1: two-step at sign-in when any of a person's organisations uses it; company login decided by email domain | Kiranmai | ✅ |
+| 2 | L2: remove the public organisation list | Kiranmai | ✅ |
+| 3 | L3: personal emails per client (off by default), access end date at most 12 months, nightly removal (migration 193) | Kiranmai | ✅ |
+| 4 | L4: one Sign-in & Security screen; timeout, methods, remember days, password rules and lockout platform-wide | Kiranmai, Varun | ✅ |
+| 5 | Found: second two-step setup when another org turns it on; "jwt expired" wording; system case entry named a person | Kiranmai | ✅ |
+| 6 | Walk on the sealed copy — client admin view, failing paths, nightly job | Kiranmai | ✅ |
+| 7 | See the platform admin's view of Sign-in & Security on screen | Kiranmai | ⏳ |
+| 8 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 9 | Next from the access review: A2/A3 (an org admin's changes reach other orgs), C1 (CP client admin can switch off the portal), A4 (screens per organisation) | Tim | ⏳ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |

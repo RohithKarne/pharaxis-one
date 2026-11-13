@@ -22,6 +22,7 @@ const { validateBulkUserRows } = require('../../services/bulkUserProvisioningSer
 const { logAudit } = require('../../utils/auditLog');
 const { getUserModules, getRoleModules, setUserModules, SCREEN_MODULES } = require('../../utils/userModules');
 const { forwardErrors } = require('../../middleware/errorHandler');
+const { checkOrgEmails } = require('../../services/orgEmailPolicy');
 
 const SALT_ROUNDS = 12;
 
@@ -202,10 +203,13 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     const [tenants] = await pool.execute(
-      `SELECT org_id FROM user_org_access WHERE user_id = ? AND (is_active = 1 OR ended_with_user = 1)`,
+      `SELECT org_id, DATE_FORMAT(access_ends_on, '%Y-%m-%d') AS access_ends_on
+         FROM user_org_access WHERE user_id = ? AND (is_active = 1 OR ended_with_user = 1)`,
       [user.id]
     );
     user.tenant_ids = tenants.map(t => t.org_id);
+    // L3: a contractor's access end date (one date for their organisations).
+    user.access_ends_on = tenants.map(t => t.access_ends_on).find(Boolean) || null;
     // The screens the person opens, and which of them come with their role.
     user.modules = await getUserModules(user.id);
     user.role_modules = await getRoleModules(user.role);
@@ -322,6 +326,12 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), forw
       await conn.rollback();
       return res.status(409).json({ error: 'Email address already in use.' });
     }
+    // L3: a personal email only where the client allows it, with an end date.
+    const emailRule = await checkOrgEmails({ email: email.trim().toLowerCase(), orgIds: tenant_ids, accessEndsOn: req.body.access_ends_on, conn });
+    if (emailRule.error) {
+      await conn.rollback();
+      return res.status(400).json({ error: emailRule.error, field: 'access_ends_on' });
+    }
 
     // Derive the effective role from the security group (H-13: users.role is not free-form
     // body input — it mirrors the assigned group so the global admin gate can't be set
@@ -391,10 +401,10 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), forw
 
     for (const orgId of tenant_ids) {
       await conn.execute(
-        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active)
-         VALUES (?, ?, ?, 1)
-         ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1`,
-        [newUserId, orgId, roleAtOrg]
+        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, access_ends_on)
+         VALUES (?, ?, ?, 1, ?)
+         ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1, access_ends_on = VALUES(access_ends_on)`,
+        [newUserId, orgId, roleAtOrg, emailRule.endsOn[Number(orgId)] ?? null]
       );
     }
     await setFormGroupMembership(conn, newUserId, security_group_id);
@@ -446,6 +456,19 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
     if (dupErrors.length) {
       await conn.rollback();
       return res.status(409).json({ error: 'Batch rejected. No users were created.', errors: dupErrors });
+    }
+    // L3: the personal-email rule, row by row; one refusal rejects the batch.
+    const rawRows = Array.isArray(req.body?.users) ? req.body.users : [];
+    const ruleErrors = [];
+    for (const row of normalized) {
+      const raw = rawRows.find((u) => String(u?.email || '').trim().toLowerCase() === row.email) || {};
+      const rule = await checkOrgEmails({ email: row.email, orgIds: row.tenant_ids, accessEndsOn: raw.access_ends_on, conn });
+      if (rule.error) ruleErrors.push({ row: row.row, reason: rule.error });
+      else row.endsOn = rule.endsOn;
+    }
+    if (ruleErrors.length) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Batch rejected. No users were created.', errors: ruleErrors });
     }
 
     // Resolve the effective role per row from its security group, and apply the
@@ -507,10 +530,10 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
       );
       for (const orgId of row.tenant_ids) {
         await conn.execute(
-          `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active)
-           VALUES (?, ?, ?, 1)
-           ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1`,
-          [insert.insertId, orgId, row.roleAtOrg]
+          `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, access_ends_on)
+           VALUES (?, ?, ?, 1, ?)
+           ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1, access_ends_on = VALUES(access_ends_on)`,
+          [insert.insertId, orgId, row.roleAtOrg, row.endsOn?.[Number(orgId)] ?? null]
         );
       }
       await setFormGroupMembership(conn, insert.insertId, row.security_group_id);
@@ -834,6 +857,14 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
       }
     }
 
+    // L3: the personal-email rule for every organisation chosen.
+    const [[who]] = await conn.execute('SELECT email FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const emailRule = await checkOrgEmails({ email: who?.email, orgIds: tenant_ids, accessEndsOn: req.body.access_ends_on, conn });
+    if (emailRule.error) {
+      await conn.rollback();
+      return res.status(400).json({ error: emailRule.error, field: 'access_ends_on' });
+    }
+
     // Deactivate all existing
     await conn.execute(
       'UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ?', [req.params.id]
@@ -842,11 +873,11 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
     // Re-activate / insert selected
     for (const orgId of tenant_ids) {
       await conn.execute(
-        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, ended_with_user)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, ended_with_user, access_ends_on)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = VALUES(is_active),
-           ended_with_user = VALUES(ended_with_user)`,
-        [req.params.id, orgId, roleAtOrg, switchedOff ? 0 : 1, switchedOff ? 1 : 0]
+           ended_with_user = VALUES(ended_with_user), access_ends_on = VALUES(access_ends_on)`,
+        [req.params.id, orgId, roleAtOrg, switchedOff ? 0 : 1, switchedOff ? 1 : 0, emailRule.endsOn[Number(orgId)] ?? null]
       );
     }
 

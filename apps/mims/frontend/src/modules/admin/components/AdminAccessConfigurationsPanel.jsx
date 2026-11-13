@@ -11,7 +11,7 @@ const TAB_LABELS = [
   ['groups', 'Groups'],
   ['privileges', 'Privileges'],
   ['requests', 'Requests'],
-  ['auth', 'Auth Policy'],
+  ['auth', 'Company Login'],
   ['reviews', 'Reviews'],
 ]
 
@@ -260,12 +260,8 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   async function saveAuthPolicy() {
     try {
+      // L4: this panel saves the company login only.
       await postJson('/api/admin/access-config/auth-policy', {
-        session_timeout_minutes: Number(authForm.session_timeout_minutes || 30),
-        two_factor_enabled: !!authForm.two_factor_enabled,
-        two_factor_methods: authForm.two_factor_methods,
-        two_factor_remember_days: Number(authForm.two_factor_remember_days || 7),
-        login_mode: authForm.login_mode,
         providers: Object.values(authForm.providers || {}).map((provider) => ({
           provider_key: provider.provider_key,
           provider_type: provider.provider_type || 'oidc',
@@ -530,11 +526,6 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
   }
 
   function renderAuth() {
-    const loginModeSummary = {
-      local_only: 'Users will see only password login.',
-      sso_only: 'Users will see only approved SSO providers.',
-      local_and_sso: 'Users will see both password login and approved SSO providers.',
-    }
     const providerEntries = [
       ['google', 'Google', '#dc2626'],
       ['microsoft', 'Microsoft 365', '#2563eb'],
@@ -556,23 +547,10 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     return (
       <div style={{ display: 'grid', gap: 18 }}>
         <div style={cardStyle('#0f766e')}>
-          <h3 style={{ marginTop: 0 }}>Authentication and Login Policy</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <label>Session timeout minutes<input className="form-control" type="number" value={authForm.session_timeout_minutes} onChange={e => setAuthForm(prev => ({ ...prev, session_timeout_minutes: e.target.value }))} /></label>
-            <label>MFA methods<input className="form-control" value={authForm.two_factor_methods} onChange={e => setAuthForm(prev => ({ ...prev, two_factor_methods: e.target.value }))} /></label>
-            <label>Trusted-device days<input className="form-control" type="number" value={authForm.two_factor_remember_days} onChange={e => setAuthForm(prev => ({ ...prev, two_factor_remember_days: e.target.value }))} /></label>
-            <label>Login mode
-              <select className="form-control" value={authForm.login_mode} onChange={e => setAuthForm(prev => ({ ...prev, login_mode: e.target.value }))}>
-                <option value="local_only">Local login only</option>
-                <option value="sso_only">SSO only</option>
-                <option value="local_and_sso">Local + SSO</option>
-              </select>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={authForm.two_factor_enabled} onChange={e => setAuthForm(prev => ({ ...prev, two_factor_enabled: e.target.checked }))} /> Require MFA</label>
-          </div>
-          <div style={{ marginTop: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-alt, #f8fafc)' }}>
-            <strong>User login experience</strong>
-            <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 13 }}>{loginModeSummary[authForm.login_mode]}</div>
+          <h3 style={{ marginTop: 0 }}>Company Login</h3>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Set up this client's Microsoft or Google sign-in. People whose email is at one of the allowed domains sign in with it, not with a password.
+            Two-step, personal emails, timeouts and password rules are on <strong>Sign-in &amp; Security</strong>.
           </div>
         </div>
 
@@ -623,8 +601,8 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
             This preview reflects what users in the selected organisation will see on the MIMS login page.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ padding: '6px 10px', borderRadius: 999, background: authForm.login_mode !== 'sso_only' ? '#dcfce7' : '#fee2e2', color: authForm.login_mode !== 'sso_only' ? '#166534' : '#991b1b', fontWeight: 700, fontSize: 12 }}>
-              Password Login: {authForm.login_mode !== 'sso_only' ? 'Shown' : 'Hidden'}
+            <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: 12 }}>
+              Password: for emails outside the allowed domains
             </span>
             {Object.values(authForm.providers || {}).map((provider) => {
               const ready = provider.is_active && provider.client_id && (provider.client_secret || provider.client_secret_configured)
@@ -635,7 +613,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
               )
             })}
           </div>
-          <div style={{ marginTop: 14 }}><button style={buttonStyle(true)} onClick={saveAuthPolicy}>Save Auth Policy</button></div>
+          <div style={{ marginTop: 14 }}><button style={buttonStyle(true)} onClick={saveAuthPolicy}>Save Company Login</button></div>
         </div>
       </div>
     )

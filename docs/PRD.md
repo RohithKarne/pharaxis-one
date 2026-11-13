@@ -93,7 +93,7 @@ Medical Information Management System. One installation serves many pharma organ
 - **Content management:** documents, modules, FAQs, letter templates; review and approval with an independent approver; versions and revisions; letters built only from published, in-date content.
 - **Reports:** a library of 20 reports and dashboards, scheduled sends, exports audited.
 - **Administration:** users and their screens, 32 permissions, groups, case form fields (the one screen for the form), MI response settings, transmission setup, sites, mailboxes, case numbering, audit trails.
-- **Security:** per-organisation two-step sign-in, session timeout, password history, single sign-on per organisation.
+- **Security:** one sign-in for all of MIMS, set by the platform (Rohith, 2026-11-13): email, then password or the client's company login, then two-step when any of the person's organisations uses it, then the organisation. Idle timeout, two-step methods, password rules and lockout are platform-wide. Per client: two-step on/off (on by default), company login (Microsoft / Google), personal emails (off by default; contractors need an access end date, at most 12 months), company email domains. All on one screen, Sign-in & Security; a client's own admin sees only their row.
 
 **Menu:** New Case · Work (Overview, Inbox, Cases, Transmissions) · Knowledge (Browse Content, Content Management) · Reporting (Reports) · Administration (MIMS Admin). A person sees only what they can open.
 

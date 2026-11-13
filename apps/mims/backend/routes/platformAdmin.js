@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
+const { checkOrgEmails } = require('../services/orgEmailPolicy');
 const { platformSmtpConfigError } = require('../utils/mailSecurity');
 const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
 const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../services/leaverCasesService');
@@ -252,32 +253,16 @@ router.post('/orgs', authenticate, requireRole('platform_admin'), validate(schem
   } catch { res.status(409).json({ error: 'Organisation name already exists.' }); }
 });
 
-// PUT /api/admin/platform/orgs/:id — update org (name / active status / session timeout)
+// PUT /api/admin/platform/orgs/:id — update org (name / active status). L4: sign-in
+// settings are set only on Sign-in & Security (PUT /api/admin/two-factor/...).
 router.put('/orgs/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
-    const {
-      name,
-      is_active,
-      session_timeout_minutes,
-      two_factor_enabled,
-      two_factor_methods,
-      two_factor_remember_days,
-    } = req.body;
+    const { name, is_active } = req.body;
     const [[existing]] = await pool.execute('SELECT * FROM organisations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Organisation not found.' });
     // M-19: normalise is_active ONCE to a number so a boolean payload (is_active:true)
     // cannot bypass the strict-equality readiness/deactivation gates below.
     const active = is_active === undefined ? existing.is_active : (is_active ? 1 : 0);
-    if (session_timeout_minutes !== undefined) {
-      const mins = parseInt(session_timeout_minutes);
-      if (isNaN(mins) || mins < 30)
-        return res.status(400).json({ error: 'Session timeout must be at least 30 minutes.' });
-    }
-    if (two_factor_remember_days !== undefined) {
-      const days = parseInt(two_factor_remember_days);
-      if (isNaN(days) || days < 1)
-        return res.status(400).json({ error: 'Remember-device duration must be at least 1 day.' });
-    }
     if (!existing.is_active && active === 1) {
       const readiness = await getOrgReadiness(Number(req.params.id));
       if (!readiness.ready) {
@@ -288,25 +273,10 @@ router.put('/orgs/:id', authenticate, requireRole('platform_admin'), async (req,
       }
     }
     await pool.execute(
-      `UPDATE organisations
-       SET name = ?, is_active = ?, session_timeout_minutes = ?,
-           two_factor_enabled = ?, two_factor_methods = ?, two_factor_remember_days = ?,
-           updated_at = NOW()
-       WHERE id = ?`,
-      [
-        name ?? existing.name,
-        active,
-        session_timeout_minutes ?? existing.session_timeout_minutes ?? 30,
-        two_factor_enabled !== undefined ? (two_factor_enabled ? 1 : 0) : existing.two_factor_enabled,
-        two_factor_methods ?? existing.two_factor_methods ?? 'email,totp',
-        two_factor_remember_days ?? existing.two_factor_remember_days ?? 7,
-        req.params.id,
-      ]
+      'UPDATE organisations SET name = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
+      [name ?? existing.name, active, req.params.id]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, {
-      name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods,
-      two_factor_remember_days,
-    });
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, { name, is_active });
     if (existing.is_active && active === 0) {
       await emitPlatformAdminAlert('organization_deactivated', {
         severity: 'medium',
@@ -1211,12 +1181,17 @@ router.post('/users/:id/org-access', authenticate, requireRole('platform_admin')
   try {
     const { org_id, primary_site_id, role_at_org, site_permission } = req.body;
     if (!org_id) return res.status(400).json({ error: 'org_id is required.' });
+    // L3: the personal-email rule applies to platform admins' assignments too.
+    const [[who]] = await pool.execute('SELECT email FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const emailRule = await checkOrgEmails({ email: who?.email, orgIds: [org_id], accessEndsOn: req.body.access_ends_on });
+    if (emailRule.error) return res.status(400).json({ error: emailRule.error, field: 'access_ends_on' });
     const [result] = await pool.execute(
-      `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission, access_ends_on)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE primary_site_id = VALUES(primary_site_id),
-         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1, ended_with_user = 0`,
-      [req.params.id, org_id, primary_site_id || null, role_at_org || 'user', site_permission || 'full']
+         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1, ended_with_user = 0,
+         access_ends_on = VALUES(access_ends_on)`,
+      [req.params.id, org_id, primary_site_id || null, role_at_org || 'user', site_permission || 'full', emailRule.endsOn[Number(org_id)] ?? null]
     );
     await audit(req.user.userId, req.user.email, 'ASSIGN_ORG', 'user_org_access', result.insertId,
       { user_id: req.params.id, org_id, role_at_org, site_permission });

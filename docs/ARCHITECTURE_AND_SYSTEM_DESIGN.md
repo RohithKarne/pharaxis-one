@@ -154,7 +154,7 @@ late / failed / not covered  ▼
 | Bridge job silent | Alert after three missed runs |
 | Inquiry Ledger (MIMS) | Red when waiting for an owner 8 h, serious side effect 2 h, with an owner 5 days |
 | Safety alert second check | 24 hours after it goes live |
-| Sign-in | Idle timeout 30 min (min 30) per organisation, 60 for platform admins; two-step locks after 3 wrong codes |
+| Sign-in | Idle timeout 30 min for everyone (platform-wide, min 30), 60 for platform admins; two-step locks after 3 wrong codes; the code step lasts 10 minutes |
 | Content check-out (MIMS) | 2 hours, then released by a job |
 | Help articles | Stale after 90 days without review |
 | Login audit (MIMS) | Kept 7 years |
@@ -518,7 +518,7 @@ if (req.user.role !== 'platform_admin') {
 - `sessionTimeout` stored in localStorage as `mims_session_timeout`. Wired into `App.jsx` via `AppRoutes`.
 
 #### User 2FA Architecture
-- Organisation users: 2FA per organisation, set by a platform admin on the `2FA Configuration` screen.
+- Organisation users: two-step is asked at sign-in when any of the person's organisations has it on, against the organisation where they set it up (L1, 2026-11-13). Two-step on/off per client is on `Sign-in & Security`; methods and remember-device days are platform-wide (`services/platformSignIn.js`).
 - Platform admins: their own two-step when the platform setting requires it (`platformTwoFactorRequired`), with its own trusted devices.
 - Supported methods: `Email OTP` and `Authenticator App (TOTP)`.
 - Login flow (same screen):
@@ -799,7 +799,7 @@ All under `/admin-console/*` (requires `admin_console` module).
 
 **Important distinction:**
 - `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for app operations
-- `Platform Admin -> 2FA Configuration` = platform SMTP for user 2FA email delivery + org-level 2FA controls
+- `Sign-in & Security` (was 2FA Configuration) = platform sign-in rules, password rules, one row per client, platform mail for codes
 
 **Case form screens (2026-10-13).** Customize Forms (`sys-setup-customize-forms`) and Validation Rules (`sys-setup-validation`) are retired and their files and server endpoints removed; Setup › Medical Information holds **MI Response Settings** (`sys-setup-mi-response`) and **Transmission Setup** (`sys-setup-int-transmission`, the safety and quality hand-off targets — it was an empty page); an old link opens Case Form Fields (`RETIRED_SYSTEM_ITEMS` in `configItems.js`). A show-only-when rule appears under its field on Case Form Fields, read-only. Smart Field Rules, Grid Section Templates and Case Actions are hidden from the menu unless the **Advanced form tools** switch on Case Form Fields is on (a per-browser preference, not a permission).
 
@@ -811,7 +811,7 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 |----------|--------------|---------------|
 | `dashboard` | Dashboard | Platform KPIs, failed logins, unread notifications, recent audit + login activity |
 | `organizations` | Organizations | Org cards with site lists, active/inactive toggles, session timeout editor, add site form |
-| `2fa-config` | 2FA Configuration | Platform SMTP config + test/send buttons; per-org 2FA enable/methods/remember-days table |
+| `2fa-config` | Sign-in & Security | Platform sign-in rules (idle timeout, platform-admin timeout, two-step methods, remember days, lockout), password rules, per-client row (two-step, company login, personal emails, company domains), platform mail |
 | `users` | Users | User list with 2FA status, org assignments, Reset 2FA button; create user form; org assignment panel (Org / Site / Role tabs) |
 | `module-access` | Module Access | No screen any more; a person's screens are set on MIMS Admin › Add / Edit Users › Screens (2026-10-14) |
 | `alerts` | Alerts | Alert rule setup, enable/disable, thresholds, recipients, recent alert event history |
@@ -1051,7 +1051,7 @@ Both Vite servers proxy `/api` (and `/uploads` for CP Portal) to their backend. 
 - `clamd.conf` needs `TCPSocket 3310`, `TCPAddr 127.0.0.1` and the same `DatabaseDirectory` as `freshclam.conf`. If `freshclam` fails with "NULL X509 store", add `CVDCertsDirectory /opt/homebrew/etc/clamav/certs` to both.
 - Settings: `CLAMAV_HOST` (127.0.0.1), `CLAMAV_PORT` (3310), `CLAMAV_TIMEOUT_MS` (30000). Held files are rescanned every minute.
 
-**MIMS single sign-on and Microsoft 365.** Google and Microsoft sign-in are set per organisation in Admin Console › Access Configurations › Auth Policy (local only, SSO only, or both). Users pick their organisation first. Microsoft 365 authoring stores the edit link on the CM document; approvals stay in MIMS. Needs `MIMS_FRONTEND_BASE_URL`, `MIMS_BACKEND_BASE_URL`, `MIMS_ALLOWED_FRONTEND_ORIGINS`, `SSO_CONFIG_ENCRYPTION_KEY`. Provider secrets are stored encrypted; the screen shows only Configured or Missing.
+**MIMS single sign-on and Microsoft 365.** Google and Microsoft sign-in (company login) are set per client on Company Login (was Auth Policy). An email at a domain the company login lists must use it; any other email may use a password (L1, 2026-11-13; the old per-organisation "local / SSO / both" setting is no longer read). Sign-in starts from the email; the person then sees only their own organisations. Microsoft 365 authoring stores the edit link on the CM document; approvals stay in MIMS. Needs `MIMS_FRONTEND_BASE_URL`, `MIMS_BACKEND_BASE_URL`, `MIMS_ALLOWED_FRONTEND_ORIGINS`, `SSO_CONFIG_ENCRYPTION_KEY`. Provider secrets are stored encrypted; the screen shows only Configured or Missing.
 
 **MIMS tests.** `MYSQL_DATABASE=pharaxis_mims_test npm run test` and `npm run test:e2e` in `apps/mims`. Never against the dev database.
 
