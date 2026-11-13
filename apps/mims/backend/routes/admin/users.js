@@ -114,9 +114,20 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
 // GET /api/admin/users/security-groups — global list for dropdown (no requireOrg)
 router.get('/users/security-groups', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [groups] = await pool.execute(
-      `SELECT id, name, description, is_active FROM security_groups WHERE is_active = 1 AND is_template = 0 ORDER BY name ASC`
+    const [rows] = await pool.execute(
+      `SELECT id, name, description, is_active, org_id, privileges FROM security_groups WHERE is_active = 1 AND is_template = 0 ORDER BY name ASC`
     );
+    // A6 (Rohith, 2026-11-13): an organisation admin sees their organisation's groups
+    // and the shared ones, never another organisation's and never a platform group
+    // (assigning one was already refused; the list should not offer it).
+    const global = hasGlobalAdminScope(req.user);
+    const groups = rows.filter((g) => {
+      if (global) return true;
+      if (g.org_id != null && Number(g.org_id) !== Number(req.user.orgId)) return false;
+      let role = null;
+      try { role = (typeof g.privileges === 'string' ? JSON.parse(g.privileges) : g.privileges)?.role; } catch { role = null; }
+      return !ELEVATED_ROLES.has(String(role || '')) && !/platform/i.test(g.name);
+    }).map(({ privileges, org_id, ...g }) => g);
     res.json({ groups });
   } catch (err) {
     console.error('GET /users/security-groups error:', err);
