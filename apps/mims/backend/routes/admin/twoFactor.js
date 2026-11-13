@@ -33,7 +33,7 @@ async function audit(userId, userName, action, entity, entityId, details) {
 function assertOrgScope(req, orgId) {
   if (hasGlobalAdminScope(req.user)) return null;
   if (Number(req.user.orgId) === Number(orgId)) return null;
-  const err = new Error('You can update 2FA only for your active organisation.');
+  const err = new Error('You can change sign-in settings only for your own organisation.');
   err.status = 403;
   return err;
 }
