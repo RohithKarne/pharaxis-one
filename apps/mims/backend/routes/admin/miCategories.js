@@ -21,7 +21,7 @@ function hasPlatformAdminScope(req) { return hasGlobalAdminScope(req.user); }
 async function requireCategoryEditor(req, res, next) {
   try {
     if (hasPlatformAdminScope(req)) return next();
-    const modules = await getUserModules(req.user.userId);
+    const modules = await getUserModules(req.user.userId, req.user.orgId);
     if (modules.includes('content_mgmt') && (await userHasActivityPrivilege(req.user, 'content.author'))) return next();
     return res.status(403).json({ error: 'You do not have permission to change MI categories.' });
   } catch (err) {

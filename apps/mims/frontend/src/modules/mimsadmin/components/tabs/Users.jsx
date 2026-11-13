@@ -10,6 +10,7 @@ import { isPlatformAdmin } from '../../../../shared/utils/adminScope'
 import AuditChip from '../../../../shared/components/AuditChip'
 import SavedViews from '../../../../shared/components/SavedViews'
 import BulkUserImport from './BulkUserImport'
+import { useAdminTenant } from '../../utils/AdminTenantContext'
 import './Users.css'
 
 const API = '/api/admin'
@@ -51,6 +52,7 @@ const EMPTY_FORM = {
 export default function Users() {
   const { token } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const adminTenant = useAdminTenant()
 
   const [users,      setUsers]      = useState([])
   const [total,      setTotal]      = useState(0)
@@ -121,7 +123,9 @@ export default function Users() {
 
   async function openEdit(user) {
     try {
-      const data = await httpFetch(`${API}/users/${user.id}`, { headers: H }).then(r => r.json())
+      // A4: the Screens section shows the screens in the organisation picked in TENANT.
+      const orgQ = adminTenant?.tenantId ? `?org_id=${adminTenant.tenantId}` : ''
+      const data = await httpFetch(`${API}/users/${user.id}${orgQ}`, { headers: H }).then(r => r.json())
       setEditUser(data.user)
       setModalOpen(true)
     } catch { showFlash('Failed to load user.', 'error') }
@@ -471,7 +475,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         // Screens, only when they changed
         if (personScreens(form.modules).join() !== personScreens(editUser.modules).join()) {
           const rm = await httpFetch(`/api/admin/users/${editUser.id}/modules`, {
-            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules }),
+            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules, org_id: editUser.screens_org_id || null }),
           })
           const dm = await rm.json()
           if (!rm.ok) { setApiErr(dm.error || 'Failed to update screens.'); return }
@@ -739,9 +743,11 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   administrator can add to or take away (access review). */}
               {isEdit && (
                 <div>
-                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>Screens</div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>
+                    Screens{editUser.screens_org_name ? ` in ${editUser.screens_org_name}` : ''}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                    What this person sees in the menu. Marked “role” comes with their role; untick to take it away.
+                    What this person sees in the menu{editUser.screens_org_name ? ` while working in ${editUser.screens_org_name}` : ''}. Marked “role” comes with their role there; untick to take it away. Other organisations are not changed.
                   </div>
                   <div className="ma-usr-checks">
                     {PERSON_SCREENS.map(sc => (

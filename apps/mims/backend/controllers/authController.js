@@ -535,7 +535,7 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
   return {
     orgRows,
     selected,
-    modules: await getUserModules(user.id),
+    modules: await getUserModules(user.id, selected.org_id), // A4: screens for this organisation
     orgId: selected.org_id,
     siteId: selected.primary_site_id,
     orgName: selected.org_name,
@@ -2016,10 +2016,11 @@ const authController = {
       siteName: o.site_name,
       roleAtOrg: o.role_at_org || user.role,
     }));
-    const modules = await getUserModules(user.id);
+    const modules = await getUserModules(user.id, req.user.orgId); // A4: screens for this organisation
     const current = allOrgs.find(o => Number(o.orgId) === Number(req.user.orgId)) || allOrgs[0] || null;
     return res.status(200).json({
-      user,
+      // A4: the role shown is the person's role in this organisation.
+      user: current ? { ...user, role: current.roleAtOrg || user.role } : user,
       modules,
       allOrgs,
       orgId: current?.orgId ?? null,
