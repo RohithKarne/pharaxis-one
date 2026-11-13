@@ -64,8 +64,8 @@ function isExpired(expiresAt) {
 router.post('/register', accountCreationRateLimiter, authController.register);
 router.post('/login/start', loginRateLimiter, authController.startLogin);
 router.post('/login', loginRateLimiter, authController.login);
-router.get('/login/orgs', authController.listLoginOrgs);
-router.get('/login/options', authController.getLoginOptions);
+// L2 (2026-11-13): the public list of every organisation and its sign-in options
+// was removed. Nothing used it, and it told anyone the names of every client.
 router.get('/sso/providers', authController.listSsoProviders);
 router.get('/sso/:provider/start', authController.startSso);
 router.get('/sso/:provider/callback', authController.ssoCallback);

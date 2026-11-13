@@ -351,21 +351,6 @@ async function saveOrgSsoPolicy(orgId, payload = {}, actorId = null) {
   return getOrgSsoPolicy(orgId);
 }
 
-async function getPublicLoginOrgs() {
-  const [rows] = await pool.execute(
-    `SELECT id, name, login_mode
-       FROM organisations
-      WHERE is_active = 1
-      ORDER BY name ASC`
-  );
-
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    login_mode: normalizeLoginMode(row.login_mode),
-  }));
-}
-
 async function getPublicLoginOptions(orgId) {
   const policy = await getOrgSsoPolicy(orgId);
   if (!policy?.org || !policy.org.is_active) return null;
@@ -531,7 +516,6 @@ module.exports = {
   companyLoginForEmail,
   getProviderConfig,
   getPublicLoginOptions,
-  getPublicLoginOrgs,
   issueSsoState,
   listEnabledProviders,
   normalizeLoginMode,

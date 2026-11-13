@@ -33,7 +33,6 @@ const {
   exchangeCodeForTokens,
   getPublicLoginOptions,
   companyLoginForEmail,
-  getPublicLoginOrgs,
   issueSsoState,
   listEnabledProviders,
   parseSsoState,
@@ -1042,27 +1041,6 @@ const authController = {
       return res.status(200).json({ providers });
     } catch (err) {
       return res.status(500).json({ error: err.message || 'Failed to load SSO providers.' });
-    }
-  },
-
-  async listLoginOrgs(_req, res) {
-    try {
-      const orgs = await getPublicLoginOrgs();
-      return res.status(200).json({ orgs });
-    } catch (err) {
-      return res.status(500).json({ error: err.message || 'Failed to load organisations.' });
-    }
-  },
-
-  async getLoginOptions(req, res) {
-    try {
-      const orgId = parsePositiveInt(req.query.org_id);
-      if (!orgId) return res.status(400).json({ error: 'org_id is required.' });
-      const options = await getPublicLoginOptions(orgId);
-      if (!options) return res.status(404).json({ error: 'Organisation not found or inactive.' });
-      return res.status(200).json(options);
-    } catch (err) {
-      return res.status(500).json({ error: err.message || 'Failed to load login options.' });
     }
   },
 
