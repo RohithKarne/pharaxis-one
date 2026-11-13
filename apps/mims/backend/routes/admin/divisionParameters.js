@@ -17,6 +17,7 @@ const express = require('express');
 const { bootstrapOrg, bootstrapOrgWithConnection } = require('../../services/orgBootstrapService');
 const router = express.Router();
 const pool = require('../../database/db');
+const { checkOrgEmails } = require('../../services/orgEmailPolicy');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { forwardErrors } = require('../../middleware/errorHandler');
@@ -328,6 +329,21 @@ router.put('/division-parameters/:orgId/users', authenticate, requireRole('admin
         WHERE org_id = ? AND is_active = 1 ${userIds.length ? `AND user_id NOT IN (${userIds.map(() => '?').join(',')})` : ''}`,
       userIds.length ? [orgId, ...userIds] : [orgId]
     );
+    // L3: the personal-email rule; a person with a personal email is added from
+    // Add / Edit Users, where an access end date can be given.
+    for (const uid of userIds) {
+      const [[who]] = await conn.execute(
+        `SELECT u.email, uoa.is_active FROM users u
+           LEFT JOIN user_org_access uoa ON uoa.user_id = u.id AND uoa.org_id = ?
+          WHERE u.id = ? LIMIT 1`, [orgId, uid]);
+      if (who && !Number(who.is_active)) {
+        const rule = await checkOrgEmails({ email: who.email, orgIds: [orgId], conn });
+        if (rule.error) {
+          await conn.rollback();
+          return res.status(400).json({ error: `${rule.error} Add them from Add / Edit Users with an access end date.` });
+        }
+      }
+    }
     // Upsert each selected user as active.
     for (const uid of userIds) {
       await conn.execute(

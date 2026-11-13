@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const mailer = require('../utils/mailer');
 const pool = require('../database/db');
+const { checkOrgEmails } = require('../services/orgEmailPolicy');
 const { platformSmtpConfigError } = require('../utils/mailSecurity');
 const { authenticate, requireRole, endAllSessions } = require('../middleware/auth');
 const { moveOpenCasesToUnassigned, notifyCaseAdmins } = require('../services/leaverCasesService');
@@ -1211,12 +1212,17 @@ router.post('/users/:id/org-access', authenticate, requireRole('platform_admin')
   try {
     const { org_id, primary_site_id, role_at_org, site_permission } = req.body;
     if (!org_id) return res.status(400).json({ error: 'org_id is required.' });
+    // L3: the personal-email rule applies to platform admins' assignments too.
+    const [[who]] = await pool.execute('SELECT email FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const emailRule = await checkOrgEmails({ email: who?.email, orgIds: [org_id], accessEndsOn: req.body.access_ends_on });
+    if (emailRule.error) return res.status(400).json({ error: emailRule.error, field: 'access_ends_on' });
     const [result] = await pool.execute(
-      `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission, access_ends_on)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE primary_site_id = VALUES(primary_site_id),
-         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1, ended_with_user = 0`,
-      [req.params.id, org_id, primary_site_id || null, role_at_org || 'user', site_permission || 'full']
+         role_at_org = VALUES(role_at_org), site_permission = VALUES(site_permission), is_active = 1, ended_with_user = 0,
+         access_ends_on = VALUES(access_ends_on)`,
+      [req.params.id, org_id, primary_site_id || null, role_at_org || 'user', site_permission || 'full', emailRule.endsOn[Number(org_id)] ?? null]
     );
     await audit(req.user.userId, req.user.email, 'ASSIGN_ORG', 'user_org_access', result.insertId,
       { user_id: req.params.id, org_id, role_at_org, site_permission });

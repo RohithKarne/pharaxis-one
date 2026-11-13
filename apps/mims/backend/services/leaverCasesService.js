@@ -22,7 +22,9 @@ const { createNotifications } = require('./notificationCenterService');
 
 const MOVE_REASON = "Moved to unassigned — owner's access ended";
 
-async function moveOpenCasesToUnassigned(conn, userIds, actorId) {
+// orgId (optional, L3): only that organisation's cases, for a person removed from
+// one organisation but kept in others.
+async function moveOpenCasesToUnassigned(conn, userIds, actorId, orgId = null) {
   const ids = [...new Set((userIds || []).map(Number).filter(Boolean))];
   if (!ids.length) return [];
   const [cases] = await conn.query(
@@ -31,8 +33,9 @@ async function moveOpenCasesToUnassigned(conn, userIds, actorId) {
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
       WHERE c.case_owner_id IN (?) AND c.is_deleted = 0
         AND (ws.name IS NULL OR ws.name <> 'Closed')
+        ${orgId ? 'AND c.org_id = ?' : ''}
       FOR UPDATE`,
-    [ids]
+    orgId ? [ids, orgId] : [ids]
   );
   if (!cases.length) return [];
   await conn.query('UPDATE cases SET case_owner_id = NULL WHERE id IN (?)', [cases.map((c) => c.id)]);
