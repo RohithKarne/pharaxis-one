@@ -22,6 +22,7 @@ const { validateBulkUserRows } = require('../../services/bulkUserProvisioningSer
 const { logAudit } = require('../../utils/auditLog');
 const { getUserModules, getRoleModules, setUserModules, SCREEN_MODULES } = require('../../utils/userModules');
 const { forwardErrors } = require('../../middleware/errorHandler');
+const { updatePasswordWithHistory } = require('../../controllers/authController');
 const { checkOrgEmails } = require('../../services/orgEmailPolicy');
 
 const SALT_ROUNDS = 12;
@@ -38,6 +39,20 @@ function orgScopeForUsers(req) {
     sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND (uoa_scope.is_active = 1 OR uoa_scope.ended_with_user = 1)) AND NOT ${PLATFORM_ADMIN_SQL}`,
     params: [req.user.orgId ?? null],
   };
+}
+
+// A0/A2/A3 (Rohith, 2026-11-13): an organisation admin acts only inside their own
+// organisation. Is this person in it (as orgScopeForUsers counts), and do they also
+// belong to another organisation?
+async function personInCallerOrg(req, userId, conn = pool) {
+  if (hasGlobalAdminScope(req.user)) return { inOrg: true, shared: false };
+  const scope = orgScopeForUsers(req);
+  const [[row]] = await conn.execute(`SELECT u.id FROM users u WHERE u.id = ? AND ${scope.sql}`, [userId, ...scope.params]);
+  if (!row) return { inOrg: false, shared: false };
+  const [[other]] = await conn.execute(
+    'SELECT COUNT(*) AS n FROM user_org_access WHERE user_id = ? AND org_id <> ? AND (is_active = 1 OR ended_with_user = 1)',
+    [userId, req.user.orgId ?? null]);
+  return { inOrg: true, shared: Number(other.n) > 0 };
 }
 
 function addDays(date, days) {
@@ -573,8 +588,8 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[existing]] = await pool.execute(
       canTouchPlatformAdmin
-        ? 'SELECT id, role, is_active, is_disabled, security_group_id FROM users WHERE id = ?'
-        : 'SELECT id, role, is_active, is_disabled, security_group_id FROM users WHERE id = ? AND role != ?',
+        ? 'SELECT id, user_id, name, email, role, is_active, is_disabled, security_group_id FROM users WHERE id = ?'
+        : 'SELECT id, user_id, name, email, role, is_active, is_disabled, security_group_id FROM users WHERE id = ? AND role != ?',
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
@@ -589,12 +604,16 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     }
 
     // WP1: a tenant admin may only edit users that belong to their own org.
-    if (!canTouchPlatformAdmin) {
-      const [[inOrg]] = await pool.execute(
-        'SELECT 1 AS ok FROM user_org_access WHERE user_id = ? AND org_id = ? AND (is_active = 1 OR ended_with_user = 1) LIMIT 1',
-        [req.params.id, req.user.orgId ?? null]
-      );
-      if (!inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
+    // A2/A3 (Rohith, 2026-11-13): and for a person who also works for another
+    // organisation, only what belongs to this one.
+    const place = await personInCallerOrg(req, req.params.id);
+    if (!place.inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
+    const orgOnly = !canTouchPlatformAdmin && place.shared;
+    if (orgOnly) {
+      const changed = (v, cur) => v !== undefined && v !== null && String(v).trim().toLowerCase() !== String(cur ?? '').trim().toLowerCase();
+      if (changed(name, existing.name) || changed(email, existing.email) || changed(user_id, existing.user_id)) {
+        return res.status(403).json({ error: 'This person also works for another organisation. Only a platform admin can change their name, email or user ID.' });
+      }
     }
 
     // MIPM-134: moving someone to another security group gives them that group's role,
@@ -636,6 +655,29 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       if (dup) return res.status(409).json({ error: 'Email address already in use.' });
     }
 
+    // A3: an organisation admin "switching off" a person who also works for another
+    // organisation removes them from this organisation only: their access here ends,
+    // their open cases here go to unassigned, and they keep the other organisation.
+    // Switching an account off everywhere is for a platform admin.
+    if (orgOnly && !wasOff && willBeOff) {
+      const orgId = req.user.orgId;
+      const offReason = String(req.body.inactive_reason || '').trim().slice(0, 255) || 'Removed by an organisation administrator';
+      let moved = [];
+      const c = await pool.getConnection();
+      try {
+        await c.beginTransaction();
+        await c.execute('UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ? AND org_id = ?', [req.params.id, orgId]);
+        moved = await moveOpenCasesToUnassigned(c, [req.params.id], req.user.userId, orgId);
+        await c.commit();
+      } catch (txErr) { await c.rollback(); throw txErr; } finally { c.release(); }
+      const sessionsEnded = await endAllSessions(req.params.id).catch(() => 0);
+      if (moved.length) await notifyCaseAdmins(moved).catch((err) => console.error('[A3] notifying case administrators failed:', err.message));
+      await audit(req.user.userId, 'REMOVE_FROM_ORG', req.params.id, {
+        org_id: orgId, reason: offReason, cases_moved_to_unassigned: moved.length, sessions_ended: sessionsEnded,
+      });
+      return res.json({ ok: true, removed_from_org: true, cases_moved_to_unassigned: moved.length });
+    }
+
     // MIPM-33: the user update, the switch-off/back-on bookkeeping and moving a leaver's
     // open cases to the unassigned queue commit together or not at all.
     const switchedOff = (is_active != null && !is_active) || (is_disabled != null && is_disabled);
@@ -663,8 +705,10 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
         [
           user_id   ?? null, name     ?? null,
           email     ? email.trim().toLowerCase() : null,
-          initials  ?? null, role     ?? null,
-          security_group_id ?? null,
+          // A2: a shared person's person-wide role and group stay; their role in
+          // this organisation is set below.
+          initials  ?? null, orgOnly ? null : (role ?? null),
+          orgOnly ? null : (security_group_id ?? null),
           network_user_id   ?? null,
           department        ?? null,
           is_active   != null ? (is_active   ? 1 : 0) : null,
@@ -676,8 +720,14 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
         ]
       );
       if (groupChanged) {
-        await setFormGroupMembership(conn, req.params.id, security_group_id, existing.security_group_id);
-        await conn.execute('UPDATE user_org_access SET role_at_org = ? WHERE user_id = ?', [role, req.params.id]);
+        // A2: a shared person keeps the group they have elsewhere; they join this one.
+        await setFormGroupMembership(conn, req.params.id, security_group_id, orgOnly ? null : existing.security_group_id);
+        // A2: the role in the organisation being edited, not in every organisation.
+        if (canTouchPlatformAdmin) {
+          await conn.execute('UPDATE user_org_access SET role_at_org = ? WHERE user_id = ?', [role, req.params.id]);
+        } else {
+          await conn.execute('UPDATE user_org_access SET role_at_org = ? WHERE user_id = ? AND org_id = ?', [role, req.params.id, req.user.orgId]);
+        }
       }
 
       // MIPM-35: record why and when on the way off; on the way back, clear it and give
@@ -732,6 +782,8 @@ router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'pl
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
+    // A0: only someone in the admin's own organisation.
+    if (!(await personInCallerOrg(req, req.params.id)).inOrg) return res.status(404).json({ error: 'User not found.' });
 
     await pool.execute(
       `UPDATE users SET password_expires_at = NOW(), password_reset_required = 1 WHERE id = ?`,
@@ -768,16 +820,18 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'pla
     if (user.network_user_id) {
       return res.status(400).json({ error: 'Password cannot be changed for SSO users.' });
     }
+    // A0: only someone in the admin's own organisation.
+    if (!(await personInCallerOrg(req, req.params.id)).inOrg) return res.status(404).json({ error: 'User not found.' });
 
-    const hash = await bcrypt.hash(new_password, SALT_ROUNDS);
-    const { expiry_days } = await passwordPolicy.getPolicy();
-    const expiresAt = addDays(new Date(), expiry_days);
-    await pool.execute(
-      `UPDATE users SET password = ?, password_reset_required = 0,
-        password_expires_at = ? WHERE id = ?`,
-      [hash, expiresAt, req.params.id]
-    );
-    await audit(req.user.userId, 'ADMIN_CHANGE_PASSWORD', req.params.id, {});
+    // A0: the same rules as a person's own change — complexity, not the current
+    // password or one of the recent ones (RULES: current + last 5 on every path).
+    const [[cur]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.params.id]);
+    const result = await updatePasswordWithHistory(req.params.id, cur?.password || null, new_password);
+    if (result?.invalid) return res.status(400).json({ error: result.error });
+    if (result?.reused) return res.status(400).json({ error: 'This password was used recently. Choose a different one.' });
+    // A0: a password set by an admin ends the person's sessions everywhere.
+    const sessionsEnded = await endAllSessions(req.params.id).catch(() => 0);
+    await audit(req.user.userId, 'ADMIN_CHANGE_PASSWORD', req.params.id, { sessions_ended: sessionsEnded });
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /users/:id/change-password error:', err);
@@ -788,6 +842,8 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'pla
 // ── GET /api/admin/users/:id/tenants ─────────────────────────────────────────
 router.get('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    // A0: an organisation admin sees the organisations only of people in their own.
+    if (!(await personInCallerOrg(req, req.params.id)).inOrg) return res.status(404).json({ error: 'User not found.' });
     const [rows] = await pool.execute(
       `SELECT uoa.org_id, uoa.role_at_org, uoa.is_active, o.name AS org_name
        FROM user_org_access uoa
@@ -804,7 +860,8 @@ router.get('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
 
 // ── PUT /api/admin/users/:id/tenants — full replace of tenant assignments ──────
 router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), forwardErrors(async (req, res) => {
-  const { tenant_ids = [] } = req.body;
+  let { tenant_ids = [] } = req.body;
+  let tenantScope = null; // A3: the organisations an organisation admin may change
   if (!tenant_ids.length) {
     return res.status(400).json({ error: 'At least one tenant must be assigned.' });
   }
@@ -850,10 +907,21 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
         return res.status(403).json({ error: 'You are not permitted to assign a platform-admin security group.' });
       }
       const allowedOrgs = await callerAssignableOrgIds(req);
-      const bad = tenant_ids.map(Number).filter((id) => !allowedOrgs.has(id));
+      // A2/A3 (2026-11-13): organisations the person already has outside the
+      // admin's own are kept as they are, not refused and not changed.
+      const [held] = await conn.execute(
+        'SELECT org_id FROM user_org_access WHERE user_id = ? AND (is_active = 1 OR ended_with_user = 1)', [req.params.id]);
+      const heldElsewhere = new Set(held.map((r) => Number(r.org_id)).filter((id) => !allowedOrgs.has(id)));
+      const bad = tenant_ids.map(Number).filter((id) => !allowedOrgs.has(id) && !heldElsewhere.has(id));
       if (bad.length) {
         await conn.rollback();
         return res.status(403).json({ error: 'You can only assign users to organisations you belong to.' });
+      }
+      tenantScope = allowedOrgs;
+      tenant_ids = tenant_ids.map(Number).filter((id) => allowedOrgs.has(id));
+      if (!tenant_ids.length && !heldElsewhere.size) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'At least one tenant must be assigned.' });
       }
     }
 
@@ -865,17 +933,32 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
       return res.status(400).json({ error: emailRule.error, field: 'access_ends_on' });
     }
 
-    // Deactivate all existing
-    await conn.execute(
-      'UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ?', [req.params.id]
-    );
+    // Deactivate the existing ones the caller may change (A3: an organisation admin
+    // only within their own organisations; a platform admin, all of them).
+    if (tenantScope) {
+      const scoped = [...tenantScope];
+      if (scoped.length) {
+        await conn.query(
+          'UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ? AND org_id IN (?) AND org_id NOT IN (?)',
+          [req.params.id, scoped, tenant_ids.length ? tenant_ids : [0]]
+        );
+      }
+    } else {
+      await conn.execute(
+        'UPDATE user_org_access SET is_active = 0, ended_with_user = 0 WHERE user_id = ?', [req.params.id]
+      );
+    }
 
     // Re-activate / insert selected
     for (const orgId of tenant_ids) {
       await conn.execute(
+        // A2: an organisation admin's save keeps a current member's role there (a role
+        // changes with the security group on Edit User); a new member gets the group's.
         `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, ended_with_user, access_ends_on)
          VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = VALUES(is_active),
+         ON DUPLICATE KEY UPDATE
+           role_at_org = ${tenantScope ? 'IF(is_active = 1 AND role_at_org IS NOT NULL, role_at_org, VALUES(role_at_org))' : 'VALUES(role_at_org)'},
+           is_active = VALUES(is_active),
            ended_with_user = VALUES(ended_with_user), access_ends_on = VALUES(access_ends_on)`,
         [req.params.id, orgId, roleAtOrg, switchedOff ? 0 : 1, switchedOff ? 1 : 0, emailRule.endsOn[Number(orgId)] ?? null]
       );
