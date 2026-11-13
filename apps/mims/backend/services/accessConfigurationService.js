@@ -416,43 +416,23 @@ async function getAuthPolicy(orgId) {
   const ssoPolicy = await getOrgSsoPolicy(orgId);
   const loginMode = normalizeLoginMode(org?.login_mode);
   const providers = Array.isArray(ssoPolicy?.providers) ? ssoPolicy.providers : [];
+  // L4: the same rule sign-in uses (ssoService.getOrgSsoPolicy).
+  const ssoAllowed = !!ssoPolicy?.org?.sso_login_allowed;
   return {
-    org: org ? {
-      ...org,
-      login_mode: loginMode,
-      local_login_allowed: loginMode !== 'sso_only',
-      sso_login_allowed: loginMode !== 'local_only',
-    } : null,
+    org: org ? { ...org, login_mode: loginMode, local_login_allowed: true, sso_login_allowed: ssoAllowed } : null,
     providers,
-    sso: {
-      login_mode: loginMode,
-      local_login_allowed: loginMode !== 'sso_only',
-      sso_login_allowed: loginMode !== 'local_only',
-      providers,
-    },
+    sso: { login_mode: loginMode, local_login_allowed: true, sso_login_allowed: ssoAllowed, providers },
   };
 }
 
+// L4 (Rohith, 2026-11-13): this panel now saves only the client's company login
+// (SSO providers and their domains). Two-step on/off, personal emails and company
+// domains are set on Sign-in & Security; timeout, methods and remember days are
+// platform-wide; "password / SSO / both" is no longer a setting.
 async function saveAuthPolicy(orgId, payload = {}, actorId = null, reason = null) {
   const before = await getAuthPolicy(orgId);
-  const timeout = Math.max(15, Math.min(720, Number(payload.session_timeout_minutes || before.org?.session_timeout_minutes || 30)));
-  const rememberDays = Math.max(0, Math.min(90, Number(payload.two_factor_remember_days ?? before.org?.two_factor_remember_days ?? 7)));
-  const loginMode = normalizeLoginMode(payload.login_mode || before.org?.login_mode);
-  await pool.execute(
-    `UPDATE organisations
-     SET session_timeout_minutes = ?, two_factor_enabled = ?, two_factor_methods = ?, two_factor_remember_days = ?, login_mode = ?, updated_at = NOW()
-     WHERE id = ?`,
-    [
-      timeout,
-      normalizeBool(payload.two_factor_enabled, !!before.org?.two_factor_enabled),
-      String(payload.two_factor_methods || before.org?.two_factor_methods || 'email,totp'),
-      rememberDays,
-      loginMode,
-      orgId,
-    ]
-  );
   await saveOrgSsoPolicy(orgId, {
-    login_mode: loginMode,
+    login_mode: before.org?.login_mode,
     providers: Array.isArray(payload.providers) ? payload.providers : [],
   }, actorId);
   const after = await getAuthPolicy(orgId);

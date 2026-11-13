@@ -39,8 +39,8 @@ export const SYSTEM_NAV = [
     label: 'Security', value: 'sys-security', children: [
       { label: 'Add / Edit Users', value: 'sys-sec-users'    },
       { label: 'Group Security',   value: 'sys-sec-group'    },
-      { label: 'Auth Policy',      value: 'sys-sec-auth-policy' },
-      { label: '2FA Configuration', value: 'sys-setup-2fa-config' },
+      { label: 'Sign-in & Security', value: 'sys-setup-2fa-config' },
+      { label: 'Company Login',    value: 'sys-sec-auth-policy' },
       { label: 'Logged In Users',  value: 'sys-sec-logged-in'},
     ],
   },

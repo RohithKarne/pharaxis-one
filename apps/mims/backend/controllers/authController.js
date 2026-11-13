@@ -5,6 +5,7 @@
 'use strict';
 
 const bcrypt = require('bcrypt');
+const { getPlatformSignIn } = require('../services/platformSignIn');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 // qrcode: draws the authenticator set-up code on our server, so the secret never
@@ -509,6 +510,7 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
   // code is held under that organisation (the one signed in to when it has two-step,
   // else the most recently used one that does).
   const twoFactorOrg = selected.two_factor_enabled ? selected : orgRows.find((r) => r.two_factor_enabled) || null;
+  const platformSignIn = await getPlatformSignIn();
 
   return {
     orgRows,
@@ -518,11 +520,12 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
     siteId: selected.primary_site_id,
     orgName: selected.org_name,
     siteName: selected.site_name,
-    sessionTimeout: selected.session_timeout_minutes ?? 30,
+    // L4: timeout, two-step methods and remember days are platform-wide.
+    sessionTimeout: platformSignIn.sessionTimeout,
     twoFactorEnabled: !!twoFactorOrg,
     twoFactorOrgId: twoFactorOrg?.org_id ?? null,
-    twoFactorMethods: parseMethodList(twoFactorOrg?.two_factor_methods || 'email,totp'),
-    rememberDays: twoFactorOrg?.two_factor_remember_days ?? 7,
+    twoFactorMethods: platformSignIn.twoFactorMethods,
+    rememberDays: platformSignIn.rememberDays,
   };
 }
 
@@ -2003,7 +2006,7 @@ const authController = {
       siteId: current?.siteId ?? null,
       orgName: current?.orgName ?? null,
       siteName: current?.siteName ?? null,
-      sessionTimeout: (orgRows.find((row) => Number(row.org_id) === Number(current?.orgId))?.session_timeout_minutes) ?? 30,
+      sessionTimeout: (await getPlatformSignIn()).sessionTimeout, // L4: one timeout
       currentOrgActive: !!current && Number(current.orgId) === Number(req.user.orgId),
     });
    } catch (err) {
@@ -2054,7 +2057,8 @@ const authController = {
         ...(hasGlobalAdminScope(req.user) ? { platformAdmin: true } : {}),
       });
       await trackSessionToken(req.user.userId, token);
-      attachAuthCookie(res, token, Number(access.session_timeout_minutes || 30) * 60 * 1000);
+      const { sessionTimeout: platformTimeout } = await getPlatformSignIn(); // L4: one timeout
+      attachAuthCookie(res, token, platformTimeout * 60 * 1000);
 
       await logLoginAudit({
         userId: req.user.userId,
@@ -2073,7 +2077,7 @@ const authController = {
         orgName: access.org_name,
         siteName: access.site_name,
         allOrgs,
-        sessionTimeout: access.session_timeout_minutes ?? 30,
+        sessionTimeout: platformTimeout,
         role: roleForOrg,
       });
     } catch (err) {

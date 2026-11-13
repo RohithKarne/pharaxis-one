@@ -1,5 +1,6 @@
 'use strict';
 
+const { getPlatformSignIn } = require('../services/platformSignIn');
 const express        = require('express');
 const router         = express.Router();
 const { forwardErrors } = require('../middleware/errorHandler');
@@ -43,12 +44,8 @@ async function resolveSessionTimeoutMinutes(req) {
       return Math.max(15, toNumber(config.platform_admin_session_timeout_minutes, 60));
     }
 
-    if (!req.user.orgId) return 30;
-    const [[org]] = await pool.execute(
-      'SELECT session_timeout_minutes FROM organisations WHERE id = ? LIMIT 1',
-      [req.user.orgId]
-    );
-    return Math.max(15, toNumber(org?.session_timeout_minutes, 30));
+    // L4: one idle timeout for every organisation, set on Sign-in & Security.
+    return (await getPlatformSignIn()).sessionTimeout;
   } catch (_) {
     return hasGlobalAdminScope(req.user) ? 60 : 30;
   }

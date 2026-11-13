@@ -230,14 +230,12 @@ router.put('/division-parameters/:orgId/save/:section', authenticate, requireRol
   try {
     await ensureRow(orgId);
 
-    // General tab also writes org-level fields: Inactive toggle, name, session timeout.
+    // General tab also writes org-level fields: Inactive toggle, name.
     if (section === 'general') {
       const orgSets = [], orgVals = [];
       if (typeof body.is_active === 'boolean') { orgSets.push('is_active = ?'); orgVals.push(body.is_active ? 1 : 0); }
       if (typeof body.name === 'string' && body.name.trim()) { orgSets.push('name = ?'); orgVals.push(body.name.trim()); }
-      if (body.session_timeout_minutes != null && body.session_timeout_minutes !== '') {
-        orgSets.push('session_timeout_minutes = ?'); orgVals.push(Number(body.session_timeout_minutes));
-      }
+      // L4: the idle timeout is platform-wide (Sign-in & Security), not per division.
       if (orgSets.length) { orgVals.push(orgId); await pool.execute(`UPDATE organisations SET ${orgSets.join(', ')} WHERE id = ?`, orgVals); }
     }
 

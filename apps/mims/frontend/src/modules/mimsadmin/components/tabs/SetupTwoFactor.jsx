@@ -15,9 +15,9 @@ export default function SetupTwoFactor() {
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
       <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>2FA Configuration</h1>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Sign-in &amp; Security</h1>
         <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-          Manage user 2FA email delivery and tenant-level MFA requirements from MIMS Admin.
+          One sign-in for all of MIMS: platform rules, and each client's two-step, company login and personal-email settings.
         </p>
       </div>
       {msg.text && (
@@ -25,7 +25,7 @@ export default function SetupTwoFactor() {
           {msg.text}
         </div>
       )}
-      <TwoFactorConfigView H={H} flash={flash} apiBase="/api/admin/two-factor" showSessionTimeout={false} />
+      <TwoFactorConfigView H={H} flash={flash} apiBase="/api/admin/two-factor" />
     </div>
   )
 }

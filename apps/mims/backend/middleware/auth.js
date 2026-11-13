@@ -197,7 +197,7 @@ async function sessionTimeoutMinutes(user) {
   try {
     const [[row]] = isPlatform
       ? await pool.execute("SELECT config_value AS v FROM system_config WHERE config_key = 'platform_admin_session_timeout_minutes' LIMIT 1")
-      : await pool.execute('SELECT session_timeout_minutes AS v FROM organisations WHERE id = ? LIMIT 1', [user.orgId ?? null]);
+      : [[{ v: (await require('../services/platformSignIn').getPlatformSignIn()).sessionTimeout }]]; // L4: one timeout
     minutes = Math.max(30, parseInt(row?.v, 10) || minutes);
   } catch (_) { /* keep the default; the cookie is still renewed */ }
   _timeoutCache.set(key, { minutes, until: Date.now() + 60_000 });
