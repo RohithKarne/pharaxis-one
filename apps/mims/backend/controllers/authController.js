@@ -32,6 +32,7 @@ const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
   getPublicLoginOptions,
+  companyLoginForEmail,
   getPublicLoginOrgs,
   issueSsoState,
   listEnabledProviders,
@@ -504,6 +505,12 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
     [user.id, selected.org_id]
   );
 
+  // L1 (Rohith, 2026-11-13): two-step is asked at sign-in when ANY of the person's
+  // organisations has it on, so switching organisation later never skips it. The
+  // code is held under that organisation (the one signed in to when it has two-step,
+  // else the most recently used one that does).
+  const twoFactorOrg = selected.two_factor_enabled ? selected : orgRows.find((r) => r.two_factor_enabled) || null;
+
   return {
     orgRows,
     selected,
@@ -513,9 +520,10 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
     orgName: selected.org_name,
     siteName: selected.site_name,
     sessionTimeout: selected.session_timeout_minutes ?? 30,
-    twoFactorEnabled: !!selected.two_factor_enabled,
-    twoFactorMethods: parseMethodList(selected.two_factor_methods || 'email,totp'),
-    rememberDays: selected.two_factor_remember_days ?? 7,
+    twoFactorEnabled: !!twoFactorOrg,
+    twoFactorOrgId: twoFactorOrg?.org_id ?? null,
+    twoFactorMethods: parseMethodList(twoFactorOrg?.two_factor_methods || 'email,totp'),
+    rememberDays: twoFactorOrg?.two_factor_remember_days ?? 7,
   };
 }
 
@@ -566,8 +574,15 @@ function makeTwoFactorPayload(user, context, mode) {
     sessionTimeout: context.sessionTimeout,
     twoFactorMethods: context.twoFactorMethods,
     rememberDays: context.rememberDays,
+    // L1: the organisation the two-step record lives under (may differ from orgId).
+    tfaOrgId: context.twoFactorOrgId ?? context.orgId,
     mode,
   };
+}
+
+// The organisation a pending sign-in's two-step record lives under.
+function tfaOrgOf(pending) {
+  return pending.tfaOrgId ?? pending.orgId;
 }
 
 async function findExternalIdentity(providerKey, providerSubject) {
@@ -1477,8 +1492,12 @@ const authController = {
         if (!loginOptions) {
           return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
         }
-        if (!loginOptions.local_login_allowed) {
-          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
+        // L1: one sign-in. A password is refused only for an email whose domain a
+        // company login on one of this person's organisations owns.
+        const owner = await companyLoginForEmail((await getActiveOrgRowsForUser(user.id)).map((r) => r.org_id), identity);
+        if (owner) {
+          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Company login required', authEvent: 'password_login_failed', metadata: { orgId: owner.orgId, provider: owner.key }, req });
+          return res.status(403).json({ error: `Your company signs you in with ${owner.label}. Use the ${owner.label} button instead of a password.` });
         }
       }
 
@@ -1581,7 +1600,7 @@ const authController = {
         return finalizeRegularLogin({ res, req, user, context });
       }
 
-      const settings = await getUser2faSettings(user.id, context.orgId);
+      const settings = await getUser2faSettings(user.id, context.twoFactorOrgId);
       if (settings?.is_enabled && settings.is_locked) {
         await logLoginAudit({
           userId: user.id,
@@ -1595,7 +1614,7 @@ const authController = {
         return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' });
       }
 
-      if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
+      if (settings?.is_enabled && await isTrustedDevice(user.id, context.twoFactorOrgId, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
         if (user.password_reset_required) {
           return res.status(200).json(await issuePasswordResetSession(res, user, privileges));
         }
@@ -1733,7 +1752,7 @@ const authController = {
       const user = await userModel.findById(pending.userId);
       if (!user) return res.status(404).json({ error: 'User not found.' });
       const challengeType = pending.mode === 'verify' ? 'login_email' : 'setup_email';
-      const result = await createEmailChallenge(user, pending.orgId, challengeType);
+      const result = await createEmailChallenge(user, tfaOrgOf(pending), challengeType);
       await logLoginAudit({
         userId: pending.userId,
         userName: pending.email,
@@ -1754,7 +1773,7 @@ const authController = {
       const { challengeToken } = req.body;
       if (!challengeToken) return res.status(400).json({ error: 'challengeToken is required.' });
       const pending = parseTwoFactorToken(challengeToken);
-      const secret = await beginTotpEnrollment(pending.userId, pending.orgId);
+      const secret = await beginTotpEnrollment(pending.userId, tfaOrgOf(pending));
       const issuer = encodeURIComponent('MIMS');
       const label = encodeURIComponent(`${pending.orgName}:${pending.email}`);
       const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
@@ -1806,21 +1825,21 @@ const authController = {
       const user = await userModel.findById(pending.userId);
       if (!user) return res.status(404).json({ error: 'User not found.' });
 
-      const settings = await getUser2faSettings(pending.userId, pending.orgId);
+      const settings = await getUser2faSettings(pending.userId, tfaOrgOf(pending));
       let verified = false;
       let setupCompleted = false;
       let generatedBackupCodes = null;
       let authEvent = '2fa_verified';
 
       if (backupCode) {
-        verified = await consumeBackupCode(pending.userId, pending.orgId, backupCode);
+        verified = await consumeBackupCode(pending.userId, tfaOrgOf(pending), backupCode);
         authEvent = '2fa_backup_code_used';
       } else if (method === 'email') {
         const challengeType = pending.mode === 'verify' ? 'login_email' : 'setup_email';
-        verified = await verifyEmailChallenge(pending.userId, pending.orgId, challengeType, code);
+        verified = await verifyEmailChallenge(pending.userId, tfaOrgOf(pending), challengeType, code);
         if (verified && pending.mode !== 'verify') {
-          await ensureUser2faRow(pending.userId, pending.orgId, 'email', null);
-          generatedBackupCodes = await replaceBackupCodes(pending.userId, pending.orgId);
+          await ensureUser2faRow(pending.userId, tfaOrgOf(pending), 'email', null);
+          generatedBackupCodes = await replaceBackupCodes(pending.userId, tfaOrgOf(pending));
           setupCompleted = true;
           authEvent = '2fa_setup_completed';
         }
@@ -1828,12 +1847,12 @@ const authController = {
         if (pending.mode === 'verify') {
           verified = !!settings?.totp_secret && verifyTotpToken(settings.totp_secret, String(code || '').trim());
         } else {
-          const secret = await getLatestTotpEnrollmentSecret(pending.userId, pending.orgId);
+          const secret = await getLatestTotpEnrollmentSecret(pending.userId, tfaOrgOf(pending));
           verified = !!secret && verifyTotpToken(secret, String(code || '').trim());
           if (verified) {
-            await ensureUser2faRow(pending.userId, pending.orgId, 'totp', secret);
-            await consumeTotpEnrollmentSecret(pending.userId, pending.orgId, secret);
-            generatedBackupCodes = await replaceBackupCodes(pending.userId, pending.orgId);
+            await ensureUser2faRow(pending.userId, tfaOrgOf(pending), 'totp', secret);
+            await consumeTotpEnrollmentSecret(pending.userId, tfaOrgOf(pending), secret);
+            generatedBackupCodes = await replaceBackupCodes(pending.userId, tfaOrgOf(pending));
             setupCompleted = true;
             authEvent = '2fa_setup_completed';
           }
@@ -1841,7 +1860,7 @@ const authController = {
       }
 
       if (!verified) {
-        const failure = await setTwoFactorFailure(pending.userId, pending.orgId);
+        const failure = await setTwoFactorFailure(pending.userId, tfaOrgOf(pending));
         await logLoginAudit({
           userId: pending.userId,
           userName: pending.email,
@@ -1857,9 +1876,9 @@ const authController = {
         });
       }
 
-      await clearTwoFactorFailures(pending.userId, pending.orgId);
+      await clearTwoFactorFailures(pending.userId, tfaOrgOf(pending));
       const trustedDeviceToken = rememberDevice
-        ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
+        ? await createTrustedDevice(pending.userId, tfaOrgOf(pending), pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
       if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
 

@@ -261,17 +261,41 @@ function mapProviderSummary(row, orgId, includeSecretStatus = false) {
   return summary;
 }
 
+// L1 (Rohith, 2026-11-13): one sign-in for all of MIMS. An organisation no longer
+// chooses "password only / SSO only / both" (login_mode is kept, not read). Company
+// login is offered wherever it is set up, and an email whose domain a company login
+// lists must use it (companyLoginForEmail); every other email may use a password.
+function usableProviders(providers) {
+  return (providers || []).filter((p) => p.is_active && p.configured);
+}
+
 async function getOrgSsoPolicy(orgId) {
   const config = await getOrgIdentityConfig(orgId);
   if (!config) return null;
+  const providers = config.providers.map((row) => mapProviderSummary(row, orgId, true));
   return {
     org: {
       ...config.org,
-      local_login_allowed: normalizeLoginMode(config.org.login_mode) !== 'sso_only',
-      sso_login_allowed: normalizeLoginMode(config.org.login_mode) !== 'local_only',
+      local_login_allowed: true,
+      sso_login_allowed: usableProviders(providers).length > 0,
     },
-    providers: config.providers.map((row) => mapProviderSummary(row, orgId, true)),
+    providers,
   };
+}
+
+// The company login that owns this email's domain, among the given organisations,
+// or null. Only a provider that names its domains owns them.
+async function companyLoginForEmail(orgIds, email) {
+  const domain = String(email || '').split('@')[1]?.trim().toLowerCase();
+  if (!domain) return null;
+  for (const orgId of orgIds || []) {
+    const policy = await getOrgSsoPolicy(orgId).catch(() => null);
+    if (!policy?.org?.is_active) continue;
+    const owner = usableProviders(policy.providers)
+      .find((p) => (p.allowed_domains || []).map((d) => String(d).toLowerCase()).includes(domain));
+    if (owner) return { orgId, key: owner.key, label: owner.label || owner.key };
+  }
+  return null;
 }
 
 async function saveOrgSsoPolicy(orgId, payload = {}, actorId = null) {
@@ -345,16 +369,14 @@ async function getPublicLoginOrgs() {
 async function getPublicLoginOptions(orgId) {
   const policy = await getOrgSsoPolicy(orgId);
   if (!policy?.org || !policy.org.is_active) return null;
-  const providers = policy.providers.filter((provider) => provider.is_active && provider.configured);
-  const loginMode = normalizeLoginMode(policy.org.login_mode);
+  const providers = usableProviders(policy.providers);
   return {
     org: {
       id: policy.org.id,
       name: policy.org.name,
-      login_mode: loginMode,
     },
-    local_login_allowed: loginMode !== 'sso_only',
-    sso_login_allowed: loginMode !== 'local_only',
+    local_login_allowed: true,
+    sso_login_allowed: providers.length > 0,
     providers,
   };
 }
@@ -506,6 +528,7 @@ module.exports = {
   encryptSecret,
   exchangeCodeForTokens,
   getOrgSsoPolicy,
+  companyLoginForEmail,
   getProviderConfig,
   getPublicLoginOptions,
   getPublicLoginOrgs,
