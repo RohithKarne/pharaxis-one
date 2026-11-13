@@ -33,6 +33,15 @@ until he confirms it.
 
 ## Unreleased
 
+### A0/A2/A3 — an organisation admin acts only inside their own organisation (MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control and password controls (21 CFR 11.300) changed.
+**Why:** One client's administrator could set the password of a person in another client, change their role there, or lock them out of it.
+- An organisation admin can set or expire a password, and see a person's organisations, only for people in their own organisation. A password they set follows the same rules as a person's own (not the current or a recent one) and ends that person's sessions.
+- Changing a shared person's security group changes their role in this organisation only. Their name, email and user ID change only by a platform admin.
+- "Switching off" a person who also works for another organisation removes them from this organisation only; their cases here are unassigned and case admins told. Switching an account off everywhere stays with a platform admin.
+- Saving Edit User changes only the admin's own organisations and keeps a current member's role.
+
 ### One MIMS sign-in, set by the platform (MIMS — 2026-11-13)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control (21 CFR 11.10(d), 11.300) changed: who is asked for two-step, who may use a password, who may join an organisation, and where sign-in settings are kept.

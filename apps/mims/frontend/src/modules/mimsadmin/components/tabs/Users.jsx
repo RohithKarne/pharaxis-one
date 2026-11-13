@@ -129,10 +129,10 @@ export default function Users() {
 
   function closeModal() { setModalOpen(false); setEditUser(null) }
 
-  async function onSaved() {
+  async function onSaved(message) {
     closeModal()
     await loadUsers()
-    showFlash(editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.')
+    showFlash(message || (editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.'))
   }
 
   const filtered = users
@@ -453,6 +453,12 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         })
         const d = await r.json()
         if (!r.ok) { setApiErr(d.error || 'Failed to update user.'); return }
+        // A3: a person who also works for another organisation was removed from this
+        // one only; there is nothing more to save here.
+        if (d.removed_from_org) {
+          onSaved(`${form.name || 'The person'} was removed from this organisation and keeps their other organisations.${d.cases_moved_to_unassigned ? ` ${d.cases_moved_to_unassigned} open case(s) here moved to unassigned.` : ''}`)
+          return
+        }
 
         // Update tenants separately
         const rt = await httpFetch(`/api/admin/users/${editUser.id}/tenants`, {

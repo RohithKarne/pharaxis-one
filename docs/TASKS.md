@@ -163,6 +163,18 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 8 | Push and open the pull request | Varun | ⏳ Rohith's word |
 | 9 | Next from the access review: A2/A3 (an org admin's changes reach other orgs), C1 (CP client admin can switch off the portal), A4 (screens per organisation) | Tim | ⏳ |
 
+## Now — A0/A2/A3: an organisation admin acts only inside their own organisation (no Jira; locked by Rohith 2026-11-13)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | A0: set / expire password and the organisation list only for people in the admin's organisation; history rule; sessions end | Kiranmai | ✅ |
+| 2 | A2: group change sets the role in this organisation only; a shared person's name, email, user ID by platform admin | Kiranmai | ✅ |
+| 3 | A3: an organisation admin removes a shared person from their organisation only | Kiranmai | ✅ |
+| 4 | Found: saving Edit User reset or refused a shared person's other organisations | Kiranmai | ✅ |
+| 5 | Walk on the sealed copy through the routes the screens call (all paths, failing ones included) | Kiranmai | ✅ |
+| 6 | See Edit User on screen with a shared person — name change refused, removal message, Vanaja case still Raj's; found and fixed "User not found" after removal | Kiranmai | ✅ |
+| 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
+
 ## Waiting on a decision
 
 | Item | Waiting for |

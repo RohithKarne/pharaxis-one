@@ -2549,4 +2549,7 @@ const authController = {
   },
 };
 
+// A0 (2026-11-13): the admin set-password route uses the same complexity, reuse
+// and history rules as a person changing their own password.
+authController.updatePasswordWithHistory = updatePasswordWithHistory;
 module.exports = authController;
