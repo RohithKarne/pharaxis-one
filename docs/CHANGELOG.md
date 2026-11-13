@@ -33,6 +33,14 @@ until he confirms it.
 
 ## Unreleased
 
+### Access review closed — C1, A6, A4 (CP Portal and MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control changed (21 CFR 11.10(d)): which screens a person has in each organisation; who can switch a portal off.
+**Why:** A person's screens and role label followed them into every organisation; a CP client admin could take the whole portal offline; a client admin was offered other organisations' and the platform's groups.
+- CP Portal (C1): only the platform can switch a client off or delete it; a client admin can still edit its name and contacts.
+- MIMS (A6): Add / Edit Users offers an organisation admin only their organisation's and shared groups, never a platform group.
+- MIMS (A4): screens and the role shown follow the person's role in the organisation they are working in; personal screen changes are kept per organisation (migration 194; existing ones still apply everywhere); Edit User's Screens section names the organisation; the User Access Review report follows the same rule.
+
 ### A0/A2/A3 — an organisation admin acts only inside their own organisation (MIMS — 2026-11-13)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control and password controls (21 CFR 11.300) changed.

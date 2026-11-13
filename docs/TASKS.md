@@ -175,6 +175,17 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 6 | See Edit User on screen with a shared person — name change refused, removal message, Vanaja case still Raj's; found and fixed "User not found" after removal | Kiranmai | ✅ |
 | 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
 
+## Now — close the access review: C1, A6, A4 (no Jira; locked by Rohith 2026-11-13)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | C1: CP client switch-off and delete superadmin-only | Kiranmai | ✅ |
+| 2 | A6: group list for an organisation admin — own and shared groups only | Kiranmai | ✅ |
+| 3 | A4: migration 194; screens and role per organisation; every screen check passes the organisation | Varun, Kiranmai | ✅ |
+| 4 | Walk on sealed copies: Vanaja agent screens and label, Access Denied by address, Calder admin screens after switching, Inbox removed in Calder only, group list, C1 refusals | Kiranmai | ✅ |
+| 5 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 6 | After merge: one walk of everything from the access review on the shared dev copy, then Rohith's sign-off | Kiranmai, Rohith | ⏳ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |
