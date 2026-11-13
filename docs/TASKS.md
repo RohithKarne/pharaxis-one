@@ -172,7 +172,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 3 | A3: an organisation admin removes a shared person from their organisation only | Kiranmai | ✅ |
 | 4 | Found: saving Edit User reset or refused a shared person's other organisations | Kiranmai | ✅ |
 | 5 | Walk on the sealed copy through the routes the screens call (all paths, failing ones included) | Kiranmai | ✅ |
-| 6 | See Edit User on screen with a shared person (the browser pane was hidden during the walk) | Kiranmai | ⏳ |
+| 6 | See Edit User on screen with a shared person — name change refused, removal message, Vanaja case still Raj's; found and fixed "User not found" after removal | Kiranmai | ✅ |
 | 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
 
 ## Waiting on a decision

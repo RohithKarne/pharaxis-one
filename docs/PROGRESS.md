@@ -26,7 +26,7 @@ One sign-in for all of MIMS; sign-in settings on one screen (Sign-in & Security)
 
 ## Done — 2026-11-13: A0/A2/A3, organisation admins kept inside their organisation (locked by Rohith)
 
-Found while re-reading (A0): any organisation admin could set any person's password in any organisation. Fixed with A2 (role per organisation) and A3 (remove from one organisation, not every one), plus Edit User's organisation save. Checked on a sealed copy through the routes the screens call; CI suite 215/215. **Not seen on screen:** Edit User with a shared person (browser pane hidden). Still open from the access review: C1, A4.
+Found while re-reading (A0): any organisation admin could set any person's password in any organisation. Fixed with A2 (role per organisation) and A3 (remove from one organisation, not every one), plus Edit User's organisation save. Checked on a sealed copy through the routes the screens call; CI suite 215/215. Edit User walked on screen with a shared person ("User not found" after removal found and fixed). Still open from the access review: C1, A4.
 
 ## Next
 
