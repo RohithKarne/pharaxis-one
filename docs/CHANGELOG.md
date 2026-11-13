@@ -33,6 +33,16 @@ until he confirms it.
 
 ## Unreleased
 
+### One MIMS sign-in, set by the platform (MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control (21 CFR 11.10(d), 11.300) changed: who is asked for two-step, who may use a password, who may join an organisation, and where sign-in settings are kept.
+**Why:** Each organisation set its own sign-in rules, so a person in two organisations could sign in through the weaker one and switch into the stricter one; the same settings were edited on four screens.
+- Two-step is asked at sign-in when any of a person's organisations has it on; switching organisation needs no second step.
+- An email at a domain a client's company login lists must use it; the per-organisation "password / SSO / both" setting is no longer read.
+- The public list of every organisation on the sign-in page is removed.
+- Per client: personal emails (off by default) and company email domains; a personal-email contractor needs an access end date (at most 12 months) and is removed on that day by a nightly job, their open cases there unassigned (migration 193).
+- One screen, Sign-in & Security: platform rules (idle timeout for everyone, two-step methods, remember-device days, lockout, password rules) and one row per client; a client's own admin sees only their row. Removed from Organisations, Division Parameters, System Parameters; Auth Policy is now Company Login.
+
 ### S1 — side-effect reports missing a validity criterion are kept, not refused (CP Portal and MIMS — 2026-11-12)
 
 **Revalidation impact:** Partial — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.* Revalidate side-effect intake (portal form, bridge, MIMS case API) and the AE validity display only.

@@ -20,6 +20,10 @@ Team ─────── restructured 2026-11-10: Rohith → Tim → Technolog
 | Revalidation flag (Unreleased) | Full | Partial |
 | Tagged release | None — tags paused by Rohith, 2026-10-04 | None |
 
+## Done — 2026-11-13: one MIMS sign-in (L1–L4, locked by Rohith)
+
+One sign-in for all of MIMS; sign-in settings on one screen (Sign-in & Security). Walked on a sealed copy: two-step asked when any organisation uses it; switch without a second step; a company-domain email refused a password; the public organisation list gone; personal emails refused, then required an end date, then a contractor removed by the nightly job with their case unassigned. Found and fixed on the way: a second setup demanded when another organisation turned two-step on; "jwt expired" shown to people; a system case entry named a person. PRD and Architecture lines changed on Rohith's lock (2026-11-13). **Not seen on screen:** the platform admin's view of Sign-in & Security (sign-in did not finish inside the 10-minute code step during the walk). A4 (screens per organisation) is still open and was seen live in the walk.
+
 ## Next
 
 The work in hand is in [TASKS.md](TASKS.md). The ticket list is Jira (CPPM for CP Portal, MIPM for MIMS).
