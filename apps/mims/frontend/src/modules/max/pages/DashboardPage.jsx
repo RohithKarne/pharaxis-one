@@ -437,7 +437,7 @@ export default function DashboardPage() {
         )}
 
         {focusCards.some(item => preferences.visibleWidgets.includes(item.id)) && (
-          <article className="card" style={{ marginBottom: 10 }}>
+          <article className="card stat-card" style={{ marginBottom: 10 }}>
             <div className="card-header"><h3>Work queues</h3></div>
             <table className="admin-table mims-queue-table">
               <tbody>
@@ -463,7 +463,7 @@ export default function DashboardPage() {
         {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
         {preferences.visibleWidgets.includes('workspace_launchpad') && (
-          <article className="card">
+          <article className="card stat-card">
             <div className="card-header"><h3>Modules</h3></div>
             <table className="admin-table mims-module-list">
               <tbody>
