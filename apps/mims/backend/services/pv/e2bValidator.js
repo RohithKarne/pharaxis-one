@@ -23,6 +23,9 @@ function validateAgainstXsd(xml, xsdPath) {
     execFileSync('xmllint', ['--noout', '--schema', resolvedPath, tmp], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     return [];
   } catch (err) {
+    if (err && (err.code === 'ENOENT' || String(err.message).includes('ENOENT'))) {
+      return null;
+    }
     const raw = String(err.stderr || err.message || '');
     return raw
       .split('\n')
@@ -41,6 +44,38 @@ function validateAgainstXsd(xml, xsdPath) {
   }
 }
 
+function checkBasicXmlWellFormedness(xml) {
+  const text = String(xml || '').trim();
+  if (!text) return [{ path: '/', reason: 'XML payload is empty' }];
+  const cleaned = text
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '');
+  const tagRegex = /<(\/)?([a-zA-Z0-9:_-]+)(?:\s+[^>]*)?(\/)?>/g;
+  const stack = [];
+  let match;
+  while ((match = tagRegex.exec(cleaned)) !== null) {
+    const isClosing = Boolean(match[1]);
+    const tagName = match[2];
+    const isSelfClosing = Boolean(match[3]) || match[0].endsWith('/>');
+    if (isSelfClosing) continue;
+    if (isClosing) {
+      if (stack.length === 0) {
+        return [{ path: `/${tagName}`, reason: `Unexpected closing tag </${tagName}> without matching opening tag` }];
+      }
+      const last = stack.pop();
+      if (last !== tagName) {
+        return [{ path: `/${tagName}`, reason: `Mismatched closing tag </${tagName}>, expected </${last}>` }];
+      }
+    } else {
+      stack.push(tagName);
+    }
+  }
+  if (stack.length > 0) {
+    return [{ path: `/${stack[stack.length - 1]}`, reason: `Unclosed tag <${stack[stack.length - 1]}>` }];
+  }
+  return [];
+}
+
 function validateWellFormedXml(xml) {
   const tmp = path.join(os.tmpdir(), `mims-e2b-wf-${Date.now()}-${Math.random().toString(16).slice(2)}.xml`);
   try {
@@ -48,6 +83,9 @@ function validateWellFormedXml(xml) {
     execFileSync('xmllint', ['--noout', tmp], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     return [];
   } catch (err) {
+    if (err && (err.code === 'ENOENT' || String(err.message).includes('ENOENT'))) {
+      return checkBasicXmlWellFormedness(xml);
+    }
     const raw = String(err.stderr || err.message || '');
     return raw
       .split('\n')

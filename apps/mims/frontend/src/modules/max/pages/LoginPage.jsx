@@ -119,10 +119,6 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     return (activeMode === 'content' || isAdminUser(data)) && hasModuleAccess(data, modeConfig.moduleKey)
   }
 
-  function hasMimsAppAccess(data) {
-    return hasModuleAccess(data, 'mims_core')
-  }
-
   const progressStep = twoFactor ? 3 : (loginStage === 'password' || loginStage === 'choice' ? 2 : 1)
   const stepText = twoFactor
     ? 'Enter the verification code.'
@@ -141,7 +137,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         const parsed = JSON.parse(savedPref);
         landingPref = parsed.defaultLandingView;
       }
-    } catch (_) {}
+    } catch {
+      landingPref = null
+    }
 
     if (landingPref === 'Cases' && hasModuleAccess(data, 'mims_core')) return '/cases';
     if (landingPref === 'Inbox' && hasModuleAccess(data, 'inbox')) return '/inbox';
