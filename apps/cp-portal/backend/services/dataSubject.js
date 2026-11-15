@@ -127,7 +127,7 @@ async function buildExport(userId, clientId) {
 
   const [[profile]] = await pool.execute(
     `SELECT id, client_id, first_name, last_name, email, user_type, specialty, country, phone,
-            license_number, medical_registration_number, registry_name, license_verified,
+            license_number, registry_type, license_verified, license_verified_at,
             is_active, email_verified, user_type_confirmed, last_login_at, created_at
        FROM cp_portal_users WHERE id = ? AND client_id = ?`,
     [userId, clientId]
@@ -463,7 +463,7 @@ async function eraseUser(userId, clientId) {
     await conn.execute(
       `UPDATE cp_portal_users
           SET first_name = ?, last_name = ?, email = ?, phone = NULL, specialty = NULL, country = NULL,
-              license_number = NULL, medical_registration_number = NULL, registry_name = NULL, license_verified = 0,
+              license_number = NULL, registry_type = NULL, license_verified = 0, license_verified_at = NULL,
               password = ?, is_active = 0, notif_prefs_json = '{}',
               verification_token = NULL, reset_token = NULL, reset_token_expires_at = NULL,
               token_version = COALESCE(token_version, 0) + 1
