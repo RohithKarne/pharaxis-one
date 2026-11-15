@@ -934,8 +934,8 @@ export default function CaseMITab({
                   {showDiff && (
                     <div style={{ marginTop: 12, marginBottom: 12 }}>
                       <DocumentDiffViewer
-                        originalText={templates.find(t => t.id === miRespForm.template_id)?.body_html || 'Standard response template placeholder'}
-                        modifiedText={miRespForm.body_html || miRespForm.custom_text || ''}
+                        originalText={templates.find(t => String(t.id) === String(miRespForm.template_id))?.body_html || 'Standard response template placeholder'}
+                        modifiedText={[miRespForm.body_html || '', miRespForm.custom_text || ''].filter(Boolean).join('\n\n') || ''}
                         originalLabel="Standard Template Baseline"
                         modifiedLabel="Current Draft Revisions"
                       />

@@ -357,7 +357,7 @@ async function trimPasswordHistory(userId, keep = 5, conn = pool) {
   );
 }
 
-async function updatePasswordWithHistory(userId, currentHash, newPassword) {
+async function updatePasswordWithHistory(userId, currentHash, newPassword, expectedNonce = null) {
   // Complexity check (alphanumeric / special chars) — driven by system params
   const complexity = await passwordPolicy.validateComplexity(newPassword);
   if (!complexity.ok) {
@@ -374,19 +374,24 @@ async function updatePasswordWithHistory(userId, currentHash, newPassword) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    // A36: Lock and atomically check the nonce so overlapping requests cannot reuse the same token
+    const [updateResult] = await conn.execute(
+      `UPDATE users
+       SET password = ?, password_reset_required = ?, password_reset_nonce = NULL,
+           password_expires_at = ?, updated_at = NOW()
+       WHERE id = ? AND (password_reset_nonce = ? OR ? IS NULL)`,
+      [newHash, 0, expiresAt, userId, expectedNonce, expectedNonce]
+    );
+    if (updateResult.affectedRows === 0) {
+      await conn.rollback();
+      return { consumed: true };
+    }
     if (currentHash) {
       await conn.execute(
         'INSERT INTO user_password_history (user_id, password_hash) VALUES (?, ?)',
         [userId, currentHash]
       );
     }
-    await conn.execute(
-      `UPDATE users
-       SET password = ?, password_reset_required = ?, password_reset_nonce = NULL,
-           password_expires_at = ?, updated_at = NOW()
-       WHERE id = ?`,
-      [newHash, 0, expiresAt, userId]
-    );
     await trimPasswordHistory(userId, history_count, conn);
     await conn.commit();
     return { reused: false };
@@ -2253,7 +2258,10 @@ const authController = {
         return res.status(401).json({ error: 'Reset token is invalid or already used.' });
       }
 
-      const result = await updatePasswordWithHistory(pending.userId, user.password, newPassword);
+      const result = await updatePasswordWithHistory(pending.userId, user.password, newPassword, pending.passwordResetNonce);
+      if (result.consumed) {
+        return res.status(401).json({ error: 'Reset token is invalid or already used.' });
+      }
       if (result.invalid) {
         return res.status(400).json({ error: result.error });
       }

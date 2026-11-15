@@ -159,9 +159,12 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
 // DELETE /api/admin/documents/:clientId/categories/:catId
 router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const [result] = await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Category not found.' });
-    await audit(req.admin, req.params.clientId, 'DELETE', 'document_category', Number(req.params.catId), {});
+    const [[cat]] = await pool.execute('SELECT name FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    if (!cat) return res.status(404).json({ error: 'Category not found.' });
+    // Re-assign orphaned documents to General before deleting category
+    await pool.execute('UPDATE cp_documents SET category = "General" WHERE category = ? AND client_id = ?', [cat.name, req.params.clientId]);
+    await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'DELETE', 'document_category', Number(req.params.catId), { category: cat.name });
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'DELETE /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
@@ -178,6 +181,7 @@ router.get('/:clientId/expiring', authenticateAdmin, requireClientAccess, async 
       SELECT id, title, expires_at, status, category
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
+        AND retired_at IS NULL AND status = 'published'
         AND expires_at IS NOT NULL
         AND DATE(expires_at) <= DATE(DATE_ADD(NOW(), INTERVAL 30 DAY))
       ORDER BY expires_at ASC
@@ -228,6 +232,7 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
       SELECT id, title, expires_at, status
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
+        AND retired_at IS NULL AND status = 'published'
         AND expires_at IS NOT NULL
         AND DATE(expires_at) <= DATE(DATE_ADD(NOW(), INTERVAL 30 DAY))
       ORDER BY expires_at ASC
@@ -308,6 +313,13 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
     );
 
     if (action === 'publish') {
+      // Check for archived documents: archived documents cannot be published directly
+      const archived = selected.filter(d => d.status === 'archived');
+      if (archived.length > 0) {
+        return res.status(400).json({
+          error: `Nothing was published. ${archived.length} of ${selected.length} selected document(s) are archived. Archived documents cannot be published directly.`,
+        });
+      }
       // CPPM-31: the single-document route refuses an unapproved publish, and so
       // must this one — otherwise ticking the boxes is the way around the control.
       // The whole batch is refused rather than part of it, so nobody is left

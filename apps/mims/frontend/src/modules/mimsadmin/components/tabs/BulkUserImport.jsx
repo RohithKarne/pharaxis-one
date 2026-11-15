@@ -20,18 +20,43 @@ import { httpFetch } from '../../../../shared/api/httpFetch.js'
 
 const API = '/api/admin'
 
-const TEMPLATE_HEADERS = ['user_id', 'name', 'email', 'initials', 'department', 'network_user_id']
+const TEMPLATE_HEADERS = ['user_id', 'name', 'email', 'initials', 'department', 'network_user_id', 'access_ends_on']
 const REQUIRED = ['user_id', 'name', 'email']
 const MAX_ROWS = 500
 
-/** Minimal CSV parse — the importer accepts the same shape the template exports. */
+/** RFC 4180 compliant CSV line parse with quotation support. */
+function parseCsvLine(line) {
+  const result = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (c === ',' && !inQuotes) {
+      result.push(cur.trim())
+      cur = ''
+    } else {
+      cur += c
+    }
+  }
+  result.push(cur.trim())
+  return result
+}
+
+/** Robust CSV parse — respects quoted fields and commas inside values. */
 function parseCsv(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim() !== '')
   if (!lines.length) return { headers: [], rows: [] }
 
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+  const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase())
   const rows = lines.slice(1).map((line, i) => {
-    const values = line.split(',').map(v => v.trim())
+    const values = parseCsvLine(line)
     const row = { __row: i + 1 }
     headers.forEach((h, idx) => { row[h] = values[idx] ?? '' })
     return row
@@ -80,6 +105,7 @@ export default function BulkUserImport({ groups, orgs, token, onClose, onCreated
   const [fileName,  setFileName]  = useState('')
   const [groupId,   setGroupId]   = useState('')
   const [tenantIds, setTenantIds] = useState([])
+  const [batchAccessEndsOn, setBatchAccessEndsOn] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [serverErrors, setServerErrors] = useState([])
   const [apiErr,    setApiErr]    = useState('')
@@ -133,6 +159,7 @@ export default function BulkUserImport({ groups, orgs, token, onClose, onCreated
         network_user_id: r.network_user_id || '',
         security_group_id: Number(groupId),
         tenant_ids: tenantIds,
+        access_ends_on: r.access_ends_on || batchAccessEndsOn || null,
       }))
       const res = await httpFetch(`${API}/users/bulk`, {
         method: 'POST', headers: H, body: JSON.stringify({ users }),
@@ -220,6 +247,16 @@ export default function BulkUserImport({ groups, orgs, token, onClose, onCreated
                       </label>
                     ))}
                   </div>
+                </div>
+                <div className="ma-usr-field">
+                  <label>Contractor Access Ends On</label>
+                  <input
+                    type="date"
+                    className="ma-usr-select"
+                    value={batchAccessEndsOn}
+                    onChange={e => setBatchAccessEndsOn(e.target.value)}
+                  />
+                  <span className="ma-usr-bulk-hint" style={{ marginTop: 4 }}>Required for personal-email contractor provisioning.</span>
                 </div>
               </div>
 

@@ -408,7 +408,7 @@ router.patch('/:clientId/bulk', authenticateAdmin, async (req, res) => {
     if (!cleanIds.length) return res.status(400).json({ error: 'No valid ids provided.' });
     const placeholders = cleanIds.map(() => '?').join(',');
     const [result] = await pool.execute(
-      `UPDATE cp_portal_users SET is_active = ? WHERE client_id = ? AND id IN (${placeholders})`,
+      `UPDATE cp_portal_users SET is_active = ?, token_version = token_version + 1 WHERE client_id = ? AND id IN (${placeholders})`,
       [is_active ? 1 : 0, req.params.clientId, ...cleanIds]
     );
     const count = result.affectedRows;
@@ -435,9 +435,13 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     }
     if (user_type   !== undefined && VALID_USER_TYPES.includes(user_type)) {
       updates.push('user_type = ?'); params.push(user_type);
+      updates.push('token_version = token_version + 1');
     }
     if (country     !== undefined) { updates.push('country = ?');     params.push(country); }
-    if (is_active   !== undefined) { updates.push('is_active = ?');   params.push(is_active ? 1 : 0); }
+    if (is_active   !== undefined) {
+      updates.push('is_active = ?');   params.push(is_active ? 1 : 0);
+      updates.push('token_version = token_version + 1');
+    }
     if (is_verified !== undefined) {
       // BUGFIX: login gates on `email_verified`, so an admin marking a user verified
       // must clear that gate too — otherwise the user still can't sign in.
@@ -471,7 +475,7 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
 
 router.delete('/:clientId/:userId', authenticateAdmin, async (req, res) => {
   try {
-    const [result] = await pool.execute('UPDATE cp_portal_users SET is_active=0 WHERE id=? AND client_id=?', [req.params.userId, req.params.clientId]);
+    const [result] = await pool.execute('UPDATE cp_portal_users SET is_active=0, token_version = token_version + 1 WHERE id=? AND client_id=?', [req.params.userId, req.params.clientId]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
     await audit(req.admin, req.params.clientId, 'DELETE', 'portal_user', req.params.userId, {});
     res.json({ message: 'User deactivated.' });

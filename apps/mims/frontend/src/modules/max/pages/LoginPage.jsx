@@ -132,11 +132,33 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         ? `Enter the password for ${loginForm.email || 'this account'}.`
         : 'Enter your work email or username.'
 
-  function findFallbackAdminDestination(data) {
-    if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination
-    if (hasModuleAccess(data, 'content_mgmt')) return MODULE_LOGIN_CONFIG.content.destination
-    if (isAdminUser(data) && hasModuleAccess(data, 'reports')) return MODULE_LOGIN_CONFIG.reports.destination
-    return ''
+  function findPermittedDestination(data) {
+    // A15: Check saved default landing view preference
+    let landingPref = null;
+    try {
+      const savedPref = localStorage.getItem(`mims_dashboard_pref_${data.user?.id}`);
+      if (savedPref) {
+        const parsed = JSON.parse(savedPref);
+        landingPref = parsed.defaultLandingView;
+      }
+    } catch (_) {}
+
+    if (landingPref === 'Cases' && hasModuleAccess(data, 'mims_core')) return '/cases';
+    if (landingPref === 'Inbox' && hasModuleAccess(data, 'inbox')) return '/inbox';
+    if (landingPref === 'Transmissions' && hasModuleAccess(data, 'transmissions')) return '/transmissions';
+
+    // Normal mims_core landing
+    if (hasModuleAccess(data, 'mims_core')) return '/dashboard';
+
+    // A32: Fallback across all permitted modules so users with subset access never hit false /no-access
+    if (hasModuleAccess(data, 'inbox')) return '/inbox';
+    if (hasModuleAccess(data, 'transmissions')) return '/transmissions';
+    if (hasModuleAccess(data, 'browse_content')) return '/content';
+    if (hasModuleAccess(data, 'content_mgmt')) return MODULE_LOGIN_CONFIG.content.destination;
+    if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination;
+    if (isAdminUser(data) && hasModuleAccess(data, 'reports')) return MODULE_LOGIN_CONFIG.reports.destination;
+
+    return '';
   }
 
   async function discardRejectedSession(data) {
@@ -178,11 +200,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     })
     if (activeMode !== 'app') {
       navigate(modeConfig.destination)
-    } else if (hasMimsAppAccess(data)) {
-      navigate('/dashboard')
     } else {
-      const fallback = findFallbackAdminDestination(data)
-      if (fallback) navigate(fallback)
+      const destination = findPermittedDestination(data)
+      if (destination) navigate(destination)
       else navigate('/no-access')
     }
   }

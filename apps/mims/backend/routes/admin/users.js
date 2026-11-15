@@ -59,9 +59,32 @@ async function audit(userId, action, entityId, details) {
 // GET /api/admin/users/export — CSV download of users matching the same filter
 router.get('/users/export', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const { search = '' } = req.query;
-    const like = `%${search}%`;
+    const { search = '', role, status, group_id } = req.query;
     const scope = orgScopeForUsers(req);
+    const whereConditions = [scope.sql];
+    const whereParams = [...scope.params];
+
+    if (search.trim()) {
+      const like = `%${search.trim()}%`;
+      whereConditions.push('(u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)');
+      whereParams.push(like, like, like);
+    }
+    if (role) {
+      whereConditions.push('u.role = ?');
+      whereParams.push(role);
+    }
+    if (status === 'active') {
+      whereConditions.push('u.is_active = 1 AND u.is_disabled = 0');
+    } else if (status === 'inactive') {
+      whereConditions.push('u.is_active = 0 AND u.is_disabled = 0');
+    } else if (status === 'disabled') {
+      whereConditions.push('u.is_disabled = 1');
+    }
+    if (group_id) {
+      whereConditions.push('u.security_group_id = ?');
+      whereParams.push(group_id);
+    }
+
     const [users] = await pool.execute(
       `SELECT u.id, u.user_id, u.name, u.email, u.role, u.department,
               sg.name AS security_group_name,
@@ -69,10 +92,9 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
               u.password_expires_at, u.created_at, u.updated_at, u.inactive_reason, u.inactive_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-        WHERE ${scope.sql}
-          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
+        WHERE ${whereConditions.join(' AND ')}
         ORDER BY u.name`,
-      [...scope.params, like, like, like]
+      whereParams
     );
     const columns = [
       { key: 'user_id', label: 'User ID' },
@@ -507,10 +529,10 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
       );
       for (const orgId of row.tenant_ids) {
         await conn.execute(
-          `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active)
-           VALUES (?, ?, ?, 1)
-           ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1`,
-          [insert.insertId, orgId, row.roleAtOrg]
+          `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active, access_ends_on)
+           VALUES (?, ?, ?, 1, ?)
+           ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1, access_ends_on = VALUES(access_ends_on)`,
+          [insert.insertId, orgId, row.roleAtOrg, row.access_ends_on || null]
         );
       }
       await setFormGroupMembership(conn, insert.insertId, row.security_group_id);
@@ -680,8 +702,9 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       conn.release();
     }
 
-    // MIPM-32: switching someone off ends every session they have, at once.
-    const sessionsEnded = switchedOff ? await endAllSessions(req.params.id) : undefined;
+    // A07 fix: Any role, group, or status demotion ends all active sessions at once
+    const accessChanged = switchedOff || req.body.role !== undefined || req.body.security_group_id !== undefined || req.body.group_ids !== undefined || req.body.role_at_org !== undefined;
+    const sessionsEnded = accessChanged ? await endAllSessions(req.params.id) : undefined;
     // MIPM-33: tell the organisation's case administrators, after the move is committed.
     if (movedCases.length) {
       await notifyCaseAdmins(movedCases).catch((err) => console.error('[MIPM-33] notifying case administrators failed:', err.message));

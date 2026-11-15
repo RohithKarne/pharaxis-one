@@ -345,9 +345,9 @@ export default function SafetyPage() {
                   </td>
                   <td>{a.view_count || 0}</td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                    {canWrite && Number(a.second_check_waiting) === 1 && (
+                    {canWrite && (!a.second_check_at && !!a.second_check_due_at) && (
                       <button className="cp-btn cp-btn-sm cp-btn-primary" disabled={!Number(a.can_second_check)}
-                        title={Number(a.can_second_check) ? 'Confirm you have read this alert' : 'You wrote or last changed this alert; a different person must check it'}
+                        title={Number(a.can_second_check) ? 'Confirm you have read this alert (2nd check)' : 'You wrote or last changed this alert; a different person must check it'}
                         onClick={() => handleSecondCheck(a)}>Second check</button>
                     )}
                     {canPublish && a.status === 'active' && (

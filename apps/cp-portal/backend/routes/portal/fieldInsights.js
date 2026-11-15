@@ -27,17 +27,23 @@ router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     } = req.body || {};
     const clientId = req.portalUser.clientId;
     const userId = req.portalUser.userId;
+    const userType = req.portalUser.userType;
+
+    // A10 fix: Restrict field insights to authenticated field medical staff
+    if (userType === 'patient' || userType === 'consumer') {
+      return res.status(403).json({ error: 'Field Medical Insights capture is restricted to field medical staff.' });
+    }
 
     if (!reporter_name || !product_name || !content || !insight_type) {
       return res.status(400).json({ error: 'Please provide reporter name, product name, insight category, and clinical content.' });
     }
 
-    // Save in cp_field_insights. A failed save is an error, never a made-up ID.
+    // Save in cp_field_insights with initial status 'pending'
     const [insertRes] = await pool.execute(
         `INSERT INTO cp_field_insights
            (client_id, reporter_name, reporter_email, hcp_specialty, institution, product_name, insight_type,
             interaction_venue, content, urgency, follow_up_requested, created_by_user_id, sync_status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', NOW())`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
         [
           clientId,
           reporter_name.trim(),
@@ -57,11 +63,15 @@ router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     // If follow-up requested or high urgency, bridge to MIMS as unsolicited field inquiry
     let linkedCaseId = null;
+    let syncStatus = 'pending';
     if (follow_up_requested) {
       try {
-        const mimsRes = await safeFetch(`${MIMS_BASE_URL}/v1/cases`, {
+        const mimsRes = await safeFetch(`${MIMS_BASE_URL}/cases`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || '',
+          },
           body: JSON.stringify({
             title: `[Field Medical Insight - ${insight_type}] ${product_name}`,
             case_type: 'MI',
@@ -75,10 +85,19 @@ router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
         });
         if (mimsRes.ok) {
           const mimsData = await mimsRes.json().catch(() => ({}));
-          linkedCaseId = mimsData.case_id || mimsData.id;
+          linkedCaseId = mimsData.case_id || mimsData.id || null;
+          syncStatus = 'synced';
+          await pool.execute(
+            'UPDATE cp_field_insights SET sync_status = ?, linked_case_id = ? WHERE id = ?',
+            [syncStatus, linkedCaseId, insightId]
+          );
+        } else {
+          syncStatus = 'pending_retry';
+          await pool.execute('UPDATE cp_field_insights SET sync_status = ? WHERE id = ?', [syncStatus, insightId]);
         }
       } catch (_) {
-        // Tolerable bridge offline fallback
+        syncStatus = 'pending_retry';
+        await pool.execute('UPDATE cp_field_insights SET sync_status = ? WHERE id = ?', [syncStatus, insightId]);
       }
     }
 

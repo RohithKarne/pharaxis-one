@@ -239,6 +239,10 @@ export default function TrainingAdminPage() {
             <input value={form.credits} onChange={e => setForm({ ...form, credits: e.target.value })} placeholder="Leave blank if none" style={input} />
           </div>
           <div style={{ marginBottom: 12 }}>
+            <label style={label}>Estimated Duration</label>
+            <input value={form.duration || ''} onChange={e => setForm({ ...form, duration: e.target.value })} placeholder="e.g. 30 mins" style={input} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
             <label style={label}>Pass Score Threshold (%)</label>
             <input type="number" value={form.pass_score} onChange={e => setForm({ ...form, pass_score: e.target.value })} min={50} max={100} style={input} />
           </div>

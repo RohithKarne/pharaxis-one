@@ -84,7 +84,7 @@ export default function ProfilePage() {
   async function changePassword(e) {
     e.preventDefault()
     setPwdMsg(''); setPwdErr('')
-    if (pwd.new_password.length < 8) { setPwdErr('New password must be at least 8 characters.'); return }
+    if (pwd.new_password.length < 12) { setPwdErr('New password must be at least 12 characters.'); return }
     if (pwd.new_password !== pwd.confirm_password) { setPwdErr('New password and confirmation do not match.'); return }
     if (pwd.new_password === pwd.current_password) { setPwdErr('New password must be different from your current password.'); return }
 
@@ -236,7 +236,7 @@ export default function ProfilePage() {
             <label style={labelStyle} htmlFor="pf-new">{t('New password')}</label>
             <input id="pf-new" type="password" autoComplete="new-password" style={inputStyle}
               value={pwd.new_password} onChange={e => setPwd(p => ({ ...p, new_password: e.target.value }))} />
-            <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>{t('At least 8 characters.')}</div>
+            <div style={{ fontSize: 12, color: '#5F6B7A', marginTop: 6 }}>{t('At least 12 characters.')}</div>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={labelStyle} htmlFor="pf-confirm">{t('Confirm new password')}</label>

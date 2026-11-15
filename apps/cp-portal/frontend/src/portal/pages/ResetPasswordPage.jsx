@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
 
   async function submit(e) {
     e.preventDefault(); setError('')
-    if (pwd.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (pwd.length < 12) { setError('Password must be at least 12 characters.'); return }
     if (pwd !== confirm) { setError('Passwords do not match.'); return }
     setLoading(true)
     try {
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
             {error && <div className="pp-error-msg">{error}</div>}
             <form onSubmit={submit} className="pp-auth-form">
               <div className="pp-field pp-field-password">
-                <label>{t('New password')} <span style={{ fontSize: 11, color: '#4B5563' }}>{t('(min 8 characters)')}</span></label>
+                <label>{t('New password')} <span style={{ fontSize: 11, color: '#4B5563' }}>{t('(min 12 characters)')}</span></label>
                 <div className="pp-input-wrapper">
                   <input type={show ? 'text' : 'password'} required value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••" />
                   <button type="button" className="pp-password-toggle" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'}>

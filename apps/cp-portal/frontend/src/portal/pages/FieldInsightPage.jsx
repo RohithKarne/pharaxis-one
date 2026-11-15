@@ -31,7 +31,7 @@ const VENUES = [
 ]
 
 export default function FieldInsightPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, user } = usePortal()
   const [formData, setFormData] = useState({
     reporter_name: '',
     reporter_email: '',
@@ -50,24 +50,29 @@ export default function FieldInsightPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
+  const draftKey = user?.id ? `cp_field_insight_draft_${user.clientId || 'portal'}_${user.id}` : null
+
   // Load offline draft on mount
   useEffect(() => {
+    if (!draftKey) return
     try {
-      const cached = localStorage.getItem('cp_field_insight_draft')
+      const cached = localStorage.getItem(draftKey)
       if (cached) {
         setFormData(JSON.parse(cached))
         setSavedLocally(true)
       }
     } catch (_) {}
-  }, [])
+  }, [draftKey])
 
   function handleChange(field, value) {
     setFormData(prev => {
       const next = { ...prev, [field]: value }
-      try {
-        localStorage.setItem('cp_field_insight_draft', JSON.stringify(next))
-        setSavedLocally(true)
-      } catch (_) {}
+      if (draftKey) {
+        try {
+          localStorage.setItem(draftKey, JSON.stringify(next))
+          setSavedLocally(true)
+        } catch (_) {}
+      }
       return next
     })
   }
@@ -90,7 +95,7 @@ export default function FieldInsightPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to submit field insight.')
 
       setSuccessMsg(data.message || 'Insight submitted successfully!')
-      localStorage.removeItem('cp_field_insight_draft')
+      if (draftKey) localStorage.removeItem(draftKey)
       setSavedLocally(false)
       setFormData({
         reporter_name: '',
@@ -109,6 +114,19 @@ export default function FieldInsightPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (!user || user.user_type === 'patient' || user.user_type === 'consumer') {
+    return (
+      <div className="pp-container pp-page-content" style={{ maxWidth: 720, margin: '40px auto', padding: '0 16px' }}>
+        <div style={{ background: '#FEF2F2', border: '1px solid #F87171', borderRadius: 8, padding: 24, textAlign: 'center' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#991B1B', margin: '0 0 8px 0' }}>Access Restricted</h2>
+          <p style={{ fontSize: 14, color: '#7F1D1D', margin: 0 }}>
+            Field Medical Insights capture is restricted to field medical staff. If you are an HCP or medical representative, please ensure you are signed in with authorized field credentials.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

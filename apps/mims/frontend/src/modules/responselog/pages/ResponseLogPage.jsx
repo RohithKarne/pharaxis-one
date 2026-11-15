@@ -89,8 +89,10 @@ export default function ResponseLogPage() {
   const setSearch = setFilter('search'), setStatus = setFilter('status'), setFromDate = setFilter('fromDate'), setToDate = setFilter('toDate')
   const [page,      setPage]      = useState(1)
   const limit = 50
+  const reqSeqRef = useRef(0)
 
   const fetchLog = useCallback(async () => {
+    const seq = ++reqSeqRef.current
     setLoading(true); setError(null)
     try {
       const params = new URLSearchParams({ page, limit })
@@ -101,11 +103,17 @@ export default function ResponseLogPage() {
 
       const res  = await httpFetch(`${API}/cases/mi-responses/log?${params}`, { headers })
       const data = await res.json()
+      // A16 fix: discard older response if a newer query has been dispatched
+      if (seq !== reqSeqRef.current) return
       if (!res.ok) { setError(data.error || 'Failed to load response log.'); return }
       setResponses(data.responses || [])
       setTotal(data.total || 0)
-    } catch { setError('Network error.') }
-    finally { setLoading(false) }
+    } catch {
+      if (seq === reqSeqRef.current) setError('Network error.')
+    }
+    finally {
+      if (seq === reqSeqRef.current) setLoading(false)
+    }
   }, [fromDate, headers, page, search, status, toDate])
 
   useEffect(() => { fetchLog() }, [fetchLog])

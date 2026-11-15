@@ -1186,10 +1186,15 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
       // old "archive the previous published version" step archived every OTHER
       // published document of the same type in the folder.
 
-      await conn.execute(
-        "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+      // A20 fix: Atomically verify status is 'Approved' so concurrent requests cannot both publish
+      const [updateResult] = await conn.execute(
+        "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ? AND status = 'Approved'",
         [req.user.userId, req.user.userId, id]
       );
+      if (updateResult.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Document was already published or is no longer in Approved status.' });
+      }
 
       const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
       versionStr = `${after.version_major}.${after.version_minor}`;

@@ -386,7 +386,9 @@
 }
 
 .tx-table-wrap {
-  overflow: hidden;
+  overflow-x: auto;
+  min-height: 320px;
+  flex: 1 0 auto;
 }
 
 .tx-table {
@@ -423,7 +425,14 @@
 }
 
 /* Reconciliation: AE and PC cases not yet handed off (14 Oct 2026). */
-.tx-recon { margin: 0 0 14px; border: 1px solid var(--border, #e5e7eb); background: var(--surface, #fff); padding: 10px 14px; }
+.tx-recon {
+  margin: 0 0 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  padding: 10px 14px;
+  max-height: 260px;
+  overflow-y: auto;
+}
 .tx-recon summary { cursor: pointer; font-size: 13.5px; }
 .tx-recon-late { color: #b91c1c; font-weight: 700; }
 .tx-recon-empty { margin: 8px 0 0; font-size: 13px; color: var(--text-muted, #6b7280); }

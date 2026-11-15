@@ -316,10 +316,11 @@ router.get('/security-groups/:id/audit', authenticate, requireRole('admin', 'pla
     if (!group) return res.status(404).json({ error: 'Security group not found.' });
 
     const [rows] = await pool.execute(
-      `SELECT user_name, action, details, created_at
-       FROM audit_logs
-       WHERE entity = 'security_group' AND entity_id = ?
-       ORDER BY created_at DESC
+      `SELECT a.user_id, COALESCE(a.user_name, u.name, u.email, 'System') AS user_name, a.action, a.details, a.created_at
+       FROM audit_logs a
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.entity = 'security_group' AND a.entity_id = ?
+       ORDER BY a.created_at DESC
        LIMIT 100`,
       [group.id]
     );

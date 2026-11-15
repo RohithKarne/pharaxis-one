@@ -17,9 +17,32 @@ const EMPTY_FORM = {
   status: 'draft',
   is_pinned: false,
   therapeutic_area_id: '',
+  thumbnail_path: '',
 }
 
 const STATUS_LABELS = labelsOf('contentStatus')
+
+function getAllowedStatuses(currentStatus, canPublish, canApprove) {
+  if (!currentStatus || currentStatus === 'draft') {
+    return ['draft', 'review', ...(canPublish ? ['archived'] : [])]
+  }
+  if (currentStatus === 'review') {
+    return ['review', ...(canApprove ? ['approved', 'draft'] : [])]
+  }
+  if (currentStatus === 'approved') {
+    return ['approved', ...(canPublish ? ['published', 'scheduled', 'archived'] : [])]
+  }
+  if (currentStatus === 'published') {
+    return ['published', ...(canPublish ? ['archived'] : [])]
+  }
+  if (currentStatus === 'scheduled') {
+    return ['scheduled', ...(canPublish ? ['published', 'archived'] : [])]
+  }
+  if (currentStatus === 'archived') {
+    return ['archived', 'draft']
+  }
+  return [currentStatus]
+}
 
 export default function NewsPage() {
   const { clientId }              = useParams()
@@ -35,6 +58,10 @@ export default function NewsPage() {
   // A live area dropdown in every row re-tagged a post on a mis-click; the area is now
   // chosen in the post form and the list shows it as text (CP screen review, 10 Oct 2026).
   const [areas, setAreas] = useState([])
+
+  const availableStatuses = editPost
+    ? getAllowedStatuses(editPost.status, canPublish, canApprove)
+    : ['draft', 'review']
 
   useEffect(() => { load() }, [clientId])
   useEffect(() => { loadAreas(clientId).then(setAreas) }, [clientId])
@@ -95,6 +122,7 @@ export default function NewsPage() {
       status:       post.status || 'draft',
       is_pinned:    !!post.is_pinned,
       therapeutic_area_id: post.therapeutic_area_id ?? '',
+      thumbnail_path: post.thumbnail_path || '',
     })
     setError('')
     setShowForm(true)
@@ -236,14 +264,19 @@ export default function NewsPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
-                    <option value="draft">{STATUS_LABELS.draft}</option>
-                    <option value="review">{STATUS_LABELS.review}</option>
-                    {canPublish && <option value="approved">{STATUS_LABELS.approved}</option>}
-                    {canPublish && <option value="scheduled">{STATUS_LABELS.scheduled}</option>}
-                    {canPublish && <option value="published">{STATUS_LABELS.published}</option>}
-                    {canPublish && <option value="archived">{STATUS_LABELS.archived}</option>}
+                    {availableStatuses.map(s => (
+                      <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
+                    ))}
                   </select>
                 </div>
+              </div>
+              <div className="cp-field">
+                <label>Thumbnail Image URL (optional)</label>
+                <input
+                  value={form.thumbnail_path || ''}
+                  onChange={e => setField('thumbnail_path', e.target.value)}
+                  placeholder="e.g. /uploads/news/featured-card.png"
+                />
               </div>
               <div className="cp-field">
                 <label htmlFor="news-area">Therapeutic area</label>
@@ -347,6 +380,9 @@ export default function NewsPage() {
                         <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0F766E', border: '1px solid #99F6E4' }} onClick={() => quickAction(p, 'approved')}>Approve</button>
                         <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }} onClick={() => quickAction(p, 'draft')}>Reject</button>
                       </>
+                    )}
+                    {canPublish && p.status === 'approved' && (
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#16A34A', color: '#fff', border: 'none' }} onClick={() => quickAction(p, 'published')}>Publish</button>
                     )}
                     {canPublish && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleArchive(p)}>Archive</button>}
                   </td>

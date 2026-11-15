@@ -20,6 +20,14 @@ router.post('/audit/inspector-export', authenticate, requireRole('admin', 'platf
   try {
     const caseId = Number(req.body.case_id);
     if (!caseId) return res.status(400).json({ error: 'case_id is required.' });
+
+    // A03 fix: Verify case belongs to active organisation
+    const [[caseScopeRow]] = await pool.execute('SELECT id, org_id FROM cases WHERE id = ?', [caseId]);
+    if (!caseScopeRow) return res.status(404).json({ error: 'Case not found.' });
+    if (!hasGlobalAdminScope(req.user) && Number(caseScopeRow.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Access denied: case belongs to another organisation.' });
+    }
+
     const password = String(req.body.e_sign_password || req.body.password || '');
     const reason = String(req.body.e_sign_reason || req.body.reason || '').trim();
     if (String(req.body.format || '').toLowerCase() === 'pdf' && (!password || !reason)) {
@@ -155,7 +163,7 @@ router.post('/audit/inspector-export/multi', authenticate, requireRole('admin', 
       const inPlaceholders = slice.map(() => '?').join(',');
       const [rows] = await pool.execute(
         `SELECT a.id, a.case_id, a.timestamp, a.action_type, a.field_name, a.old_value, a.new_value,
-                a.changed_by, a.reason, c.case_number, c.case_type
+                a.user_name AS changed_by, '' AS reason, c.case_number, c.case_type
            FROM case_audit_trail a
            JOIN cases c ON c.id = a.case_id
           WHERE a.case_id IN (${inPlaceholders})

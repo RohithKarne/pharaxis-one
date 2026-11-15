@@ -206,6 +206,25 @@ export default function MSLPage() {
     loadBookings()
   }
 
+  async function quickBookingStatus(b, newStatus) {
+    setBookingMsg('')
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/bookings/${b.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setBookingMsg(d.error || `Could not update booking (error ${res.status}).`)
+        return
+      }
+      loadBookings()
+    } catch {
+      setBookingMsg('Network error — please try again.')
+    }
+  }
+
   const pendingCount = bookings.filter(b => b.status === 'pending').length
 
   return (
@@ -432,8 +451,17 @@ export default function MSLPage() {
                         </span>
                       </td>
                       <td>{b.created_at ? b.created_at.slice(0, 10) : '—'}</td>
-                      <td style={{ display: 'flex', gap: 6 }}>
+                      <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <CanChange area="msls">
+                        {b.status === 'pending' && (
+                          <button
+                            className="cp-btn cp-btn-sm"
+                            style={{ background: '#CCFBF1', color: '#0F766E', border: '1px solid #99F6E4' }}
+                            onClick={() => quickBookingStatus(b, 'confirmed')}
+                          >
+                            Confirm
+                          </button>
+                        )}
                         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEditBooking(b)}>Update</button>
                         </CanChange>
                         <CanChange area="msls">

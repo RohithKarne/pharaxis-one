@@ -11,33 +11,40 @@
 
 const pool = require('../database/db');
 
-async function runReconciliation({ orgId, userId = null } = {}) {
+async function runReconciliation({ orgId, userId = null, shouldRecord = true } = {}) {
   const safeOrgId = orgId || 1;
 
-  // 1. Fetch all AE cases for this organization
+  // 1. Fetch all AE cases for this organization with correct schema columns
   const [aeCases] = await pool.execute(
-    `SELECT c.id, c.case_number, c.case_type, c.product_name, c.source_reference, c.created_at,
-            c.awareness_date, c.received_date, c.status_id, ws.name AS status_name
+    `SELECT c.id, c.case_number, c.case_type,
+            COALESCE(capi.product_name, cai.suspect_drug_name, 'AE Product') AS product_name,
+            c.source_reference, c.created_at, c.awareness_date, c.date_received, c.status_id,
+            ws.name AS status_name
        FROM cases c
        LEFT JOIN workflow_states ws ON ws.id = c.status_id
+       LEFT JOIN case_ae_product_info capi ON capi.version_id = (
+         SELECT v.id FROM case_ae_versions v WHERE v.case_id = c.id ORDER BY v.version_number DESC LIMIT 1
+       ) AND capi.is_suspect = 1
+       LEFT JOIN case_ae_intake cai ON cai.case_id = c.id
       WHERE c.org_id = ? AND c.case_type = 'AE' AND c.is_deleted = 0
-      ORDER BY c.id DESC LIMIT 500`,
+      ORDER BY c.id DESC`,
     [safeOrgId]
-  ).catch(() => [[]]);
+  );
 
-  // 2. Fetch safety-related intake messages from inbox
+  // 2. Fetch safety-related intake inquiries from inquiries table
   const [safetyInbox] = await pool.execute(
-    `SELECT m.id, m.subject, m.from_email, m.received_at, m.case_id, m.status
-       FROM inbox_messages m
-      WHERE m.org_id = ? AND (
-        LOWER(m.subject) LIKE '%adverse%' OR
-        LOWER(m.subject) LIKE '%side effect%' OR
-        LOWER(m.subject) LIKE '%reaction%' OR
-        m.classification = 'adverse_event'
+    `SELECT i.id, i.subject, i.sender AS from_email, i.received_at, i.case_id, i.status
+       FROM inquiries i
+      WHERE i.org_id = ? AND (
+        LOWER(i.subject) LIKE '%adverse%' OR
+        LOWER(i.subject) LIKE '%side effect%' OR
+        LOWER(i.subject) LIKE '%reaction%' OR
+        i.ai_suggested_type = 'AE' OR
+        i.queue_name = 'safety'
       )
-      ORDER BY m.id DESC LIMIT 200`,
+      ORDER BY i.id DESC`,
     [safeOrgId]
-  ).catch(() => [[]]);
+  );
 
   // 3. Analyze for unlinked safety intakes
   const unlinkedIntakes = safetyInbox
@@ -87,17 +94,19 @@ async function runReconciliation({ orgId, userId = null } = {}) {
     sample_cases: aeCases.slice(0, 10).map(c => ({ id: c.id, number: c.case_number, status: c.status_name })),
   });
 
-  // Record audit in safety_reconciliations table
+  // Record audit in safety_reconciliations table when requested (POST run sweep)
   let reconId = null;
-  try {
-    const [ins] = await pool.execute(
-      `INSERT INTO safety_reconciliations (org_id, total_intakes, matched_cases, unlinked_intakes, delayed_cases, status, details_json, reconciled_by, run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [safeOrgId, totalIntakes, matchedCases, unlinkedIntakes.length, delayedCases.length, status, detailsJson, userId]
-    );
-    reconId = ins.insertId;
-  } catch (_) {
-    // Migration table may be pending
+  if (shouldRecord) {
+    try {
+      const [ins] = await pool.execute(
+        `INSERT INTO safety_reconciliations (org_id, total_intakes, matched_cases, unlinked_intakes, delayed_cases, status, details_json, reconciled_by, run_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [safeOrgId, totalIntakes, matchedCases, unlinkedIntakes.length, delayedCases.length, status, detailsJson, userId]
+      );
+      reconId = ins.insertId;
+    } catch (_) {
+      // Migration table may be pending
+    }
   }
 
   return {

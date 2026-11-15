@@ -40,6 +40,46 @@
       ],
       "cwd": "apps/cp-portal/frontend",
       "port": 5174
+    },
+    {
+      "name": "FIN MIMS Backend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/dc15ca8c-12e6-44a0-b064-c189abdf3de5/scratchpad/wt-fin/apps/mims && exec node --env-file=.env backend/server.js"
+      ],
+      "cwd": "apps/mims",
+      "port": 3100
+    },
+    {
+      "name": "FIN MIMS Frontend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/dc15ca8c-12e6-44a0-b064-c189abdf3de5/scratchpad/wt-fin/apps/mims/frontend && MIMS_DEV_PORT=5373 MIMS_API_PROXY=http://127.0.0.1:3100 exec node_modules/.bin/vite --port 5373 --strictPort"
+      ],
+      "cwd": "apps/mims/frontend",
+      "port": 5373
+    },
+    {
+      "name": "FIN CP Backend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/dc15ca8c-12e6-44a0-b064-c189abdf3de5/scratchpad/wt-fin/apps/cp-portal/backend && exec node server.js"
+      ],
+      "cwd": "apps/cp-portal/backend",
+      "port": 4100
+    },
+    {
+      "name": "FIN CP Frontend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-rohithkarne-Pharaxis-One/dc15ca8c-12e6-44a0-b064-c189abdf3de5/scratchpad/wt-fin/apps/cp-portal/frontend && CP_API_PROXY=http://localhost:4100 exec node_modules/.bin/vite --port 5374 --strictPort"
+      ],
+      "cwd": "apps/cp-portal/frontend",
+      "port": 5374
     }
   ]
 }

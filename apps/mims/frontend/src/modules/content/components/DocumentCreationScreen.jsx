@@ -870,9 +870,15 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
       {/* ── Footer ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 88px 14px 28px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
-        <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-        <button className="cm-btn cm-btn-secondary" onClick={() => handleSave(false)} disabled={saving}>{saving ? 'Saving…' : 'Save Draft'}</button>
-        <button className="cm-btn cm-btn-primary" onClick={() => handleSave(true)} disabled={saving}>{saving ? 'Saving…' : 'Save & Check-In'}</button>
+        {doc && !['Draft', 'CheckedOut'].includes(doc.status) ? (
+          <button className="cm-btn cm-btn-secondary" onClick={onClose}>Close</button>
+        ) : (
+          <>
+            <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="cm-btn cm-btn-secondary" onClick={() => handleSave(false)} disabled={saving}>{saving ? 'Saving…' : 'Save Draft'}</button>
+            <button className="cm-btn cm-btn-primary" onClick={() => handleSave(true)} disabled={saving}>{saving ? 'Saving…' : 'Save & Check-In'}</button>
+          </>
+        )}
       </div>
     </div>
   )

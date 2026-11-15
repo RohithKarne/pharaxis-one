@@ -348,7 +348,7 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
     } else if (s === 'Archived') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
     }
-    if (s !== 'Archived') {
+    if (s !== 'Archived' && hasCapability('content.author')) {
       btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(doc)}>Clone</button>)
     }
     btns.push(<button key="hist" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryDoc(doc)}>History</button>)

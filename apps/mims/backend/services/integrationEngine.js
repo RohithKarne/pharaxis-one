@@ -114,9 +114,9 @@ async function sendWithRetry(endpointUrl, apiKey, eventType, payload, orgId, int
   return false;
 }
 
-async function fireIntegrationEvent(orgId, eventType, payload) {
+async function fireIntegrationEvent(orgId, eventType, payload, targetSystem = null) {
   const [rows] = await pool.query(
-    `SELECT id, endpoint_url, api_key, event_triggers, config
+    `SELECT id, endpoint_url, api_key, event_triggers, config, integration_type
      FROM org_integrations
      WHERE org_id = ? AND enabled = 1`,
     [orgId]
@@ -127,6 +127,21 @@ async function fireIntegrationEvent(orgId, eventType, payload) {
   for (const row of rows) {
     const triggers = parseEventTriggers(row.event_triggers);
     if (!triggers.includes(eventType)) continue;
+
+    // A28 fix: If a specific target is selected, send ONLY to matching integration!
+    if (targetSystem && targetSystem !== 'external_safety_system') {
+      let parsedConfig = {};
+      try {
+        parsedConfig = typeof row.config === 'string' ? JSON.parse(row.config || '{}') : (row.config || {});
+      } catch (_) {}
+      const matchesTarget =
+        row.integration_type === targetSystem ||
+        String(row.id) === String(targetSystem) ||
+        parsedConfig.target_system === targetSystem ||
+        parsedConfig.name === targetSystem ||
+        (row.endpoint_url && row.endpoint_url.includes(targetSystem));
+      if (!matchesTarget) continue;
+    }
 
     jobs.push(
       sendWithRetry(

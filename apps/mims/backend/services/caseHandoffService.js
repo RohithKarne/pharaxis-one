@@ -318,17 +318,13 @@ async function transmit({ orgId, caseId, userId, userName, targetSystem }) {
   let status = 'SENT';
   let responseCode = 200;
   try {
-    const results = await fireIntegrationEvent(orgId, eventType, payload);
-    // fireIntegrationEvent returns [] when no integration subscribes to the
-    // event. That is not a success — nothing left MIMS — and recording it as
-    // SENT would be the exact "wrote a row, called it done" failure the on-screen proof rule (docs/RULES.md › Proving it works) exists
-    // to prevent.
+    const results = await fireIntegrationEvent(orgId, eventType, payload, target);
     if (!results.length) {
       status = 'NO_TARGET';
-      responseCode = 0;
-    } else if (!results.some(r => r.status === 'fulfilled' && r.value === true)) {
+      responseCode = 404;
+    } else if (!results.every(r => r.status === 'fulfilled' && r.value === true)) {
       status = 'FAILED';
-      responseCode = 502;
+      responseCode = 503;
     }
   } catch (err) {
     status = 'FAILED';
