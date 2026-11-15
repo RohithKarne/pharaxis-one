@@ -11,7 +11,8 @@ router.get('/cases/:caseId/validity', authenticate, async (req, res) => {
   try {
     const orgId = await orgForCase(req.params.caseId, req); if (!orgId) return res.status(404).json({ error: 'Case not found.' });
     const key = `${orgId}:${req.params.caseId}`; const hit = cache.get(key);
-    if (hit && Date.now() - hit.ts < 30000) return res.json(hit.value);
+    // ?fresh=1 (S1): the case header asks again after a save, so the banner clears at once.
+    if (hit && !req.query.fresh && Date.now() - hit.ts < 30000) return res.json(hit.value);
     const value = await assess({ orgId, caseId: req.params.caseId }); cache.set(key, { ts: Date.now(), value }); res.json(value);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -10,6 +10,7 @@ import { isPlatformAdmin } from '../../../../shared/utils/adminScope'
 import AuditChip from '../../../../shared/components/AuditChip'
 import SavedViews from '../../../../shared/components/SavedViews'
 import BulkUserImport from './BulkUserImport'
+import { useAdminTenant } from '../../utils/AdminTenantContext'
 import './Users.css'
 
 const API = '/api/admin'
@@ -44,13 +45,14 @@ const EMPTY_FORM = {
   user_id: '', name: '', email: '', initials: '', role: 'agent',
   security_group_id: '', network_user_id: '', department: '',
   is_active: true, is_disabled: false, case_admin: false,
-  tenant_ids: [],
+  tenant_ids: [], access_ends_on: '',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Users() {
   const { token } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const adminTenant = useAdminTenant()
 
   const [users,      setUsers]      = useState([])
   const [total,      setTotal]      = useState(0)
@@ -121,7 +123,9 @@ export default function Users() {
 
   async function openEdit(user) {
     try {
-      const data = await httpFetch(`${API}/users/${user.id}`, { headers: H }).then(r => r.json())
+      // A4: the Screens section shows the screens in the organisation picked in TENANT.
+      const orgQ = adminTenant?.tenantId ? `?org_id=${adminTenant.tenantId}` : ''
+      const data = await httpFetch(`${API}/users/${user.id}${orgQ}`, { headers: H }).then(r => r.json())
       setEditUser(data.user)
       setModalOpen(true)
     } catch { showFlash('Failed to load user.', 'error') }
@@ -129,10 +133,10 @@ export default function Users() {
 
   function closeModal() { setModalOpen(false); setEditUser(null) }
 
-  async function onSaved() {
+  async function onSaved(message) {
     closeModal()
     await loadUsers()
-    showFlash(editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.')
+    showFlash(message || (editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.'))
   }
 
   const filtered = users
@@ -375,6 +379,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
       is_disabled:      !!editUser.is_disabled,
       case_admin:       !!editUser.case_admin,
       tenant_ids:       editUser.tenant_ids       || [],
+      access_ends_on:   editUser.access_ends_on   || '',
       modules:          personScreens(editUser.modules),
       inactive_reason:  '',
       reactivation_reason: '',
@@ -457,11 +462,17 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         })
         const d = await r.json()
         if (!r.ok) { setApiErr(d.error || 'Failed to update user.'); return }
+        // A3: a person who also works for another organisation was removed from this
+        // one only; there is nothing more to save here.
+        if (d.removed_from_org) {
+          onSaved(`${form.name || 'The person'} was removed from this organisation and keeps their other organisations.${d.cases_moved_to_unassigned ? ` ${d.cases_moved_to_unassigned} open case(s) here moved to unassigned.` : ''}`)
+          return
+        }
 
         // Update tenants separately
         const rt = await httpFetch(`/api/admin/users/${editUser.id}/tenants`, {
           method: 'PUT', headers: H,
-          body: JSON.stringify({ tenant_ids: form.tenant_ids }),
+          body: JSON.stringify({ tenant_ids: form.tenant_ids, access_ends_on: form.access_ends_on || null }),
         })
         const dt = await rt.json()
         if (!rt.ok) { setApiErr(dt.error || 'Failed to update tenants.'); return }
@@ -469,7 +480,7 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
         // Screens, only when they changed
         if (personScreens(form.modules).join() !== personScreens(editUser.modules).join()) {
           const rm = await httpFetch(`/api/admin/users/${editUser.id}/modules`, {
-            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules }),
+            method: 'PUT', headers: H, body: JSON.stringify({ modules: form.modules, org_id: editUser.screens_org_id || null }),
           })
           const dm = await rm.json()
           if (!rm.ok) { setApiErr(dm.error || 'Failed to update screens.'); return }
@@ -737,9 +748,11 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                   administrator can add to or take away (access review). */}
               {isEdit && (
                 <div>
-                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>Screens</div>
+                  <div className="ma-usr-section-title" style={{ marginBottom: 4 }}>
+                    Screens{editUser.screens_org_name ? ` in ${editUser.screens_org_name}` : ''}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                    What this person sees in the menu. Marked “role” comes with their role; untick to take it away.
+                    What this person sees in the menu{editUser.screens_org_name ? ` while working in ${editUser.screens_org_name}` : ''}. Marked “role” comes with their role there; untick to take it away. Other organisations are not changed.
                   </div>
                   <div className="ma-usr-checks">
                     {PERSON_SCREENS.map(sc => (
@@ -900,6 +913,19 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     </div>
                   )
                 })}
+              </div>
+
+              {/* L3: a contractor with a personal email, where the client allows it. */}
+              <div style={{ marginTop: 16 }}>
+                <label htmlFor="ma-usr-access-ends" className="ma-usr-section-title" style={{ display: 'block', marginBottom: 4 }}>
+                  Access ends on
+                </label>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Needed only for a contractor with a personal email (for example gmail), where the client allows it. At most 12 months away. On that day the person is removed from these organisations.
+                </div>
+                <input id="ma-usr-access-ends" type="date" aria-label="Access ends on"
+                  value={form.access_ends_on || ''}
+                  onChange={e => set('access_ends_on', e.target.value)} />
               </div>
             </>
           )}

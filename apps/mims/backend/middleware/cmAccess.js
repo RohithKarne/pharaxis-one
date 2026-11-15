@@ -31,7 +31,7 @@ async function allowed(req) {
   const path = gatePath(req);
   const has = (key) => userHasActivityPrivilege(req.user, key);
   if (CONSUMER.some((re) => re.test(path))) {
-    const modules = await getUserModules(req.user.userId);
+    const modules = await getUserModules(req.user.userId, req.user.orgId);
     return modules.includes('browse_content') || modules.includes('content_mgmt');
   }
   if (/^\/reviews\//.test(path)) return (await has('content.review')) || (await has('content.author'));
@@ -40,11 +40,11 @@ async function allowed(req) {
   // checks, alert defaults) and the content lists: Configure content (admins
   // by default). Every author could change the publishing checks.
   if (/^\/folders(\/\d+(\/.*)?)?$/.test(path) || /^\/(settings|picklists)(\/\d+)?$/.test(path)) {
-    const modules = await getUserModules(req.user.userId);
+    const modules = await getUserModules(req.user.userId, req.user.orgId);
     return modules.includes('content_mgmt') && (await has('content.folder.configure'));
   }
   if (/\/(publish|archive)$/.test(path) || /\/bulk$/.test(path)) return has('content.publish');
-  const modules = await getUserModules(req.user.userId);
+  const modules = await getUserModules(req.user.userId, req.user.orgId);
   return modules.includes('content_mgmt') && (await has('content.author'));
 }
 
@@ -52,7 +52,7 @@ async function allowed(req) {
 // (MIPM-184 for documents; MIPM-210 extends it to modules, FAQs and templates).
 async function publishedOnly(req) {
   if (hasGlobalAdminScope(req.user)) return false;
-  const modules = await getUserModules(req.user.userId);
+  const modules = await getUserModules(req.user.userId, req.user.orgId);
   return !modules.includes('content_mgmt');
 }
 
@@ -88,7 +88,7 @@ function cmReadAccess(req, res, next) {
   return authenticate(req, res, async () => {
     try {
       if (hasGlobalAdminScope(req.user)) return next();
-      const modules = await getUserModules(req.user.userId);
+      const modules = await getUserModules(req.user.userId, req.user.orgId);
       if (modules.includes('content_mgmt')) return next();
       if (modules.includes('browse_content') && BROWSE_READS.some((re) => re.test(gatePath(req)))) return next();
       return res.status(403).json({ error: 'You do not have access to Content Management.', error_code: 'MODULE_FORBIDDEN', should_logout: false });

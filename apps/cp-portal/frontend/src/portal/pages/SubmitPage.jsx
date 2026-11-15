@@ -25,6 +25,9 @@ export function optionList(raw) {
   return s.split('\n').map(o => o.trim()).filter(Boolean)
 }
 
+// S1: what a kept side-effect report may still need, in the reporter's words.
+const MISSING_LABELS = { patient: 'who had the side effect (initials, age or sex)', reporter: 'how to reach you', product: 'which medicine', reaction: 'what happened' }
+
 export default function SubmitPage() {
   const { clientCode, portalHeaders, isFeatureEnabled, portalConfig, user, t } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
@@ -261,10 +264,14 @@ export default function SubmitPage() {
             </p>
           )}
           {/* CPPM-94: a side effect report is not a question with a reply time. */}
-          <p className="pp-success-sub">
-            {submittedType === 'adverse_event'
-              ? 'Our drug safety team will review your report and may contact you for more details.'
-              : slaText}
+          {/* S1: a kept report that lacks something says what the safety team may ask for. */}
+          <p className="pp-success-sub" role="status">
+            {submittedType !== 'adverse_event'
+              ? slaText
+              : submitted.missing_criteria?.length > 0
+                ? <>{t('Our drug safety team will review your report and may contact you about:')}{' '}
+                    {submitted.missing_criteria.map(k => t(MISSING_LABELS[k] || k)).join(', ')}.</>
+                : 'Our drug safety team will review your report and may contact you for more details.'}
           </p>
           <div className="pp-success-actions">
             <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>{t('Submit Another')}</button>

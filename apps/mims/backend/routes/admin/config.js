@@ -125,7 +125,7 @@ async function requireAdminConsoleAccess(req, res, next) {
   if (hasPlatformAdminScope(req)) return next();
   try {
     // Role defaults count, as at sign-in (MIPM-148, the sibling of MIPM-134).
-    if ((await getUserModules(req.user.userId)).includes('admin_console')) return next();
+    if ((await getUserModules(req.user.userId, req.user.orgId)).includes('admin_console')) return next();
     return res.status(403).json({ error: 'You do not have permission to view MIMS Admin data.' });
   } catch (err) {
     return res.status(500).json({ error: 'Access check failed.' });

@@ -9,6 +9,8 @@ const { emitPlatformAdminAlert } = require('../../services/alertService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logAudit } = require('../../utils/auditLog');
 const { platformSmtpConfigError } = require('../../utils/mailSecurity');
+const { parseAllowedDomains } = require('../../services/ssoService');
+const { invalidatePlatformSignIn } = require('../../services/platformSignIn');
 
 const router = express.Router();
 const adminTwoFactorAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
@@ -31,9 +33,36 @@ async function audit(userId, userName, action, entity, entityId, details) {
 function assertOrgScope(req, orgId) {
   if (hasGlobalAdminScope(req.user)) return null;
   if (Number(req.user.orgId) === Number(orgId)) return null;
-  const err = new Error('You can update 2FA only for your active organisation.');
+  const err = new Error('You can change sign-in settings only for your own organisation.');
   err.status = 403;
   return err;
+}
+
+// L4: platform sign-in rules saved from Sign-in & Security (system_config).
+// Password rules are saved through PUT /system-params/general (one writer).
+const PLATFORM_RULE_KEYS = [
+  'user_session_timeout_minutes', 'two_factor_methods', 'two_factor_remember_days',
+  'login_lockout_threshold', 'login_lockout_minutes',
+];
+const RULE_RANGES = {
+  user_session_timeout_minutes: [30, 480, 'Idle timeout must be 30–480 minutes.'],
+  two_factor_remember_days: [1, 90, '"Remember this device" must be 1–90 days.'],
+  login_lockout_threshold: [3, 20, 'Lock after 3–20 wrong passwords.'],
+  login_lockout_minutes: [5, 1440, 'Lockout must be 5–1440 minutes.'],
+};
+function collectPlatformRules(body, upserts) {
+  for (const [key, [min, max, msg]] of Object.entries(RULE_RANGES)) {
+    if (body[key] === undefined) continue;
+    const n = parseInt(body[key], 10);
+    if (!Number.isFinite(n) || n < min || n > max) return msg;
+    upserts.push([key, String(n)]);
+  }
+  if (body.two_factor_methods !== undefined) {
+    const list = String(body.two_factor_methods).split(',').map((m) => m.trim()).filter((m) => ['email', 'totp'].includes(m));
+    if (!list.length) return 'Choose at least one two-step method.';
+    upserts.push(['two_factor_methods', [...new Set(list)].join(',')]);
+  }
+  return null;
 }
 
 function handleError(res, err) {
@@ -45,9 +74,20 @@ router.get('/two-factor/orgs', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const isPlatformAdmin = hasGlobalAdminScope(req.user);
     const [orgs] = await pool.execute(
-      isPlatformAdmin ? 'SELECT * FROM organisations ORDER BY name' : 'SELECT * FROM organisations WHERE id = ? ORDER BY name',
+      `SELECT id, name, is_active, two_factor_enabled, allow_personal_emails, company_email_domains
+         FROM organisations ${isPlatformAdmin ? '' : 'WHERE id = ?'} ORDER BY name`,
       isPlatformAdmin ? [] : [req.user.orgId]
     );
+    // L4: each client's company login, for the Sign-in & Security row.
+    const [sso] = await pool.execute(
+      `SELECT org_id, provider_key, allowed_domains, is_active,
+              (client_id IS NOT NULL AND client_secret_encrypted IS NOT NULL) AS configured
+         FROM access_sso_provider_configs`);
+    for (const org of orgs) {
+      org.company_email_domains = parseAllowedDomains(org.company_email_domains);
+      org.company_login = sso.filter((p) => Number(p.org_id) === Number(org.id) && p.is_active && Number(p.configured))
+        .map((p) => ({ provider: p.provider_key, domains: parseAllowedDomains(p.allowed_domains) }));
+    }
     return res.json({ orgs });
   } catch (err) {
     return handleError(res, err);
@@ -63,42 +103,32 @@ router.put('/two-factor/orgs/:id', ...adminTwoFactorAuth, async (req, res) => {
     const [[existing]] = await pool.execute('SELECT * FROM organisations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Organisation not found.' });
 
-    const sessionTimeout = parseIntSafe(req.body.session_timeout_minutes, existing.session_timeout_minutes || 30);
-    if (sessionTimeout < 15) {
-      return res.status(400).json({ error: 'Session timeout must be at least 15 minutes.' });
-    }
-
-    const rememberDays = parseIntSafe(req.body.two_factor_remember_days, existing.two_factor_remember_days || 7);
-    if (rememberDays < 1) {
-      return res.status(400).json({ error: 'Remember-device duration must be at least 1 day.' });
-    }
+    // L4 (Rohith, 2026-11-13): a client keeps only these settings. Timeout,
+    // two-step methods and remember days are platform-wide (PUT /two-factor/config).
+    const domains = req.body.company_email_domains !== undefined
+      ? parseAllowedDomains(req.body.company_email_domains)
+      : parseAllowedDomains(existing.company_email_domains);
+    const badDomain = domains.find((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d));
+    if (badDomain) return res.status(400).json({ error: `"${badDomain}" is not an email domain (for example calder.com).` });
+    const next = {
+      two_factor_enabled: req.body.two_factor_enabled !== undefined ? (req.body.two_factor_enabled ? 1 : 0) : Number(existing.two_factor_enabled),
+      allow_personal_emails: req.body.allow_personal_emails !== undefined ? (req.body.allow_personal_emails ? 1 : 0) : Number(existing.allow_personal_emails),
+      company_email_domains: domains.length ? domains.join(',') : null,
+    };
 
     await pool.execute(
       `UPDATE organisations
-       SET session_timeout_minutes = ?,
-           two_factor_enabled = ?,
-           two_factor_methods = ?,
-           two_factor_remember_days = ?,
-           updated_at = NOW()
-       WHERE id = ?`,
-      [
-        sessionTimeout,
-        req.body.two_factor_enabled !== undefined ? (req.body.two_factor_enabled ? 1 : 0) : existing.two_factor_enabled,
-        req.body.two_factor_methods ?? existing.two_factor_methods ?? 'email,totp',
-        rememberDays,
-        req.params.id,
-      ]
+          SET two_factor_enabled = ?, allow_personal_emails = ?, company_email_domains = ?, updated_at = NOW()
+        WHERE id = ?`,
+      [next.two_factor_enabled, next.allow_personal_emails, next.company_email_domains, req.params.id]
     );
 
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation_2fa', req.params.id, {
-      session_timeout_minutes: sessionTimeout,
-      two_factor_enabled: req.body.two_factor_enabled,
-      two_factor_methods: req.body.two_factor_methods,
-      two_factor_remember_days: rememberDays,
-      source: 'mims_admin_system_setup',
-    });
+    await logAudit(req.user.userId, req.user.email, 'UPDATE', 'organisation_sign_in', req.params.id,
+      { source: 'sign_in_security' },
+      { two_factor_enabled: Number(existing.two_factor_enabled), allow_personal_emails: Number(existing.allow_personal_emails), company_email_domains: existing.company_email_domains },
+      next);
 
-    return res.json({ message: '2FA settings updated.' });
+    return res.json({ message: `Sign-in settings saved for ${existing.name}.` });
   } catch (err) {
     return handleError(res, err);
   }
@@ -146,6 +176,10 @@ router.put('/two-factor/config', ...platformConfigAuth, async (req, res) => {
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
     }
 
+    // L4: the platform sign-in rules, one value each for every organisation.
+    const ruleError = collectPlatformRules(req.body || {}, upserts);
+    if (ruleError) return res.status(400).json({ error: ruleError });
+
     const smtpError = await platformSmtpConfigError(req.body, pool);
     if (smtpError) return res.status(400).json({ error: smtpError });
 
@@ -163,6 +197,8 @@ router.put('/two-factor/config', ...platformConfigAuth, async (req, res) => {
       if (value !== undefined) upserts.push([key, value]);
     }
 
+    const changedRuleKeys = upserts.map(([k]) => k).filter((k) => PLATFORM_RULE_KEYS.includes(k));
+    if (changedRuleKeys.length) invalidatePlatformSignIn();
     for (const [key, value] of upserts) {
       await pool.execute(
         `INSERT INTO system_config (config_key, config_value)
@@ -190,7 +226,7 @@ router.put('/two-factor/config', ...platformConfigAuth, async (req, res) => {
       message: `2FA system configuration was updated by ${req.user.email}.`,
       metadata: {
         updatedBy: req.user.email,
-        changedKeys: Object.keys(configPairs).filter(key => configPairs[key] !== undefined)
+        changedKeys: Object.keys(configPairs).filter(key => configPairs[key] !== undefined).concat(changedRuleKeys)
           .concat(timeoutValue !== undefined ? ['platform_admin_session_timeout_minutes'] : []),
       },
       linkUrl: '/mims/mims-admin',

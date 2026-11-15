@@ -33,6 +33,41 @@ until he confirms it.
 
 ## Unreleased
 
+### Access review closed — C1, A6, A4 (CP Portal and MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control changed (21 CFR 11.10(d)): which screens a person has in each organisation; who can switch a portal off.
+**Why:** A person's screens and role label followed them into every organisation; a CP client admin could take the whole portal offline; a client admin was offered other organisations' and the platform's groups.
+- CP Portal (C1): only the platform can switch a client off or delete it; a client admin can still edit its name and contacts.
+- MIMS (A6): Add / Edit Users offers an organisation admin only their organisation's and shared groups, never a platform group.
+- MIMS (A4): screens and the role shown follow the person's role in the organisation they are working in; personal screen changes are kept per organisation (migration 194; existing ones still apply everywhere); Edit User's Screens section names the organisation; the User Access Review report follows the same rule.
+
+### A0/A2/A3 — an organisation admin acts only inside their own organisation (MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control and password controls (21 CFR 11.300) changed.
+**Why:** One client's administrator could set the password of a person in another client, change their role there, or lock them out of it.
+- An organisation admin can set or expire a password, and see a person's organisations, only for people in their own organisation. A password they set follows the same rules as a person's own (not the current or a recent one) and ends that person's sessions.
+- Changing a shared person's security group changes their role in this organisation only. Their name, email and user ID change only by a platform admin.
+- "Switching off" a person who also works for another organisation removes them from this organisation only; their cases here are unassigned and case admins told. Switching an account off everywhere stays with a platform admin.
+- Saving Edit User changes only the admin's own organisations and keeps a current member's role.
+
+### One MIMS sign-in, set by the platform (MIMS — 2026-11-13)
+
+**Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control (21 CFR 11.10(d), 11.300) changed: who is asked for two-step, who may use a password, who may join an organisation, and where sign-in settings are kept.
+**Why:** Each organisation set its own sign-in rules, so a person in two organisations could sign in through the weaker one and switch into the stricter one; the same settings were edited on four screens.
+- Two-step is asked at sign-in when any of a person's organisations has it on; switching organisation needs no second step.
+- An email at a domain a client's company login lists must use it; the per-organisation "password / SSO / both" setting is no longer read.
+- The public list of every organisation on the sign-in page is removed.
+- Per client: personal emails (off by default) and company email domains; a personal-email contractor needs an access end date (at most 12 months) and is removed on that day by a nightly job, their open cases there unassigned (migration 193).
+- One screen, Sign-in & Security: platform rules (idle timeout for everyone, two-step methods, remember-device days, lockout, password rules) and one row per client; a client's own admin sees only their row. Removed from Organisations, Division Parameters, System Parameters; Auth Policy is now Company Login.
+
+### S1 — side-effect reports missing a validity criterion are kept, not refused (CP Portal and MIMS — 2026-11-12)
+
+**Revalidation impact:** Partial — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.* Revalidate side-effect intake (portal form, bridge, MIMS case API) and the AE validity display only.
+**Why:** A side-effect report missing the patient, reporter, product or reaction was refused and lost (since #816). It is now kept, flagged for follow-up in both apps, and still cannot be transmitted to PV until all four are recorded (EMA GVP Module VI; 21 CFR 314.80).
+- CP Portal: the portal no longer refuses such a report; the reporter is told what the safety team may ask for; the Submissions inbox marks it "Incomplete — follow up" and names what is missing.
+- MIMS: the case API no longer refuses it; an AE case shows "Not yet a valid report — follow up for: …" under the header, from the same check that gates Transmit to PV, and the banner clears on save.
+- MIMS (found on the way): the E2B validation's four-factor check always passed, because it read placeholder values ("Suspect Product", "UNK"); it now uses the same validity check.
+
 ### Toolchain upgrade to the latest stable releases, and fixes found on the way (CP Portal and MIMS — 2026-11-12)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-12.*

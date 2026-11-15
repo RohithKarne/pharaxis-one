@@ -134,9 +134,57 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 9 | Found: migrations 0064 and 191 broke fresh databases (CI red on main) — fixed | Kiranmai | ✅ |
 | 10 | Walk both apps on a sealed 9.7 copy, failing paths included | Kiranmai | ✅ |
 | 11 | Postmortem for #816/#817 | Varun | ✅ |
-| 12 | Push and open the pull request | Varun | ⏳ Rohith's word |
-| 13 | After merge: switch the dev machine to MySQL 9.7 on port 3306 and make Node 26 the default (needs Rohith's admin password once) | Rohith, Varun | ⏳ |
+| 12 | Push and open the pull request — PR #818, merged | Varun | ✅ |
+| 13 | After merge: switch the dev machine to MySQL 9.7 on port 3306 and make Node 26 the default — seen 2026-11-12: Node 26.13.1, MySQL 9.7.4 on 3306 | Rohith, Varun | ✅ |
 | 14 | Walk the rest of #817 on screen: inspector export, E2B, document diff, reconciliation, credential check | Kiranmai, John | ⏳ |
+
+## Now — S1: keep incomplete side-effect reports (no Jira; locked by Rohith 2026-11-12)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | CP Portal: keep the report, name what is missing, tell the reporter, flag it in Submissions | Kiranmai | ✅ |
+| 2 | MIMS: stop refusing on the case API; banner on the AE case from the validity check | Kiranmai, Meera | ✅ |
+| 3 | Found: E2B four-factor check always passed — now uses the validity check | Varun | ✅ |
+| 4 | Walk on sealed copies: incomplete kept and flagged, complete not flagged, banner clears on save, empty description refused | Kiranmai | ✅ |
+| 5 | Decide: CP counts a reporter with only a name; MIMS needs email or phone | John | ⏳ |
+| 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
+
+## Now — one MIMS sign-in (no Jira; locked by Rohith 2026-11-13; replaces A1, folds in A5)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | L1: two-step at sign-in when any of a person's organisations uses it; company login decided by email domain | Kiranmai | ✅ |
+| 2 | L2: remove the public organisation list | Kiranmai | ✅ |
+| 3 | L3: personal emails per client (off by default), access end date at most 12 months, nightly removal (migration 193) | Kiranmai | ✅ |
+| 4 | L4: one Sign-in & Security screen; timeout, methods, remember days, password rules and lockout platform-wide | Kiranmai, Varun | ✅ |
+| 5 | Found: second two-step setup when another org turns it on; "jwt expired" wording; system case entry named a person | Kiranmai | ✅ |
+| 6 | Walk on the sealed copy — client admin view, failing paths, nightly job | Kiranmai | ✅ |
+| 7 | See the platform admin's view of Sign-in & Security on screen | Kiranmai | ⏳ |
+| 8 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 9 | Next from the access review: A2/A3 (an org admin's changes reach other orgs), C1 (CP client admin can switch off the portal), A4 (screens per organisation) | Tim | ⏳ |
+
+## Now — A0/A2/A3: an organisation admin acts only inside their own organisation (no Jira; locked by Rohith 2026-11-13)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | A0: set / expire password and the organisation list only for people in the admin's organisation; history rule; sessions end | Kiranmai | ✅ |
+| 2 | A2: group change sets the role in this organisation only; a shared person's name, email, user ID by platform admin | Kiranmai | ✅ |
+| 3 | A3: an organisation admin removes a shared person from their organisation only | Kiranmai | ✅ |
+| 4 | Found: saving Edit User reset or refused a shared person's other organisations | Kiranmai | ✅ |
+| 5 | Walk on the sealed copy through the routes the screens call (all paths, failing ones included) | Kiranmai | ✅ |
+| 6 | See Edit User on screen with a shared person — name change refused, removal message, Vanaja case still Raj's; found and fixed "User not found" after removal | Kiranmai | ✅ |
+| 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
+
+## Now — close the access review: C1, A6, A4 (no Jira; locked by Rohith 2026-11-13)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | C1: CP client switch-off and delete superadmin-only | Kiranmai | ✅ |
+| 2 | A6: group list for an organisation admin — own and shared groups only | Kiranmai | ✅ |
+| 3 | A4: migration 194; screens and role per organisation; every screen check passes the organisation | Varun, Kiranmai | ✅ |
+| 4 | Walk on sealed copies: Vanaja agent screens and label, Access Denied by address, Calder admin screens after switching, Inbox removed in Calder only, group list, C1 refusals | Kiranmai | ✅ |
+| 5 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 6 | After merge: one walk of everything from the access review on the shared dev copy, then Rohith's sign-off | Kiranmai, Rohith | ⏳ |
 
 ## Waiting on a decision
 

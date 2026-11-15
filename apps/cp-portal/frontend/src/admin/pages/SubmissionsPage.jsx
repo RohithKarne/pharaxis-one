@@ -59,6 +59,8 @@ function Journey({ s }) {
 }
 
 const STATUS_LABELS = labelsOf('submissionStatus')
+// S1: the four things a side-effect report needs to be a valid case.
+const CRITERIA_LABELS = { patient: 'the patient', reporter: 'the reporter', product: 'the suspect product', reaction: 'the side effect' }
 
 // CPPM-14: draft the medical answer, then a reviewer approves and sends it.
 function AnswerPanel({ clientId, submissionId, canApprove, canEdit, onChanged, sentToMims }) {
@@ -418,6 +420,13 @@ export default function SubmissionsPage() {
           {s.ae_task_status === 'open' ? 'Safety review open' : 'Safety review closed'}
         </span>
       )}
+      {/* S1: kept although it lacks one of the four things a valid case needs. */}
+      {s.missing_criteria?.length > 0 && (
+        <span title={`Not yet a valid case. Follow up for: ${s.missing_criteria.map(k => CRITERIA_LABELS[k] || k).join(', ')}`}
+          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: '#FEF3C7', color: '#92400E' }}>
+          Incomplete — follow up
+        </span>
+      )}
       {/* Bridge feature F2: MIMS holds it as serious; the date it must reach
           the authorities by, while the request is open. */}
       {Number(s.mims_serious) === 1 && (
@@ -716,6 +725,11 @@ export default function SubmissionsPage() {
                   : open.ae_task_status
                     ? 'Someone reported becoming unwell. The safety review of this case is closed.'
                     : 'This is a side-effect report.'}
+                {open.missing_criteria?.length > 0 && (
+                  <div style={{ marginTop: 6, fontWeight: 600 }}>
+                    Not yet a valid case. It was kept; follow up for: {open.missing_criteria.map(k => CRITERIA_LABELS[k] || k).join(', ')}.
+                  </div>
+                )}
               </div>
             )}
             <div className="cp-inbox-panel-row">{refCell(open)}</div>

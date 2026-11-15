@@ -108,6 +108,11 @@ const HANDLERS = {
     const { runScheduledExports } = require('./scheduledExportService')
     await runScheduledExports()
   },
+  'contractor-access-end': async () => {
+    const { sweepEndedContractorAccess } = require('./contractorAccessService')
+    const ended = await sweepEndedContractorAccess()
+    logger.info({ job: 'contractor-access-end', ended: ended.length }, 'Contractor access end sweep complete')
+  },
   'inquiry-ledger-watch': async () => {
     const { sweep } = require('./inquiryLedger')
     await sweep()

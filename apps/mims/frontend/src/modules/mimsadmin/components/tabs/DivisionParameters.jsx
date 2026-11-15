@@ -207,7 +207,6 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
     ...params,
     is_active: org ? !!org.is_active : true,
     name: org?.name || '',
-    session_timeout_minutes: org?.session_timeout_minutes ?? 30,
   })
   const [saving, setSaving] = useState(false)
   const [triedSave, setTriedSave] = useState(false)
@@ -340,11 +339,6 @@ function GeneralTab({ H, orgId, org, params, onSaved, flash, creating = false, o
             <option value="">— Select —</option>
             {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-        </div>
-        <div style={{ marginBottom: 0 }}>
-          <label style={lbl}>Session Timeout (minutes)</label>
-          <input aria-label="Session Timeout (minutes)" className="form-control" type="number" min={1} value={form.session_timeout_minutes ?? 30}
-            onChange={e => set('session_timeout_minutes', e.target.value)} />
         </div>
       </div>
 

@@ -82,7 +82,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
     // created_at/changed_by/action_summary/action_detail.
     `SELECT t.timestamp AS ts, 'case_audit' AS type, t.action_type AS title,
             JSON_OBJECT('field', t.field_name, 'old', t.old_value, 'new', t.new_value) AS detail,
-            COALESCE(u.name, t.user_name) AS actor_name
+            -- An entry the system wrote says System, not the person whose id it carries.
+            CASE WHEN t.user_name = 'System' THEN 'System' ELSE COALESCE(u.name, t.user_name) END AS actor_name
        FROM case_audit_trail t
        LEFT JOIN users u ON u.id = t.user_id
       WHERE t.case_id = ?

@@ -37,7 +37,7 @@ const CASE_EMAIL_LOOKUP = [
 router.use(authenticate, async (req, res, next) => {
   try {
     if (hasGlobalAdminScope(req.user)) return next();
-    const modules = await getUserModules(req.user.userId);
+    const modules = await getUserModules(req.user.userId, req.user.orgId);
     if (modules.includes('inbox')) return next();
     if (req.method === 'GET' && modules.includes('mims_core')) {
       if (/^\/case\/\d+\/correspondence$/.test(req.path) || req.path === '/users') return next();

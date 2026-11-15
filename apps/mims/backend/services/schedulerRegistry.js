@@ -169,6 +169,14 @@ module.exports = [
     configRoute:    '/cases',
   },
   {
+    name:           'contractor-access-end',
+    source:         'Security',
+    cronExpression: '15 0 * * *',
+    description:    'Removes a personal-email contractor from an organisation on their "Access ends on" day; their open cases there go to unassigned (L3)',
+    type:           'cron',
+    configRoute:    '/admin-console/users',
+  },
+  {
     name:           'login-audit-archive',
     source:         'Security',
     cronExpression: '0 2 * * *',

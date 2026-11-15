@@ -17,8 +17,6 @@ export default function OrganisationsView({ H, flash }) {
   const [editOrgName, setEditOrgName] = useState('')
   const [showSiteForm, setShowSiteForm] = useState(null)
   const [siteForm, setSiteForm] = useState({ name: '', country: '', is_primary: false })
-  const [editingTimeout, setEditingTimeout] = useState(null)
-  const [timeoutValue, setTimeoutValue]     = useState(30)
   const [selectedOrgIds, setSelectedOrgIds] = useState(new Set())
   const [editingSite, setEditingSite] = useState(null)
   const [siteEditForm, setSiteEditForm] = useState({ name: '', country: '' })
@@ -86,7 +84,6 @@ export default function OrganisationsView({ H, flash }) {
       body: JSON.stringify({
         name: editOrgName.trim(),
         is_active: editingOrg.is_active,
-        session_timeout_minutes: editingOrg.session_timeout_minutes || 30,
       })
     })
     const data = await res.json()
@@ -193,19 +190,6 @@ export default function OrganisationsView({ H, flash }) {
     }
     flash(`${ids.length} organisation${ids.length !== 1 ? 's' : ''} ${activate ? 'activated' : 'deactivated'}.`)
     setSelectedOrgIds(new Set())
-    load()
-  }
-
-  async function saveTimeout(org) {
-    const mins = parseInt(timeoutValue)
-    if (isNaN(mins) || mins < 30) return flash('Minimum session timeout is 30 minutes.', 'error')
-    const res = await guardedFetch(`${API_BASE}/orgs/${org.id}`, {
-      method: 'PUT', headers: H,
-      body: JSON.stringify({ name: org.name, is_active: org.is_active, session_timeout_minutes: mins })
-    })
-    if (!res.ok) return flash('Failed to update timeout.', 'error')
-    flash(`Session timeout updated to ${mins} minutes for ${org.name}.`)
-    setEditingTimeout(null)
     load()
   }
 
@@ -337,12 +321,6 @@ export default function OrganisationsView({ H, flash }) {
                 background: org.is_active ? '#d4edda' : '#f8d7da',
                 color: org.is_active ? '#155724' : '#721c24',
               }}>{org.is_active ? 'Active' : 'Inactive'}</span>
-              <span style={{ fontSize: 11, marginLeft: 8, color: 'var(--text-muted)' }}>
-                {org.session_timeout_minutes || 30} min timeout
-              </span>
-              <span style={{ fontSize: 11, marginLeft: 8, color: org.two_factor_enabled ? '#155724' : 'var(--text-muted)' }}>
-                2FA {org.two_factor_enabled ? 'On' : 'Off'}
-              </span>
             </div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -564,28 +542,7 @@ export default function OrganisationsView({ H, flash }) {
                   ))}
                 </tbody>
               </table>
-              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Session Timeout:</span>
-                {editingTimeout === org.id ? (
-                  <>
-                    <select className="form-control" style={{ fontSize: 12, width: 'auto' }}
-                      value={timeoutValue} onChange={e => setTimeoutValue(e.target.value)}>
-                      <option value={30}>30 minutes</option>
-                      <option value={45}>45 minutes</option>
-                      <option value={60}>60 minutes</option>
-                      <option value={90}>90 minutes</option>
-                      <option value={120}>120 minutes</option>
-                    </select>
-                    <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={() => saveTimeout(org)}>Save</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => setEditingTimeout(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <button className="btn btn-secondary" style={{ fontSize: 11 }}
-                    onClick={() => { setEditingTimeout(org.id); setTimeoutValue(org.session_timeout_minutes || 30) }}>
-                    Edit Timeout
-                  </button>
-                )}
-              </div>
+              {/* L4: timeout and two-step are set on Sign-in & Security. */}
               {showSiteForm === org.id ? (
                 <form onSubmit={createSite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div>
@@ -628,7 +585,7 @@ export default function OrganisationsView({ H, flash }) {
           }}>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Edit Organisation</div>
             <div style={{ fontSize: 12, color: '#666', marginBottom: 16 }}>
-              Update organisation name. Status, timeout, 2FA, and sites remain in their own controls.
+              Update organisation name. Status and sites remain in their own controls; sign-in settings are on Sign-in & Security.
             </div>
             <div className="form-group">
               <label>Organisation Name</label>

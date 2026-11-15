@@ -11,6 +11,7 @@ const CaseAETab = lazy(() => import('../components/CaseAETab'))
 const CasePCTab = lazy(() => import('../components/CasePCTab'))
 import CaseHeaderStrip     from '../components/CaseHeaderStrip'
 import CaseBridgePanel     from '../components/CaseBridgePanel'
+import CaseValidityBanner  from '../components/CaseValidityBanner'
 import CaseFormWizard      from '../components/CaseFormWizard'
 import { WiredTextarea }   from '../../../shared/components/WiredField'
 import useCoreFields       from '../hooks/useCoreFields'
@@ -240,6 +241,7 @@ export default function CaseFormPage() {
         onAssignToMe={readOnly ? undefined : assignToMe}
       />
       <CaseBridgePanel caseId={id} headers={headers} />
+      <CaseValidityBanner caseId={id} caseType={caseData.case_type} headers={headers} savedAt={savedMsg} />
 
       {/* cf-form-main is the page's scroll container. This wrapper was left as
           cf-tabbar when the tab strip was replaced by the wizard — that class is

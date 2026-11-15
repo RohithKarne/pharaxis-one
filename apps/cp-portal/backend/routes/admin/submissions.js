@@ -16,6 +16,7 @@ const { queueEmail } = require('../../utils/emailOutbox');
 const { downloadRefusal } = require('../../utils/virusScan');
 const { requireRole } = require('../../middleware/auth');
 const workOwnership = require('../../utils/workOwnership');
+const { missingAeCriteria } = require('../../utils/aeCriteria');
 
 // One set of filters for the list and the export, so what is on screen is what is exported.
 // The search also finds the reference people quote back to us (CP-000123).
@@ -46,7 +47,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     let query = `
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
              s.submitter_type, s.status, s.external_ref, s.mims_case_number, s.mims_fingerprint, s.submitted_at,
-             s.sync_attempts, s.form_data,
+             s.sync_attempts, s.form_data, s.user_id,
              -- Bridge features F1 and F2: the request's journey through MIMS, and a side
              -- effect MIMS holds as serious with the day it is due to the authorities.
              s.synced_at, s.mims_triaged_at, s.mims_serious, DATE_FORMAT(s.mims_due_date, '%Y-%m-%d') AS mims_due_date,
@@ -88,6 +89,12 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       r.owned_by_me = r.owner_id != null && r.owner_id === req.admin.adminId; // CPPM-61
       r.reference = `CP-${String(r.id).padStart(6, '0')}`;
       r.mims_case_url = (caseUrlBase && r.external_ref) ? caseUrlBase + encodeURIComponent(r.external_ref) : null;
+      // S1: what a side-effect report still lacks to be a valid case, for follow-up.
+      if (r.submission_type === 'adverse_event') {
+        let form = {};
+        try { form = typeof r.form_data === 'string' ? JSON.parse(r.form_data) : (r.form_data || {}); } catch { form = {}; }
+        r.missing_criteria = missingAeCriteria(form, r);
+      }
     });
 
     // Attach uploaded files per submission

@@ -225,6 +225,11 @@ router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req,
     if (description !== undefined)   { updates.push('description = ?');   params.push(description); }
     if (contact_name !== undefined)  { updates.push('contact_name = ?');  params.push(contact_name); }
     if (contact_email !== undefined) { updates.push('contact_email = ?'); params.push(contact_email); }
+    // C1 (Rohith, 2026-11-13): switching a portal off closes side-effect reporting for
+    // every doctor on it, so only the platform (superadmin) can do it.
+    if (is_active !== undefined && req.admin.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Only the platform can switch a portal off or on. Contact Pharaxis.' });
+    }
     if (is_active !== undefined)     { updates.push('is_active = ?');     params.push(is_active ? 1 : 0); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
@@ -242,6 +247,10 @@ router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req,
 // DELETE /api/admin/clients/:id — soft delete
 router.delete('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req, res) => {
   try {
+    // C1: deactivating a client is the platform's decision, not the client admin's.
+    if (req.admin.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Only the platform can switch a portal off. Contact Pharaxis.' });
+    }
     const clientId = Number(req.params.id);
     await pool.execute(`UPDATE cp_clients SET is_active = 0, updated_at = NOW() WHERE id = ?`, [clientId]);
 

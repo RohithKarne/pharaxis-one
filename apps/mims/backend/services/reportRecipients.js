@@ -30,7 +30,7 @@ async function eligibleRecipients(orgId) {
   );
   const out = [];
   for (const row of rows) {
-    if ((await getUserModules(row.id)).includes('reports')) out.push(row);
+    if ((await getUserModules(row.id, orgId)).includes('reports')) out.push(row);
   }
   return out;
 }

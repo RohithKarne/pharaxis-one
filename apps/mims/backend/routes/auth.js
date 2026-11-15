@@ -1,5 +1,6 @@
 'use strict';
 
+const { getPlatformSignIn } = require('../services/platformSignIn');
 const express        = require('express');
 const router         = express.Router();
 const { forwardErrors } = require('../middleware/errorHandler');
@@ -43,12 +44,8 @@ async function resolveSessionTimeoutMinutes(req) {
       return Math.max(15, toNumber(config.platform_admin_session_timeout_minutes, 60));
     }
 
-    if (!req.user.orgId) return 30;
-    const [[org]] = await pool.execute(
-      'SELECT session_timeout_minutes FROM organisations WHERE id = ? LIMIT 1',
-      [req.user.orgId]
-    );
-    return Math.max(15, toNumber(org?.session_timeout_minutes, 30));
+    // L4: one idle timeout for every organisation, set on Sign-in & Security.
+    return (await getPlatformSignIn()).sessionTimeout;
   } catch (_) {
     return hasGlobalAdminScope(req.user) ? 60 : 30;
   }
@@ -64,8 +61,8 @@ function isExpired(expiresAt) {
 router.post('/register', accountCreationRateLimiter, authController.register);
 router.post('/login/start', loginRateLimiter, authController.startLogin);
 router.post('/login', loginRateLimiter, authController.login);
-router.get('/login/orgs', authController.listLoginOrgs);
-router.get('/login/options', authController.getLoginOptions);
+// L2 (2026-11-13): the public list of every organisation and its sign-in options
+// was removed. Nothing used it, and it told anyone the names of every client.
 router.get('/sso/providers', authController.listSsoProviders);
 router.get('/sso/:provider/start', authController.startSso);
 router.get('/sso/:provider/callback', authController.ssoCallback);
