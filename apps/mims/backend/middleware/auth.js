@@ -146,12 +146,27 @@ async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
     throw createAuthError('Session revoked or invalid. Please log in again.', 'SESSION_REVOKED');
   }
 
+  // A07 fix: Read current database role so demotions take effect immediately
+  let liveRole = decoded.role;
+  try {
+    const [[liveUser]] = await pool.execute(
+      `SELECT u.role, uoa.role_at_org
+         FROM users u
+         LEFT JOIN user_org_access uoa ON uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
+        WHERE u.id = ? LIMIT 1`,
+      [decoded.orgId ?? null, decoded.userId]
+    );
+    if (liveUser) {
+      liveRole = liveUser.role_at_org || liveUser.role || decoded.role;
+    }
+  } catch (_) {}
+
   const result = {
     userId:               decoded.userId,
     email:                decoded.email,
     // MIPM-76: the person's name, for audit entries and notifications that name them.
     name:                 accountName,
-    role:                 decoded.role,
+    role:                 liveRole,
     orgId:                decoded.orgId ?? null,
     siteId:               decoded.siteId ?? null,
     platformAdmin:        Boolean(decoded.platformAdmin),

@@ -125,7 +125,46 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
 
   const patient = icsr.patient || {};
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ichicsr xmlns="urn:ich:e2b:r3">
+<MCCI_IN200100UV01 ITSVersion="XML_1.0" xsi:schemaLocation="urn:hl7-org:v3 MCCI_IN200100UV01.xsd" xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <id extension="${esc(report.sender_safety_report_id || `DRAFT-${report.case_id || 'CASE'}`)}" root="2.16.840.1.113883.3.989.2.1.3.22"/>
+  <creationTime value="${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}"/>
+  <responseModeCode code="D"/>
+  <interactionId extension="MCCI_IN200100UV01" root="2.16.840.1.113883.1.6"/>
+  <name code="N.1.1" codeSystem="2.16.840.1.113883.3.989.2.1.1.1" codeSystemVersion="1.01"/>
+  <PORR_IN049016UV>
+    <id extension="${esc(report.sender_safety_report_id || `DRAFT-${report.case_id || 'CASE'}`)}" root="2.16.840.1.113883.3.989.2.1.3.1"/>
+    <creationTime value="${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}"/>
+    <interactionId extension="PORR_IN049016UV" root="2.16.840.1.113883.1.6"/>
+    <processingCode code="P"/>
+    <processingModeCode code="T"/>
+    <acceptAckCode code="AL"/>
+    <receiver typeCode="RCV">
+      <device classCode="DEV" determinerCode="INSTANCE">
+        <id extension="${esc(report.receiver_id || 'FDA')}" root="2.16.840.1.113883.3.989.2.1.3.12"/>
+      </device>
+    </receiver>
+    <sender typeCode="SND">
+      <device classCode="DEV" determinerCode="INSTANCE">
+        <id extension="${esc(sender.identifier || `ORG-${report.org_id || 'UNKNOWN'}`)}" root="2.16.840.1.113883.3.989.2.1.3.11"/>
+      </device>
+    </sender>
+    <controlActProcess classCode="CACT" moodCode="EVN">
+      <code code="PORR_TE049016UV" codeSystem="2.16.840.1.113883.1.18"/>
+      <effectiveTime value="${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}"/>
+      <subject typeCode="SUBJ">
+        <investigationEvent classCode="INVSTG" moodCode="EVN">
+          <id extension="${esc(report.sender_safety_report_id || `DRAFT-${report.case_id || 'CASE'}`)}" root="2.16.840.1.113883.3.989.2.1.3.1"/>
+          <code code="PAT_ADV_EVNT" codeSystem="2.16.840.1.113883.5.4"/>
+          <text>${esc(report.narrative || '')}</text>
+          <statusCode code="active"/>
+          <effectiveTime>
+            <low value="${e2bDate(report.receive_date)}"/>
+          </effectiveTime>
+          <availabilityTime value="${e2bDate(report.receive_date)}"/>
+        </investigationEvent>
+      </subject>
+    </controlActProcess>
+  </PORR_IN049016UV>
   <ichicsrmessageheader>
     ${tag('messagetype', 'ichicsr')}
     ${tag('messageformatversion', '3.0')}
@@ -164,7 +203,7 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     ].join(''))}
     ${block('summary', tag('narrativeincludeclinical', report.narrative || ''))}
   </safetyreport>
-</ichicsr>`;
+</MCCI_IN200100UV01>`;
   return xml.replace(/\n\s*\n/g, '\n');
 }
 

@@ -1,0 +1,1770 @@
+{
+  "commit": "9c940bf9",
+  "method": "Static imports, exports and literal lazy import/require from actual frontend entry points. Not-reached is not a runtime pass or a claim that planned work should be deleted.",
+  "entries": [
+    "apps/cp-portal/frontend/src/main.jsx",
+    "apps/mims/frontend/src/modules/max/main.jsx"
+  ],
+  "graph": {
+    "apps/cp-portal/frontend/src/main.jsx": [
+      "apps/cp-portal/frontend/src/App.jsx",
+      "apps/cp-portal/frontend/src/shared/components/AppErrorBoundary.jsx",
+      "apps/cp-portal/frontend/src/index.css",
+      "apps/cp-portal/frontend/src/shared/styles/classic.css"
+    ],
+    "apps/cp-portal/frontend/src/App.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/IdleTimeout.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/LoginPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/DashboardPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ClientsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ClientDetailPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/BrandingPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/FeaturesPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/LanguagePage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ContentPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/FormsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/MSLPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/IntegrationPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SyncHealthPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ZeroLossReportPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/DataRequestsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SsoConfigPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/PortalUsersPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ChatboxConfigPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ChatRecordsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/GatePage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SafetyPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/NewsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/DocumentsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/CompliancePage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/AuditTrailPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SubmissionsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SafetyQueuePage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/SafetyConfirmationsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/AdminUsersPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/ReviewQueuePage.jsx",
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/components/PortalLayout.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/PortalHomePage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/LoginPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/SubmitPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/TherapeuticAreasPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/EventsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/EventDetailPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ResourcesPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/DrugInfoPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/FindMSLPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/MySubmissionsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/VisitorRequestPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ContactPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/PortalNotFoundPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/PortalUnavailablePage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/SafetyPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/NewsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/NewsDetailPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/DocumentsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/SavedItemsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/VerifyEmailPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/SsoCompletePage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/PreferencesPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/SearchResultsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/MyActivityPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ProfilePage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ForgotPasswordPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ResetPasswordPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ClarificationPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/FieldInsightPage.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Toast.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/AnalyticsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/FeedbackPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/EmailSettingsPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/FAQPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/FAQPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/ClinicalTrialsPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/TrainingPage.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/TrainingModulePage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/TrialsAdminPage.jsx",
+      "apps/cp-portal/frontend/src/admin/pages/TrainingAdminPage.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx": [],
+    "apps/cp-portal/frontend/src/shared/components/IdleTimeout.jsx": [
+      "apps/cp-portal/frontend/src/shared/hooks/useIdleTimer.js",
+      "apps/cp-portal/frontend/src/shared/components/SessionTimeoutModal.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/hooks/useIdleTimer.js": [],
+    "apps/cp-portal/frontend/src/shared/components/SessionTimeoutModal.jsx": [],
+    "apps/cp-portal/frontend/src/admin/pages/LoginPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/DashboardPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/browserLabel.js",
+      "apps/cp-portal/frontend/src/admin/components/PageLoader.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/utils/browserLabel.js": [],
+    "apps/cp-portal/frontend/src/admin/components/PageLoader.jsx": [],
+    "apps/cp-portal/frontend/src/shared/components/Icon.jsx": [],
+    "apps/cp-portal/frontend/src/admin/pages/ClientsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/api/client.js",
+      "apps/cp-portal/frontend/src/shared/utils/portalUrl.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/api/client.js": [],
+    "apps/cp-portal/frontend/src/shared/utils/portalUrl.js": [],
+    "apps/cp-portal/frontend/src/admin/pages/ClientDetailPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/AlertsPanel.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/portalUrl.js",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/activityActor.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/AlertsPanel.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/utils/activityActor.js": [],
+    "apps/cp-portal/frontend/src/admin/pages/BrandingPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/ColorPicker.jsx",
+      "apps/cp-portal/frontend/src/admin/components/LoadingButton.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/ColorPicker.jsx": [],
+    "apps/cp-portal/frontend/src/admin/components/LoadingButton.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/PageLoader.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/FeaturesPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/shared/utils/labels.js": [],
+    "apps/cp-portal/frontend/src/admin/pages/LanguagePage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/ContentPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/AreaTagSelect.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/AreaTagSelect.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/FormsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/FormPreview.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/FormPreview.jsx": [],
+    "apps/cp-portal/frontend/src/admin/pages/MSLPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/IntegrationPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SyncHealthPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/ZeroLossReportPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/DataRequestsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SsoConfigPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/PortalUsersPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/BulkPortalUserImport.jsx",
+      "apps/cp-portal/frontend/src/admin/components/Pager.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RowMenu.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/BulkPortalUserImport.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/Pager.jsx": [],
+    "apps/cp-portal/frontend/src/admin/components/RowMenu.jsx": [],
+    "apps/cp-portal/frontend/src/admin/pages/ChatboxConfigPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/ChatRecordsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/GatePage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SafetyPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/shared/utils/datetime.js": [],
+    "apps/cp-portal/frontend/src/admin/pages/NewsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/AreaTagSelect.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/DocumentsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/AreaTagSelect.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/CompliancePage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/AuditTrailPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js",
+      "apps/cp-portal/frontend/src/admin/components/Pager.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SubmissionsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/WorkOwnership.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js",
+      "apps/cp-portal/frontend/src/admin/components/Pager.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/components/WorkOwnership.jsx": [
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SafetyQueuePage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/SafetyConfirmationsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/AdminUsersPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/ReviewQueuePage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/WorkOwnership.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx": [
+      "apps/cp-portal/frontend/src/portal/utils/translations.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/utils/translations.js": [
+      "apps/cp-portal/frontend/src/portal/utils/translations.ui.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/utils/translations.ui.js": [],
+    "apps/cp-portal/frontend/src/portal/components/PortalLayout.jsx": [
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/components/UserTypeGate.jsx",
+      "apps/cp-portal/frontend/src/portal/components/ConsentBanner.jsx",
+      "apps/cp-portal/frontend/src/portal/components/FeedbackWidget.jsx",
+      "apps/cp-portal/frontend/src/portal/utils/translations.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/components/UserTypeGate.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/hooks/useFocusTrap.js"
+    ],
+    "apps/cp-portal/frontend/src/shared/hooks/useFocusTrap.js": [],
+    "apps/cp-portal/frontend/src/portal/components/ConsentBanner.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/components/FeedbackWidget.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/PortalHomePage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/portal/components/SpecialtyCard.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/components/SpecialtyCard.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/LoginPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/SubmitPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/TherapeuticAreasPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx": [],
+    "apps/cp-portal/frontend/src/portal/pages/EventsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/utils/safeUrl.js",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/utils/safeUrl.js": [],
+    "apps/cp-portal/frontend/src/portal/pages/EventDetailPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/utils/ics.js",
+      "apps/cp-portal/frontend/src/portal/utils/safeUrl.js"
+    ],
+    "apps/cp-portal/frontend/src/shared/utils/ics.js": [],
+    "apps/cp-portal/frontend/src/portal/pages/ResourcesPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/DrugInfoPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/portal/components/AskAboutThis.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/components/AskAboutThis.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/FindMSLPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/components/Toast.jsx",
+      "apps/cp-portal/frontend/src/shared/hooks/useFocusTrap.js",
+      "apps/cp-portal/frontend/src/shared/utils/ics.js"
+    ],
+    "apps/cp-portal/frontend/src/shared/components/Toast.jsx": [],
+    "apps/cp-portal/frontend/src/portal/pages/MySubmissionsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/portal/utils/submissionStatus.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/utils/submissionStatus.js": [],
+    "apps/cp-portal/frontend/src/portal/pages/VisitorRequestPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/pages/MySubmissionsPage.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ContactPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/PortalNotFoundPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/PortalUnavailablePage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/SafetyPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/portal/components/AskAboutThis.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/NewsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/NewsDetailPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/portal/components/AskAboutThis.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/DocumentsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/components/PdfViewerModal.jsx",
+      "apps/cp-portal/frontend/src/portal/components/AskAboutThis.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/components/PdfViewerModal.jsx": [
+      "apps/cp-portal/frontend/src/shared/hooks/useFocusTrap.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/SavedItemsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/VerifyEmailPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/SsoCompletePage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/PreferencesPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/components/Toast.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/SearchResultsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/MyActivityPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/components/Icon.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/portal/utils/submissionStatus.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ProfilePage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js",
+      "apps/cp-portal/frontend/src/shared/components/Toast.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/browserLabel.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ForgotPasswordPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ResetPasswordPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/hooks/usePageTitle.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ClarificationPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/FieldInsightPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/AnalyticsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/activityActor.js",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/FeedbackPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/EmailSettingsPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/admin/components/LoadingButton.jsx"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/FAQPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/FAQPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/ClinicalTrialsPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/TrainingPage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/shared/components/Skeleton.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/portal/pages/TrainingModulePage.jsx": [
+      "apps/cp-portal/frontend/src/portal/context/PortalContext.jsx",
+      "apps/cp-portal/frontend/src/portal/components/PdfViewerModal.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/datetime.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/TrialsAdminPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx",
+      "apps/cp-portal/frontend/src/shared/utils/labels.js"
+    ],
+    "apps/cp-portal/frontend/src/admin/pages/TrainingAdminPage.jsx": [
+      "apps/cp-portal/frontend/src/admin/components/AdminLayout.jsx",
+      "apps/cp-portal/frontend/src/admin/components/RoleGate.jsx",
+      "apps/cp-portal/frontend/src/admin/context/AdminAuthContext.jsx"
+    ],
+    "apps/cp-portal/frontend/src/shared/components/AppErrorBoundary.jsx": [],
+    "apps/cp-portal/frontend/src/index.css": [],
+    "apps/cp-portal/frontend/src/shared/styles/classic.css": [],
+    "apps/mims/frontend/src/modules/max/main.jsx": [
+      "apps/mims/frontend/src/modules/max/App.jsx",
+      "apps/mims/frontend/src/shared/components/AppErrorBoundary.jsx",
+      "apps/mims/frontend/src/shared/observability/clientTelemetry.js",
+      "apps/mims/frontend/src/shared/utils/applyTheme.js",
+      "apps/mims/frontend/src/index.css",
+      "apps/mims/frontend/src/shared/styles/themes.css",
+      "apps/mims/frontend/src/shared/styles/classic.css"
+    ],
+    "apps/mims/frontend/src/modules/max/App.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/ProtectedRoute.jsx",
+      "apps/mims/frontend/src/shared/components/ModuleAccessGuard.jsx",
+      "apps/mims/frontend/src/shared/hooks/useIdleTimer.js",
+      "apps/mims/frontend/src/shared/components/SessionTimeoutModal.jsx",
+      "apps/mims/frontend/src/shared/components/ToastContainer.jsx",
+      "apps/mims/frontend/src/shared/components/ConfirmModal.jsx",
+      "apps/mims/frontend/src/shared/components/ExceptionToast.jsx",
+      "apps/mims/frontend/src/shared/config/adminRouteMap.json",
+      "apps/mims/frontend/src/modules/max/pages/LoginPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/SsoCompletePage.jsx",
+      "apps/mims/frontend/src/pages/NoAccessPage.jsx",
+      "apps/mims/frontend/src/pages/AccessEndedPage.jsx",
+      "apps/mims/frontend/src/pages/ResetPasswordPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/DashboardPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/InboxPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/SessionManagementPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CasesPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CaseFormPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CaseTransmissionPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CaseResponsePage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/ICSRBuilderPage.jsx",
+      "apps/mims/frontend/src/modules/content/pages/ContentPage.jsx",
+      "apps/mims/frontend/src/modules/reports/pages/ReportsPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/ExceptionLogsPage.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionsPage.jsx",
+      "apps/mims/frontend/src/modules/browse/pages/BrowseContentPage.jsx",
+      "apps/mims/frontend/src/modules/responselog/pages/ResponseLogPage.jsx",
+      "apps/mims/frontend/src/modules/inquiryledger/pages/InquiryLedgerPage.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx"
+    ],
+    "apps/mims/frontend/src/shared/context/AuthContext.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/shared/api/httpFetch.js": [],
+    "apps/mims/frontend/src/shared/utils/adminScope.js": [],
+    "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/ProtectedRoute.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/ModuleAccessGuard.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useIdleTimer.js": [],
+    "apps/mims/frontend/src/shared/components/SessionTimeoutModal.jsx": [],
+    "apps/mims/frontend/src/shared/components/ToastContainer.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/components/mims-dialogs.css"
+    ],
+    "apps/mims/frontend/src/shared/utils/toast.js": [],
+    "apps/mims/frontend/src/shared/components/mims-dialogs.css": [],
+    "apps/mims/frontend/src/shared/components/ConfirmModal.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/components/mims-dialogs.css"
+    ],
+    "apps/mims/frontend/src/shared/utils/confirm.js": [],
+    "apps/mims/frontend/src/shared/components/ExceptionToast.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js"
+    ],
+    "apps/mims/frontend/src/shared/config/adminRouteMap.json": [],
+    "apps/mims/frontend/src/modules/max/pages/LoginPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/max/pages/SsoCompletePage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/pages/NoAccessPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/pages/AccessEndedPage.jsx": [],
+    "apps/mims/frontend/src/pages/ResetPasswordPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/max/pages/DashboardPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/shared/utils/routePrefetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/MIMSLayout.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSHeader.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSNavbar.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSStatStrip.jsx",
+      "apps/mims/frontend/src/shared/components/NotificationOverlay.jsx",
+      "apps/mims/frontend/src/shared/components/HelpDrawer.jsx",
+      "apps/mims/frontend/src/shared/components/CommandPalette.jsx",
+      "apps/mims/frontend/src/shared/components/ToastNotificationListener.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/MIMSHeader.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/Icon.jsx": [],
+    "apps/mims/frontend/src/shared/components/MIMSNavbar.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/shared/utils/routePrefetch.js",
+      "apps/mims/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/mims/frontend/src/shared/utils/routePrefetch.js": [
+      "apps/mims/frontend/src/modules/max/pages/DashboardPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/InboxPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/SessionManagementPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CasesPage.jsx",
+      "apps/mims/frontend/src/modules/cases/pages/CaseFormPage.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionsPage.jsx",
+      "apps/mims/frontend/src/modules/responselog/pages/ResponseLogPage.jsx",
+      "apps/mims/frontend/src/modules/inquiryledger/pages/InquiryLedgerPage.jsx",
+      "apps/mims/frontend/src/modules/max/pages/ExceptionLogsPage.jsx",
+      "apps/mims/frontend/src/modules/browse/pages/BrowseContentPage.jsx",
+      "apps/mims/frontend/src/modules/content/pages/ContentPage.jsx",
+      "apps/mims/frontend/src/modules/reports/pages/ReportsPage.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx"
+    ],
+    "apps/mims/frontend/src/modules/max/pages/InboxPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/serverTime.js",
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/hooks/useRememberedFilters.js",
+      "apps/mims/frontend/src/modules/max/components/EmailBody.jsx",
+      "apps/mims/frontend/src/modules/max/components/emailBodyText.js",
+      "apps/mims/frontend/src/modules/max/components/InboxFilterBar.jsx",
+      "apps/mims/frontend/src/modules/max/components/InboxBulkBar.jsx"
+    ],
+    "apps/mims/frontend/src/shared/utils/serverTime.js": [],
+    "apps/mims/frontend/src/shared/hooks/useRememberedFilters.js": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/max/components/EmailBody.jsx": [
+      "apps/mims/frontend/src/modules/max/components/emailBodyText.js"
+    ],
+    "apps/mims/frontend/src/modules/max/components/emailBodyText.js": [],
+    "apps/mims/frontend/src/modules/max/components/InboxFilterBar.jsx": [],
+    "apps/mims/frontend/src/modules/max/components/InboxBulkBar.jsx": [],
+    "apps/mims/frontend/src/modules/max/pages/SessionManagementPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/pages/CasesPage.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/cases/cases.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/compliance/ReasonForChangeModal.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/components/SlaCountdownBadge.jsx",
+      "apps/mims/frontend/src/shared/utils/serverTime.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/cases.css": [],
+    "apps/mims/frontend/src/shared/components/compliance/ReasonForChangeModal.jsx": [],
+    "apps/mims/frontend/src/shared/components/SlaCountdownBadge.jsx": [],
+    "apps/mims/frontend/src/modules/cases/pages/CaseFormPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/cases/cases.css",
+      "apps/mims/frontend/src/modules/cases/hooks/useCaseForm.js",
+      "apps/mims/frontend/src/modules/cases/components/CaseContactsTab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseWorkflowStep.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseMITab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseAETab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CasePCTab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseHeaderStrip.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseBridgePanel.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseValidityBanner.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseFormWizard.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/modules/cases/hooks/useCoreFields.js",
+      "apps/mims/frontend/src/shared/components/CaseFormShell.jsx",
+      "apps/mims/frontend/src/shared/hooks/useUnsavedChangesGuard.js",
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/cases/components/CaseChangeControlModal.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/ReasonForChangeModal.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/hooks/useCaseForm.js": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseContactsTab.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/ReasonForChangeModal.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/WiredField.jsx": [
+      "apps/mims/frontend/src/shared/components/FieldHistoryPopover.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/LockedFieldBadge.jsx",
+      "apps/mims/frontend/src/shared/components/collab/FieldPresenceBadge.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/FieldHistoryPopover.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/compliance/LockedFieldBadge.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/collab/FieldPresenceBadge.jsx": [],
+    "apps/mims/frontend/src/modules/cases/components/CaseWorkflowStep.jsx": [
+      "apps/mims/frontend/src/modules/cases/components/DynamicFieldsSection.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/cases/hooks/useCoreFields.js",
+      "apps/mims/frontend/src/modules/cases/components/CaseCommunicationsWorkspace.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseICSRTab.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/DynamicFieldsSection.jsx": [
+      "apps/mims/frontend/src/shared/ruleEvaluator.js",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/hooks/useFieldValidation.js",
+      "apps/mims/frontend/src/shared/hooks/useSmartFields.js",
+      "apps/mims/frontend/src/shared/components/FieldHistoryPopover.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/LockedFieldBadge.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/MaskedRevealButton.jsx",
+      "apps/mims/frontend/src/shared/components/collab/FieldPresenceBadge.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/RichFieldRenderer.jsx",
+      "apps/mims/frontend/src/shared/components/TypeaheadInput.jsx"
+    ],
+    "apps/mims/frontend/src/shared/ruleEvaluator.js": [],
+    "apps/mims/frontend/src/shared/hooks/useFieldValidation.js": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useSmartFields.js": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/compliance/MaskedRevealButton.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/richFields/RichFieldRenderer.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/richFields/AddressField.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/PhoneField.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/CurrencyField.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/RichTextField.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/SignaturePad.jsx",
+      "apps/mims/frontend/src/shared/components/richFields/ImageAnnotator.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/richFields/AddressField.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/richFields/PhoneField.jsx": [],
+    "apps/mims/frontend/src/shared/components/richFields/CurrencyField.jsx": [],
+    "apps/mims/frontend/src/shared/components/richFields/RichTextField.jsx": [],
+    "apps/mims/frontend/src/shared/components/richFields/SignaturePad.jsx": [],
+    "apps/mims/frontend/src/shared/components/richFields/ImageAnnotator.jsx": [],
+    "apps/mims/frontend/src/shared/components/TypeaheadInput.jsx": [],
+    "apps/mims/frontend/src/modules/cases/hooks/useCoreFields.js": [],
+    "apps/mims/frontend/src/modules/cases/components/CaseCommunicationsWorkspace.jsx": [
+      "apps/mims/frontend/src/modules/cases/components/CaseCommentsTab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseCorrespondenceTab.jsx",
+      "apps/mims/frontend/src/modules/cases/components/CaseAttachmentsPanel.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseCommentsTab.jsx": [
+      "apps/mims/frontend/src/shared/components/RealtimeChatPanel.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/collab/CommentThread.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/RealtimeChatPanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/hooks/useChatRealtime.js",
+      "apps/mims/frontend/src/shared/components/realtime-chat.css"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useChatRealtime.js": [],
+    "apps/mims/frontend/src/shared/components/realtime-chat.css": [],
+    "apps/mims/frontend/src/shared/components/collab/CommentThread.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseCorrespondenceTab.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/documents/DropzoneUpload.jsx",
+      "apps/mims/frontend/src/shared/components/documents/AttachmentGallery.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/utils/serverTime.js"
+    ],
+    "apps/mims/frontend/src/shared/components/documents/DropzoneUpload.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/documents/AttachmentGallery.jsx": [
+      "apps/mims/frontend/src/shared/components/documents/AttachmentTagPicker.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/documents/AttachmentTagPicker.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseAttachmentsPanel.jsx": [
+      "apps/mims/frontend/src/shared/components/documents/DropzoneUpload.jsx",
+      "apps/mims/frontend/src/shared/components/documents/AttachmentGallery.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseICSRTab.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseMITab.jsx": [
+      "apps/mims/frontend/src/modules/cases/components/CaseAssociatedDocs.jsx",
+      "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx",
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/cases/components/DynamicFieldsSection.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/components/MiApprovalPanel.jsx",
+      "apps/mims/frontend/src/shared/components/DocumentDiffViewer.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseAssociatedDocs.jsx": [],
+    "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx": [],
+    "apps/mims/frontend/src/shared/components/MiApprovalPanel.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/DocumentDiffViewer.jsx": [
+      "apps/mims/frontend/src/shared/utils/textDiff.js"
+    ],
+    "apps/mims/frontend/src/shared/utils/textDiff.js": [],
+    "apps/mims/frontend/src/modules/cases/components/CaseAETab.jsx": [
+      "apps/mims/frontend/src/modules/cases/components/CaseE2BCard.jsx",
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/cases/components/AETabPanel.jsx",
+      "apps/mims/frontend/src/modules/cases/components/TransmissionSignModal.jsx",
+      "apps/mims/frontend/src/shared/components/StickySectionNav.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/dateOnly.js",
+      "apps/mims/frontend/src/modules/cases/components/DynamicFieldsSection.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseE2BCard.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/AETabPanel.jsx": [
+      "apps/mims/frontend/src/modules/cases/components/AEMultiRowTab.jsx",
+      "apps/mims/frontend/src/shared/components/meddra/MedDRACoder.jsx",
+      "apps/mims/frontend/src/shared/components/CausalityMatrix.jsx",
+      "apps/mims/frontend/src/shared/components/CaseDrugsTab.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/AEMultiRowTab.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/SeriousnessChecklist.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/SeriousnessChecklist.jsx": [],
+    "apps/mims/frontend/src/shared/components/meddra/MedDRACoder.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/CausalityMatrix.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/CaseDrugsTab.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/TransmissionSignModal.jsx": [],
+    "apps/mims/frontend/src/shared/components/StickySectionNav.jsx": [],
+    "apps/mims/frontend/src/shared/utils/dateOnly.js": [],
+    "apps/mims/frontend/src/modules/cases/components/CasePCTab.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/cases/components/PCTabPanel.jsx",
+      "apps/mims/frontend/src/modules/cases/components/TransmissionSignModal.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/dateOnly.js",
+      "apps/mims/frontend/src/modules/cases/components/DynamicFieldsSection.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/components/StickySectionNav.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/PCTabPanel.jsx": [],
+    "apps/mims/frontend/src/modules/cases/components/CaseHeaderStrip.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/cases/components/CaseTimelineView.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseTimelineView.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseBridgePanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseValidityBanner.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/components/CaseFormWizard.jsx": [],
+    "apps/mims/frontend/src/shared/components/CaseFormShell.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/hooks/useCasePresence.js",
+      "apps/mims/frontend/src/shared/components/CompletenessBar.jsx",
+      "apps/mims/frontend/src/shared/components/StickySectionNav.jsx",
+      "apps/mims/frontend/src/shared/components/UrgencyBanner.jsx",
+      "apps/mims/frontend/src/shared/components/collab/PresenceIndicator.jsx",
+      "apps/mims/frontend/src/shared/components/collab/WatchersButton.jsx",
+      "apps/mims/frontend/src/shared/components/collab/CommentThread.jsx",
+      "apps/mims/frontend/src/shared/components/caseActions/CloneCaseButton.jsx",
+      "apps/mims/frontend/src/shared/components/caseActions/RunMacroButton.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/ESignModal.jsx",
+      "apps/mims/frontend/src/shared/components/WiredField.jsx",
+      "apps/mims/frontend/src/shared/components/HaClockBar.jsx",
+      "apps/mims/frontend/src/shared/components/SlaChip.jsx",
+      "apps/mims/frontend/src/shared/components/CaseTimelineDrawer.jsx",
+      "apps/mims/frontend/src/shared/components/CaseValidityPanel.jsx",
+      "apps/mims/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useCasePresence.js": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/CompletenessBar.jsx": [],
+    "apps/mims/frontend/src/shared/components/UrgencyBanner.jsx": [],
+    "apps/mims/frontend/src/shared/components/collab/PresenceIndicator.jsx": [],
+    "apps/mims/frontend/src/shared/components/collab/WatchersButton.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/caseActions/CloneCaseButton.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/caseActions/RunMacroButton.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/compliance/ESignModal.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/HaClockBar.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/SlaChip.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/CaseTimelineDrawer.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/CaseValidityPanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useUnsavedChangesGuard.js": [],
+    "apps/mims/frontend/src/modules/cases/components/CaseChangeControlModal.jsx": [],
+    "apps/mims/frontend/src/modules/transmissions/pages/TransmissionsPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/transmissions/components/SafetyReconciliationPanel.jsx",
+      "apps/mims/frontend/src/modules/transmissions/transmissions.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/hooks/useRememberedFilters.js"
+    ],
+    "apps/mims/frontend/src/modules/transmissions/components/SafetyReconciliationPanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/transmissions/transmissions.css": [],
+    "apps/mims/frontend/src/modules/responselog/pages/ResponseLogPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/responselog/responselog.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/hooks/useRememberedFilters.js"
+    ],
+    "apps/mims/frontend/src/modules/responselog/responselog.css": [],
+    "apps/mims/frontend/src/modules/inquiryledger/pages/InquiryLedgerPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/responselog/responselog.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/max/pages/ExceptionLogsPage.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/browse/pages/BrowseContentPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/browse/browse.css",
+      "apps/mims/frontend/src/modules/content/components/BrowseSection.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/content/components/ContentUtils.js"
+    ],
+    "apps/mims/frontend/src/modules/browse/browse.css": [],
+    "apps/mims/frontend/src/modules/content/components/BrowseSection.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/ContentUtils.js": [],
+    "apps/mims/frontend/src/modules/content/pages/ContentPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/components/StandaloneModuleShell.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminMICategoriesSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/FolderManager.jsx",
+      "apps/mims/frontend/src/modules/content/components/DocumentsSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/ModulesSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/FAQsSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/TemplatesSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/CMSettingsSection.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentOperationsSection.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/StandaloneModuleShell.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminMICategoriesSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/content/components/FolderManager.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx": [],
+    "apps/mims/frontend/src/modules/content/components/DocumentsSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx",
+      "apps/mims/frontend/src/modules/content/components/DocumentCreationScreen.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentModals.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentUtils.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/DocumentCreationScreen.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentUtils.js",
+      "apps/mims/frontend/src/modules/content/components/ContentPanels.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/ContentPanels.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/ContentModals.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/content/components/ContentPanels.jsx"
+    ],
+    "apps/mims/frontend/src/modules/content/components/ModulesSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx",
+      "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentModals.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/content/components/ContentUtils.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/FAQsSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx",
+      "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentModals.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/content/components/TemplatesSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/content/components/StatusBadge.jsx",
+      "apps/mims/frontend/src/modules/content/components/RichTextEditor.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentModals.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/content/components/ContentUtils.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/CMSettingsSection.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/content/components/ContentOperationsSection.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/reports/pages/ReportsPage.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/components/StandaloneModuleShell.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/ui/index.js",
+      "apps/mims/frontend/src/modules/reports/components/ReportFilterBar.jsx",
+      "apps/mims/frontend/src/modules/reports/components/ReportTableViewer.jsx"
+    ],
+    "apps/mims/frontend/src/shared/ui/index.js": [
+      "apps/mims/frontend/src/shared/ui/Button.jsx",
+      "apps/mims/frontend/src/shared/ui/Card.jsx",
+      "apps/mims/frontend/src/shared/ui/Stack.jsx",
+      "apps/mims/frontend/src/shared/ui/PageHeader.jsx",
+      "apps/mims/frontend/src/shared/ui/States.jsx"
+    ],
+    "apps/mims/frontend/src/shared/ui/Button.jsx": [],
+    "apps/mims/frontend/src/shared/ui/Card.jsx": [],
+    "apps/mims/frontend/src/shared/ui/Stack.jsx": [],
+    "apps/mims/frontend/src/shared/ui/PageHeader.jsx": [],
+    "apps/mims/frontend/src/shared/ui/States.jsx": [
+      "apps/mims/frontend/src/shared/ui/Button.jsx"
+    ],
+    "apps/mims/frontend/src/modules/reports/components/ReportFilterBar.jsx": [],
+    "apps/mims/frontend/src/modules/reports/components/ReportTableViewer.jsx": [],
+    "apps/mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/MIMSAdminShell.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/MIMSAdminShell.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/CaseFieldsConfig.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx",
+      "apps/mims/frontend/src/shared/components/HelpHint.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/helpKeys.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Dashboard.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Organizations.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ServiceLog.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemActivity.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ServiceDashboard.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Configuration.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Escalation.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Documents.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Tables.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/System.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Help.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/CaseFieldsConfig.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/HelpHint.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/utils/helpKeys.js": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Dashboard.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx",
+      "apps/mims/frontend/src/shared/components/collab/MentionsInbox.jsx",
+      "apps/mims/frontend/src/shared/components/caseActions/RecentPinnedWidget.jsx",
+      "apps/mims/frontend/src/shared/components/PcSignalsWidget.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/collab/MentionsInbox.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/caseActions/RecentPinnedWidget.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/PcSignalsWidget.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Organizations.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/OrganisationsView.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/OrganisationsView.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/AdminGuidedSetupWizardModal.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/AdminGuidedSetupWizardModal.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ServiceLog.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/modules/responselog/pages/ResponseErrorLogPage.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionErrorLogPage.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx": [],
+    "apps/mims/frontend/src/modules/responselog/pages/ResponseErrorLogPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/responselog/pages/ResponseErrorLogPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/hooks/useRememberedFilters.js"
+    ],
+    "apps/mims/frontend/src/modules/responselog/pages/ResponseErrorLogPage.css": [],
+    "apps/mims/frontend/src/modules/transmissions/pages/TransmissionErrorLogPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionErrorLogPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/transmissions/pages/TransmissionErrorLogPage.css": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemActivity.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ServiceDashboard.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/config/adminRouteMap.json",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Configuration.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/EmailCaseImportConfig.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/EmailCaseImportConfig.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Escalation.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Documents.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Tables.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PicklistsTable.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminMiscSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PicklistsTable.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PicklistsTable.css"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PicklistsTable.css": [],
+    "apps/mims/frontend/src/modules/admin/components/AdminMiscSection.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminProductsPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminEmailAccountsPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminContactMasterPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminCaseNumberingPanel.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminProductsPanel.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminEmailAccountsPanel.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminContactMasterPanel.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminCaseNumberingPanel.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/System.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminQASection.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminUATPanel.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CopyDivision.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DivisionParameters.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/CaseFieldsConfig.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ExceptionLog.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/FeatureFlags.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/GridTemplates.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CaseActionsAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ComplianceAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DocumentTypesAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ComplaintCodesAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/LotMasterAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/FieldActionsAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CapaAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PiiRedactionRules.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CapabilityGroupSecurity.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/LoggedInUsers.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupAlerts.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupAuthPolicy.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupChangeApprovals.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupEmailAccounts.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupCaseNumbering.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupIntegrations.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/MiResponseSettings.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/TransmissionSetup.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupWorkflowEngine.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupTwoFactor.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupWorkflow.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/AiConfig.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DeveloperApiAdmin.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemParameters.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Users.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ViewData.jsx",
+      "apps/mims/frontend/src/modules/admin/pages/DPPRPage.jsx",
+      "apps/mims/frontend/src/modules/regression/pages/RegressionPage.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminQASection.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/apiClient.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminESignDashboardPanel.jsx"
+    ],
+    "apps/mims/frontend/src/shared/api/apiClient.js": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminESignDashboardPanel.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/apiClient.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminUATPanel.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CopyDivision.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/toast.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DivisionParameters.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ExceptionLog.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/FeatureFlags.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/GridTemplates.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CaseActionsAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ComplianceAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx",
+      "apps/mims/frontend/src/shared/components/compliance/ComplianceAuditPanel.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/InspectorExportPane.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/compliance/ComplianceAuditPanel.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/context/FeatureFlagsContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/InspectorExportPane.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DocumentTypesAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ComplaintCodesAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/LotMasterAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/FieldActionsAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CapaAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SmartFields.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/PiiRedactionRules.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/CapabilityGroupSecurity.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/LoggedInUsers.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupAlerts.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/AlertsView.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/AlertsView.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupAuthPolicy.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminAccessSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminAccessSection.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminAccessConfigurationsPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminChangeApprovalsPanel.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminAccessConfigurationsPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminChangeApprovalsPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupChangeApprovals.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminAccessSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupEmailAccounts.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminMiscSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupCaseNumbering.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminMiscSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupIntegrations.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationSection.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminIntegrationSection.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminMirIntPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminCrmIntPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminContentIntPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminEmirIntPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminCaseImportPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminRoutingRulesPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationHealthPanel.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminMirIntPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx": [],
+    "apps/mims/frontend/src/modules/admin/components/AdminCrmIntPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminContentIntPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminEmirIntPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminCaseImportPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminIntegrationShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminRoutingRulesPanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminIntegrationHealthPanel.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/MiResponseSettings.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/TransmissionSetup.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupWorkflowEngine.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupTwoFactor.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/TwoFactorConfigView.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/TwoFactorConfigView.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/utils/guardedFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SetupWorkflow.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminWorkflowSection.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminWorkflowSection.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminWorkflowPanel.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminSourceTypesPanel.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminWorkflowPanel.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js"
+    ],
+    "apps/mims/frontend/src/modules/admin/components/AdminSourceTypesPanel.jsx": [
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/AiConfig.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/DeveloperApiAdmin.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemParameters.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/applyTheme.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemParameters.css"
+    ],
+    "apps/mims/frontend/src/shared/utils/applyTheme.js": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/SystemParameters.css": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Users.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/shared/components/AuditChip.jsx",
+      "apps/mims/frontend/src/shared/components/SavedViews.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/BulkUserImport.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Users.css"
+    ],
+    "apps/mims/frontend/src/shared/components/AuditChip.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/SavedViews.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/BulkUserImport.jsx": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Users.css": [],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/ViewData.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/VirtualizedTable.jsx",
+      "apps/mims/frontend/src/modules/admin/components/AdminShared.jsx",
+      "apps/mims/frontend/src/modules/audittrail/pages/CaseAuditTrailPage.jsx",
+      "apps/mims/frontend/src/modules/audittrail/pages/CMAuditTrailPage.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionAuditTrailPage.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/VirtualizedTable.jsx": [],
+    "apps/mims/frontend/src/modules/audittrail/pages/CaseAuditTrailPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/audittrail/pages/CaseAuditTrailPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/audittrail/pages/CaseAuditTrailPage.css": [],
+    "apps/mims/frontend/src/modules/audittrail/pages/CMAuditTrailPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/audittrail/pages/CMAuditTrailPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/audittrail/pages/CMAuditTrailPage.css": [],
+    "apps/mims/frontend/src/modules/transmissions/pages/TransmissionAuditTrailPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/transmissions/pages/TransmissionAuditTrailPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/transmissions/pages/TransmissionAuditTrailPage.css": [],
+    "apps/mims/frontend/src/modules/admin/pages/DPPRPage.jsx": [
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/modules/admin/pages/DPPRPage.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/modules/mimsadmin/utils/AdminTenantContext.jsx"
+    ],
+    "apps/mims/frontend/src/modules/admin/pages/DPPRPage.css": [],
+    "apps/mims/frontend/src/modules/regression/pages/RegressionPage.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/Help.jsx": [
+      "apps/mims/frontend/src/modules/mimsadmin/components/configItems.js",
+      "apps/mims/frontend/src/modules/mimsadmin/components/tabs/HelpGuide.jsx"
+    ],
+    "apps/mims/frontend/src/modules/mimsadmin/components/tabs/HelpGuide.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/confirm.js",
+      "apps/mims/frontend/src/shared/utils/toast.js"
+    ],
+    "apps/mims/frontend/src/shared/components/MIMSStatStrip.jsx": [],
+    "apps/mims/frontend/src/shared/components/NotificationOverlay.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/components/HelpDrawer.jsx": [
+      "apps/mims/frontend/src/shared/hooks/useHelpKey.js",
+      "apps/mims/frontend/src/shared/components/HelpDrawer.css",
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/shared/hooks/useHelpKey.js": [],
+    "apps/mims/frontend/src/shared/components/HelpDrawer.css": [],
+    "apps/mims/frontend/src/shared/components/CommandPalette.jsx": [
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/utils/adminScope.js",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/components/Icon.jsx"
+    ],
+    "apps/mims/frontend/src/shared/components/ToastNotificationListener.jsx": [
+      "apps/mims/frontend/src/shared/utils/toast.js"
+    ],
+    "apps/mims/frontend/src/modules/cases/pages/CaseTransmissionPage.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/shared/utils/toast.js",
+      "apps/mims/frontend/src/modules/cases/cases.css"
+    ],
+    "apps/mims/frontend/src/modules/cases/pages/CaseResponsePage.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/cases/cases.css",
+      "apps/mims/frontend/src/modules/cases/components/CaseMITab.jsx"
+    ],
+    "apps/mims/frontend/src/modules/cases/pages/ICSRBuilderPage.jsx": [
+      "apps/mims/frontend/src/shared/components/MIMSLayout.jsx",
+      "apps/mims/frontend/src/shared/context/AuthContext.jsx",
+      "apps/mims/frontend/src/shared/api/httpFetch.js",
+      "apps/mims/frontend/src/modules/cases/cases.css"
+    ],
+    "apps/mims/frontend/src/shared/components/AppErrorBoundary.jsx": [
+      "apps/mims/frontend/src/shared/observability/clientTelemetry.js"
+    ],
+    "apps/mims/frontend/src/shared/observability/clientTelemetry.js": [
+      "apps/mims/frontend/src/shared/api/httpFetch.js"
+    ],
+    "apps/mims/frontend/src/index.css": [],
+    "apps/mims/frontend/src/shared/styles/themes.css": [],
+    "apps/mims/frontend/src/shared/styles/classic.css": []
+  },
+  "unresolved": [],
+  "computed": [],
+  "parseErrors": [],
+  "controlCounts": {
+    "reachable-static-import": 3537,
+    "not-reached-static-import": 6
+  }
+}

@@ -8,7 +8,7 @@ const { runReconciliation, getReconciliationHistory } = require('../services/saf
 router.get('/pv/reconciliation', authenticate, async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const current = await runReconciliation({ orgId, userId: req.user.userId });
+    const current = await runReconciliation({ orgId, userId: req.user.userId, shouldRecord: false });
     const history = await getReconciliationHistory({ orgId });
     res.json({ current, history });
   } catch (err) {

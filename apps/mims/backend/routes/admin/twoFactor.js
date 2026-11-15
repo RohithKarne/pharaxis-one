@@ -172,7 +172,7 @@ router.put('/two-factor/config', ...platformConfigAuth, async (req, res) => {
     const timeoutValue = platform_admin_session_timeout_minutes;
     if (timeoutValue !== undefined) {
       const mins = parseIntSafe(timeoutValue, 0);
-      if (mins < 30) return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
+      if (mins < 30 || mins > 480) return res.status(400).json({ error: 'Platform admin session timeout must be between 30 and 480 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
     }
 

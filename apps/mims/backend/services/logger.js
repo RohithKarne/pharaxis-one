@@ -6,6 +6,10 @@ const redact = {
   paths: [
     'req.headers.authorization',
     'req.headers.cookie',
+    'res.headers["set-cookie"]',
+    'res.headers.set-cookie',
+    'res.headers.Set-Cookie',
+    'res.headers["Set-Cookie"]',
     '*.password',
     '*.token',
     '*.refreshToken',

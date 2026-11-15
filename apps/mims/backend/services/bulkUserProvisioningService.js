@@ -46,6 +46,7 @@ function normalizeBulkUserRow(row = {}) {
     is_primary_ref:    toFlag(row.is_primary_ref),
     access_admin_site: toFlag(row.access_admin_site),
     case_admin:        toFlag(row.case_admin),
+    access_ends_on:    row.access_ends_on ? String(row.access_ends_on).trim().slice(0, 10) : null,
   };
 }
 

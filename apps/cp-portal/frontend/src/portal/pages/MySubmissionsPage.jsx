@@ -179,7 +179,9 @@ export function RequestCard({ s, screening, base, onChanged, portalHeaders }) {
           </div>
           <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
           <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
-            {t('A copy was emailed to you. If you need anything further, reply below.')}
+            {s.email_delivered
+              ? t('A copy was emailed to you. If you need anything further, reply below.')
+              : t('Your official answer is displayed above. If you need anything further, reply below.')}
           </div>
           {/* F3 (27 Oct review): a PDF copy to keep — signed-in requests only. */}
           {base?.includes('/submissions/') && (

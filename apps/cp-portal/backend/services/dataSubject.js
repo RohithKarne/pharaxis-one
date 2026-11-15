@@ -127,6 +127,7 @@ async function buildExport(userId, clientId) {
 
   const [[profile]] = await pool.execute(
     `SELECT id, client_id, first_name, last_name, email, user_type, specialty, country, phone,
+            license_number, registry_type, license_verified, license_verified_at,
             is_active, email_verified, user_type_confirmed, last_login_at, created_at
        FROM cp_portal_users WHERE id = ? AND client_id = ?`,
     [userId, clientId]
@@ -196,6 +197,13 @@ async function buildExport(userId, clientId) {
        FROM cp_training_attempts WHERE portal_user_id = ? AND client_id = ? ORDER BY id`, [userId, clientId]))
     .map(({ answers_json, ...a }) => ({ ...a, answers: JSON.parse(answers_json || '[]') }));
 
+  // A18 fix: Include field insights submitted by the user
+  const fieldInsights = await q(
+    `SELECT id, product_name, insight_type, content, interaction_venue, urgency, follow_up_requested, created_at
+       FROM cp_field_insights WHERE (created_by_user_id = ? OR reporter_email = ?) AND client_id = ?`,
+    [userId, profile?.email || '', clientId]
+  );
+
   return {
     export_metadata: { generated_at: new Date().toISOString(), scope: 'CP Portal', user_id: userId, client_id: clientId, note: 'MIMS-synced case data is held in a separate system and is not included in this export.' },
     profile: profile || null,
@@ -212,6 +220,7 @@ async function buildExport(userId, clientId) {
     sso_identities: ssoIdentities,
     chat_conversations: chats,
     training_attempts: trainingAttempts,
+    field_insights: fieldInsights,
   };
 }
 
@@ -454,6 +463,7 @@ async function eraseUser(userId, clientId) {
     await conn.execute(
       `UPDATE cp_portal_users
           SET first_name = ?, last_name = ?, email = ?, phone = NULL, specialty = NULL, country = NULL,
+              license_number = NULL, registry_type = NULL, license_verified = 0, license_verified_at = NULL,
               password = ?, is_active = 0, notif_prefs_json = '{}',
               verification_token = NULL, reset_token = NULL, reset_token_expires_at = NULL,
               token_version = COALESCE(token_version, 0) + 1
@@ -461,6 +471,16 @@ async function eraseUser(userId, clientId) {
       [ERASED, ERASED, anonEmail, deadHash, userId, clientId]
     );
     summary.anonymized.push('cp_portal_users(identity)');
+
+    // A19 fix: Cascade erasure to field insights
+    const [fiRes] = await conn.execute(
+      `UPDATE cp_field_insights
+          SET reporter_name = ?, reporter_email = ?, institution = NULL,
+              content = '[REDACTED PURSUANT TO DATA ERASURE REQUEST]'
+        WHERE (created_by_user_id = ? OR reporter_email = ?) AND client_id = ?`,
+      [ERASED, anonEmail, userId, person?.email || '', clientId]
+    );
+    if (fiRes.affectedRows) summary.anonymized.push(`cp_field_insights(${fiRes.affectedRows})`);
 
     // CP walk 2026-10-04: the person's own data requests (this erasure, any export)
     // are kept as the record that they were handled, but without the name and

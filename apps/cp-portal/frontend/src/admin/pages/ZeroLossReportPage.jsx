@@ -40,6 +40,26 @@ export default function ZeroLossReportPage() {
     URL.revokeObjectURL(url)
   }
 
+  function downloadCsv() {
+    if (!report) return
+    const rows = [
+      ['Zero-Loss Reconciliation Report', `Month: ${month}`, `Client: ${report.client.name}`],
+      ['Verdict', report.verdict.text],
+      ['Fingerprint (SHA-256)', report.fingerprint?.sha256 || '—'],
+      [],
+      ['Section', 'Metric', 'Value'],
+      ['1. Reports Received', 'In MIMS', `${report.received.total_in_mims || report.received.total || 0} of ${report.received.total || 0}`],
+      ['2. Delivery SLA', 'Within Target', `${report.delivery?.all?.within_target ?? 0} / ${report.delivery?.all?.delivered ?? 0}`],
+      ['3. Comparisons with MIMS', 'Runs / Missing', `${report.comparisons?.runs?.[0]?.runs || 0} runs, ${report.comparisons?.runs?.[0]?.missing || 0} missing`],
+    ]
+    const csvContent = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `zero-loss-${clientId}-${month}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const minutes = s => (s == null ? '—' : `${Math.round(s / 60)} min`)
 
   return (
@@ -48,6 +68,7 @@ export default function ZeroLossReportPage() {
         <label htmlFor="zl-month" style={{ fontSize: 14 }}>Month</label>
         <input id="zl-month" type="month" value={month} max={new Date().toISOString().slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)} />
         <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => window.print()} disabled={!report}>Print</button>
+        <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={downloadCsv} disabled={!report}>Download CSV</button>
         <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={downloadPdf} disabled={!report}>Download PDF</button>
         <Link to={`/admin/clients/${clientId}/sync-health`} style={{ fontSize: 13, marginLeft: 'auto' }}>Sync Health</Link>
       </div>

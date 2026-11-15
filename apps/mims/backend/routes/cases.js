@@ -2763,11 +2763,9 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
 
     // F7 FIX: set is_finalized=1 when advancing beyond DRAFT (DB-level immutability guard)
     const isFinalized = responseStatus !== 'DRAFT' ? 1 : 0;
-    // C-09: MI response status change + its two audit rows commit atomically.
-    // Sending no longer overwrites who approved it and when (M-92): the sender
-    // was recorded as the approver.
+    // A21 fix: Atomically verify response_status matches expected previous state
     await withTxn(async (conn) => {
-      await conn.execute(
+      const [updateResult] = await conn.execute(
         `UPDATE case_mi_responses
          SET response_status = ?,
              is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
@@ -2775,9 +2773,12 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
              approved_by = CASE WHEN ? = 'APPROVED' THEN ? ELSE approved_by END,
              approved_at = CASE WHEN ? = 'APPROVED' THEN NOW() ELSE approved_at END,
              sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
-         WHERE id = ? AND case_id = ?`,
-        [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
+         WHERE id = ? AND case_id = ? AND response_status = ?`,
+        [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id, existing.response_status]
       );
+      if (updateResult.affectedRows === 0) {
+        throw Object.assign(new Error(`Response status was already changed from ${existing.response_status}.`), { status: 409 });
+      }
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
       // MIPM-171: the signature and its reason belong on the case trail too — they
       // were only in the system log, so the case's E-signatures view was empty.

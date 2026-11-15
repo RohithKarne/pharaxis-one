@@ -216,7 +216,12 @@ export default function Users() {
             title="Download users as CSV"
             onClick={async () => {
               try {
-                const r = await httpFetch(`/api/admin/users/export?search=${encodeURIComponent(search)}`, { headers: H })
+                const params = new URLSearchParams()
+                if (search.trim()) params.set('search', search.trim())
+                if (fltRole) params.set('role', fltRole)
+                if (fltStatus) params.set('status', fltStatus)
+                if (fltGroup) params.set('group_id', fltGroup)
+                const r = await httpFetch(`/api/admin/users/export?${params.toString()}`, { headers: H })
                 if (!r.ok) { showFlash('Export failed.', 'error'); return }
                 const text = await r.text()
                 const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })

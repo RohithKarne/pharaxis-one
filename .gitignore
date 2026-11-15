@@ -74,3 +74,7 @@ ecosystem.config*.js
 # saved-views suite writes for itself on every run.
 .e2e-stack/
 apps/mims/e2e/.savedviews-session.json
+
+# Local evidence and scratch directories
+*_evidence/
+Pharaxis-One/

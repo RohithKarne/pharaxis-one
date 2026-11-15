@@ -502,6 +502,12 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
       ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
       pregnancy_trimester,
     } = req.body;
+    if (age !== undefined && age !== null && age !== '') {
+      const numAge = Number(age);
+      if (isNaN(numAge) || numAge < 0 || numAge > 130) {
+        return res.status(400).json({ error: 'Patient age must be a valid positive number between 0 and 130.' });
+      }
+    }
     // The trimester is asked only when the patient is pregnant; any other answer clears it.
     const trimester = Number(pregnant) === 1 ? (pregnancy_trimester || null) : null;
     const resolvedAdditionalInfo = patient_info_additional_info ?? additional_info;

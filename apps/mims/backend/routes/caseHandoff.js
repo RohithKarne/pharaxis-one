@@ -113,8 +113,10 @@ async function buildIcsrFromCase(caseId, orgId) {
   // Products / Drugs
   const [caseDrugs] = await pool.execute('SELECT * FROM case_drugs WHERE case_id = ? ORDER BY id ASC', [caseId]).catch(() => [[]]);
   const [aeProducts] = await pool.execute(
-    `SELECT p.* FROM case_ae_products p JOIN case_ae_versions v ON v.id = p.version_id
+    `SELECT p.* FROM case_ae_product_info p JOIN case_ae_versions v ON v.id = p.version_id
       WHERE v.case_id = ? ORDER BY v.version_number DESC, p.id ASC`, [caseId]).catch(() => [[]]);
+  const [aeIntake] = await pool.execute(
+    'SELECT * FROM case_ae_intake WHERE case_id = ? LIMIT 1', [caseId]).catch(() => [[]]);
 
   const drugs = caseDrugs.length
     ? caseDrugs.map(d => ({
@@ -130,20 +132,29 @@ async function buildIcsrFromCase(caseId, orgId) {
       }))
     : aeProducts.length
       ? aeProducts.map(p => ({
-          drug_role: p.product_role || 'suspect',
+          drug_role: p.product_role || (p.is_suspect ? 'suspect' : 'concomitant'),
           medicinal_product_name: p.product_name || 'Suspect Product',
           active_substance: p.active_substance || '',
-          dose_amount: p.dose_amount || '',
+          dose_amount: p.dose || '',
           dose_unit: p.dose_unit || '',
-          batch_no: p.batch_number || '',
+          route_of_admin: p.route_of_admin || '',
+          batch_no: p.batch_lot_number || '',
           start_date: p.start_date || null,
           end_date: p.end_date || null,
         }))
-      : [{
-          drug_role: 'suspect',
-          medicinal_product_name: c.product_name || 'Suspect Product',
-          active_substance: '',
-        }];
+      : aeIntake.length && aeIntake[0].suspect_drug_name
+        ? [{
+            drug_role: 'suspect',
+            medicinal_product_name: aeIntake[0].suspect_drug_name,
+            batch_no: aeIntake[0].batch_lot_number || '',
+            dose_amount: aeIntake[0].dose || '',
+            route_of_admin: aeIntake[0].route_of_admin || '',
+          }]
+        : [{
+            drug_role: 'suspect',
+            medicinal_product_name: 'Suspect Product',
+            active_substance: '',
+          }];
 
   const reactions = events.length
     ? events.map(e => ({

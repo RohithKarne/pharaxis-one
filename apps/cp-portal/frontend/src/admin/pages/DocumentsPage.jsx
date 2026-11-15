@@ -82,6 +82,10 @@ export default function DocumentsPage() {
   const [editError, setEditError]     = useState('')
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('') // CPPM-31: an edit that took the approval away
+  const [versionDoc, setVersionDoc]   = useState(null)
+  const [versions, setVersions]       = useState([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [showVersionModal, setShowVersionModal] = useState(false)
   const [expiringDocs, setExpiringDocs] = useState([])
   const [reviewDueDocs, setReviewDueDocs] = useState([])
   const [neverApprovedDocs, setNeverApprovedDocs] = useState([]) // CPPM-71
@@ -90,6 +94,20 @@ export default function DocumentsPage() {
   const [selectedIds, setSelectedIds]   = useState([])
 
   useEffect(() => { load() }, [clientId])
+
+  async function openVersions(doc) {
+    setVersionDoc(doc)
+    setShowVersionModal(true)
+    setVersionsLoading(true)
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/${doc.id}/versions`, { headers: adminHeaders() })
+      const d = await res.json()
+      setVersions(d.versions || [])
+    } catch {
+      setVersions([])
+    }
+    setVersionsLoading(false)
+  }
 
   function toggleSelect(id) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -243,6 +261,9 @@ export default function DocumentsPage() {
     setEditDoc(doc)
     setEditError('')
     setEditForm({
+      title: doc.title || '',
+      category: doc.category || '',
+      doc_type: doc.doc_type || 'other',
       is_active: !!doc.is_active,
       visible_to: doc.visible_to_json ? (Array.isArray(doc.visible_to_json) ? doc.visible_to_json : JSON.parse(doc.visible_to_json)) : [],
       status: doc.status || 'published',
@@ -517,6 +538,39 @@ export default function DocumentsPage() {
               <button className="cp-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
             </div>
             <form onSubmit={handleEdit} className="cp-modal-body">
+              <div className="cp-field">
+                <label>Document Title *</label>
+                <input
+                  required
+                  value={editForm.title || ''}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              <div className="cp-field-row">
+                <div className="cp-field">
+                  <label>Category</label>
+                  <select
+                    value={editForm.category || ''}
+                    onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                  >
+                    <option value="">No category</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="cp-field">
+                  <label>Document Type</label>
+                  <select
+                    value={editForm.doc_type || 'other'}
+                    onChange={e => setEditForm(f => ({ ...f, doc_type: e.target.value }))}
+                  >
+                    <option value="smpc">SmPC</option>
+                    <option value="pil">PIL</option>
+                    <option value="ifu">IFU</option>
+                    <option value="clinical_summary">Clinical Summary</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>Status</label>
@@ -673,7 +727,17 @@ export default function DocumentsPage() {
                   <td>{visibleSummary(d)}</td>
                   <td>{d.is_active ? '✓' : '—'}</td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <a
+                      href={`/api/portal/documents/${d.id}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cp-btn cp-btn-sm cp-btn-outline"
+                      title="Download or preview file"
+                    >
+                      File
+                    </a>
                     {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(d)}>Edit</button>}
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openVersions(d)}>History</button>
                     {canWrite && d.status === 'draft' && (
                       <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }} onClick={() => quickDocAction(d, 'review')}>Submit for Review</button>
                     )}
@@ -695,6 +759,50 @@ export default function DocumentsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showVersionModal && versionDoc && (
+        <div className="cp-modal-overlay" onClick={() => setShowVersionModal(false)}>
+          <div className="cp-modal" style={{ maxWidth: 650 }} onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <span>Version History: {versionDoc.title}</span>
+              <button className="cp-modal-close" onClick={() => setShowVersionModal(false)}>✕</button>
+            </div>
+            <div className="cp-modal-body">
+              {versionsLoading ? (
+                <div className="cp-loading">Loading version history…</div>
+              ) : versions.length === 0 ? (
+                <div className="cp-empty"><p>No previous versions recorded for this document.</p></div>
+              ) : (
+                <table className="cp-table">
+                  <thead>
+                    <tr>
+                      <th>Version</th>
+                      <th>Title</th>
+                      <th>Certified By</th>
+                      <th>Superseded By</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versions.map(v => (
+                      <tr key={v.id}>
+                        <td><strong>{v.version || '—'}</strong></td>
+                        <td>{v.title}</td>
+                        <td>{v.approved_by_name || '—'}<div style={{ fontSize: 11, color: '#6B7280' }}>{v.approved_at ? v.approved_at.slice(0, 10) : ''}</div></td>
+                        <td>{v.superseded_by_name || '—'}</td>
+                        <td><span className="cp-badge">{v.reason || 'replaced'}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div className="cp-modal-footer">
+                <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowVersionModal(false)}>Close</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </AdminLayout>

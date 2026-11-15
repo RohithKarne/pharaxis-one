@@ -192,7 +192,7 @@ async function getGroupPrivileges(groupId, orgId = null, allowGlobal = false) {
   };
 }
 
-async function setGroupPrivileges({ groupId, privilegeKeys, userId, orgId = null, allowGlobal = false, reason = null }) {
+async function setGroupPrivileges({ groupId, privilegeKeys, userId, userName = null, orgId = null, allowGlobal = false, reason = null }) {
   const before = await getGroupPrivileges(groupId, orgId, allowGlobal);
   if (!before) throw new Error('Security group not found.');
   const keys = Array.from(new Set((privilegeKeys || []).map((key) => String(key || '').trim()).filter(Boolean)));
@@ -222,8 +222,16 @@ async function setGroupPrivileges({ groupId, privilegeKeys, userId, orgId = null
     conn.release();
   }
   const after = await getGroupPrivileges(groupId, orgId, allowGlobal);
+  let actorName = userName;
+  if (!actorName && userId) {
+    try {
+      const [[u]] = await pool.execute('SELECT name, email FROM users WHERE id = ? LIMIT 1', [userId]);
+      actorName = u?.name || u?.email || 'System';
+    } catch (_) { actorName = 'System'; }
+  }
   await auditAccessChange({
     userId,
+    userName: actorName,
     action: 'UPDATE_PRIVILEGES',
     entity: 'security_group',
     entityId: groupId,
@@ -688,10 +696,18 @@ async function resolveEffectivePrivileges(userId, orgId) {
      WHERE sgu.user_id = ? AND (sg.org_id = ? OR sg.org_id IS NULL)`,
     [userId, orgId]
   );
+  // A29 fix: Include rights inherited from role catalog defaults so effective-access preview matches enforcement
+  const role = String(access.role_at_org || access.role || '').toLowerCase();
+  const catalog = await getPrivilegeCatalog(orgId);
+  const roleDefaults = catalog
+    .filter((item) => item.default_allowed_roles?.map((r) => String(r).toLowerCase()).includes(role))
+    .map((item) => item.privilege_key);
+  const allPrivileges = Array.from(new Set([...privRows.map((row) => row.privilege_key), ...roleDefaults]));
+
   return {
     user: access,
     modules: moduleRows.map((row) => row.module),
-    privileges: privRows.map((row) => row.privilege_key),
+    privileges: allPrivileges,
   };
 }
 

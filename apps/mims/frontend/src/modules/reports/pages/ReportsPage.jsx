@@ -327,12 +327,20 @@ export default function ReportsPage() {
     if (!definitions.length) return
     const params = new URLSearchParams(location.search || '')
     const reportKey = params.get('reportKey')
+    const preset = params.get('preset')
     // A report named in the address opens the Reports section only when no
     // other section is asked for: "Schedule Report" went to Schedulers and this
     // pulled it straight back, so the button did nothing.
     const sectionParam = params.get('section')
     if (reportKey && (!sectionParam || sectionParam === 'reports')) {
       const match = definitions.find((item) => item.report_key === reportKey)
+      if (match) {
+        setSelectedReportId(match.id)
+        setSection('reports')
+      }
+    } else if (preset && (!sectionParam || sectionParam === 'reports')) {
+      // A14 fix: Handle pinned report preset navigation by id or key
+      const match = definitions.find((item) => String(item.id) === String(preset) || item.report_key === preset)
       if (match) {
         setSelectedReportId(match.id)
         setSection('reports')

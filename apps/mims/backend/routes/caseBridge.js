@@ -223,11 +223,15 @@ router.post('/bridge/clarifications/:token/reply', async (req, res) => {
         [q.case_id, commentText]
       );
 
-      // Update question record
-      await conn.execute(
-        'UPDATE case_reporter_questions SET answered_at = NOW(), token_used_at = NOW(), answer_comment_id = ? WHERE id = ?',
+      // A09 fix: Atomically verify question has not already been answered
+      const [updateResult] = await conn.execute(
+        'UPDATE case_reporter_questions SET answered_at = NOW(), token_used_at = NOW(), answer_comment_id = ? WHERE id = ? AND answered_at IS NULL',
         [commentRes.insertId, q.id]
       );
+      if (updateResult.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'This clarification has already been answered.' });
+      }
 
       // Move case change time and audit
       await conn.execute('UPDATE cases SET updated_at = NOW() WHERE id = ?', [q.case_id]);
