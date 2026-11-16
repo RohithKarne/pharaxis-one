@@ -27,6 +27,32 @@ router.use('/cases/ae', require('../services/caseHelpers').normalizeDateOnlyBody
 // Admin-required panel fields (Customize Forms) are checked before any
 // AE section save reaches its own route below.
 const { missingRequiredRow } = require('../services/requiredFields');
+const { recalculateAll: recalculateHaClocks, clockStatus } = require('../services/haClockService');
+
+const VALID_OUTCOMES = ['recovered', 'recovering', 'not_recovered', 'recovered_with_sequelae', 'fatal', 'unknown'];
+function normalizeOutcome(val) {
+  if (!val) return 'unknown';
+  const clean = String(val).trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (VALID_OUTCOMES.includes(clean)) return clean;
+  if (clean.includes('fatal') || clean.includes('death')) return 'fatal';
+  if (clean.includes('sequelae')) return 'recovered_with_sequelae';
+  if (clean.includes('not_recov')) return 'not_recovered';
+  if (clean.includes('recovering')) return 'recovering';
+  if (clean.includes('recovered')) return 'recovered';
+  return 'unknown';
+}
+
+async function triggerClockRecalc(versionId) {
+  try {
+    const [[v]] = await pool.execute('SELECT case_id FROM case_ae_versions WHERE id = ?', [versionId]);
+    if (!v) return;
+    const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [v.case_id]);
+    if (!c) return;
+    await recalculateHaClocks({ orgId: c.org_id, caseId: v.case_id });
+  } catch (err) {
+    console.warn('[caseAE] Failed to recalculate regulatory clock:', err.message);
+  }
+}
 
 router.put('/cases/ae/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
@@ -128,7 +154,15 @@ router.get('/cases/:id/ae/versions', authenticate, async (req, res) => {
        ORDER BY v.version_number ASC`,
       [req.params.id]
     );
-    res.json(rows);
+    const enriched = rows.map(v => {
+      const clock = clockStatus(v.regulatory_due_date);
+      return {
+        ...v,
+        regulatory_days_remaining: clock.days_remaining,
+        regulatory_clock_status: clock.status,
+      };
+    });
+    res.json(enriched);
   } catch (err) {
     console.error('GET AE versions error:', err);
     res.status(500).json({ error: err.message });
@@ -359,6 +393,7 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
+      dechallenge_outcome, rechallenge_outcome,
       is_serious = 0, is_death = 0, is_life_threatening = 0,
       is_hospitalization = 0, is_disability = 0,
       is_congenital_anomaly = 0, is_other_medically_important = 0,
@@ -366,20 +401,23 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     } = req.body;
     const serious = is_serious || is_death || is_life_threatening || is_hospitalization || is_disability ||
       is_congenital_anomaly || is_other_medically_important || is_required_intervention || is_lab_abnormality;
+    const normalizedOutcome = normalizeOutcome(outcome);
     const [result] = await pool.execute(
       `INSERT INTO case_ae_events
         (version_id, event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
          verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
+         dechallenge_outcome, rechallenge_outcome,
          is_serious, is_death, is_life_threatening, is_hospitalization,
          is_disability, is_congenital_anomaly, is_other_medically_important,
          is_required_intervention, is_lab_abnormality)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.versionId, event_description || null, meddra_term || null, outcome || null, reported_causality || null, frequency || null, causality_assessment || null, seriousness || null,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.versionId, event_description || null, meddra_term || null, normalizedOutcome, reported_causality || null, frequency || null, causality_assessment || null, seriousness || null,
        start_date || null, end_date || null,
        // Hospital dates belong to a hospitalisation; without the criterion they are not kept.
        verbatim_reaction || null,
        is_hospitalization ? (hospitalization_start_date || null) : null,
        is_hospitalization ? (hospitalization_end_date || null) : null,
+       dechallenge_outcome || null, rechallenge_outcome || null,
        serious ? 1 : 0, is_death ? 1 : 0, is_life_threatening ? 1 : 0,
        is_hospitalization ? 1 : 0, is_disability ? 1 : 0,
        is_congenital_anomaly ? 1 : 0, is_other_medically_important ? 1 : 0,
@@ -389,6 +427,7 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
       'SELECT * FROM case_ae_events WHERE id = ?', [result.insertId]
     );
     await audit(req, req.params.versionId, `events #${row.id}`, null, row, 'AE_ROW_ADDED');
+    await triggerClockRecalc(req.params.versionId);
     res.status(201).json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -405,10 +444,12 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
     const {
       event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       verbatim_reaction, hospitalization_start_date, hospitalization_end_date,
+      dechallenge_outcome, rechallenge_outcome,
       is_serious, is_death, is_life_threatening, is_hospitalization,
       is_disability, is_congenital_anomaly, is_other_medically_important,
       is_required_intervention, is_lab_abnormality
     } = req.body;
+    const normalizedOutcome = outcome !== undefined ? normalizeOutcome(outcome) : undefined;
     // WP2: is_serious is DERIVED from the seriousness criteria. The old SQL used
     // `CASE WHEN ? = 1 THEN 1 ELSE is_serious END`, which could only ever PROMOTE —
     // a regulatory E2B field that, once set, could never be cleared even when the
@@ -428,6 +469,8 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         verbatim_reaction          = COALESCE(?, verbatim_reaction),
         hospitalization_start_date = CASE WHEN COALESCE(?, is_hospitalization) = 1 THEN COALESCE(?, hospitalization_start_date) ELSE NULL END,
         hospitalization_end_date   = CASE WHEN COALESCE(?, is_hospitalization) = 1 THEN COALESCE(?, hospitalization_end_date) ELSE NULL END,
+        dechallenge_outcome        = COALESCE(?, dechallenge_outcome),
+        rechallenge_outcome        = COALESCE(?, rechallenge_outcome),
         is_death                   = COALESCE(?, is_death),
         is_life_threatening        = COALESCE(?, is_life_threatening),
         is_hospitalization         = COALESCE(?, is_hospitalization),
@@ -445,12 +488,13 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
           THEN 1 ELSE 0 END)
        WHERE id = ?`,
       [
-        event_description ?? null, meddra_term ?? null, outcome ?? null, reported_causality ?? null, frequency ?? null, causality_assessment ?? null, seriousness ?? null,
+        event_description ?? null, meddra_term ?? null, normalizedOutcome ?? null, reported_causality ?? null, frequency ?? null, causality_assessment ?? null, seriousness ?? null,
         start_date ?? null, end_date ?? null,
         // Unticking Hospitalization clears the event's hospital dates (they were kept).
         verbatim_reaction ?? null,
         is_hospitalization ?? null, hospitalization_start_date ?? null,
         is_hospitalization ?? null, hospitalization_end_date ?? null,
+        dechallenge_outcome ?? null, rechallenge_outcome ?? null,
         is_death ?? null, is_life_threatening ?? null,
         is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null,
@@ -466,6 +510,7 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
     );
     const [[updated]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
     await audit(req, owned.version_id, `events #${req.params.eventId}`, before, updated);
+    await triggerClockRecalc(owned.version_id);
     res.json(updated);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -476,6 +521,7 @@ router.delete('/cases/ae/events/:eventId', authenticate, async (req, res) => {
     const [[gone]] = await pool.execute('SELECT * FROM case_ae_events WHERE id = ?', [req.params.eventId]);
     await pool.execute('DELETE FROM case_ae_events WHERE id = ?', [req.params.eventId]);
     await audit(req, owned.version_id, `events #${req.params.eventId}`, gone, null, 'AE_ROW_REMOVED');
+    await triggerClockRecalc(owned.version_id);
     res.json({ success: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -500,7 +546,7 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
     const {
       patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm,
       ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
-      pregnancy_trimester,
+      pregnancy_trimester, pregnancy_outcome, gestational_age_weeks, paternal_exposure = 0
     } = req.body;
     if (age !== undefined && age !== null && age !== '') {
       const numAge = Number(age);
@@ -513,18 +559,20 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
     const resolvedAdditionalInfo = patient_info_additional_info ?? additional_info;
     await pool.execute(
       `INSERT INTO case_ae_patient_info
-        (version_id, patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, pregnancy_trimester)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, pregnancy_trimester, pregnancy_outcome, gestational_age_weeks, paternal_exposure)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         patient_initials = VALUES(patient_initials), date_of_birth = VALUES(date_of_birth),
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), height_cm = VALUES(height_cm),
         ethnicity = VALUES(ethnicity), pregnant = VALUES(pregnant),
         patient_country = VALUES(patient_country), last_menstrual_date = VALUES(last_menstrual_date), additional_info = VALUES(additional_info),
-        pregnancy_trimester = VALUES(pregnancy_trimester)`,
+        pregnancy_trimester = VALUES(pregnancy_trimester), pregnancy_outcome = VALUES(pregnancy_outcome),
+        gestational_age_weeks = VALUES(gestational_age_weeks), paternal_exposure = VALUES(paternal_exposure)`,
       [req.params.versionId, patient_initials || null, date_of_birth || null, age || null, age_unit || null, sex || null,
        weight_kg || null, height_cm || null, ethnicity || null,
-       pregnant ?? null, patient_country || null, last_menstrual_date || null, resolvedAdditionalInfo || null, trimester]
+       pregnant ?? null, patient_country || null, last_menstrual_date || null, resolvedAdditionalInfo || null, trimester,
+       pregnancy_outcome || null, gestational_age_weeks || null, paternal_exposure ? 1 : 0]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]

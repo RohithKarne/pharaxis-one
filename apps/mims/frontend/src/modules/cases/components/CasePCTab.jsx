@@ -35,6 +35,8 @@ const PC_COMPLETION_DEFS = {
       { label: 'Reply Date', key: 'reply_date' },
       { label: 'Reply to Complainant', key: 'reply_summary' },
       { label: 'Device Malfunction', key: 'device_malfunction' },
+      { label: 'Patient Harm Involved', key: 'is_patient_harm' },
+      { label: 'FAR Reportable', key: 'is_far_reportable' },
     ],
   },
   'patient-info': {

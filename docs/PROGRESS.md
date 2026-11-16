@@ -20,6 +20,181 @@ Team ─────── restructured 2026-11-10: Rohith → Tim → Technolog
 | Revalidation flag (Unreleased) | Full | Partial |
 | Tagged release | None — tags paused by Rohith, 2026-10-04 | None |
 
+## Done — 2026-11-16: MIMS Admin Clinical Governance & Regulatory Capabilities Remediation (Phases 1 & 2, locked by Rohith)
+
+Delivered, configured, and verified all 7 approved clinical governance changes and new capabilities across Phase 1 (Governance & Policy Alignment) and Phase 2 (New Regulatory & Clinical Capabilities) in the MIMS Admin module for Calder Therapeutics, maintaining clean multi-tenant isolation against Vanaja Review Co:
+
+1. Phase 1 — Clinical Governance & Policy Alignment (Tickets 1–4):
+   - Ticket 1 (Off-Label Two-Signer Rule): Activated `mi_two_signer_rules` (`condition_type: 'off_label'`) for Calder Therapeutics (`org_id: 1`). Medical inquiries discussing unapproved indications now strictly mandate sequential review by a Medical Reviewer and sign-off by an Approver before letter transmission.
+   - Ticket 2 (Tiered Transmission SLAs): Upgraded `services/transmissionTargets.js` and `services/caseHandoffService.js` with `expedited_handoff_days`. Configured 0-day (same-day) expedited handoff SLA for serious adverse events and 1-day standard SLA for non-serious AEs. Added expedited SLA input field to `TransmissionSetup.jsx`.
+   - Ticket 3 (Lot Master Commercial Seed): Seeded 5 real commercial batches across Entresto (24/26 mg, 49/51 mg), Kisqali (200 mg), Cosentyx (150 mg/mL), and Leqvio (284 mg) in `lot_master`. Bound recalled Cosentyx batch `COS-2025-442C` directly to Class II Field Action Record `REC-2026-001` in `field_action_records`.
+   - Ticket 4 (Standardized Safety Reporting Text): Saved FDA MedWatch reporting channels (`www.fda.gov/medwatch`, `1-800-FDA-1088`) and Calder 24h Medical Safety contact points into `mi_response_settings.closing_statement`. Enforced `require_pi_offlabel = 1`.
+
+2. Phase 2 — New Regulatory & Clinical Capabilities (Tickets 5–7 & Migration 197):
+   - Migration 197 (`197_admin_clinical_capabilities.js`):
+     - Created `product_regional_labels` table (`org_id`, `product_id`, `region_code`, `label_type`, `label_title`, `version`, `approval_date`, `document_url`, `is_active`).
+     - Created `emergency_safety_contacts` table (`org_id`, `physician_name`, `medical_title`, `email`, `phone_24h`, `time_zone`, `is_primary`, `is_active`).
+     - Added `enforce_safety_screening_gate` column to `mi_response_settings`.
+     - Seeded 8 baseline regional labels (US PI and EU SmPC) for Calder products and 2 emergency safety physicians (Dr. Aris Thorne, MD as Primary Global Safety Director, and Dr. Elena Rostova, MD, PhD as Senior PV Physician).
+   - Ticket 5 (Regional Labeling Surface): Built `RegionalLabelsAdmin.jsx` with full filter, add, edit, and delete controls. Implemented backend CRUD endpoints in `routes/admin/productDictionary.js` (`/api/admin/product-regional-labels`, `/api/admin/products/:id/regional-labels`).
+   - Ticket 6 (Emergency Safety Directory Surface): Built `EmergencySafetyAdmin.jsx` with on-call rotation management, primary contact designation, and 24/7 emergency dispatch numbers. Implemented backend CRUD endpoints in `routes/admin/emergencySafetyContacts.js` (`/api/admin/emergency-safety-contacts`).
+   - Ticket 7 (Safety Screening Gate): Integrated `enforce_safety_screening_gate` into `services/miResponseSettings.js` and added an admin toggle with audit logging in `MiResponseSettings.jsx`.
+   - Navigation Registration: Registered both new admin panels under `SYSTEM_NAV.Setup.Medical Information` in `configItems.js` and mounted lazy routes in `System.jsx`.
+
+3. Verification & Live Browser Walk:
+   - Programmatic verification suite (`scratch/admin_phase1_phase2_verification.js`) passed 29/29 tests (100% green), including 3 failing path rejections (missing required parameters, unauthenticated access) and strict multi-tenant isolation (Vanaja sees 0 Calder contacts/labels).
+   - Backend syntax check (`npm run test:static`) passed across all 560 JavaScript files.
+   - Live browser walk on Chrome (`http://localhost:5173/mims/`) captured 5 UI screenshots in the artifact directory (`admin_phase1_mi_response.png`, `admin_phase1_transmission_sla.png`, `admin_phase1_lot_master.png`, `admin_phase2_regional_labels.png`, `admin_phase2_emergency_safety.png`) with 0 console errors.
+
+Signed off by Medical Affairs (John, Meera, Daniel), Technology (Varun), Engineering (Kiranmai), and Product & Compliance (Saad). **Not checked on screen:** Live outbound health authority AS2/B2B gateways (simulated via local mock endpoints); physical telephone exchange dispatch.
+
+## Done — 2026-11-16: Case Form Upgrade Drop 3: Regulatory Safeguards & Quality-Safety Fusion (locked by Rohith)
+
+Delivered and verified the complete Drop 3 Regulatory Safeguards & Quality-Safety Fusion upgrade across the MIMS Case Form module, enforcing 21 CFR 312.7 commercial solicited off-label gating and 21 CFR 314.81(b)(1) 3-Day FDA Field Alert Report (FAR) tracking with patient-harm linkage:
+1. Migration 199 (`199_case_form_drop3_safeguards.js`):
+   - Added commercial clearance tracking columns to `case_mi`: `commercial_clearance_status` ENUM('not_required', 'pending', 'cleared', 'rejected'), `commercial_clearance_by`, `commercial_clearance_at`, `commercial_clearance_notes`.
+   - Added 3-day FAR and patient harm columns to `case_pc_general`: `is_patient_harm` (TINYINT(1)), `is_far_reportable` (TINYINT(1)), `far_due_date` (DATETIME), `far_status` ENUM('not_required', 'pending', 'submitted', 'exempt'), `far_submission_date` (DATETIME), `far_notes` (TEXT).
+2. Off-Label Commercial Solicited Gating (CF-06 / Decision 1A):
+   - Backend `apps/mims/backend/routes/cases.js` enforces a strict block at both response creation (`POST /cases/:id/mi-responses`) and status transitions (`PATCH /cases/:id/mi-responses/:responseId/status`) to `READY`, `APPROVED`, or `SENT` when an MI inquiry is both off-label and solicited by commercial reps (`is_off_label && is_solicited`), returning HTTP 422 `SOLICITED_OFFLABEL_GATED` unless cleared by a Medical Affairs Director.
+   - `services/miSendCheck.js` incorporates the commercial clearance requirement into the pre-send readiness verification checklist (`solicited_offlabel`).
+   - `routes/admin/miPromoReview.js` persists clearance decisions and synchronizes `commercial_clearance_status`.
+   - Frontend `MiApprovalPanel.jsx` mounts `[data-testid="solicited-offlabel-gate-alert"]` amber warning banner citing 21 CFR 312.7, exposes one-click "✓ Grant Medical Director Clearance" / "✕ Reject Clearance" actions with review notes, and renders `[data-testid="solicited-offlabel-cleared-banner"]` upon clearance.
+3. Patient-Harm Quality Complaints & 3-Day FAR Calculation Engine (CF-07 / Decision 2A):
+   - `services/haClockService.js` implements `calculateFarClock` and `add3WorkingDays`, calculating 3-day (72h) FDA notification deadlines with business-day awareness for federal holidays per 21 CFR 314.81(b)(1).
+   - `routes/casePC.js` calculates and saves `far_due_date` on `PUT /cases/pc/versions/:versionId/general`, writes 21 CFR Part 11 audit records (`Patient Harm (3-Day FDA FAR Triggered)`), and exposes `GET /cases/:id/pc/far-clock`.
+   - Frontend `PCTabPanel.jsx` renders the "Potential or Actual Patient Harm Involved" toggle, `[data-testid="pc-patient-harm-alert"]` mandate alert, `[data-testid="far-clock-badge"]` (72h SLA active), FAR reportability checkbox, and FAR status selector.
+4. Testing & Real Browser Verification (`walk-case-form-drop3.js`):
+   - Executed full automated Playwright walk on Chrome against live MIMS:
+     - Case `#483147`: Set off-label and solicited flags, verified real-time amber gate alert `[data-testid="solicited-offlabel-gate-alert"]` (`28_cf_drop3_solicited_offlabel_gated.png`), executed Medical Affairs Director digital clearance prompt, and verified green clearance banner `[data-testid="solicited-offlabel-cleared-banner"]` (`29_cf_drop3_solicited_offlabel_cleared.png`).
+     - Case `#483149`: Navigated to PC General tab, checked "Potential or Actual Patient Harm Involved", verified `[data-testid="pc-patient-harm-alert"]` and `[data-testid="far-clock-badge"]`, saved with HTTP 200 (`30_cf_drop3_patient_harm_far_clock.png`), and asserted DB persistence (`far_due_date` calculated 3 business days out).
+     - Console Cleanliness: 0 console errors logged.
+Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live external AS2/B2B health authority gateway transmissions; physical telephone dispatch.
+
+## Done — 2026-11-16: Case Form Upgrade Drop 2: Clinical Intake Intelligence (locked by Rohith)
+
+Delivered and verified the complete Drop 2 Clinical Intake Intelligence upgrade across the MIMS Case Form module, enforcing ICH E2B(R3) four-factor transmission gates and AI/clinical safety trigger interception:
+1. Migration 198 (`198_case_mi_safety_override.js`):
+   - Added `screening_override_rationale` (TEXT) and `safety_triggers_detected` (VARCHAR 255) to `case_mi` for tracking clinical rationale when adverse events are dismissed during intake.
+2. Real-Time E2B(R3) 4-Factor Gate & Hard Transmission Blocker (CF-03 / Decision 1A):
+   - Backend `POST /cases/:id/ae-transmissions` in `apps/mims/backend/routes/cases.js` assesses 4-factor validity (`assessValidity`). If the 4 core criteria (identifiable reporter, identifiable patient, suspect product, adverse event narrative) are incomplete, transmission is hard-blocked with HTTP 422 Unprocessable Entity.
+   - Frontend `CaseAETab.jsx` warns operators with a persistent amber banner during drafting and enforces a hard disable on the "Transmit to PV" button inside the transmission drawer with an explicit `[data-testid="ae-tx-blocked-notice"]` alert.
+3. AI / Clinical Safety Term Interception Scanner & Mandatory Rationale Gate (CF-05 / Decision 2A):
+   - Backend `caseMI.js` implements a dictionary scanner (`SAFETY_TRIGGER_TERMS`) scanning Question Summary, Detailed Question, and Response text for 45+ critical adverse event and defect tokens. If triggers are detected and screening is marked "No", updates are rejected with HTTP 422 unless a mandatory Clinical Override Rationale is provided.
+   - Audits override events directly to `case_audit_log` under action `SAFETY_SCREENING_OVERRIDE` with 21 CFR Part 11 integrity.
+   - Frontend `CaseMITab.jsx` analyzes text in real time, rendering an amber `[data-testid="mi-safety-trigger-alert"]` banner detailing detected terms. Selecting "No" conditionally mounts the mandatory `[data-testid="mi-override-rationale-field"]`.
+4. Testing & Real Browser Verification (`walk-case-form-drop2.js`):
+   - Navigated live to MI Case `#483147`, typed clinical safety terms (`urticaria, dyspnea, angioedema`) into Question Summary, and verified real-time amber alert banner.
+   - Selected "No" for AE/PC screening, entered 1-sentence Clinical Override Rationale, and saved successfully with HTTP 200.
+   - Navigated to Child AE Case `#483153`, verified AE Validity Banner at the top, opened Transmission Drawer, and verified the transmission hard block notice and disabled "Transmit to PV" button.
+   - Captured artifacts `25_cf_drop2_safety_term_interception.png`, `26_cf_drop2_override_rationale_saved.png`, and `27_cf_drop2_transmission_hard_gate.png` with 0 console errors.
+Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live external AS2/B2B health authority gateway endpoints (mocked locally).
+
+## Done — 2026-11-16: Case Form Upgrade Drop 1: Safety & Compliance Core (locked by Rohith)
+
+Delivered and verified the complete Drop 1 Safety & Compliance Core upgrade across the MIMS Case Form module, spanning ICH E2B(R3) clinical criteria, expedited regulatory clock tracking, hierarchical Split & Link Case architecture, and structured pharmacovigilance data:
+1. Migration 195 (`195_case_form_upgrade_core.js`):
+   - Created `case_relationships` table (`parent_case_id`, `child_case_id`, `relationship_type`, `created_by`, `notes`).
+   - Expanded `case_links.link_type` ENUM to include `'split'`.
+   - Added `dechallenge_outcome` and `rechallenge_outcome` columns to `case_ae_events`.
+   - Added ICH E2B(R3) pregnancy & lactation columns to `case_ae_patient_info` (`pregnancy_outcome`, `gestational_age_weeks`, `paternal_exposure`).
+   - Added regulatory clock cache columns to `case_ae_versions` (`is_expedited`, `regulatory_clock_type`, `regulatory_due_date`).
+2. ICH E2B(R3) Seriousness & Automated Regulatory Clock Engine (CF-01):
+   - `haClockService.js` upgraded to evaluate discrete seriousness: fatal / life-threatening adverse events trigger a 7-calendar-day expedited clock from Day 0; other serious criteria trigger a 15-calendar-day expedited clock; non-serious events follow standard periodic review.
+   - Synchronizes with `case_ha_clocks` across all 11 global health authorities and updates `case_ae_versions` cache.
+   - Frontend `CaseHeaderStrip.jsx` displays color-coded active clock status (`⚡ Expedited (7d remaining)` / `(15d remaining)`).
+3. Dual-Track Split & Link Case Architecture (CF-02):
+   - Implemented `POST /api/cases/:id/split` with atomic case numbering (`assignCaseNumberInternal`), reciprocal `case_links` records, and hierarchical `case_relationships`.
+   - Selectively clones primary reporter contacts and patient demographics.
+   - Automatically routes child AE cases to the Pharmacovigilance Triage Queue (`case_owner_id = null`).
+   - Frontend `CaseHeaderStrip.jsx` provides a one-click `Split Case` button and modal with data copy options and real-time linked case navigation.
+   - Frontend `CaseMITab.jsx` adds `Split to AE (Parallel Safety)` and `Split to PC (Parallel Quality)` buttons for parallel investigation.
+4. Structured Pharmacovigilance Data & Sanitization (CF-04):
+   - Integrated `normalizeOutcome` in `caseAE.js`, eliminating MySQL ENUM strict-mode rejections by automatically normalizing Title Case input to lowercase tokens.
+   - Added structured WHO-UMC dechallenge and rechallenge dropdown selectors to `AEMultiRowTab.jsx` and reaction event tables.
+   - Added ICH E2B pregnancy outcome selector, gestational age input, and paternal drug exposure checkbox to `AETabPanel.jsx`.
+5. Testing & Verification:
+   - Programmatic verification suite (`verify_drop1_backend.js`) passed 100% across all 8 checkpoints.
+   - Live browser walkthrough on `http://localhost:5173/mims/` verified modals, clock badges, and event tables with 0 console errors and 0 network failures.
+Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live external AS2/B2B XML transmission over external network gateways (simulated/DB-verified); physical barcode optical scanners.
+
+## Done — 2026-11-16: MIMS Content Module Enhancements (all 5 items, locked by Rohith)
+
+Delivered and verified the complete 5-item enhancement package across clinical safety, 21 CFR Part 11 version governance, authoring validation, delivery, and baseline database seeding:
+1. Migration 196 (Baseline CM Defaults Migration):
+   - Created and applied `apps/mims/backend/database/migrations/196_cm_baseline_defaults.js`.
+   - Seeds 6 governed document categories and 5 document types in `cm_picklists`.
+   - Seeds default alert notification windows ([30, 60, 90] days) and default alert roles in `cm_org_settings`.
+   - Seeds baseline role permissions for active root folders in `cm_folder_permissions`.
+2. Off-Label Prescribing Information Auto-Attach & Locked Enclosure:
+   - Backend routes (`routes/cases.js`) and resolution engine (`services/miResponseService.js`) dynamically resolve the active in-date Prescribing Information document for the inquiry's product.
+   - Automatically pre-attaches the PI document to the response package whenever `is_off_label` is true and `require_pi_offlabel` is enabled.
+   - Frontend `CaseMITab.jsx` renders the PI enclosure checkbox pre-checked and locked (`disabled={true}`) with a visual badge: `🔒 [Mandatory Enclosure — Prescribing Information locked for Off-Label]`.
+3. Version Increment Governance Modal & 21 CFR Part 11 Audit Trail:
+   - Enhanced `CheckInModal` (`ContentModals.jsx`) to enforce selection between Minor Revision (vX.Y+1, editorial/layout) and Major Revision (vX+1.0, clinical/label updates).
+   - Dynamically populates governed justification categories (*Clinical Guidance / Indication Update*, *Safety / Contraindication Revision*, *Dosage & Administration Modification*, *Regulatory Authority Mandate* for Major; *Editorial / Typo Correction*, etc. for Minor).
+   - Backend `routes/cm/documents.js` updates `version_major`/`version_minor` atomically, logs the structured justification to `cm_version_history.notes`, and captures `bump_type` and `rationale_category` in `audit_logs`.
+4. Live Template Merge Token Validator:
+   - Created real-time syntax highlighting and token extraction in `TemplatesSection.jsx` checking all `{{tokens}}` against `MERGE_FIELDS`.
+   - Displays real-time green validation badge (`✓ All Merge Tokens Validated (N)`) or red warning container (`⚠️ Invalid Merge Token(s) Detected: {{invalid_token}} ✗`) before save.
+   - Backend `routes/cm/templates.js` rejects any template containing unrecognized merge tokens with HTTP 400.
+5. GxP Watermarked PDF Rendition & 21 CFR Part 11 Electronic Signature Stamp:
+   - Enhanced native PDF engine (`services/pdfExportService.js`) with GxP release watermarks (`[ CONFIDENTIAL — GxP CONTROLLED MEDICAL RESPONSE ]`) and 21 CFR Part 11 Electronic Signature Stamp block (signer, date/time, meaning, SHA-256 integrity digest).
+   - Exposed endpoint `POST /api/cases/:id/mi-response-builder/pdf` streaming generated PDF binary attachments.
+   - Added `📄 Export GxP PDF` button in `CaseMITab.jsx` preview footer with instant blob download.
+6. Verification & Sign-offs:
+   - 33/33 automated test assertions passed 100% across all 5 enhancement areas.
+   - Full screen walk verified on live browser (`http://localhost:5173/mims/`) using Google Chrome across Author and Operator roles: Template token validator (both valid and invalid states), Check-In version governance modal with category switching, and MI Response Builder off-label locked PI and PDF download.
+   - Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Physical paper printer output; high-volume simultaneous batch PDF generation (1000+ concurrency). Full artifact report generated in brain.
+
+## Done — 2026-11-16: Reporting Module Enhancements REP-1 & REP-4 (Option A, locked by Rohith)
+
+Delivered and verified the two high-impact reporting enhancements:
+1. REP-1 (Executive 21 CFR Part 11 PDF Export Engine):
+   - Created pure standard-compliant landscape PDF-1.4 generation engine (`apps/mims/backend/services/reportPdfService.js`) with zero binary external dependencies.
+   - Embeds organization branding header ("Calder Therapeutics"), report title, description, complete 21 CFR Part 11 audit metadata block (generation timestamp, requesting user, applied filter criteria, total record count), alternating row fills, column-width distribution, cell truncation, and running confidentiality footer ("CONFIDENTIAL — FOR REGULATORY / COMPLIANCE INSPECTION ONLY").
+   - Wired backend endpoint `POST /api/reports/module/definitions/:id/export?format=pdf` with GxP audit trail logging (`EXPORT_PDF` action) and `report_runs` execution history.
+   - Added "Export PDF" button to frontend `ReportFilterBar.jsx` and wired blob download stream in `ReportsPage.jsx`.
+2. REP-4 (In-Context Case Drill-Through Drawer):
+   - Created `CaseDrillDrawer.jsx` component providing a non-disruptive, right-side slide-over inspection drawer.
+   - Intercepts clicks on table rows that reference cases (`row.__drill_route.startsWith('/cases/')`), keeping the active report dataset, pagination, and filter parameters intact in the background.
+   - Displays case number, styled case type badge (MI, AE, PC), inspection mode banner, 2-column grid of key case attributes, full report row attributes, "Close", "Open in New Tab ↗", and "Open Full Case" action buttons.
+3. Live Browser Verification:
+   - Walked on the live running application (`http://127.0.0.1:3000/mims/reports`) using Playwright with Google Chrome under test user `qa.verifier@novartis-demo.com`.
+   - Verified "Export PDF" button renders, clicks, and downloads `executive_report_export.pdf` (6.1 MB, valid `%PDF-1.4`).
+   - Verified clicking report rows opens `CaseDrillDrawer` with live case details, and closing it cleanly restores the intact table viewer.
+   - 0 console errors. Captured screenshots `14_rep4_case_drill_drawer.png`, `15_rep4_drawer_closed.png`, and `16_rep1_pdf_export_screen.png`.
+   - Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Hardware physical printing to paper printers; multi-monitor detached browser window dragging.
+
+## Done — 2026-11-16: MIMS Content Module Full QA Verification (locked by Rohith)
+
+Complete end-to-end QA verification of the MIMS Content Module across all 8 core sub-areas: Documents, Modular Content, FAQs, Letter Templates, Operations & Impending Expiry, Folders & Permissions, Admin Data Mapping / Taxonomies, Browse Content Catalog, and MI Response Letter Builder integration. Tested using a rigorous two-layer verification suite:
+1. Programmatic validation reconciliation (113/113 test assertions passed 100% across 4 test suites):
+   - Suite 1 (38 checks): raw database to API parity across 365 documents, agent scoping enforcement (zero non-published or expired docs visible), modular documents dataset verification, FAQ queries and view tracking, template placeholders and variable preservation, folder tree (208 folders) matching hierarchy, admin picklists and document types taxonomy, reviewer task scoping, checkout concurrency lock (403 non-author, 400 collision, check-in release), and independent approver gate (403 author self-approval block).
+   - Suite 2 (12 checks): modular document authoring (`response_doc_type = 'Module'`), HTML module assembly into `assembled_html`, in-memory cache hit verification, and instant cache invalidation upon module reassignment.
+   - Suite 3 (20 checks): parallel peer review cycles, 409 review conflict gate, multi-reviewer submissions and automatic review closure, author self-approval rejection (403), 21 CFR Part 11 electronic signature validation (password + reason, 401 on bad credentials), audit trail entries in `audit_logs` and version history in `cm_version_history`.
+   - Suite 4 (43 checks): downstream delivery, Agent Browse Content catalog scoping (0 non-published, 0 expired), keyword search ("Entresto"), Security Gate: Agent direct access to `/api/cm/templates` blocked (403 MODULE_FORBIDDEN), Author template view (hiding expired by default, revealing on `include_expired=true`), Case MI Response Builder Context (`/cases/:id/mi-response-builder/context`) filtering out expired assets and internal documents, Case MI Response Builder Preview (`/cases/:id/mi-response-builder/preview`) regulatory gates (attaching expired doc returns 400, expired template returns 404), and full bookmark lifecycle (create, fetch with joined entity name, delete, 404 invalid).
+2. Live browser walk: verified on the running application (`http://localhost:5173/mims/`) using Google Chrome across Author/Admin (`aisha.verma@novartis-demo.com`) and Case Operator / Agent (`kunal.mehta@novartis-demo.com`). Walked Documents tab (table, status badges, folder tree modal toggle, search query), Modular Documents tab (module cards), FAQs tab (questions, answers, view counts, search), Templates tab (response templates), Operations Dashboard (expiring in 30 days, overdue reviews, impending expiry), Settings tab (picklists, alert defaults, publishing checks matrix), and Agent Browse Content catalog (`/browse-content` with folder tree, filters, detail drawer, star bookmarking to "★ Bookmarks" folder).
+Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live email delivery for periodic review reminders over real external SMTP servers (simulated and DB-verified); binary PDF document rendition conversion in browser print engine. Full artifact report generated in brain.
+
+## Done — 2026-11-16: MIMS Admin Module Full QA Verification (locked by Rohith)
+
+Complete end-to-end QA verification of the MIMS Admin module across all 11 active top-level tabs and 35 configuration panels, multi-tenant administrative isolation (Calder Therapeutics Org 1 vs Vanaja Review Co. Org 26), and programmatic data reconciliation with live cases, content, and reporting datasets. Tested using a two-layer verification suite:
+1. Programmatic validation reconciliation (17/17 test assertions passed 100%): verified health check; user management; strict tenant isolation between Calder (11 users) and Vanaja (2 users); security groups (9 vs 15); dynamic Case Form configuration (7 sections returned for MI); Case Numbering (AE, MI, PC, ALL prefixes validated); Medical Information response settings (FDA off-label text, mandatory prescribing info, 5/1 SLA days); Transmission Setup (safety and quality targets); Data Protection (DPPR rules and PII redaction); Email Accounts and Developer API clients; Division Parameters; Service Dashboard worker states; Picklist table categories (10 categories, 495 items); cross-tenant write barrier (Vanaja blocked from mutating Calder settings); and controlled live configuration mutation/rollback (Routine SLA 5d -> 7d -> 5d).
+2. Live browser walk: verified on the running application (`http://localhost:5173/mims/mims-admin`) using Google Chrome on macOS arm64. Walked Admin Home, Tables & Picklists, System Case Form Fields, Sign-in & Security, Service Dashboard, Vanaja tenant isolation, and the unauthenticated bounce failing path. 6 high-resolution screenshots captured with zero console errors.
+Remediations & fixes: Resolved startup reference error in `apps/mims/backend/server.js` caused by missing `fs` import, restoring clean server boot; MIMS backend static syntax check passed across all 554 files. Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live external SMTP servers over real network ports (tested with local mock); live health authority gateway transmission. Full artifact report generated in brain.
+
+## Done — 2026-11-16: MIMS Case Form Complete Module Full QA Verification (locked by Rohith)
+
+Complete end-to-end QA verification of the MIMS Case Form module across all three primary case workflows (Medical Information, Adverse Event, Product Quality Complaint), split multi-type inquiries, multi-tenant administrative isolation (Calder Therapeutics Org 1 vs Vanaja Review Co. Org 26), and cut-list field governance. Tested using a rigorous two-layer verification suite:
+1. Programmatic validation reconciliation (7/7 test suites passed 100%): negative case creation rejected (400), valid MI Case (483147) and MI tab creation/update verified with required validation (`mi_category`, contact first/last name) and response draft generation; valid AE Case (483148) verified with ICSR E2B(R3) 4-factor criteria (4/4 passed), AE Version #1 lifecycle, required reaction event and suspect product binding, patient demographic boundaries; valid PC Case (483149) verified with PC Version #1 lifecycle, `enforcePanelRequired` schema validation, and device malfunction triage; multi-tenant isolation verified (cross-tenant 404 enforcement and isolated `field_setup` configuration); and cut-list audit (118/118 cut fields hidden on newly created cases while preserving historical retrieval).
+2. Live browser walk: verified on the running application (`http://localhost:5173/mims/`) using test user `qa_calder_admin@pharaxis.local`. Inspected Case Header, 3-step wizard stepper (`1. Reporter & Patient`, `2. Product & Details`, `3. Response & Workflow`), Add Contact form, MI enquiry fields & response builder, AE versions and sub-tabs (`Events`, `AE Patient Info`, `Product Info`), PC versions and sub-tabs (`General`, `PC Patient Info`, `Product Info`), and the 21 CFR Part 11 Audit Trail drawer. Zero network request failures (50/50 HTTP 200) and zero console errors.
+Remediations & fixes: Added dev encryption fallback for SSO client secrets in `ssoService.js`, seeded Vanaja Admin group privileges, verified AE outcome ENUM constraints, and documented governed picklist taxonomy requirements. Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live E2B(R3) AS2 XML B2B gateway transmission to health authority gateways (mocked/endpoint verified); physical barcode scanner intake for lot verification. Full artifact report generated in brain.
+
+## Done — 2026-11-16: MIMS Reports Module Full QA Verification (locked by Rohith)
+
+Complete QA verification of the MIMS Reports Module across all 20 built-in library reports, custom report definitions, operational dashboards (Operations Dashboard, Compliance Watch), schedules, execution run history, and module settings. Tested via two-layer methodology: programmatic SQL-to-API reconciliation (49/49 data assertions passed 100%, 28/28 lifecycle assertions passed 100%) and a real screen walk via Playwright with Google Chrome across all 5 tabs (`Reports`, `Dashboards`, `Schedules`, `Run History`, `Settings`). 13 high-resolution screenshots captured and verified with zero console errors. Seeded 13 edge cases (`QA-REP-001` through `QA-REP-013`) in Calder Therapeutics covering Day 0 on-time/late/overdue safety hand-offs, ICSR MedDRA version errors, duplicate cases, and off-label inquiries. Remediated 4 defects in-session: ICSR seriousness formatting from raw JSON, React table cell rendering safety for object/array values, server CORS `DEFAULT_ALLOWED_ORIGINS` for same-origin preloads, and server.js `.env` loading order. Signed off by Medical Affairs (John, Meera, Daniel), Product & Compliance (Saad), Technology (Varun), and Engineering (Kiranmai). **Not checked on screen:** Live outbound SMTP delivery over real network ports (mocked/DB-verified); FDA/EMA B2B gateway acknowledgment processing (simulated via database rows); mobile viewport layout. Full artifact report generated in brain.
+
+
 ## Done — 2026-11-13: one MIMS sign-in (L1–L4, locked by Rohith)
 
 One sign-in for all of MIMS; sign-in settings on one screen (Sign-in & Security). Walked on a sealed copy: two-step asked when any organisation uses it; switch without a second step; a company-domain email refused a password; the public organisation list gone; personal emails refused, then required an end date, then a contractor removed by the nightly job with their case unassigned. Found and fixed on the way: a second setup demanded when another organisation turned two-step on; "jwt expired" shown to people; a system case entry named a person. PRD and Architecture lines changed on Rohith's lock (2026-11-13). **Not seen on screen:** the platform admin's view of Sign-in & Security (sign-in did not finish inside the 10-minute code step during the walk). A4 (screens per organisation) is still open and was seen live in the walk.

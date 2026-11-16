@@ -38,6 +38,7 @@ async function getTargets(orgId, db = pool) {
       enabled: !!row?.enabled,
       has_key: !!cfg.outbound_key_enc,
       handoff_days: Number.isFinite(Number(cfg.handoff_days)) && cfg.handoff_days !== null && cfg.handoff_days !== '' ? Number(cfg.handoff_days) : DEFAULT_HANDOFF_DAYS,
+      expedited_handoff_days: Number.isFinite(Number(cfg.expedited_handoff_days)) && cfg.expedited_handoff_days !== null && cfg.expedited_handoff_days !== '' ? Number(cfg.expedited_handoff_days) : 0,
       last_sync_at: row?.last_sync_at || null,
     };
   });
@@ -52,6 +53,10 @@ async function saveTarget(orgId, type, body, db = pool) {
   if (body.handoff_days !== undefined) {
     const n = Math.round(Number(body.handoff_days));
     cfg.handoff_days = Number.isFinite(n) && n >= 0 && n <= 30 ? n : DEFAULT_HANDOFF_DAYS;
+  }
+  if (body.expedited_handoff_days !== undefined) {
+    const n = Math.round(Number(body.expedited_handoff_days));
+    cfg.expedited_handoff_days = Number.isFinite(n) && n >= 0 && n <= 30 ? n : 0;
   }
   const endpoint = String(body.endpoint_url ?? '').trim() || null;
   const enabled = body.enabled ? 1 : 0;
@@ -75,9 +80,14 @@ function outboundKey(row) {
   return row?.api_key || '';
 }
 
-async function handoffDays(orgId, caseType, db = pool) {
+async function handoffDays(orgId, caseType, isSerious = false, db = pool) {
   const type = caseType === 'PC' ? 'quality_system' : 'safety_system';
-  return (await getTargets(orgId, db)).find(t => t.type === type)?.handoff_days ?? DEFAULT_HANDOFF_DAYS;
+  const target = (await getTargets(orgId, db)).find(t => t.type === type);
+  if (!target) return DEFAULT_HANDOFF_DAYS;
+  if (isSerious && Number.isFinite(Number(target.expedited_handoff_days))) {
+    return Number(target.expedited_handoff_days);
+  }
+  return target.handoff_days ?? DEFAULT_HANDOFF_DAYS;
 }
 
 module.exports = { TARGETS, DEFAULT_HANDOFF_DAYS, getTargets, saveTarget, outboundKey, handoffDays };

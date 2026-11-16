@@ -31,6 +31,7 @@ const PC_VERSION_TABLES = ['case_pc_general', 'case_pc_patient_info', 'case_pc_p
 const { auditChanges, versionCase } = require('../services/componentAudit');
 const { writeCaseAudit } = require('../services/caseHelpers');
 const { forwardErrors } = require('../middleware/errorHandler');
+const { calculateFarClock, add3WorkingDays } = require('../services/haClockService');
 
 // MIPM-169: every PC change goes to the case audit trail, field by field.
 async function audit(req, versionId, section, before, after, action = 'PC_UPDATED') {
@@ -250,16 +251,27 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
       date_of_complaint, date_received, severity, root_cause,
       additional_info, additional_info_general,
       reply_date, reply_summary, suspected_counterfeit, device_involved, device_malfunction,
+      is_patient_harm, is_far_reportable, far_status, far_notes, far_submission_date,
     } = req.body;
     // MI and PC review (migration 177): the reply to the complainant (21 CFR
     // 211.198(b)(1)), suspected counterfeit or tampering, and whether a device
     // part was involved, with its malfunction answer only when it was.
     const deviceInvolved = device_involved ? 1 : 0;
+    const isPatientHarm = is_patient_harm ? 1 : 0;
+    const isFarReportable = (is_far_reportable || isPatientHarm) ? 1 : 0;
+    const farStatus = far_status || (isFarReportable ? 'pending' : 'not_required');
+    let farDueDate = req.body.far_due_date || null;
+    if (isFarReportable && !farDueDate) {
+      const recDate = date_received ? new Date(date_received) : new Date();
+      farDueDate = add3WorkingDays(recDate);
+    }
+
     await pool.execute(
       `INSERT INTO case_pc_general
         (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, root_cause, additional_info,
-         reply_date, reply_summary, suspected_counterfeit, device_involved, device_malfunction)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         reply_date, reply_summary, suspected_counterfeit, device_involved, device_malfunction,
+         is_patient_harm, is_far_reportable, far_due_date, far_status, far_submission_date, far_notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         complaint_description = VALUES(complaint_description),
         pc_status = VALUES(pc_status),
@@ -272,12 +284,19 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
         additional_info = VALUES(additional_info),
         reply_date = VALUES(reply_date), reply_summary = VALUES(reply_summary),
         suspected_counterfeit = VALUES(suspected_counterfeit), device_involved = VALUES(device_involved),
-        device_malfunction = VALUES(device_malfunction)`,
+        device_malfunction = VALUES(device_malfunction),
+        is_patient_harm = VALUES(is_patient_harm),
+        is_far_reportable = VALUES(is_far_reportable),
+        far_due_date = VALUES(far_due_date),
+        far_status = VALUES(far_status),
+        far_submission_date = VALUES(far_submission_date),
+        far_notes = VALUES(far_notes)`,
       [req.params.versionId, complaint_description || null, pc_status || null,
        pc_category || null, pc_classification || null,
        date_of_complaint || null, date_received || null, severity || null, root_cause || null, additional_info_general ?? additional_info ?? null,
        reply_date || null, reply_summary || null, suspected_counterfeit ? 1 : 0, deviceInvolved,
-       deviceInvolved && device_malfunction ? String(device_malfunction).slice(0, 10) : null]
+       deviceInvolved && device_malfunction ? String(device_malfunction).slice(0, 10) : null,
+       isPatientHarm, isFarReportable, farDueDate, farStatus, far_submission_date || null, far_notes || null]
     );
     // A suspected counterfeit is urgent: illegitimate product is notified to FDA
     // within 24 hours of the determination (DSCSA). The case moves to Urgent once.
@@ -288,12 +307,28 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
         await writeCaseAudit(c.case_id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'Priority (suspected counterfeit or tampering)', c.priority || null, 'urgent');
       }
     }
+    // CF-07: Patient harm audit trail
+    if (isPatientHarm && !Number(before?.is_patient_harm)) {
+      const [[c]] = await pool.execute('SELECT v.case_id FROM case_pc_versions v WHERE v.id = ?', [req.params.versionId]);
+      if (c) {
+        await writeCaseAudit(c.case_id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'Patient Harm (3-Day FDA FAR Triggered)', 'No', 'Yes');
+      }
+    }
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]
     );
     await audit(req, req.params.versionId, 'general', before, row);
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
+// GET /api/cases/:id/pc/far-clock — 3-Day FDA Field Alert Report countdown SLA (CF-07)
+router.get('/cases/:id/pc/far-clock', authenticate, async (req, res) => {
+  try {
+    if (!await verifyCaseOrg(req.params.id, req)) return res.status(403).json({ error: 'Access denied' });
+    const clock = await calculateFarClock({ orgId: req.user.orgId, caseId: req.params.id });
+    res.json(clock || { is_far_reportable: false, is_patient_harm: false, status: 'not_required' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── TAB: PATIENT INFO ────────────────────────────────────────────────────────

@@ -28,6 +28,8 @@ router.get('/mi/tabs/:tabId/classification', authenticate, async (req, res) => {
               t.promo_review_status, t.promo_review_assigned_to,
               t.promo_review_requested_at, t.promo_review_decided_at,
               t.promo_review_decided_by, t.promo_review_notes,
+              t.commercial_clearance_status, t.commercial_clearance_by,
+              t.commercial_clearance_at, t.commercial_clearance_notes,
               c.org_id
          FROM case_mi t
          JOIN cases c ON c.id = t.case_id
@@ -49,17 +51,26 @@ router.put('/mi/tabs/:tabId/classification', authenticate, async (req, res) => {
          JOIN cases c ON c.id = t.case_id
           SET t.is_off_label = COALESCE(?, t.is_off_label),
               t.is_solicited = COALESCE(?, t.is_solicited),
-              t.off_label_indication = COALESCE(?, t.off_label_indication)
+              t.off_label_indication = COALESCE(?, t.off_label_indication),
+              t.commercial_clearance_status = CASE 
+                WHEN (COALESCE(?, t.is_off_label) = 1 AND COALESCE(?, t.is_solicited) = 1) 
+                  THEN (CASE WHEN t.commercial_clearance_status = 'cleared' THEN 'cleared' ELSE 'pending' END)
+                ELSE 'not_required' 
+              END
         WHERE t.id = ? AND ${orgClause}`,
       globalScope ? [
         is_off_label == null ? null : (is_off_label ? 1 : 0),
         is_solicited == null ? null : (is_solicited ? 1 : 0),
         off_label_indication ?? null,
+        is_off_label == null ? null : (is_off_label ? 1 : 0),
+        is_solicited == null ? null : (is_solicited ? 1 : 0),
         req.params.tabId,
       ] : [
         is_off_label == null ? null : (is_off_label ? 1 : 0),
         is_solicited == null ? null : (is_solicited ? 1 : 0),
         off_label_indication ?? null,
+        is_off_label == null ? null : (is_off_label ? 1 : 0),
+        is_solicited == null ? null : (is_solicited ? 1 : 0),
         req.params.tabId, req.user.orgId,
       ]
     );
@@ -97,17 +108,22 @@ router.post('/mi/tabs/:tabId/promo-review/decide', authenticate, requireRole(...
     if (!['approved', 'rejected'].includes(decision)) {
       return res.status(400).json({ error: 'decision must be approved or rejected' });
     }
+    const clearanceStatus = decision === 'approved' ? 'cleared' : 'rejected';
     const [result] = await pool.execute(
       `UPDATE case_mi t
          JOIN cases c ON c.id = t.case_id
           SET t.promo_review_status = ?,
               t.promo_review_decided_at = NOW(),
               t.promo_review_decided_by = ?,
-              t.promo_review_notes = ?
+              t.promo_review_notes = ?,
+              t.commercial_clearance_status = ?,
+              t.commercial_clearance_by = ?,
+              t.commercial_clearance_at = NOW(),
+              t.commercial_clearance_notes = ?
         WHERE t.id = ? AND ${orgClause}`,
       globalScope
-        ? [decision, req.user.userId, notes || null, req.params.tabId]
-        : [decision, req.user.userId, notes || null, req.params.tabId, req.user.orgId]
+        ? [decision, req.user.userId, notes || null, clearanceStatus, req.user.userId, notes || null, req.params.tabId]
+        : [decision, req.user.userId, notes || null, clearanceStatus, req.user.userId, notes || null, req.params.tabId, req.user.orgId]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });

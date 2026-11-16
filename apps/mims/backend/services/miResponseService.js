@@ -160,10 +160,34 @@ async function buildResponsePackage(req, caseId, payload = {}) {
     }
   }
 
+  const settings = await getSettings(scopedCase.org_id);
+
   // Resolve documents. MIPM-186: only published documents go out — this read
   // 'Approved', so published documents were refused and unreleased ones were sent.
-  const selectedDocumentIds = uniquePositiveInts(payload.selected_document_ids || payload.document_ids || []);
+  let selectedDocumentIds = uniquePositiveInts(payload.selected_document_ids || payload.document_ids || []);
   const selectedModuleIds   = uniquePositiveInts(payload.selected_module_ids   || payload.module_ids   || []);
+
+  // Regulatory Gate: When an MI inquiry is off-label and require_pi_offlabel is enabled,
+  // ensure the active Prescribing Information document is automatically bound (locked enclosure)
+  let autoAttachedPiId = null;
+  if (miTab?.is_off_label && settings.require_pi_offlabel) {
+    const [piRows] = await pool.execute(
+      `SELECT d.id FROM cm_documents d INNER JOIN cm_folders f ON f.id = d.folder_id
+        WHERE (? = 1 OR f.org_id = ?)
+          AND d.status = 'Published'
+          AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
+          AND (d.activation_date IS NULL OR d.activation_date <= CURDATE())
+          AND (d.document_category = 'Prescribing Information' OR d.doc_type = 'Prescribing Information' OR d.name LIKE '%Prescribing Information%')
+        ORDER BY CASE WHEN d.product_id = ? THEN 0 WHEN d.product_id IS NULL THEN 1 ELSE 2 END, d.id DESC LIMIT 1`,
+      [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, productId || 0]
+    );
+    if (piRows.length) {
+      autoAttachedPiId = piRows[0].id;
+      if (!selectedDocumentIds.includes(autoAttachedPiId)) {
+        selectedDocumentIds.push(autoAttachedPiId);
+      }
+    }
+  }
 
   let selectedDocuments = [];
   if (selectedDocumentIds.length) {
@@ -273,7 +297,6 @@ async function buildResponsePackage(req, caseId, payload = {}) {
   // The organisation's statements (MI Response Settings): the off-label
   // statement on an answer about an unapproved use, and the closing statement on
   // every answer. Plain text from the settings screen, merge fields allowed.
-  const settings = await getSettings(scopedCase.org_id);
   const statementData = { ...mergeData, product_name: mergeData.product_name || 'This product' };
   const asHtml = (text) => escapeHtml(applyMergeFields(String(text), statementData)).replace(/\n/g, '<br/>');
   const statementBlocks = [];
@@ -303,6 +326,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
       id: doc.id, doc_id: doc.doc_id, name: doc.name, doc_type: doc.doc_type,
       response_doc_type: doc.response_doc_type, file_name: doc.file_name,
       file_mime: doc.file_mime, language: doc.language, send_as_pdf: doc.send_as_pdf ? 1 : 0,
+      is_locked_enclosure: doc.id === autoAttachedPiId,
     })),
     selected_modules: selectedModules.map((mod) => ({
       id: mod.id, module_id: mod.module_id, name: mod.name, module_type: mod.module_type,

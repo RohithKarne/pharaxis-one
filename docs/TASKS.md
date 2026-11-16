@@ -186,8 +186,142 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 5 | Push and open the pull request | Varun | ⏳ Rohith's word |
 | 6 | After merge: one walk of everything from the access review on the shared dev copy, then Rohith's sign-off | Kiranmai, Rohith | ⏳ |
 
+## Now — Full QA verification of MIMS report module (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Audit existing database data & verify baseline data availability across all 20 library reports | Kiranmai, Saad | ✅ |
+| 2 | Seed realistic edge-case records for zero-count scenarios (duplicates, ICSR errors, overdue safety hand-offs) | Kiranmai, John | ✅ |
+| 3 | Automated programmatic data reconciliation: write and run comprehensive audit script comparing raw SQL tables to all 20 report datasets | Kiranmai, Varun | ✅ |
+| 4 | Verify custom report definitions, dashboards (Operations, Compliance Watch), and favourites lifecycle | Kiranmai, Saad | ✅ |
+| 5 | Verify schedules, timezone handling, run history logging, and module configuration | Kiranmai, Varun | ✅ |
+| 6 | Remediate any defects, query inconsistencies, or edge-case bugs found during the audit | Varun, Kiranmai | ✅ |
+| 7 | Walk every report, dashboard, schedule, history, and settings tab on the live browser across Admin and Operator roles, verifying UI filters and CSV exports | Kiranmai, Saad, John | ✅ |
+| 8 | Compile comprehensive final QA verification report with clinical and compliance sign-offs | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
+## Now — Reporting Module Enhancements: REP-1 & REP-4 (locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Backend: Build Executive PDF generation engine `reportPdfService.js` with landscape layout, audit blocks, metadata, and pagination | Kiranmai, Varun | ✅ |
+| 2 | Backend: Wire PDF export into `POST /reports/module/definitions/:id/export` with GxP audit trail logging (`EXPORT_PDF`) | Kiranmai, Saad | ✅ |
+| 3 | Frontend: Add "Export PDF" button to `ReportFilterBar.jsx` and wire PDF blob download in `ReportsPage.jsx` | Kiranmai | ✅ |
+| 4 | Frontend: Build in-context Case Drill-Through Drawer in `ReportsPage.jsx` for non-disruptive case inspection | Kiranmai, Saad | ✅ |
+| 5 | Automated Verification: Test PDF generation and Case Drawer on real browser via Playwright, verify PDF file on disk, capture screenshots | Kiranmai, John | ✅ |
+| 6 | Review & Sign-off: Record completed work in TASKS.md and PROGRESS.md | Tim, Varun, Saad, John | ✅ |
+
+## Now — Full QA verification of MIMS content module (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Audit database schema, existing content records & admin data mappings (document types, folders, picklists, settings) | Kiranmai, Saad | ✅ |
+| 2 | Seed realistic edge-case records for zero-count / critical test scenarios (monographs, modules, FAQs, response templates, expired evidence, pending reviews) | Kiranmai, John | ✅ |
+| 3 | Automated programmatic data reconciliation: write and run comprehensive audit script comparing raw SQL tables to all CM API endpoints and admin feeds | Kiranmai, Varun | ✅ |
+| 4 | Verify authoring workflows, concurrency checkout locks, and modular assembly cache invalidation | Kiranmai, Varun | ✅ |
+| 5 | Verify review cycles, independent approver gate, electronic signature compliance, and 21 CFR Part 11 audit trails | Kiranmai, Daniel, Saad | ✅ |
+| 6 | Verify downstream delivery: Browse Content catalog search and Case MI response letter builder template merging | Kiranmai, Meera | ✅ |
+| 7 | Remediate any defects, query inconsistencies, broken logic, or edge-case bugs found during the audit | Varun, Kiranmai | ✅ |
+| 8 | Walk every content screen, modal, and export on the live browser across Author, Reviewer, and Admin roles | Kiranmai, Saad, John | ✅ |
+| 9 | Compile comprehensive final QA verification report with clinical, regulatory, and technology sign-offs | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
+## Now — MIMS Content Module Enhancements (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Migration 196: Baseline seed migration for CM picklists, review configs, default folder permissions, and organization alert settings | Kiranmai, Varun | ✅ |
+| 2 | Auto-Attach Prescribing Information: Backend & frontend auto-binding and locking of active PI document on off-label inquiries in MI Response Builder | Kiranmai, John | ✅ |
+| 3 | Version Increment Rationale Modal: Authoring check-in modal enforcing Major vs Minor classification with predefined clinical justification for 21 CFR Part 11 | Kiranmai, Saad | ✅ |
+| 4 | Live Template Token Validator: Real-time syntax highlighting and dictionary validation of merge fields ({{tokens}}) in Template Editor | Kiranmai, Meera | ✅ |
+| 5 | GxP Watermarked PDF Rendition: Server-side PDF export with embedded approval signature block and release watermark | Kiranmai, Daniel | ✅ |
+| 6 | Automated test suite verification for all 5 enhancements | Kiranmai, Varun | ✅ |
+| 7 | Walk enhanced workflows, off-label PI auto-attachment, version modal, and PDF export on live browser | Kiranmai, Saad, John | ✅ |
+| 8 | Document in PROGRESS.md and compile final completion report with multi-disciplinary sign-offs | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
+## Now — Full QA verification of MIMS admin module (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Audit database tables and active admin configuration endpoints across all 11 tabs and 35 panels for Calder and Vanaja | Kiranmai, Saad | ✅ |
+| 2 | Programmatic reconciliation: audit script comparing admin config tables to case data, content items, and reports | Kiranmai, Varun | ✅ |
+| 3 | Security & Access verification: users, group security, sign-in & security (2FA/SSO), company login, and tenant boundaries | Kiranmai, Saad | ✅ |
+| 4 | Forms & Fields verification: Case Form Fields, Case Numbering, smart fields, grid templates, and dynamic case form rendering | Kiranmai, Saad | ✅ |
+| 5 | Workflow, Rules & Medical/Safety verification: workflow engines, CAPA, change approvals, MI response settings, safety transmissions, lot master | John, Meera, Kiranmai | ✅ |
+| 6 | Data Protection, Compliance & Platform Integrations: DPPR rules, PII redaction, routing rules, email accounts, API clients, parameters | Varun, Saad, Kiranmai | ✅ |
+| 7 | Remediate any defects, broken logic, query mismatches, or UI errors found during the audit | Varun, Kiranmai | ✅ |
+| 8 | Walk all 11 admin tabs on the real browser across Org Admin and Platform Admin roles, testing happy and failing paths | Kiranmai, Saad, John | ✅ |
+| 9 | Compile comprehensive final QA verification report with clinical, regulatory, and technology sign-offs | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
 ## Waiting on a decision
 
 | Item | Waiting for |
 |---|---|
 | Which cloud, and when | Rohith — unlocks a demo environment, deploys and real backups |
+
+## Now — Full QA verification of MIMS case form complete module (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Audit database schema, field setup, picklists, case numbering, and cut-list configuration across Calder and Vanaja | Kiranmai, Saad | ✅ |
+| 2 | Automated programmatic audit script: compare case form field setup to case tables, required fields validator, and cut list | Kiranmai, Varun | ✅ |
+| 3 | Test case creation and data validation across all case types: MI, AE, PC, and multi-type inquiries | Kiranmai, John | ✅ |
+| 4 | Verify multi-tenant admin isolation (Calder vs Vanaja): custom labels, required toggles, section visibility | Kiranmai, Saad | ✅ |
+| 5 | Verify clinical validation logic: E2B(R3) four-factor criteria, suspect product binding, and MI safety screening gate | John, Meera, Kiranmai | ✅ |
+| 6 | Verify cut-list behavior: cut fields hidden on new cases, preserved and rendered on historical cases | Kiranmai, Saad | ✅ |
+| 7 | Remediate any defects, query inconsistencies, broken logic, or edge-case bugs found during the audit | Varun, Kiranmai | ✅ |
+| 8 | Walk every case form tab and screen on the live browser across Admin and Agent roles, verifying happy and failing paths | Kiranmai, Saad, John | ✅ |
+| 9 | Compile comprehensive final QA verification report with clinical, compliance, and technology sign-offs | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
+## Now — Case form upgrade Drop 1: Safety & Compliance Core (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Migration 195: case_relationships table, E2B seriousness criteria columns on case_ae_events/versions, and dechallenge/rechallenge columns on case_ae_events | Kiranmai, Varun | ✅ |
+| 2 | Backend CF-01: Seriousness evaluation and 15-day expedited regulatory clock calculation in caseAE.js | Kiranmai | ✅ |
+| 3 | Backend CF-02: Split & Link Case API (POST /api/cases/:id/split) with PV queue routing & child case cloning | Kiranmai, Saad | ✅ |
+| 4 | Backend CF-04: Structured dechallenge/rechallenge and lowercase ENUM payload normalizer in caseAE.js | Kiranmai, John | ✅ |
+| 5 | Frontend CF-01: Seriousness 6-factor checklist & visual 15-day countdown SLA badge on AE header/tab | Kiranmai | ✅ |
+| 6 | Frontend CF-02: "Split Case" modal with selective field cloning and PV queue routing in Case Header | Kiranmai, Saad | ✅ |
+| 7 | Frontend CF-04: Structured dechallenge/rechallenge dropdowns and pregnancy exposure fields in AE tab | Kiranmai, John | ✅ |
+| 8 | Walk upgraded case forms, split-case flow, and regulatory clock on live browser across MI and AE cases | Kiranmai, Saad, John | ✅ |
+| 9 | Review, document in PROGRESS.md, and compile completion report with persona sign-offs | Tim, Varun, Saad, John, Kiranmai | ✅ |
+
+## Now — Case form upgrade Drop 2: Clinical Intake Intelligence (locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Migration 198: Add `screening_override_rationale` and `safety_triggers_detected` columns to `case_mi` | Kiranmai, Varun | ✅ |
+| 2 | Backend CF-03: Real-Time E2B(R3) 4-Factor Gate at transmission time (`POST /cases/:id/ae-transmissions`) | Kiranmai, Saad | ✅ |
+| 3 | Backend CF-05: AI / Clinical Safety Term Interception dictionary scanner and override validator in `caseMI.js` | Kiranmai, John | ✅ |
+| 4 | Frontend CF-03: Live 4-factor validity check and hard transmission gate in `CaseAETab.jsx` | Kiranmai | ✅ |
+| 5 | Frontend CF-05: Real-time clinical trigger detection banner & override rationale field in `CaseMITab.jsx` | Kiranmai, Meera | ✅ |
+| 6 | Automated Verification: Test 4-factor gating and safety term override on real browser via Playwright with screenshots | Kiranmai, John | ✅ |
+| 7 | Review, document in PROGRESS.md, and compile completion report with persona sign-offs | Tim, Varun, Saad, John, Kiranmai | ✅ |
+
+## Now — Case form upgrade Drop 3: Regulatory Safeguards & Quality-Safety Fusion (locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Migration 199: Add commercial clearance columns to `case_mi` and patient harm / 3-day FAR columns to `case_pc_general` | Kiranmai, Varun | ✅ |
+| 2 | Backend CF-06: Hard-block response dispatch for solicited off-label inquiries in `cases.js` and `miSendCheck.js` without Medical Director clearance | Kiranmai, Saad | ✅ |
+| 3 | Backend CF-07: 3-Day FDA FAR clock calculation engine (72h with business-day awareness) in `haClockService.js` and `casePC.js` | Kiranmai, John | ✅ |
+| 4 | Frontend CF-06: Off-label solicited commercial gating alert, clearance review action in `MiApprovalPanel.jsx`, and builder lockout | Kiranmai, Saad | ✅ |
+| 5 | Frontend CF-07: Patient harm toggle, 3-Day FAR countdown clock badge, and AE split/link prompt in `PCTabPanel.jsx` / `CasePCTab.jsx` | Kiranmai, John | ✅ |
+| 6 | Automated Verification: End-to-end browser walk via Playwright validating CF-06 commercial gating and CF-07 FAR clock with screenshots | Kiranmai, John | ✅ |
+| 7 | Review, document in PROGRESS.md, and compile completion report with persona sign-offs | Tim, Varun, Saad, John, Kiranmai | ✅ |
+
+## Now — MIMS Admin Clinical Governance & Regulatory Capabilities Remediation (no Jira; locked by Rohith 2026-11-16)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | Ticket 1: Activate two-signer rule for off-label responses in Calder Therapeutics (`mi_two_signer_rules`) | Kiranmai, Saad | ✅ |
+| 2 | Ticket 2: Tiered transmission SLAs (0d expedited for serious AE, 1d standard) in backend services and `TransmissionSetup.jsx` | Kiranmai, Varun | ✅ |
+| 3 | Ticket 3: Seed real `lot_master` batches for Calder products linked to `field_action_records` recall entry (`COS-2025-442C`) | Kiranmai, John | ✅ |
+| 4 | Ticket 4: Standardize MedWatch safety contact closing statement and `require_pi_offlabel` in `mi_response_settings` | Kiranmai, John | ✅ |
+| 5 | Migration 197: Create `product_regional_labels` table, `emergency_safety_contacts` table, and `enforce_safety_screening_gate` column | Kiranmai, Varun | ✅ |
+| 6 | Ticket 5: Build Regional Product Labeling UI (`RegionalLabelsAdmin.jsx`) and backend CRUD endpoints in `productDictionary.js` | Kiranmai, John | ✅ |
+| 7 | Ticket 6: Build Emergency Safety Directory UI (`EmergencySafetyAdmin.jsx`) and backend CRUD endpoints in `emergencySafetyContacts.js` | Kiranmai, Meera | ✅ |
+| 8 | Ticket 7: Integrate `enforce_safety_screening_gate` into `miResponseSettings.js` backend and UI toggle in `MiResponseSettings.jsx` | Kiranmai, Saad | ✅ |
+| 9 | Verify end-to-end with 29 automated tests, live browser walk on Chrome (0 errors, 5 screenshots), and compile final report | Tim, Saad, John, Varun, Kiranmai | ✅ |
+
+
+

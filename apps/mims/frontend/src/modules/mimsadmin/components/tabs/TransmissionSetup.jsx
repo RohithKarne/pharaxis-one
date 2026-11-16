@@ -18,7 +18,13 @@ const hint = { fontSize: 12, color: 'var(--text-muted, #6b7280)', margin: '4px 0
 const input = { width: '100%', padding: '7px 9px', border: '1px solid var(--border, #d1d5db)', borderRadius: 2, font: 'inherit' }
 
 function TargetCard({ target, onSaved }) {
-  const [form, setForm] = useState({ endpoint_url: target.endpoint_url, enabled: target.enabled, handoff_days: target.handoff_days, api_key: '' })
+  const [form, setForm] = useState({
+    endpoint_url: target.endpoint_url,
+    enabled: target.enabled,
+    handoff_days: target.handoff_days,
+    expedited_handoff_days: target.expedited_handoff_days ?? (target.type === 'safety_system' ? 0 : 1),
+    api_key: ''
+  })
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -49,9 +55,16 @@ function TargetCard({ target, onSaved }) {
       <label style={label} htmlFor={`${target.type}-key`}>Key</label>
       <input id={`${target.type}-key`} type="password" style={input} value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder={target.has_key ? 'A key is saved — type a new one to replace it' : 'No key saved'} autoComplete="new-password" />
       <p style={hint}>Sent as the x-api-key header. Kept encrypted and never shown again.</p>
-      <label style={label} htmlFor={`${target.type}-days`}>Working days to hand a case off</label>
+      <label style={label} htmlFor={`${target.type}-days`}>Working days to hand a case off (Standard SLA)</label>
       <input id={`${target.type}-days`} type="number" min="0" max="30" style={{ ...input, width: 90 }} value={form.handoff_days} onChange={e => set('handoff_days', e.target.value)} />
       <p style={hint}>Counted from the awareness date (AE) or Date Received (PC). The Transmission screen shows the due date and marks a late hand-off.</p>
+      {target.type === 'safety_system' && (
+        <>
+          <label style={label} htmlFor={`${target.type}-expedited-days`}>Expedited SLA for Serious AEs (working days)</label>
+          <input id={`${target.type}-expedited-days`} type="number" min="0" max="15" style={{ ...input, width: 90 }} value={form.expedited_handoff_days ?? 0} onChange={e => set('expedited_handoff_days', e.target.value)} />
+          <p style={hint}>For serious adverse events requiring immediate safety handoff (0 = same-day awareness handoff).</p>
+        </>
+      )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginTop: 10 }}>
         <input type="checkbox" checked={!!form.enabled} onChange={e => set('enabled', e.target.checked)} /> On — {target.case_type} cases can be transmitted here
       </label>

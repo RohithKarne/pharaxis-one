@@ -23,6 +23,24 @@ const bcrypt = require('bcrypt');
 // the screen but nothing ever read a template of that type.
 const TEMPLATE_TYPES = ['Response', 'Acknowledgment', 'Correspondence', 'Email'];
 
+const VALID_TOKEN_KEYS = new Set([
+  ...MERGE_FIELDS.map((f) => f.key),
+  'contact_name',
+  'contact_email',
+  'inquiry_text',
+]);
+
+function extractAndValidateTokens(text) {
+  if (!text) return { valid: true, tokens: [], invalid: [] };
+  const matches = [...String(text).matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)].map((m) => m[1]);
+  const invalid = matches.filter((k) => !VALID_TOKEN_KEYS.has(k));
+  return {
+    valid: invalid.length === 0,
+    tokens: [...new Set(matches)],
+    invalid: [...new Set(invalid)],
+  };
+}
+
 // A language code as stored on content (en, fr, de …); English when not given.
 function languageCode(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -281,6 +299,14 @@ router.post('/templates', authenticate, async (req, res) => {
     if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : null);
 
+    const tokenCheck = extractAndValidateTokens(`${subject || ''} ${resolvedBodyHtml || ''}`);
+    if (!tokenCheck.valid) {
+      return res.status(400).json({
+        error: `Unknown template merge field(s): ${tokenCheck.invalid.map((t) => `{{${t}}}`).join(', ')}. Please use valid fields from the editor menu.`,
+        invalid_tokens: tokenCheck.invalid,
+      });
+    }
+
     // New templates always start as Draft — they must pass through approve →
     // publish before they can be used in a response. Status is never client-set.
     const [result] = await pool.execute(
@@ -326,6 +352,18 @@ router.get('/templates/case-search', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/cm/templates/validate-tokens — validate merge field tokens in subject and body
+router.post('/templates/validate-tokens', authenticate, (req, res) => {
+  const { text, html, subject } = req.body || {};
+  const combined = `${subject || ''} ${text || ''} ${html || ''}`;
+  const result = extractAndValidateTokens(combined);
+  res.json({
+    valid: result.valid,
+    tokens: result.tokens,
+    invalid: result.invalid,
+  });
+});
+
 // GET /api/cm/templates/:id — get template
 router.get('/templates/:id', authenticate, async (req, res) => {
   try {
@@ -361,6 +399,14 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     const resolvedName = String(name ?? existing.name ?? '').trim();
     if (!resolvedName) return res.status(400).json({ error: 'name is required.' });
     const resolvedSubject = subject !== undefined ? (subject || null) : existing.subject;
+
+    const tokenCheck = extractAndValidateTokens(`${resolvedSubject || ''} ${resolvedBodyHtml || ''}`);
+    if (!tokenCheck.valid) {
+      return res.status(400).json({
+        error: `Unknown template merge field(s): ${tokenCheck.invalid.map((t) => `{{${t}}}`).join(', ')}. Please use valid fields from the editor menu.`,
+        invalid_tokens: tokenCheck.invalid,
+      });
+    }
 
     // A published template stays in use while it changes: its next version is
     // drafted through Revise. Editing it here sent it back to Draft at once and

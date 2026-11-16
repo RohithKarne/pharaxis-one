@@ -162,7 +162,52 @@ export default function AETabPanel({
             locked={locked}
           />}
           {/* Asked only when Pregnant is Yes (case form clean-up PR 3). */}
-          {Number(d.pregnant) === 1 && selectRow('Pregnancy Trimester', 'pregnancy_trimester', 'AE — Patient Information')}
+          {Number(d.pregnant) === 1 && (
+            <>
+              {selectRow('Pregnancy Trimester', 'pregnancy_trimester', 'AE — Patient Information')}
+              <div className="cf-form-field">
+                <label>Pregnancy Outcome</label>
+                <select
+                  value={d.pregnancy_outcome || ''}
+                  disabled={locked}
+                  onChange={e => set('pregnancy_outcome', e.target.value)}
+                >
+                  <option value="">— Select Outcome —</option>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="live_birth">Live Birth</option>
+                  <option value="premature_birth">Premature Birth</option>
+                  <option value="spontaneous_abortion">Spontaneous Abortion / Miscarriage</option>
+                  <option value="elective_termination">Elective Termination</option>
+                  <option value="congenital_anomaly">Congenital Anomaly</option>
+                  <option value="stillbirth">Stillbirth</option>
+                  <option value="ectopic">Ectopic Pregnancy</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </div>
+              <div className="cf-form-field">
+                <label>Gestational Age (weeks)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="45"
+                  value={d.gestational_age_weeks ?? ''}
+                  disabled={locked}
+                  onChange={e => set('gestational_age_weeks', e.target.value ? Number(e.target.value) : '')}
+                />
+              </div>
+            </>
+          )}
+          <div className="cf-form-field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginTop: 24 }}>
+              <input
+                type="checkbox"
+                checked={!!d.paternal_exposure}
+                disabled={locked}
+                onChange={e => set('paternal_exposure', e.target.checked ? 1 : 0)}
+              />
+              Paternal Drug Exposure
+            </label>
+          </div>
           {!pf('Patient Country').hidden && <PicklistRow
             label={labelText(pf('Patient Country'))}
             value={d.patient_country ?? ''}

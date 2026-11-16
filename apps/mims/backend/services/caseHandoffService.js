@@ -403,9 +403,16 @@ function isHandoffSend(h) {
   return String(h.status).toUpperCase() === 'SENT' && String(h.target_system || '') !== 'MI Email';
 }
 
-async function handoffDeadline({ orgId, caseId, caseType, awarenessDate, history }) {
+async function handoffDeadline({ orgId, caseId, caseType, awarenessDate, history, isSerious = null }) {
   if (!['AE', 'PC'].includes(caseType) || !awarenessDate) return null;
-  const days = await handoffDays(orgId, caseType);
+  let serious = !!isSerious;
+  if (isSerious === null && caseType === 'AE' && caseId) {
+    try {
+      const [[ver]] = await pool.execute('SELECT is_serious FROM case_ae_versions WHERE case_id = ? ORDER BY version_number DESC LIMIT 1', [caseId]);
+      serious = !!ver?.is_serious;
+    } catch (_) {}
+  }
+  const days = await handoffDays(orgId, caseType, serious);
   const due = addWorkingDays(awarenessDate, days);
   // An MI letter emailed on the case is written to the same trail ('MI Email',
   // 'Sent'); it is not the hand-off and must not stop the clock.

@@ -73,6 +73,7 @@ const {
 const { folderFilterSql } = require('../services/cmFolderAccess');
 const { needsTwoSigners } = require('../services/miApprovalService');
 const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
+const { makeLetterPdf } = require('../services/pdfExportService');
 const { auditChanges } = require('../services/componentAudit');
 const { forwardErrors } = require('../middleware/errorHandler');
 
@@ -1543,6 +1544,76 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
   }
 }));
 
+// Helper: Atomic Case Number Generator (internal)
+async function assignCaseNumberInternal(caseId, conn) {
+  const [[c]] = await conn.execute(
+    'SELECT * FROM cases WHERE id = ? FOR UPDATE',
+    [caseId]
+  );
+  if (!c) throw new Error('Case not found');
+  if (c.case_number) return c.case_number;
+
+  let [[cfg]] = await conn.execute(
+    'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
+    [c.org_id, c.case_type]
+  );
+  if (!cfg) {
+    [[cfg]] = await conn.execute(
+      'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
+      [c.org_id, 'ALL']
+    );
+  }
+  if (!cfg) {
+    await conn.execute(
+      `INSERT INTO case_number_config (org_id, case_type, prefix, \`separator\`, include_year, include_month, seq_length, current_seq)
+       VALUES (?, ?, ?, '-', 0, 0, 5, 0)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [c.org_id, c.case_type, c.case_type]
+    );
+    [[cfg]] = await conn.execute(
+      'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
+      [c.org_id, c.case_type]
+    );
+  }
+
+  let seq = (cfg.current_seq || 0) + 1;
+  const sepChar = cfg.separator || '-';
+  const seqLen = cfg.seq_length || 5;
+  const prefix = cfg.prefix || c.case_type;
+  let caseNumber = null;
+  for (let attempts = 0; attempts < 10000; attempts += 1) {
+    const padded = String(seq).padStart(seqLen, '0');
+    const parts = [prefix];
+    if (cfg.include_year) parts.push(new Date().getFullYear());
+    if (cfg.include_month) parts.push(String(new Date().getMonth() + 1).padStart(2, '0'));
+    parts.push(padded);
+    const candidate = parts.join(sepChar);
+
+    const [[dup]] = await conn.execute(
+      'SELECT id FROM cases WHERE org_id = ? AND case_number = ? LIMIT 1 FOR UPDATE',
+      [c.org_id, candidate]
+    );
+    if (!dup) {
+      caseNumber = candidate;
+      break;
+    }
+    seq += 1;
+  }
+  if (!caseNumber) {
+    throw new Error('Unable to generate unique case number.');
+  }
+
+  await conn.execute(
+    'UPDATE case_number_config SET current_seq = ? WHERE id = ?',
+    [seq, cfg.id]
+  );
+  await conn.execute(
+    'UPDATE cases SET case_number = ? WHERE id = ?',
+    [caseNumber, caseId]
+  );
+  return caseNumber;
+}
+
 // POST /api/cases/:id/assign-number — generate + lock case number on first Save
 // RAJEEV REVIEW: FOR UPDATE row-lock guarantees no two concurrent saves get the same sequence
 router.post('/cases/:id/assign-number', authenticate, forwardErrors(async (req, res) => {
@@ -1570,70 +1641,7 @@ router.post('/cases/:id/assign-number', authenticate, forwardErrors(async (req, 
       return res.json({ case_number: c.case_number });
     }
 
-    // Lock the number config row for this org + case_type (or ALL fallback)
-    let [[cfg]] = await conn.execute(
-      'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
-      [c.org_id, c.case_type]
-    );
-    if (!cfg) {
-      [[cfg]] = await conn.execute(
-        'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
-        [c.org_id, 'ALL']
-      );
-    }
-
-    // If no config exists at all, create a default per-case-type config row.
-    // This prevents repeated "MI-00001" when config is absent.
-    if (!cfg) {
-      await conn.execute(
-        `INSERT INTO case_number_config (org_id, case_type, prefix, \`separator\`, include_year, include_month, seq_length, current_seq)
-         VALUES (?, ?, ?, '-', 0, 0, 5, 0)
-         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-        [c.org_id, c.case_type, c.case_type]
-      );
-      [[cfg]] = await conn.execute(
-        'SELECT * FROM case_number_config WHERE org_id = ? AND case_type = ? FOR UPDATE',
-        [c.org_id, c.case_type]
-      );
-    }
-
-    // Generate next unique number for this org (guards against manual counter resets).
-    let seq      = (cfg.current_seq || 0) + 1;
-    const sepChar  = cfg.separator || '-';
-    const seqLen   = cfg.seq_length || 5;
-    const prefix   = cfg.prefix || c.case_type;
-    let caseNumber = null;
-    for (let attempts = 0; attempts < 10000; attempts += 1) {
-      const padded = String(seq).padStart(seqLen, '0');
-      const parts = [prefix];
-      if (cfg.include_year)  parts.push(new Date().getFullYear());
-      if (cfg.include_month) parts.push(String(new Date().getMonth() + 1).padStart(2, '0'));
-      parts.push(padded);
-      const candidate = parts.join(sepChar);
-
-      const [[dup]] = await conn.execute(
-        'SELECT id FROM cases WHERE org_id = ? AND case_number = ? LIMIT 1 FOR UPDATE',
-        [c.org_id, candidate]
-      );
-      if (!dup) {
-        caseNumber = candidate;
-        break;
-      }
-      seq += 1;
-    }
-    if (!caseNumber) {
-      throw new Error('Unable to generate unique case number.');
-    }
-
-    // Atomically update sequence counter + assign number
-    await conn.execute(
-      'UPDATE case_number_config SET current_seq = ? WHERE id = ?',
-      [seq, cfg.id]
-    );
-    await conn.execute(
-      'UPDATE cases SET case_number = ? WHERE id = ?',
-      [caseNumber, req.params.id]
-    );
+    const caseNumber = await assignCaseNumberInternal(req.params.id, conn);
 
     await conn.commit();
     logger.info({ case_id: req.params?.id, user_id: req.user?.userId, org_id: c.org_id }, 'Case number assigned');
@@ -1645,6 +1653,171 @@ router.post('/cases/:id/assign-number', authenticate, forwardErrors(async (req, 
       return res.status(409).json({ error: 'Case number conflict detected. Please retry assign number.' });
     }
     return res.status(500).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+}));
+
+// POST /api/cases/:id/split — CF-02: Split & Link Case Architecture (Rohith, 2026-11-16)
+router.post('/cases/:id/split', authenticate, forwardErrors(async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[parent]] = await conn.execute('SELECT * FROM cases WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (!parent) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Parent case not found' });
+    }
+    if (!hasGlobalAdminScope(req.user) && Number(parent.org_id) !== Number(req.user.orgId)) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const {
+      target_case_type,
+      reason = 'Clinical case split from parent inquiry',
+      description,
+      copy_contacts = true,
+      copy_patient = true,
+      copy_product = true,
+      assign_to_queue = true
+    } = req.body || {};
+
+    if (!['AE', 'PC', 'MI'].includes(target_case_type)) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'target_case_type must be AE, PC, or MI' });
+    }
+
+    // Determine initial status & owner
+    const childStatusId = await resolveDefaultWorkflowStateId(conn, parent.org_id);
+
+    // Decision 2: If splitting to AE, route to PV Triage Queue (owner = null) when assign_to_queue is true
+    const childOwnerId = (target_case_type === 'AE' && assign_to_queue) ? null : req.user.userId;
+    const childDesc = description || `Split from ${parent.case_number || 'Parent Case #' + parent.id}: ${parent.description || reason}`;
+
+    const [childInsert] = await conn.execute(
+      `INSERT INTO cases
+        (org_id, site_id, case_type, intake_channel, date_received, awareness_date,
+         status_id, created_by, case_owner_id, priority, description, internal_notes)
+       VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,
+      [parent.org_id, parent.site_id, target_case_type, parent.intake_channel || 'Web', parent.date_received || new Date(),
+       childStatusId, req.user.userId, childOwnerId, parent.priority || 'Normal', childDesc, `Split reason: ${reason}`]
+    );
+    const childCaseId = childInsert.insertId;
+
+    // Assign unique case number
+    const childCaseNumber = await assignCaseNumberInternal(childCaseId, conn);
+
+    // Link cases in case_links (reciprocal)
+    await conn.execute(
+      `INSERT INTO case_links (case_id, linked_case_id, link_type, created_by, notes)
+       VALUES (?, ?, 'split', ?, ?), (?, ?, 'split', ?, ?)`,
+      [parent.id, childCaseId, req.user.userId, reason,
+       childCaseId, parent.id, req.user.userId, reason]
+    );
+
+    // Hierarchical parenting in case_relationships
+    await conn.execute(
+      `INSERT INTO case_relationships (org_id, parent_case_id, child_case_id, relationship_type, created_by, notes)
+       VALUES (?, ?, ?, 'split', ?, ?)`,
+      [parent.org_id, parent.id, childCaseId, req.user.userId, reason]
+    );
+
+    // Copy contacts
+    if (copy_contacts) {
+      const [contacts] = await conn.execute('SELECT * FROM case_contacts WHERE case_id = ?', [parent.id]);
+      for (const ct of contacts) {
+        await conn.execute(
+          `INSERT INTO case_contacts
+            (case_id, contact_id, contact_role, do_not_update_master, is_primary,
+             first_name, last_name, contact_type, prefix, reporter_type,
+             source, consent_status, specialty, institution, country,
+             country_of_reporter, qualification, preferred_contact_method, language_preference,
+             phone, email, address)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [childCaseId, ct.contact_id ?? null, ct.contact_role ?? 'reporter', ct.do_not_update_master ? 1 : 0, ct.is_primary ? 1 : 0,
+           ct.first_name ?? null, ct.last_name ?? null, ct.contact_type ?? null, ct.prefix ?? null, ct.reporter_type ?? null,
+           ct.source ?? null, ct.consent_status ?? null, ct.specialty ?? null, ct.institution ?? null, ct.country ?? null,
+           ct.country_of_reporter ?? null, ct.qualification ?? null, ct.preferred_contact_method ?? null, ct.language_preference ?? null,
+           ct.phone ?? null, ct.email ?? null, ct.address ?? null]
+        );
+      }
+      const [[rep]] = await conn.execute('SELECT * FROM case_reporter WHERE case_id = ?', [parent.id]);
+      if (rep) {
+        await conn.execute(
+          `INSERT INTO case_reporter
+            (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [childCaseId, rep.first_name ?? null, rep.last_name ?? null, rep.email ?? null, rep.phone ?? null, rep.reporter_type ?? null, rep.country ?? null, rep.organisation ?? null]
+        );
+      }
+    }
+
+    // Copy patient
+    if (copy_patient) {
+      const [[pt]] = await conn.execute('SELECT * FROM case_patient WHERE case_id = ?', [parent.id]);
+      if (pt) {
+        await conn.execute(
+          `INSERT INTO case_patient (case_id, initials, age, age_unit, gender, weight_kg)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [childCaseId, pt.initials ?? null, pt.age ?? null, pt.age_unit || 'years', pt.gender ?? null, pt.weight_kg ?? null]
+        );
+      }
+    }
+
+    // Initialize version for AE or PC
+    if (target_case_type === 'AE') {
+      const [vRes] = await conn.execute(
+        `INSERT INTO case_ae_versions (case_id, version_number, status, created_by)
+         VALUES (?, 1, 'Open', ?)`,
+        [childCaseId, req.user?.userId ?? null]
+      );
+      const vId = vRes.insertId;
+      await conn.execute('INSERT INTO case_ae_general (version_id) VALUES (?)', [vId]);
+      if (copy_patient) {
+        const [[pt]] = await conn.execute('SELECT * FROM case_patient WHERE case_id = ?', [parent.id]);
+        if (pt) {
+          await conn.execute(
+            `INSERT INTO case_ae_patient_info (version_id, patient_initials, age, age_unit, sex, weight_kg)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [vId, pt.initials ?? null, pt.age ?? null, pt.age_unit || 'years', pt.gender ?? null, pt.weight_kg ?? null]
+          );
+        }
+      }
+    } else if (target_case_type === 'PC') {
+      const [vRes] = await conn.execute(
+        `INSERT INTO case_pc_versions (case_id, version_number, status, created_by)
+         VALUES (?, 1, 'Open', ?)`,
+        [childCaseId, req.user?.userId ?? null]
+      );
+      const vId = vRes.insertId;
+      await conn.execute('INSERT INTO case_pc_general (version_id, complaint_description) VALUES (?, ?)', [vId, childDesc]);
+    } else if (target_case_type === 'MI') {
+      await conn.execute(
+        `INSERT INTO case_mi (case_id, tab_index, question_summary) VALUES (?, 1, ?)`,
+        [childCaseId, childDesc]
+      );
+    }
+
+    // Write 21 CFR Part 11 audit records
+    await writeCaseAudit(parent.id, req.user.userId, req.user.email, 'CASE_SPLIT_PARENT', 'split_case', null, `Split created child case ${childCaseNumber} (${target_case_type})`, conn);
+    await writeCaseAudit(childCaseId, req.user.userId, req.user.email, 'CASE_SPLIT_CHILD', 'parent_case', null, `Created via split from ${parent.case_number || parent.id}`, conn);
+
+    await conn.commit();
+
+    res.status(201).json({
+      success: true,
+      parent_case_id: parent.id,
+      child_case_id: childCaseId,
+      child_case_number: childCaseNumber,
+      child_case_type: target_case_type,
+      message: `Case successfully split into linked ${target_case_type} case ${childCaseNumber}`
+    });
+  } catch (err) {
+    await conn.rollback();
+    logger.error({ err, route: '/api/cases/:id/split', case_id: req.params.id }, 'Split case failed');
+    res.status(err.status || 500).json({ error: err.message });
   } finally {
     conn.release();
   }
@@ -2274,7 +2447,7 @@ router.post('/cases/:id/links', authenticate, async (req, res) => {
     const source = await verifyCaseOrg(req.params.id, req);
     const target = await verifyCaseOrg(req.body?.linked_case_id, req);
     if (!source || !target) return res.status(403).json({ error: 'Access denied' });
-    const linkType = ['duplicate', 'related', 'follow_up', 'superseded_by'].includes(req.body?.link_type) ? req.body.link_type : 'related';
+    const linkType = ['duplicate', 'related', 'follow_up', 'superseded_by', 'split'].includes(req.body?.link_type) ? req.body.link_type : 'related';
     const [result] = await pool.execute(
       `INSERT INTO case_links (case_id, linked_case_id, link_type, created_by, notes)
        VALUES (?, ?, ?, ?, ?)
@@ -2410,6 +2583,20 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
     // What the builder needs to say about this answer (MI Response Settings):
     // an off-label MI must enclose the prescribing information when required.
     const settings = await getMiResponseSettings(scopedCase.org_id);
+    let autoAttachedPiId = null;
+    if (miTab?.is_off_label && settings.require_pi_offlabel) {
+      // Find the in-date published PI for this product, or general PI
+      const piDoc = documents.find((d) =>
+        (d.document_category === 'Prescribing Information' || d.doc_type === 'Prescribing Information' || /prescribing information/i.test(d.name)) &&
+        (productId ? d.product_id === productId : true)
+      ) || documents.find((d) =>
+        d.document_category === 'Prescribing Information' || d.doc_type === 'Prescribing Information' || /prescribing information/i.test(d.name)
+      );
+      if (piDoc) {
+        autoAttachedPiId = piDoc.id;
+      }
+    }
+
     // Response channels come from the organisation's Response Channel list, as
     // the MI screen's own channel does; the builder had its own fixed list.
     const [channelRows] = await pool.execute(
@@ -2422,6 +2609,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       response_rules: {
         off_label: !!miTab?.is_off_label,
         require_pi: !!miTab?.is_off_label && !!settings.require_pi_offlabel,
+        auto_attached_pi_id: autoAttachedPiId,
         offlabel_statement: miTab?.is_off_label ? settings.offlabel_statement : null,
         closing_statement: settings.closing_statement || null,
       },
@@ -2430,6 +2618,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
       templates,
       documents: documents.map((doc) => ({
         ...doc,
+        is_auto_attached_pi: doc.id === autoAttachedPiId,
         selected_modules: parseJsonSafe(doc.selected_modules, []),
         related: related.filter((r) => r.doc_id === doc.id).map((r) => ({ id: r.related_doc_id, relation_type: r.relation_type })),
       })),
@@ -2448,6 +2637,33 @@ router.post('/cases/:id/mi-response-builder/preview', authenticate, async (req, 
     res.json(pkg);
   } catch (err) {
     logger.error({ err }, 'POST /cases/:id/mi-response-builder/preview error');
+    res.status(err.statusCode || 500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+// POST /api/cases/:id/mi-response-builder/pdf — export GxP watermarked response letter PDF with 21 CFR Part 11 signature stamp
+router.post('/cases/:id/mi-response-builder/pdf', authenticate, async (req, res) => {
+  try {
+    const pkg = await buildResponsePackage(req, req.params.id, req.body || {});
+    const signatureBlock = {
+      signerName: req.user?.name || req.user?.email || 'Medical Reviewer',
+      signerEmail: req.user?.email || 'medical.affairs@pharaxis.com',
+      reason: req.body?.signature_reason || 'Approved for Medical Information Response Distribution',
+      timestamp: new Date().toISOString(),
+    };
+    const pdfResult = makeLetterPdf({
+      title: pkg.rendered_subject || 'Medical Information Response',
+      html: pkg.rendered_body_html || '',
+      header: 'CALDER THERAPEUTICS · MEDICAL INFORMATION SERVICES',
+      watermark: 'CONFIDENTIAL — GxP CONTROLLED MEDICAL RESPONSE',
+      footer: `Case ${pkg.case?.case_number || req.params.id} · Medical Information`,
+      signatureBlock,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="MI-Response-${pkg.case?.case_number || req.params.id}.pdf"`);
+    res.send(pdfResult.buffer);
+  } catch (err) {
+    logger.error({ err }, 'POST /cases/:id/mi-response-builder/pdf error');
     res.status(err.statusCode || 500).json({ error: err.message || 'Server error.' });
   }
 });
@@ -2538,6 +2754,20 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
     const finalResponseHtml = responsePackage?.rendered_body_html || req.body?.response_body_html || null;
     const finalSubject = responsePackage?.rendered_subject || req.body?.response_subject || null;
     if (!finalResponseText && !finalResponseHtml && !cm_document_id) return res.status(400).json({ error: 'response_text, response_body_html, template, or cm_document_id is required.' });
+
+    // CF-06: 21 CFR 312.7 Commercial Solicited Off-Label Gating (Decision 1A)
+    if (mi_tab_id && responseStatus !== 'DRAFT') {
+      const [[miTab]] = await pool.execute('SELECT is_off_label, is_solicited, promo_review_status, commercial_clearance_status FROM case_mi WHERE id = ?', [mi_tab_id]);
+      if (miTab && miTab.is_off_label && miTab.is_solicited) {
+        const isCleared = miTab.commercial_clearance_status === 'cleared' || miTab.promo_review_status === 'approved';
+        if (!isCleared) {
+          return res.status(422).json({
+            error: 'Response generation blocked: Inquiry is a Commercial Solicited Off-Label request. Medical Affairs Director clearance is mandatory under 21 CFR 312.7 before response can be released.',
+            code: 'SOLICITED_OFFLABEL_GATED'
+          });
+        }
+      }
+    }
 
     // Fetch CM doc name if provided
     let cm_document_name = null;
@@ -2657,6 +2887,20 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     }
     if (responseStatus === 'SENT' && existing.response_status !== 'APPROVED') {
       return res.status(400).json({ error: 'Response must be APPROVED before it can be SENT.' });
+    }
+
+    // CF-06: 21 CFR 312.7 Commercial Solicited Off-Label Gating (Decision 1A)
+    if (['READY', 'APPROVED', 'SENT'].includes(responseStatus) && existing.mi_tab_id) {
+      const [[miTab]] = await pool.execute('SELECT is_off_label, is_solicited, promo_review_status, commercial_clearance_status FROM case_mi WHERE id = ?', [existing.mi_tab_id]);
+      if (miTab && miTab.is_off_label && miTab.is_solicited) {
+        const isCleared = miTab.commercial_clearance_status === 'cleared' || miTab.promo_review_status === 'approved';
+        if (!isCleared) {
+          return res.status(422).json({
+            error: 'Status transition blocked: Inquiry is a Commercial Solicited Off-Label request. Medical Affairs Director clearance is mandatory under 21 CFR 312.7.',
+            code: 'SOLICITED_OFFLABEL_GATED'
+          });
+        }
+      }
     }
     // What the MI needs before its answer goes out (MI field review, 13 Oct
     // 2026): who asked, the product, the question, and the adverse event /
@@ -2965,6 +3209,17 @@ router.post('/cases/:id/ae-transmissions', authenticate, requireCapability('tran
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     if (await caseIsClosed(req.params.id)) return res.status(409).json({ error: 'This case is closed. Reopen it to start a hand-off.' });
+
+    // CF-03: Real-Time E2B(R3) 4-Factor Gate at transmission time (Decision 1A)
+    const { assess: assessValidity } = require('../services/caseValidityService');
+    const validity = await assessValidity({ orgId: req.user.orgId, caseId: req.params.id });
+    if (validity && !validity.is_valid) {
+      const missing = (validity.elements || []).filter(e => !e.satisfied).map(e => e.key).join(', ');
+      return res.status(400).json({
+        error: `Cannot transmit to PV: case lacks mandatory E2B(R3) criteria: ${missing}. Please complete these criteria before transmission.`,
+        missing_elements: missing
+      });
+    }
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
     const requestedPriority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;

@@ -266,10 +266,17 @@ export default function DocumentsSection({ token, user, initialSubTab = 'all' })
   useEffect(() => { if (subTab === 'checkedin') loadCheckedIn() }, [loadCheckedIn, subTab])
   useEffect(() => { if (subTab === 'checkedout') loadCheckedOut() }, [loadCheckedOut, subTab])
 
-  async function handleCheckIn(notes) {
+  async function handleCheckIn(checkInData) {
     setCheckInLoading(true)
     try {
-      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ notes: notes || undefined }) })
+      const payload = typeof checkInData === 'object' && checkInData !== null
+        ? checkInData
+        : { notes: checkInData || undefined }
+      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(payload)
+      })
       if (res.ok) { setCheckInDoc(null); loadDocs() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }

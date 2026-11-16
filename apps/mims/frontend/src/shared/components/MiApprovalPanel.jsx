@@ -86,6 +86,27 @@ function ClassificationCard({ miTabId, H, onChange }) {
     load(); onChange?.()
   }
 
+  async function decidePromoReview(decision) {
+    const notes = window.prompt(`Enter review notes for Medical Director ${decision} clearance:`, `Approved for scientific response under standard off-label governance.`);
+    if (notes === null) return;
+    try {
+      const res = await httpFetch(`/api/mi/tabs/${miTabId}/promo-review/decide`, {
+        method: 'POST', headers: H, body: JSON.stringify({ decision, notes }),
+      });
+      if (res.ok) {
+        setFlash(`Clearance marked: ${decision}`);
+        setTimeout(() => setFlash(null), 3000);
+        load();
+        onChange?.();
+      } else {
+        const err = await res.json();
+        setFlash(`Error: ${err.error}`);
+      }
+    } catch (e) {
+      setFlash(e.message);
+    }
+  }
+
   if (!state) return null
   const offLabel = !!state.is_off_label
   const solicited = !!state.is_solicited
@@ -116,6 +137,43 @@ function ClassificationCard({ miTabId, H, onChange }) {
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, marginBottom: 8 }}>
           <strong>Off-label indication:</strong> {state.off_label_indication}
         </div>
+      )}
+
+      {/* CF-06: 21 CFR 312.7 Commercial Solicited Off-Label Gating Banner */}
+      {offLabel && solicited && (
+        promoStatus === 'approved' ? (
+          <div data-testid="solicited-offlabel-cleared-banner" style={{
+            marginTop: 8, padding: '8px 12px', borderRadius: 6,
+            background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46', fontSize: 12
+          }}>
+            ✓ <strong>Medical Director Clearance Granted</strong> — Safe harbor scientific exchange authorized under 21 CFR 312.7.
+          </div>
+        ) : (
+          <div data-testid="solicited-offlabel-gate-alert" style={{
+            marginTop: 8, padding: '10px 12px', borderRadius: 6,
+            background: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e', fontSize: 12
+          }}>
+            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>⚠️</span>
+              <span>Commercial Solicited Off-Label Inquiry (21 CFR 312.7)</span>
+            </div>
+            <div style={{ marginTop: 4, color: '#b45309' }}>
+              Outbound responses are hard-gated until a Medical Affairs Director grants documented clearance.
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button data-testid="grant-clearance-btn"
+                onClick={() => decidePromoReview('approved')}
+                style={{ padding: '5px 12px', fontSize: 11, background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                ✓ Grant Medical Director Clearance
+              </button>
+              <button data-testid="reject-clearance-btn"
+                onClick={() => decidePromoReview('rejected')}
+                style={{ padding: '5px 12px', fontSize: 11, background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                ✕ Reject Clearance
+              </button>
+            </div>
+          </div>
+        )
       )}
 
       {editing && (

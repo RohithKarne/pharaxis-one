@@ -112,7 +112,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     if (tabKey === 'lab-results')     return { lab_name: '', test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
     if (tabKey === 'product-info')    return { product_id: '', product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', product_role: 'suspect', is_suspect: true, is_concomitant: false }
-    if (tabKey === 'events')          return { event_description: '', verbatim_reaction: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', hospitalization_start_date: '', hospitalization_end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
+    if (tabKey === 'events')          return { event_description: '', verbatim_reaction: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', hospitalization_start_date: '', hospitalization_end_date: '', dechallenge_outcome: '', rechallenge_outcome: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
   const [form, setForm] = useState(() => readDraft() || blankForm())
@@ -228,6 +228,8 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     { key: 'meddra_term',       label: 'MedDRA Term' },
     { key: 'outcome',           label: 'Outcome', render: codeToWords },
     { key: 'reported_causality', label: 'Reported Causality' },
+    { key: 'dechallenge_outcome', label: 'Dechallenge', render: codeToWords },
+    { key: 'rechallenge_outcome', label: 'Rechallenge', render: codeToWords },
     { key: 'frequency',         label: 'Frequency' },
     { key: 'causality_assessment', label: 'Causality Assessment' },
     { key: 'start_date',        label: 'Start Date' },
@@ -305,6 +307,27 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   {field('verbatim_reaction', 'Verbatim Reaction', <textarea rows={2} value={form.verbatim_reaction || ''} placeholder="The reporter's own words" onChange={e => set('verbatim_reaction', e.target.value)} />, { full: true })}
                   {field('meddra_term', 'MedDRA Term', <select value={form.meddra_term} onChange={e => set('meddra_term', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'MedDRA Term').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('outcome', 'Outcome', <select value={form.outcome} onChange={e => set('outcome', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Outcome').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
+                  <div className="cf-form-field">
+                    <label>Dechallenge (Action on Withdrawal)</label>
+                    <select aria-label="Dechallenge" value={form.dechallenge_outcome || ''} onChange={e => set('dechallenge_outcome', e.target.value)}>
+                      <option value="">— Select —</option>
+                      <option value="positive">Positive (Reaction abated on withdrawal)</option>
+                      <option value="negative">Negative (Reaction persisted)</option>
+                      <option value="dose_reduced_effective">Dose Reduced with Effect</option>
+                      <option value="not_applicable">Not Applicable</option>
+                      <option value="unknown">Unknown</option>
+                    </select>
+                  </div>
+                  <div className="cf-form-field">
+                    <label>Rechallenge (Effect of Re-exposure)</label>
+                    <select aria-label="Rechallenge" value={form.rechallenge_outcome || ''} onChange={e => set('rechallenge_outcome', e.target.value)}>
+                      <option value="">— Select —</option>
+                      <option value="positive">Positive (Reaction recurred)</option>
+                      <option value="negative">Negative (Reaction did not recur)</option>
+                      <option value="not_reintroduced">Not Re-introduced</option>
+                      <option value="unknown">Unknown</option>
+                    </select>
+                  </div>
                   {field('reported_causality', 'Reported Causality', <select value={form.reported_causality} onChange={e => set('reported_causality', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Reported Causality').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('frequency', 'Frequency', <select value={form.frequency} onChange={e => set('frequency', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Frequency').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
                   {field('causality_assessment', 'Causality Assessment', <select value={form.causality_assessment} onChange={e => set('causality_assessment', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Causality Assessment').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select>)}
