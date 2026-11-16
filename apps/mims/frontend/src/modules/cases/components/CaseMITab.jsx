@@ -382,7 +382,7 @@ export default function CaseMITab({
     if (!tab) return
     const targetType = target.toUpperCase()
     try {
-      const res = await httpFetch(`${API}/cases/${caseId}/split`, {
+      const res = await httpFetch(`${API}/cases/${id}/split`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
