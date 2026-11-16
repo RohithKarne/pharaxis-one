@@ -905,7 +905,7 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Only the user who checked out this document can check it in.' });
     }
 
-    const { notes, bump_type } = req.body;
+    const { notes, bump_type, rationale_category } = req.body;
 
     // Auto-set owner_user_id on first checkin (locked to this user)
     const ownerUpdate = doc.owner_user_id ? '' : ', owner_user_id = ?';
@@ -930,9 +930,19 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
     const [[after]] = await pool.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
     const versionStr = `${after.version_major}.${after.version_minor}`;
 
-    await addVersionHistory('document', Number(id), versionStr, 'Pending', notes || 'Checked in', req.user.userId);
-    await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_document', Number(id), { doc_id: doc.doc_id, version: versionStr });
-    res.json({ message: 'Document checked in.', version: versionStr });
+    const fullChangeNotes = rationale_category
+      ? `[${rationale_category}] ${notes || ''}`.trim()
+      : (notes || 'Checked in');
+
+    await addVersionHistory('document', Number(id), versionStr, 'Pending', fullChangeNotes, req.user.userId);
+    await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_document', Number(id), {
+      doc_id: doc.doc_id,
+      version: versionStr,
+      bump_type: bump_type || 'minor',
+      rationale_category: rationale_category || null,
+      notes: notes || null,
+    });
+    res.json({ message: 'Document checked in.', version: versionStr, bump_type: bump_type || 'minor', rationale_category });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/checkin', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to checkin CM document');
     res.status(500).json({ error: 'Server error.' });

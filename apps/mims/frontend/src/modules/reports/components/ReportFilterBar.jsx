@@ -25,7 +25,7 @@ function Field({ label, children }) {
   )
 }
 
-export default function ReportFilterBar({ report, filters = {}, options = {}, onChange, onRun, running, onExport, disableExport, onSchedule }) {
+export default function ReportFilterBar({ report, filters = {}, options = {}, onChange, onRun, running, onExport, onExportPdf, disableExport, onSchedule }) {
   const allowed = new Set(report?.allowed_filters || [])
   const set = (patch) => onChange?.({ ...filters, ...patch })
   const custom = !filters.period && (filters.date_from || filters.date_to)
@@ -94,6 +94,7 @@ export default function ReportFilterBar({ report, filters = {}, options = {}, on
       <div style={{ flex: 1 }} />
       {onSchedule && <button type="button" onClick={onSchedule} style={button(false, false)}>Schedule Report</button>}
       {onExport && <button type="button" onClick={onExport} disabled={disableExport} style={button(false, disableExport)}>Export CSV</button>}
+      {onExportPdf && <button type="button" onClick={onExportPdf} disabled={disableExport} style={button(false, disableExport)} data-testid="export-pdf-button">Export PDF</button>}
     </div>
   )
 }

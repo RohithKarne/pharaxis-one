@@ -29,6 +29,7 @@ const {
   canSeeAudience,
 } = require('../services/reportModuleService');
 const { buildReportCsv } = require('../services/reportCsv');
+const { generateReportPdf } = require('../services/reportPdfService');
 const { recipientsFor } = require('../services/reportRecipients');
 const {
   getExportConfigs,
@@ -227,8 +228,8 @@ router.post('/reports/module/definitions/:id/run', authenticate, async (req, res
   }
 });
 
-// Export runs on the server: it checks Export Reports, writes a CSV with
-// readable headers and no formula cells, and leaves an audit row and a run.
+// Export runs on the server: it checks Export Reports, writes a CSV or PDF with
+// readable headers, audit blocks and no formula cells, and leaves an audit row and a run.
 router.post('/reports/module/definitions/:id/export', authenticate, async (req, res) => {
   const startedAt = Date.now();
   try {
@@ -236,6 +237,50 @@ router.post('/reports/module/definitions/:id/export', authenticate, async (req, 
     const definition = await visibleDefinition(req, req.params.id);
     if (!definition) return res.status(404).json({ error: 'Report definition not found.' });
     const result = await runReportDefinition(definition, req.user.orgId, req.body?.filters || {}, { user: req.user });
+    const format = String(req.query.format || req.body?.format || 'csv').toLowerCase();
+
+    if (format === 'pdf') {
+      const [[orgRow]] = await pool.execute('SELECT name FROM organisations WHERE id = ?', [req.user.orgId]);
+      const orgName = orgRow?.name || 'Calder Therapeutics';
+      const pdfBuffer = generateReportPdf({
+        orgName,
+        reportName: definition.name,
+        description: definition.description || '',
+        filters: result.filters,
+        columns: result.columns,
+        rows: result.rows,
+        labels: result.column_labels || {},
+        user: req.user,
+      });
+
+      await logAudit(req.user.userId, req.user.email, 'EXPORT_PDF', 'report_definition', definition.id, {
+        name: definition.name,
+        filters: result.filters,
+        row_count: result.row_count,
+        format: 'pdf',
+      });
+
+      await recordReportRun({
+        orgId: req.user.orgId,
+        reportKey: definition.report_key,
+        reportName: definition.name,
+        targetType: 'report',
+        targetId: definition.id,
+        runMode: 'export',
+        triggeredBy: req.user.userId || null,
+        filters: result.filters,
+        rowCount: result.row_count,
+        durationMs: Date.now() - startedAt,
+        deliveryMethod: 'download_pdf',
+        status: 'success',
+      }).catch(() => {});
+
+      const fileName = `${definition.report_key}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      return res.send(pdfBuffer);
+    }
+
     const csv = buildReportCsv(result.columns, result.rows);
     await logAudit(req.user.userId, req.user.email, 'EXPORT', 'report_definition', definition.id, { name: definition.name, filters: result.filters, row_count: result.row_count });
     await recordReportRun({

@@ -699,4 +699,146 @@ router.delete('/products/country-authorizations/:authId', authenticate, requireR
   }
 });
 
+// ─── REGIONAL LABELS (Prescribing Information & SmPCs) ──────────────────────────
+
+// GET /api/admin/product-regional-labels
+router.get('/product-regional-labels', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const orgId = getScopedOrgId(req, req.query.org_id ? Number(req.query.org_id) : null);
+    const { product_id, region_code } = req.query;
+    let sql = `
+      SELECT prl.*, p.trade_name AS product_name
+        FROM product_regional_labels prl
+        JOIN products p ON p.id = prl.product_id
+       WHERE 1=1
+    `;
+    const params = [];
+    if (orgId) {
+      sql += ' AND prl.org_id = ?';
+      params.push(orgId);
+    }
+    if (product_id) {
+      sql += ' AND prl.product_id = ?';
+      params.push(Number(product_id));
+    }
+    if (region_code) {
+      sql += ' AND prl.region_code = ?';
+      params.push(String(region_code).toUpperCase());
+    }
+    sql += ' ORDER BY prl.product_id, prl.region_code, prl.label_type';
+    const [rows] = await pool.query(sql, params);
+    res.json({ labels: rows });
+  } catch (err) {
+    console.error('GET /product-regional-labels error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/products/:id/regional-labels
+router.get('/products/:id/regional-labels', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const orgId = getScopedOrgId(req, req.query.org_id ? Number(req.query.org_id) : null);
+    const productId = Number(req.params.id);
+    let sql = 'SELECT * FROM product_regional_labels WHERE product_id = ?';
+    const params = [productId];
+    if (orgId) {
+      sql += ' AND org_id = ?';
+      params.push(orgId);
+    }
+    sql += ' ORDER BY region_code, label_type';
+    const [rows] = await pool.query(sql, params);
+    res.json({ labels: rows });
+  } catch (err) {
+    console.error('GET /products/:id/regional-labels error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/products/:id/regional-labels
+router.post('/products/:id/regional-labels', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const orgId = getScopedOrgId(req, req.body.org_id ? Number(req.body.org_id) : null) || req.user.orgId || 1;
+    const { region_code, label_type, label_title, version, approval_date, document_url, is_active } = req.body;
+    if (!region_code || !label_title) {
+      return res.status(400).json({ error: 'region_code and label_title are required.' });
+    }
+    const [resInsert] = await pool.execute(
+      `INSERT INTO product_regional_labels
+       (org_id, product_id, region_code, label_type, label_title, version, approval_date, document_url, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [
+        orgId,
+        productId,
+        String(region_code).toUpperCase(),
+        label_type || 'US_PI',
+        label_title,
+        version || '1.0',
+        approval_date || null,
+        document_url || null,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1
+      ]
+    );
+    await audit(req.user.userId, req.user.email, 'CREATE', 'product_regional_label', resInsert.insertId, { productId, label_title });
+    res.status(201).json({ id: resInsert.insertId, message: 'Regional label created successfully.' });
+  } catch (err) {
+    console.error('POST /products/:id/regional-labels error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/admin/products/regional-labels/:labelId
+router.put('/products/regional-labels/:labelId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const labelId = Number(req.params.labelId);
+    const [[existing]] = await pool.execute('SELECT * FROM product_regional_labels WHERE id = ?', [labelId]);
+    if (!existing) return res.status(404).json({ error: 'Regional label not found.' });
+
+    const { region_code, label_type, label_title, version, approval_date, document_url, is_active } = req.body;
+    await pool.execute(
+      `UPDATE product_regional_labels
+          SET region_code = COALESCE(?, region_code),
+              label_type = COALESCE(?, label_type),
+              label_title = COALESCE(?, label_title),
+              version = COALESCE(?, version),
+              approval_date = COALESCE(?, approval_date),
+              document_url = COALESCE(?, document_url),
+              is_active = COALESCE(?, is_active),
+              updated_at = NOW()
+        WHERE id = ?`,
+      [
+        region_code ? String(region_code).toUpperCase() : null,
+        label_type || null,
+        label_title || null,
+        version || null,
+        approval_date || null,
+        document_url || null,
+        is_active !== undefined ? (is_active ? 1 : 0) : null,
+        labelId
+      ]
+    );
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'product_regional_label', labelId, { label_title });
+    res.json({ message: 'Regional label updated successfully.' });
+  } catch (err) {
+    console.error('PUT /products/regional-labels/:labelId error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// DELETE /api/admin/products/regional-labels/:labelId
+router.delete('/products/regional-labels/:labelId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  try {
+    const labelId = Number(req.params.labelId);
+    const [[existing]] = await pool.execute('SELECT id FROM product_regional_labels WHERE id = ?', [labelId]);
+    if (!existing) return res.status(404).json({ error: 'Regional label not found.' });
+
+    await pool.execute('DELETE FROM product_regional_labels WHERE id = ?', [labelId]);
+    await audit(req.user.userId, req.user.email, 'DELETE', 'product_regional_label', labelId, {});
+    res.json({ message: 'Regional label deleted.' });
+  } catch (err) {
+    console.error('DELETE /products/regional-labels/:labelId error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 module.exports = router;

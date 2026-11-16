@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import CaseAssociatedDocs from './CaseAssociatedDocs'
 import RichTextEditor from '../../content/components/RichTextEditor'
@@ -12,6 +12,13 @@ import DocumentDiffViewer from '../../../shared/components/DocumentDiffViewer'
 import { useAuth } from '../../../shared/context/AuthContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
+
+const SAFETY_TRIGGER_TERMS = [
+  'rash', 'urticaria', 'anaphylaxis', 'dyspnea', 'angioedema', 'seizure', 'convulsion',
+  'stevens-johnson', 'death', 'died', 'hospitalized', 'hospitalisation', 'infection',
+  'broken needle', 'needle bent', 'needle jam', 'contamination', 'defect', 'leaking',
+  'malfunction', 'swelling', 'blister', 'bleeding', 'syncope', 'overdose'
+]
 
 function formatProductOption(product) {
   const parts = [product.trade_name]
@@ -105,6 +112,7 @@ export default function CaseMITab({
   const [builderLoading, setBuilderLoading] = useState(false)
   const [builderPreview, setBuilderPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [pdfDownloading, setPdfDownloading] = useState(false)
   const [showDiff, setShowDiff] = useState(false)
 
   useEffect(() => { loadMI(); loadMiResponses() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -162,6 +170,7 @@ export default function CaseMITab({
       status:               tab.status               || 'Open',
       literature_reference: tab.literature_reference || '',
       ae_pc_screening:      tab.ae_pc_screening      || '',
+      screening_override_rationale: tab.screening_override_rationale || '',
     }
   }
 
@@ -228,14 +237,24 @@ export default function CaseMITab({
       if (!res.ok) throw new Error(data.error || 'Failed to load response builder context.')
       setBuilderContext(data)
       const primaryRecipient = data.recipients?.[0]
-      setMiRespForm(prev => ({
-        ...prev,
-        mi_tab_id: tabId || data.mi_tab?.id || prev.mi_tab_id,
-        product_id: productId || data.mi_tab?.product_id || prev.product_id,
-        recipient_contact_id: prev.recipient_contact_id || primaryRecipient?.case_contact_id || '',
-        recipient_email: prev.recipient_email || primaryRecipient?.email || '',
-        recipient_name: prev.recipient_name || primaryRecipient?.name || '',
-      }))
+      const autoPiId = data.response_rules?.require_pi && data.response_rules?.auto_attached_pi_id
+        ? Number(data.response_rules.auto_attached_pi_id)
+        : null
+      setMiRespForm(prev => {
+        const nextDocIds = [...(prev.selected_document_ids || [])]
+        if (autoPiId && !nextDocIds.map(Number).includes(autoPiId)) {
+          nextDocIds.push(autoPiId)
+        }
+        return {
+          ...prev,
+          mi_tab_id: tabId || data.mi_tab?.id || prev.mi_tab_id,
+          product_id: productId || data.mi_tab?.product_id || prev.product_id,
+          recipient_contact_id: prev.recipient_contact_id || primaryRecipient?.case_contact_id || '',
+          recipient_email: prev.recipient_email || primaryRecipient?.email || '',
+          recipient_name: prev.recipient_name || primaryRecipient?.name || '',
+          selected_document_ids: nextDocIds,
+        }
+      })
     } catch (err) {
       toast.error(err.message)
       setBuilderContext(null)
@@ -266,10 +285,22 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
+  const miNarrative = `${miForm.question_summary || ''} ${miForm.detailed_question || ''}`.toLowerCase()
+  const detectedSafetyTriggers = useMemo(() => {
+    return SAFETY_TRIGGER_TERMS.filter(term => {
+      const regex = new RegExp(`\\b${term}\\b`, 'i')
+      return regex.test(miNarrative)
+    })
+  }, [miNarrative])
+
   // Returns true when saved, false when it failed (the error is already shown).
   async function saveMI() {
     const tab = miTabs[activeMiTab]
     if (!tab) return false
+    if (miForm.ae_pc_screening === 'no' && detectedSafetyTriggers.length > 0 && !miForm.screening_override_rationale?.trim()) {
+      toast.error(`Clinical Safety Alert: Safety trigger terms detected (${detectedSafetyTriggers.join(', ')}). A 1-sentence Clinical Override Rationale is required to confirm 'No Adverse Event'.`)
+      return false
+    }
     try {
       const res  = await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'PUT', headers, body: JSON.stringify(miForm) })
       const data = await res.json()
@@ -346,6 +377,33 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
+  async function splitMI(target) {
+    const tab = miTabs[activeMiTab]
+    if (!tab) return
+    const targetType = target.toUpperCase()
+    try {
+      const res = await httpFetch(`${API}/cases/${id}/split`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          target_case_type: targetType,
+          reason: `Split from MI Tab #${activeMiTab + 1}: ${tab.question_summary || 'Scientific enquiry'}`,
+          description: tab.detailed_question || tab.question_summary,
+          copy_contacts: true,
+          copy_patient: true,
+          assign_to_queue: true
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Split failed')
+      setSavedMsg(`Split into ${targetType} Case ${data.child_case_number}`)
+      setTimeout(() => setSavedMsg(''), 3000)
+      toast.success(data.message || `Created linked ${targetType} Case ${data.child_case_number}`)
+    } catch (err) {
+      toast.error(err.message || 'Failed to split case')
+    }
+  }
+
   function selectedTemplate() {
     return builderContext?.templates?.find(t => Number(t.id) === Number(miRespForm.template_id)) || null
   }
@@ -408,6 +466,45 @@ export default function CaseMITab({
       return null
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  async function downloadGxPPdf() {
+    if (!miRespForm.template_id && !miRespForm.body_html && !miRespForm.custom_text) {
+      toast.warn('Select a template or enter response text first.')
+      return
+    }
+    setPdfDownloading(true)
+    try {
+      const payload = {
+        ...miRespForm,
+        subject: miRespForm.response_subject,
+        selected_document_ids: miRespForm.selected_document_ids,
+        selected_module_ids: miRespForm.selected_module_ids,
+      }
+      const res = await httpFetch(`${API}/cases/${id}/mi-response-builder/pdf`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.error || 'Failed to generate PDF.')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `MI-Response-Case-${id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('GxP Watermarked PDF generated successfully.')
+    } catch (err) {
+      toast.error(err.message || 'PDF export failed.')
+    } finally {
+      setPdfDownloading(false)
     }
   }
 
@@ -608,6 +705,17 @@ export default function CaseMITab({
                 Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} Case #{miTabs[activeMiTab].converted_to_case_id}
               </div>
             )}
+            {detectedSafetyTriggers.length > 0 && (
+              <div data-testid="mi-safety-trigger-alert" style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#991b1b', padding: '10px 14px', borderRadius: 6, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Clinical Safety Trigger Detected</div>
+                  <div style={{ fontSize: 12, marginTop: 2 }}>
+                    Potential adverse event or defect terms identified in narrative: <strong>{detectedSafetyTriggers.join(', ')}</strong>. Review carefully before screening.
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="cf-form-field cf-mi-screening">
               <label>Mentions an adverse event or product complaint? *</label>
               <select aria-label="Mentions an adverse event or product complaint?" value={miForm.ae_pc_screening || ''} onChange={e => editMiForm(p => ({ ...p, ae_pc_screening: e.target.value }))}>
@@ -616,6 +724,20 @@ export default function CaseMITab({
                 <option value="yes">Yes — convert the MI or link the AE / PC case</option>
               </select>
             </div>
+            {miForm.ae_pc_screening === 'no' && detectedSafetyTriggers.length > 0 && (
+              <div data-testid="mi-override-rationale-field" style={{ background: '#fffbeb', border: '1px solid #f59e0b', padding: '12px 14px', borderRadius: 6, marginBottom: 16 }}>
+                <label style={{ display: 'block', color: '#92400e', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+                  Clinical Override Rationale * <span style={{ fontWeight: 400, fontSize: 12 }}>(Required when potential safety triggers are present)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Inquirer is asking general pharmacokinetics question; no patient exposure or adverse event occurred."
+                  value={miForm.screening_override_rationale || ''}
+                  onChange={e => editMiForm(p => ({ ...p, screening_override_rationale: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #d97706', fontSize: 13 }}
+                />
+              </div>
+            )}
             {sendCheckCard}
             <div className="cf-form-grid">
               <div className="cf-form-field" style={miHide('mi_category')}>
@@ -660,11 +782,11 @@ export default function CaseMITab({
             </div>
             <div className="cf-form-field cf-form-field--full" style={miHide('mi_question_summary')}>
               <label>{miLabel('mi_question_summary', 'Question Summary')}</label>
-              <textarea rows={2} value={miForm.question_summary || ''} onChange={e => editMiForm(p => ({ ...p, question_summary: e.target.value }))} />
+              <textarea aria-label="Question Summary" rows={2} value={miForm.question_summary || ''} onChange={e => editMiForm(p => ({ ...p, question_summary: e.target.value }))} />
             </div>
             <div className="cf-form-field cf-form-field--full" style={miHide('mi_detailed_question')}>
               <label>{miLabel('mi_detailed_question', 'Detailed Question')}</label>
-              <textarea rows={4} value={miForm.detailed_question || ''} onChange={e => editMiForm(p => ({ ...p, detailed_question: e.target.value }))} />
+              <textarea aria-label="Detailed Question" rows={4} value={miForm.detailed_question || ''} onChange={e => editMiForm(p => ({ ...p, detailed_question: e.target.value }))} />
             </div>
             <div className="cf-form-field cf-form-field--full" style={miHide('mi_response_provided')}>
               <label>{miLabel('mi_response_provided', 'Response Provided')}</label>
@@ -696,6 +818,8 @@ export default function CaseMITab({
             </div>
             {!readOnly && (
               <div className="cf-form-actions">
+                <button className="cf-open-btn" type="button" onClick={() => splitMI('ae')}>Split to AE (Parallel Safety)</button>
+                <button className="cf-open-btn" type="button" onClick={() => splitMI('pc')}>Split to PC (Parallel Quality)</button>
                 <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
                 <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
                 <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
@@ -864,12 +988,28 @@ export default function CaseMITab({
                       <div className="cf-builder-card">
                         <div className="cf-builder-card-title">Enclosures (published documents)</div>
                         <div className="cf-builder-list">
-                          {documents.map(doc => (
-                            <label key={doc.id} className="cf-builder-check">
-                              <input type="checkbox" checked={miRespForm.selected_document_ids.map(Number).includes(Number(doc.id))} onChange={() => toggleSelection('selected_document_ids', doc.id)} />
-                              <span>{doc.name}<small>{doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}{doc.language ? ` - ${doc.language}` : ''}{doc.product_name ? ` - ${doc.product_name}` : ''}{rules.require_pi && doc.doc_type === 'Prescribing Information' ? ' - needed for this off-label answer' : ''}</small></span>
-                            </label>
-                          ))}
+                          {documents.map(doc => {
+                            const isLockedPi = Boolean(rules.require_pi && rules.auto_attached_pi_id && Number(doc.id) === Number(rules.auto_attached_pi_id))
+                            return (
+                              <label key={doc.id} className={`cf-builder-check ${isLockedPi ? 'cf-builder-check--locked' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isLockedPi || miRespForm.selected_document_ids.map(Number).includes(Number(doc.id))}
+                                  disabled={isLockedPi}
+                                  onChange={() => !isLockedPi && toggleSelection('selected_document_ids', doc.id)}
+                                />
+                                <span>
+                                  {doc.name}
+                                  <small>
+                                    {doc.doc_type || 'Document'} v{doc.version_major || 1}.{doc.version_minor || 0}
+                                    {doc.language ? ` - ${doc.language}` : ''}
+                                    {doc.product_name ? ` - ${doc.product_name}` : ''}
+                                    {isLockedPi ? ' 🔒 [Mandatory Enclosure — Prescribing Information locked for Off-Label]' : ''}
+                                  </small>
+                                </span>
+                              </label>
+                            )
+                          })}
                           {documents.length === 0 && <div className="cf-empty-msg">No published documents in this language for this product.</div>}
                           {(() => {
                             // Documents linked to a ticked one (Associated Documents), not yet ticked.
@@ -956,6 +1096,15 @@ export default function CaseMITab({
             </div>
             <div className="cf-form-actions" style={{ padding: '12px 14px', marginTop: 0 }}>
               <button className="cf-cancel-btn" onClick={() => !miRespSaving && setMiRespModal(false)}>Cancel</button>
+              <button
+                type="button"
+                className="cf-cancel-btn"
+                style={{ background: 'var(--surface-sunken)', color: 'var(--text-primary)', marginLeft: 'auto', marginRight: 8 }}
+                onClick={downloadGxPPdf}
+                disabled={pdfDownloading || miRespSaving || builderLoading}
+              >
+                {pdfDownloading ? 'Generating PDF…' : '📄 Export GxP PDF'}
+              </button>
               <button className="cf-save-btn" onClick={() => submitMiResponse('DRAFT')} disabled={miRespSaving || builderLoading}>{miRespSaving ? 'Saving...' : 'Save Draft Response'}</button>
             </div>
           </div>

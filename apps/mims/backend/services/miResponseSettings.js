@@ -19,6 +19,7 @@ const DEFAULTS = Object.freeze({
   require_pi_offlabel: true,
   routine_days: 5,
   urgent_days: 1,
+  enforce_safety_screening_gate: true,
 });
 
 const clampDays = (v) => {
@@ -36,6 +37,7 @@ async function getSettings(orgId, db = pool) {
     require_pi_offlabel: !!row.require_pi_offlabel,
     routine_days: row.routine_days,
     urgent_days: row.urgent_days,
+    enforce_safety_screening_gate: row.enforce_safety_screening_gate !== undefined ? !!row.enforce_safety_screening_gate : true,
     saved: true,
     updated_at: row.updated_at,
   };
@@ -48,14 +50,16 @@ async function saveSettings(orgId, body, userId, db = pool) {
     require_pi_offlabel: body.require_pi_offlabel === undefined ? 1 : (body.require_pi_offlabel ? 1 : 0),
     routine_days: clampDays(body.routine_days),
     urgent_days: clampDays(body.urgent_days),
+    enforce_safety_screening_gate: body.enforce_safety_screening_gate === undefined ? 1 : (body.enforce_safety_screening_gate ? 1 : 0),
   };
   await db.execute(
-    `INSERT INTO mi_response_settings (org_id, offlabel_statement, closing_statement, require_pi_offlabel, routine_days, urgent_days, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO mi_response_settings (org_id, offlabel_statement, closing_statement, require_pi_offlabel, routine_days, urgent_days, enforce_safety_screening_gate, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE offlabel_statement = VALUES(offlabel_statement), closing_statement = VALUES(closing_statement),
        require_pi_offlabel = VALUES(require_pi_offlabel), routine_days = VALUES(routine_days), urgent_days = VALUES(urgent_days),
+       enforce_safety_screening_gate = VALUES(enforce_safety_screening_gate),
        updated_by = VALUES(updated_by)`,
-    [orgId, next.offlabel_statement, next.closing_statement, next.require_pi_offlabel, next.routine_days, next.urgent_days, userId || null]
+    [orgId, next.offlabel_statement, next.closing_statement, next.require_pi_offlabel, next.routine_days, next.urgent_days, next.enforce_safety_screening_gate, userId || null]
   );
   return getSettings(orgId, db);
 }

@@ -611,9 +611,19 @@ export default function CaseAETab({
               <textarea aria-label="Clinical Narrative" rows={3} value={aeTxForm.narrative} onChange={e => setAeTxForm(p => ({ ...p, narrative: e.target.value }))} placeholder="Clinical narrative for PV team…" />
             </div>
           </div>
+          {validity && !validity.is_valid && (
+            <div data-testid="ae-tx-blocked-notice" style={{ padding: '8px 12px', background: '#FEF3C7', color: '#92400E', borderRadius: 4, fontSize: 12, marginBottom: 12, border: '1px solid #F59E0B' }}>
+              ⚠️ Transmission blocked: Missing mandatory E2B(R3) criteria: {(validity.elements || []).filter(e => !e.satisfied).map(e => VALIDITY_LABEL[e.key] || e.key).join(', ')}. Complete these to enable transmission.
+            </div>
+          )}
           <div className="cf-form-actions">
             <button className="cf-cancel-btn" onClick={() => setAeTxDrawer(false)}>Cancel</button>
-            <button className="cf-save-btn" onClick={createAeTransmission} disabled={aeTxSaving}>
+            <button
+              className="cf-save-btn"
+              onClick={createAeTransmission}
+              disabled={aeTxSaving || (validity && !validity.is_valid)}
+              title={validity && !validity.is_valid ? 'Complete all 4 E2B criteria before transmission' : undefined}
+            >
               {aeTxSaving ? 'Transmitting…' : 'Transmit to PV'}
             </button>
           </div>

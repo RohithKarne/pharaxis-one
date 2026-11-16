@@ -17,7 +17,22 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'redirect-root-to-mims',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url === '/' || req.url === '') {
+            res.writeHead(302, { Location: '/mims/' })
+            res.end()
+            return
+          }
+          next()
+        })
+      }
+    }
+  ],
   server: {
     port: Number(process.env.MIMS_DEV_PORT) || 5173,
     strictPort: !process.env.MIMS_DEV_PORT,

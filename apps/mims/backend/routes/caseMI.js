@@ -23,7 +23,7 @@ const { writeCaseAudit } = require('../services/caseHelpers');
 // closed. None of this happened: changes left no trace, PUT and DELETE checked
 // organisation membership only, and a closed case's MI could still be edited.
 const MI_AUDIT_FIELDS = ['mi_category', 'subcategory', 'product_id', 'question_summary', 'detailed_question',
-  'response_required_by', 'response_provided', 'response_date', 'response_channel', 'status', 'literature_reference', 'ae_pc_screening'];
+  'response_required_by', 'response_provided', 'response_date', 'response_channel', 'status', 'literature_reference', 'ae_pc_screening', 'screening_override_rationale'];
 const auditValue = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v === null || v === undefined ? '' : String(v)));
 
 async function caseClosed(caseId) {
@@ -197,37 +197,72 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
     const aePcScreening = ['yes', 'no'].includes(String(req.body.ae_pc_screening || '').toLowerCase())
       ? String(req.body.ae_pc_screening).toLowerCase() : null;
 
+    // CF-05: AI / Clinical Safety Term Interception (Decision 2A)
+    const SAFETY_TRIGGER_TERMS = [
+      'rash', 'urticaria', 'anaphylaxis', 'dyspnea', 'angioedema', 'seizure', 'convulsion',
+      'stevens-johnson', 'death', 'died', 'hospitalized', 'hospitalisation', 'infection',
+      'broken needle', 'needle bent', 'needle jam', 'contamination', 'defect', 'leaking',
+      'malfunction', 'swelling', 'blister', 'bleeding', 'syncope', 'overdose'
+    ];
+    const narrativeText = `${question_summary || currentMi.question_summary || ''} ${detailed_question || currentMi.detailed_question || ''}`.toLowerCase();
+    const detectedTriggers = SAFETY_TRIGGER_TERMS.filter(term => {
+      const regex = new RegExp(`\\b${term}\\b`, 'i');
+      return regex.test(narrativeText);
+    });
+
+    const screening_override_rationale = req.body.screening_override_rationale !== undefined
+      ? (req.body.screening_override_rationale || null)
+      : currentMi.screening_override_rationale;
+
+    if (aePcScreening === 'no' && detectedTriggers.length > 0 && (!screening_override_rationale || !screening_override_rationale.trim())) {
+      return res.status(400).json({
+        error: `Clinical Safety Alert: Safety trigger terms detected (${detectedTriggers.join(', ')}). A 1-sentence Clinical Override Rationale is required to confirm 'No Adverse Event'.`,
+        detected_triggers: detectedTriggers,
+        requires_override_rationale: true
+      });
+    }
+
+    const safetyTriggersDetected = detectedTriggers.length ? detectedTriggers.join(', ') : null;
+
     await pool.execute(
       `UPDATE case_mi SET
-        mi_category          = COALESCE(?, mi_category),
-        subcategory          = COALESCE(?, subcategory),
-        product_id           = COALESCE(?, product_id),
-        question_summary     = COALESCE(?, question_summary),
-        detailed_question    = COALESCE(?, detailed_question),
-        response_required_by = COALESCE(?, response_required_by),
-        response_provided    = COALESCE(?, response_provided),
-        response_date        = COALESCE(?, response_date),
-        response_channel     = COALESCE(?, response_channel),
-        status               = COALESCE(?, status),
-        literature_reference = COALESCE(?, literature_reference),
-        ae_pc_screening      = COALESCE(?, ae_pc_screening)
+        mi_category                  = COALESCE(?, mi_category),
+        subcategory                  = COALESCE(?, subcategory),
+        product_id                   = COALESCE(?, product_id),
+        question_summary             = COALESCE(?, question_summary),
+        detailed_question            = COALESCE(?, detailed_question),
+        response_required_by         = COALESCE(?, response_required_by),
+        response_provided            = COALESCE(?, response_provided),
+        response_date                = COALESCE(?, response_date),
+        response_channel             = COALESCE(?, response_channel),
+        status                       = COALESCE(?, status),
+        literature_reference         = COALESCE(?, literature_reference),
+        ae_pc_screening              = COALESCE(?, ae_pc_screening),
+        screening_override_rationale = COALESCE(?, screening_override_rationale),
+        safety_triggers_detected     = COALESCE(?, safety_triggers_detected)
        WHERE id = ?`,
       [
-        mi_category          || null,
-        subcategory          || null,
-        product_id           || null,
-        question_summary     || null,
-        detailed_question    || null,
-        response_required_by || null,
-        response_provided    || null,
-        response_date        || null,
-        response_channel     || null,
-        status               || null,
-        literature_reference || null,
+        mi_category                  || null,
+        subcategory                  || null,
+        product_id                   || null,
+        question_summary             || null,
+        detailed_question            || null,
+        response_required_by         || null,
+        response_provided            || null,
+        response_date                || null,
+        response_channel             || null,
+        status                       || null,
+        literature_reference         || null,
         aePcScreening,
+        screening_override_rationale || null,
+        safetyTriggersDetected       || null,
         req.params.miId
       ]
     );
+
+    if (screening_override_rationale && screening_override_rationale !== currentMi.screening_override_rationale) {
+      await writeCaseAudit(currentMi.case_id, req.user.userId, req.user.email, 'SAFETY_SCREENING_OVERRIDE', 'Safety Override Rationale', currentMi.screening_override_rationale || null, screening_override_rationale);
+    }
 
     const [[row]] = await pool.execute(
       'SELECT * FROM case_mi WHERE id = ?', [req.params.miId]

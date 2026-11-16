@@ -6,6 +6,10 @@ const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
 
 function formatCell(value) {
   if (value == null || value === '') return '—'
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) return value.map(formatCell).join(', ')
+    return JSON.stringify(value)
+  }
   if (typeof value === 'string' && ISO_DATE_TIME.test(value)) {
     if (value.slice(10) === 'T00:00:00.000Z') {
       const [y, m, d] = value.slice(0, 10).split('-')

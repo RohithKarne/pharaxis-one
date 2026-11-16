@@ -18,12 +18,16 @@
  *               → Response sent back to browser
  */
 
+const path = require('path');
+const fs = require('fs');
+
 // Load .env before anything else (Node 20.12+ built-in, no dotenv package needed)
 try { process.loadEnvFile(); } catch (_) {}
+try { process.loadEnvFile(path.resolve(__dirname, '../.env')); } catch (_) {}
+try { process.loadEnvFile(path.resolve(__dirname, '.env')); } catch (_) {}
 
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const pool = require('./database/db');
 const { authenticate } = require('./middleware/auth');
 const { hasGlobalAdminScope } = require('./utils/adminScope');
@@ -73,7 +77,12 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',
   'http://127.0.0.1:8081',
-  'http://localhost:8081'
+  'http://localhost:8081',
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+  `http://${HOST}:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  `http://localhost:${PORT}`
 ]);
 
 function parseAllowedOrigins(...rawOriginGroups) {
@@ -229,17 +238,16 @@ if (process.env.ENABLE_API_PLATFORM === 'true') {
 app.use('/storage/org_logos', express.static(path.join(__dirname, 'storage/org_logos')));
 
 // ─── Serve Static Frontend Files ─────────────────────────────────────────────
-// Dev:  Vite runs separately on :5173 — Express doesn't serve the frontend.
-// Prod: `npm run build` outputs to ../frontend/dist/ with base '/mims/'.
-//       Mount at /mims so /mims/assets/... resolves to dist/assets/...
-const FRONTEND_DIR = process.env.NODE_ENV === 'production'
-  ? path.join(__dirname, '../frontend/dist')
+// Prod or when built: `npm run build` outputs to ../frontend/dist/ with base '/mims/'.
+// Mount at both /mims and root so /mims/assets/... resolves properly.
+const distDir = path.join(__dirname, '../frontend/dist');
+const hasDist = fs.existsSync(path.join(distDir, 'index.html'));
+const FRONTEND_DIR = (process.env.NODE_ENV === 'production' || hasDist)
+  ? distDir
   : path.join(__dirname, '../frontend');
-if (process.env.NODE_ENV === 'production') {
-  app.use('/mims', express.static(FRONTEND_DIR));
-} else {
-  app.use(express.static(FRONTEND_DIR));
-}
+
+app.use('/mims', express.static(FRONTEND_DIR));
+app.use(express.static(FRONTEND_DIR));
 
 // Fix 2: health check now verifies DB connectivity (not just process liveness)
 app.get('/api/health', async (_req, res) => {
@@ -325,6 +333,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/caseFields'));
   r.use(`${prefix}/admin`, require('./routes/admin/miResponseSettings'));
   r.use(`${prefix}/admin`, require('./routes/admin/transmissionSetup'));
+  r.use(`${prefix}/admin`, require('./routes/admin/emergencySafetyContacts'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
   r.use(`${prefix}/admin`, require('./routes/admin/picklistsTable'));
@@ -480,11 +489,11 @@ mountRoutes(apiV1Router, '');
 // SPA fallback — any non-API route returns index.html so client-side routing works
 app.use('/api', notFoundHandler)
 app.use('/oauth', notFoundHandler)
-app.get('/mims', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
-app.get('/mims/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
-// Keep legacy catch-all for dev (Vite handles its own routing)
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+app.get('/mims', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
+app.get('/mims/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
+app.get('/', (_req, res) => res.redirect('/mims/'));
+if (hasDist || process.env.NODE_ENV !== 'production') {
+  app.get('/*splat', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
 }
 app.use(notFoundHandler);
 app.use(errorHandler);

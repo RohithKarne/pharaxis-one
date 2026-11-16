@@ -528,6 +528,27 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
   return rows.map(({ case_id: caseId, ...row }) => ({ ...row, __drill_route: caseRoute(caseId) }));
 }
 
+function formatSeriousnessClassification(raw) {
+  if (!raw) return 'Non-serious';
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try { obj = JSON.parse(raw); } catch (_) { return raw; }
+  }
+  if (typeof obj === 'object') {
+    const labels = {
+      death: 'Death',
+      life_threatening: 'Life-threatening',
+      hospitalization: 'Hospitalisation',
+      disability: 'Disability',
+      congenital_anomaly: 'Congenital anomaly',
+      other_medically_important: 'Other medically important',
+    };
+    const active = Object.entries(obj).filter(([, on]) => Boolean(on)).map(([k]) => labels[k] || k);
+    return active.length ? active.join(', ') : 'Non-serious';
+  }
+  return String(raw);
+}
+
 async function getIcsrSubmissions(orgId, filters = {}) {
   const range = resolvePeriod(filters, 'last_90_days');
   const scope = caseScopeSql(filters);
@@ -543,7 +564,11 @@ async function getIcsrSubmissions(orgId, filters = {}) {
       LIMIT ${ROW_CAP}`,
     [orgId, range.dateFrom, range.dateTo, ...scope.params]
   );
-  return rows.map(({ case_id: caseId, ...row }) => ({ ...row, __drill_route: caseRoute(caseId) }));
+  return rows.map(({ case_id: caseId, ...row }) => ({
+    ...row,
+    seriousness: formatSeriousnessClassification(row.seriousness),
+    __drill_route: caseRoute(caseId),
+  }));
 }
 
 // ── Team ────────────────────────────────────────────────────────────────────

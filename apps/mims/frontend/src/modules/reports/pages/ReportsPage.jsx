@@ -9,6 +9,7 @@ import { Button } from '../../../shared/ui'
 
 import ReportFilterBar from '../components/ReportFilterBar'
 import ReportTableViewer from '../components/ReportTableViewer'
+import CaseDrillDrawer from '../components/CaseDrillDrawer'
 
 // The Overview (library counts and a table of links) and Governance (anomaly
 // flags on every empty run, recommendations, usage counts, templates, shares,
@@ -183,6 +184,7 @@ export default function ReportsPage() {
   const [filterOptions, setFilterOptions] = useState({})
   const [reportBuilderPreview, setReportBuilderPreview] = useState(null)
   const [reportBuilderPreviewLoading, setReportBuilderPreviewLoading] = useState(false)
+  const [drillDrawerRow, setDrillDrawerRow] = useState(null)
 
   const [dashboardSearch, setDashboardSearch] = useState('')
   const [selectedDashboardId, setSelectedDashboardId] = useState(null)
@@ -570,6 +572,23 @@ export default function ReportsPage() {
     }
   }
 
+  async function exportReportPdf(definitionId, filters, fileBase = 'report') {
+    try {
+      const response = await httpFetch(`/api/reports/module/definitions/${definitionId}/export?format=pdf`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filters: filters || {}, format: 'pdf' }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'PDF Export failed.')
+      }
+      downloadBlob(await response.blob(), `${fileBase}-${new Date().toISOString().slice(0, 10)}.pdf`)
+    } catch (err) {
+      setError(err.message || 'Failed to export report PDF.')
+    }
+  }
+
   async function saveReportDefinition() {
     try {
       const url = editingReportId
@@ -941,6 +960,7 @@ export default function ReportsPage() {
                   onRun={() => runSelectedReport(selectedReport.id)}
                   running={reportPreviewLoading}
                   onExport={canExportReports ? () => exportReport(selectedReport.id, reportFilters, selectedReport.report_key) : null}
+                  onExportPdf={canExportReports ? () => exportReportPdf(selectedReport.id, reportFilters, selectedReport.report_key) : null}
                   disableExport={!reportPreview?.rows?.length}
                   onSchedule={canScheduleReports ? scheduleSelectedReport : null}
                 />
@@ -953,7 +973,13 @@ export default function ReportsPage() {
                       columns={reportPreview.columns}
                       labels={reportPreview.column_labels}
                       rows={reportPreview.rows}
-                      onRowClick={(row) => row.__drill_route && navigate(row.__drill_route, { state: row.__drill_state })}
+                      onRowClick={(row) => {
+                        if (row.__drill_route?.startsWith('/cases/')) {
+                          setDrillDrawerRow(row)
+                        } else if (row.__drill_route) {
+                          navigate(row.__drill_route, { state: row.__drill_state })
+                        }
+                      }}
                     />
                   </>
                 ) : (
@@ -1615,6 +1641,19 @@ export default function ReportsPage() {
         {section === 'history' && renderHistorySection()}
         {section === 'configuration' && canManageReports && renderConfigurationSection()}
       </div>
+
+      <CaseDrillDrawer
+        row={drillDrawerRow}
+        labels={reportPreview?.column_labels || {}}
+        onClose={() => setDrillDrawerRow(null)}
+        onOpenCase={(route, newTab) => {
+          if (newTab) {
+            window.open(route, '_blank')
+          } else {
+            navigate(route)
+          }
+        }}
+      />
     </div>
   )
 

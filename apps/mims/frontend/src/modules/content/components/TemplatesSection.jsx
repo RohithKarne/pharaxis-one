@@ -67,6 +67,16 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     if (!form.folder_id) return toast.warn('Folder is required.')
     if (!form.name.trim()) return toast.warn('Template name is required.')
     if (!form.body_html || form.body_html === '<p></p>') return toast.warn('Body is required.')
+
+    const combined = `${form.subject || ''} ${form.body_html || ''}`
+    const matches = [...combined.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)].map(m => m[1])
+    const uniqueTokens = [...new Set(matches)]
+    const validKeys = new Set([...(mergeFields || []).map(f => f.key), 'contact_name', 'contact_email', 'inquiry_text'])
+    const invalidTokens = uniqueTokens.filter(t => !validKeys.has(t))
+    if (invalidTokens.length > 0) {
+      return toast.warn(`Please fix invalid merge field(s): ${invalidTokens.map(t => `{{${t}}}`).join(', ')} before saving.`)
+    }
+
     setSaving(true)
     try {
       const url = isEdit ? `/api/cm/templates/${template.id}` : '/api/cm/templates'
@@ -143,6 +153,36 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
             <label className="cm-form-label">Body <span className="required">*</span></label>
             <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} mergeFields={mergeFields} />
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Use Insert field to add case data — the requester, product, question, dates and more.</p>
+            {(() => {
+              const combined = `${form.subject || ''} ${form.body_html || ''}`
+              const matches = [...combined.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)].map(m => m[1])
+              const uniqueTokens = [...new Set(matches)]
+              const validKeys = new Set([...(mergeFields || []).map(f => f.key), 'contact_name', 'contact_email', 'inquiry_text'])
+              const invalidTokens = uniqueTokens.filter(t => !validKeys.has(t))
+              if (uniqueTokens.length === 0) return null
+              return (
+                <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: invalidTokens.length ? 'var(--danger-bg, #fee2e2)' : 'var(--success-bg, #dcfce7)', border: `1px solid ${invalidTokens.length ? 'var(--danger-border, #fca5a5)' : 'var(--success-border, #86efac)'}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: invalidTokens.length ? '#991b1b' : '#166534' }}>
+                    {invalidTokens.length ? '⚠️ Invalid Merge Token(s) Detected:' : `✓ All Merge Tokens Validated (${uniqueTokens.length}):`}
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {uniqueTokens.map(tok => {
+                      const isInv = invalidTokens.includes(tok)
+                      return (
+                        <span key={tok} style={{ padding: '2px 6px', borderRadius: 4, background: isInv ? '#f87171' : '#bbf7d0', color: isInv ? '#fff' : '#14532d', fontFamily: 'monospace' }}>
+                          {`{{${tok}}}`} {isInv ? '✗' : '✓'}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {invalidTokens.length > 0 && (
+                    <div style={{ fontSize: 11, color: '#991b1b', marginTop: 4 }}>
+                      Unrecognized variables will fail letter dispatch. Please use supported fields from the editor menu.
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Expiry Date</label>

@@ -115,6 +115,52 @@ export default function PCTabPanel({
           {fieldRow('Reply to Complainant',  'reply_summary', 'textarea', { fullWidth: true, sectionName: 'PC — General' })}
           {boolField('Suspected Counterfeit or Tampering', 'suspected_counterfeit')}
           {boolField('Device Part Involved', 'device_involved')}
+          {/* CF-07: Patient Harm & 3-Day FDA FAR Regulatory Linkage */}
+          {boolField('Potential or Actual Patient Harm Involved', 'is_patient_harm')}
+          {(!!d.is_patient_harm || !!d.is_far_reportable) && (
+            <div data-testid="pc-patient-harm-alert" style={{
+              gridColumn: '1 / -1',
+              background: '#fef2f2', border: '1px solid #ef4444', borderRadius: 8,
+              padding: '12px 16px', margin: '8px 0', color: '#991b1b'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>🚨</span>
+                  <strong style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Patient Harm / 3-Day FDA Field Alert Report (FAR) Mandate
+                  </strong>
+                </div>
+                <div data-testid="far-clock-badge" style={{
+                  background: '#b91c1c', color: '#fff', padding: '4px 10px', borderRadius: 12,
+                  fontSize: 11, fontWeight: 700, letterSpacing: 0.3
+                }}>
+                  ⚡ 3-Day FAR Clock Active (72h SLA)
+                </div>
+              </div>
+              <div style={{ fontSize: 12, marginTop: 6, color: '#7f1d1d', lineHeight: 1.5 }}>
+                Under 21 CFR 314.81(b)(1), product defects involving actual or potential patient harm mandate notification to the FDA district office within 3 working days. Ensure a parallel Adverse Event case is split or linked.
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ fontSize: 12 }}>
+                  <strong>FAR Due Date:</strong> {d.far_due_date ? String(d.far_due_date).slice(0, 10) : 'Calculated on Save (3 Working Days)'}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <strong>FAR Status:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 600 }}>{d.far_status || 'pending'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {boolField('FDA 3-Day Field Alert Report (FAR) Reportable', 'is_far_reportable')}
+          {(!!d.is_patient_harm || !!d.is_far_reportable) && (
+            <div key="far_status" className="cf-form-field">
+              <label>FAR Submission Status</label>
+              <select aria-label="FAR Submission Status" value={d.far_status || 'pending'} disabled={locked} onChange={e => set('far_status', e.target.value)}>
+                <option value="pending">Pending QA / Regulatory Review</option>
+                <option value="submitted">Submitted to FDA District Office</option>
+                <option value="exempt">Exempt / Not Reportable Upon Review</option>
+              </select>
+            </div>
+          )}
           {!!d.device_involved && (() => {
             const f = pf('Device Malfunction')
             if (f.hidden) return null

@@ -4,21 +4,108 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { AssociatedDocsPanel } from './ContentPanels'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
-  // What changed goes into the version history (it was always "Checked in").
+  const [bumpType, setBumpType] = useState('minor')
+  const [rationaleCategory, setRationaleCategory] = useState('')
   const [notes, setNotes] = useState('')
+
+  const majorCategories = [
+    'Clinical Guidance / Indication Update',
+    'Safety / Contraindication Revision',
+    'Dosage & Administration Modification',
+    'Regulatory Authority Mandate',
+  ]
+
+  const minorCategories = [
+    'Editorial / Typo Correction',
+    'Formatting & Layout Adjustments',
+    'Administrative Reference Update',
+    'Translation Clarification',
+  ]
+
+  const categories = bumpType === 'major' ? majorCategories : minorCategories
+  const curMajor = item?.version_major || 1
+  const curMinor = item?.version_minor || 0
+  const nextVersion = bumpType === 'major' ? `v${curMajor + 1}.0` : `v${curMajor}.${curMinor + 1}`
+
+  const handleSubmit = () => {
+    if (!rationaleCategory) {
+      toast.warn('Please select a version change category.')
+      return
+    }
+    onConfirm({
+      bump_type: bumpType,
+      rationale_category: rationaleCategory,
+      notes: notes.trim(),
+    })
+  }
+
   return (
     <div className="cm-modal-overlay">
-      <div className="cm-modal">
-        <h3 className="cm-modal-title">Check In Document</h3>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-          Check in <strong>"{item?.name || item?.question || item?.title}"</strong>?<br />
-          This will move it to <strong>Pending</strong> status.
+      <div className="cm-modal" style={{ maxWidth: 480 }}>
+        <h3 className="cm-modal-title">Check In Document & Version Governance</h3>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Check in <strong>"{item?.name || item?.question || item?.title}"</strong>.<br />
+          This will move it to <strong>Pending</strong> status and advance version to <strong>{nextVersion}</strong>.
         </p>
-        <label className="cm-form-label" htmlFor="checkin-notes">What changed</label>
-        <textarea id="checkin-notes" className="cm-form-textarea" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional — recorded in the version history" />
+
+        <div className="cm-form-group" style={{ marginBottom: 12 }}>
+          <label className="cm-form-label" style={{ fontWeight: 600 }}>Revision Classification <span className="required">*</span></label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className={`cm-btn ${bumpType === 'minor' ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
+              style={{ fontSize: 12, padding: '8px 12px', textAlign: 'left' }}
+              onClick={() => { setBumpType('minor'); setRationaleCategory('') }}
+            >
+              <div><strong>Minor Revision</strong></div>
+              <div style={{ fontSize: 11, opacity: 0.85 }}>v{curMajor}.{curMinor + 1} · Editorial / Layout</div>
+            </button>
+            <button
+              type="button"
+              className={`cm-btn ${bumpType === 'major' ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
+              style={{ fontSize: 12, padding: '8px 12px', textAlign: 'left' }}
+              onClick={() => { setBumpType('major'); setRationaleCategory('') }}
+            >
+              <div><strong>Major Revision</strong></div>
+              <div style={{ fontSize: 11, opacity: 0.85 }}>v{curMajor + 1}.0 · Clinical / Label Change</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="cm-form-group" style={{ marginBottom: 12 }}>
+          <label className="cm-form-label" htmlFor="checkin-category" style={{ fontWeight: 600 }}>
+            {bumpType === 'major' ? 'Clinical Change Justification' : 'Editorial Justification'} <span className="required">*</span>
+          </label>
+          <select
+            id="checkin-category"
+            className="cm-form-input"
+            value={rationaleCategory}
+            onChange={e => setRationaleCategory(e.target.value)}
+          >
+            <option value="">— Select Predefined Category —</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="cm-form-group" style={{ marginBottom: 16 }}>
+          <label className="cm-form-label" htmlFor="checkin-notes">Change Rationale & Details</label>
+          <textarea
+            id="checkin-notes"
+            className="cm-form-textarea"
+            rows={2}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Specific changes made — logged to 21 CFR Part 11 audit trail"
+          />
+        </div>
+
         <div className="cm-modal-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="cm-btn cm-btn-primary" onClick={() => onConfirm(notes.trim())} disabled={loading}>{loading ? 'Checking in…' : 'Confirm'}</button>
+          <button className="cm-btn cm-btn-primary" onClick={handleSubmit} disabled={loading}>
+            {loading ? 'Checking in…' : `Check In as ${nextVersion}`}
+          </button>
         </div>
       </div>
     </div>

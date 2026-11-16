@@ -30,6 +30,8 @@ const SetupCaseNumbering = lazy(() => import('./SetupCaseNumbering'))
 const SetupIntegrations = lazy(() => import('./SetupIntegrations'))
 const MiResponseSettings = lazy(() => import('./MiResponseSettings'))
 const TransmissionSetup = lazy(() => import('./TransmissionSetup'))
+const RegionalLabelsAdmin = lazy(() => import('./RegionalLabelsAdmin'))
+const EmergencySafetyAdmin = lazy(() => import('./EmergencySafetyAdmin'))
 const SetupWorkflowEngine = lazy(() => import('./SetupWorkflowEngine'))
 const SetupTwoFactor = lazy(() => import('./SetupTwoFactor'))
 const SetupWorkflow = lazy(() => import('./SetupWorkflow'))
@@ -88,6 +90,8 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-setup-data-protect' ? <DPPRPage embedded />
     : selectedItem === 'sys-setup-mi-response' ? <MiResponseSettings />
     : selectedItem === 'sys-setup-int-transmission' ? <TransmissionSetup />
+    : selectedItem === 'sys-setup-regional-labels' ? <RegionalLabelsAdmin />
+    : selectedItem === 'sys-setup-emergency-safety' ? <EmergencySafetyAdmin />
     : selectedItem?.startsWith('sys-setup-int-') ? <SetupIntegrations selectedItem={selectedItem} />
     : selectedItem === 'sys-system-params' ? <SystemParameters />
     : selectedItem === 'sys-view-data' ? <ViewData selectedItem={auditItem} onSelect={onAuditSelect} />

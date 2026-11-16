@@ -36,6 +36,7 @@ export default function MiResponseSettings() {
         body: JSON.stringify({
           offlabel_statement: s.offlabel_statement, closing_statement: s.closing_statement,
           require_pi_offlabel: s.require_pi_offlabel, routine_days: s.routine_days, urgent_days: s.urgent_days,
+          enforce_safety_screening_gate: s.enforce_safety_screening_gate,
           // A rule the platform sets is shown, not written back as the organisation's own.
           two_signers: {
             off_label: s.two_signers?.off_label?.platform ? undefined : s.two_signers?.off_label?.on,
@@ -97,6 +98,15 @@ export default function MiResponseSettings() {
           <input type="checkbox" checked={!!s.two_signers?.always?.on} disabled={!!s.two_signers?.always?.platform} onChange={e => setSigner('always', e.target.checked)} />
           Every answer needs a medical reviewer and an approver
         </label>
+      </section>
+
+      <section style={box}>
+        <span style={label}>Safety Screening Gate</span>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+          <input type="checkbox" checked={!!s.enforce_safety_screening_gate} onChange={e => set('enforce_safety_screening_gate', e.target.checked)} />
+          Enforce adverse event & product complaint screening gate before response completion / send
+        </label>
+        <p style={hint}>When enabled, an inquiry cannot be sent or closed if the safety screening question remains unanswered.</p>
       </section>
 
       <button type="button" className="cf-save-btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>

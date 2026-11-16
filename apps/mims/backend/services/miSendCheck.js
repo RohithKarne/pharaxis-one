@@ -45,7 +45,7 @@ async function linkedSafetyCase(caseId, db) {
 
 async function miSendCheck(caseId, miTabId = null, db = pool, { responseId = null } = {}) {
   const [tabs] = await db.execute(
-    `SELECT id, tab_index, product_id, question_summary, ae_pc_screening, converted_to_case_id, is_off_label
+    `SELECT id, tab_index, product_id, question_summary, ae_pc_screening, converted_to_case_id, is_off_label, is_solicited, promo_review_status, commercial_clearance_status
        FROM case_mi WHERE case_id = ? ${miTabId ? 'AND id = ?' : ''} ORDER BY tab_index, id`,
     miTabId ? [caseId, miTabId] : [caseId]);
   const [[contact]] = await db.execute(
@@ -65,6 +65,21 @@ async function miSendCheck(caseId, miTabId = null, db = pool, { responseId = nul
     if (screening === 'yes') {
       items.push({ key: 'linked', label: `${prefix(t)}AE or PC case for what was found`, level: 'block', ok: !!(t.converted_to_case_id || linked),
         detail: t.converted_to_case_id ? `case ${t.converted_to_case_id}` : (linked ? `case ${linked.id}` : 'convert the MI or link the case') });
+    }
+    // CF-06: 21 CFR 312.7 Commercial Solicited Off-Label Gating (Decision 1A)
+    // If inquiry is off-label and solicited by commercial sales reps/promotions,
+    // require documented Medical Affairs Director clearance.
+    if (t.is_off_label && t.is_solicited) {
+      const isCleared = t.commercial_clearance_status === 'cleared' || t.promo_review_status === 'approved';
+      items.push({
+        key: 'solicited_offlabel',
+        label: `${prefix(t)}Solicited Off-Label Commercial Clearance (21 CFR 312.7)`,
+        level: 'block',
+        ok: isCleared,
+        detail: isCleared
+          ? 'Cleared by Medical Affairs Director'
+          : `Gated: Requires Medical Affairs Director promotional clearance before response release (status: ${t.commercial_clearance_status || t.promo_review_status || 'pending'})`
+      });
     }
     // An off-label answer encloses the prescribing information (FDA draft
     // guidance on unsolicited requests); the organisation can switch this off

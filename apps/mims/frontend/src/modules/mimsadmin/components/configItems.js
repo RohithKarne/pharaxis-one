@@ -74,6 +74,8 @@ export const SYSTEM_NAV = [
         label: 'Medical Information', value: 'sys-setup-grp-mi', children: [
           { label: 'MI Response Settings',     value: 'sys-setup-mi-response' },
           { label: 'Transmission Setup',       value: 'sys-setup-int-transmission' },
+          { label: 'Regional Labeling (PI/SmPC)', value: 'sys-setup-regional-labels' },
+          { label: 'Emergency Safety Directory', value: 'sys-setup-emergency-safety' },
         ],
       },
       {
