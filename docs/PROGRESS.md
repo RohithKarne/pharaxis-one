@@ -8,7 +8,7 @@ What is done, what broke, what is next. Newest first. Updated by whoever does th
 
 ```
 CP Portal ── active development ── local only ── last merged: #795 (27 Oct review, E1–E5, F1–F5)
-MIMS ─────── active development ── local only ── last merged: #794 (migration 174, "Used in cases")
+MIMS ─────── active development ── local only ── open PR: #826 (Case Form Drops 1-3, Reports REP-1/4, Admin Remediation)
 Bridge ───── live between the two, locally ── watched by Sync Health and the Inquiry Ledger
 Documents ── six core files replace the SOP (#802)
 Team ─────── restructured 2026-11-10: Rohith → Tim → Technology (Varun) and Medical Affairs (John)
