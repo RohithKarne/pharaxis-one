@@ -124,9 +124,11 @@ router.put('/api/admin/api-clients/:id', authenticate, requireRole('admin', 'pla
     if (!client || (!hasGlobalAdminScope(req.user) && Number(client.org_id) !== Number(req.user.orgId))) {
       return res.status(404).json({ error: 'Connection not found.' });
     }
-    const siteId = req.body.default_site_id ? Number(req.body.default_site_id) : null;
+    const siteId = req.body.default_site_id === undefined
+      ? client.default_site_id
+      : (req.body.default_site_id ? Number(req.body.default_site_id) : null);
     const statusId = req.body.initial_status_id ? Number(req.body.initial_status_id) : null;
-    if (siteId) {
+    if (req.body.default_site_id !== undefined && siteId) {
       const [[site]] = await pool.execute('SELECT id FROM sites WHERE id = ? AND org_id = ?', [siteId, client.org_id]);
       if (!site) return res.status(400).json({ error: 'That site does not belong to this organisation.' });
     }
@@ -547,7 +549,7 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), forwardErrors(async (req
     const [[site]] = await conn.execute(
       `SELECT id FROM sites WHERE org_id = ? ORDER BY (id = ?) DESC, id ASC LIMIT 1`,
       [orgId, req.apiClient.default_site_id || 0]);
-    if (!site?.id) { await conn.rollback(); return res.status(400).json({ error: 'No site is configured for this organisation.' }); }
+    if (!site?.id) { await conn.rollback(); return res.status(400).json({ error: 'Organisation defaults are missing. Run Bootstrap in MIMS Admin and retry.' }); }
     const [[state]] = await conn.execute(
       `SELECT id FROM workflow_states WHERE (org_id = ? OR org_id IS NULL) AND is_active = 1
         ORDER BY (id = ?) DESC, (LOWER(name) = 'new') DESC, org_id IS NULL ASC, id ASC LIMIT 1`,

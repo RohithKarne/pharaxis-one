@@ -526,6 +526,7 @@ export default function CasesPage() {
         org_id: newCase.org_id,
         case_type: newCase.case_type,
         intake_channel: 'manual',
+        assign_to_me: true,
         reporter,
         ...((['AE', 'PC'].includes(newCase.case_type)) && { patient }),
         ...(newCase.case_type === 'AE' && { ae_intake: { ...aeIntake, is_serious: Object.entries(aeIntake).some(([k, v]) => k.startsWith('is_') && v) } }),
@@ -1043,8 +1044,11 @@ export default function CasesPage() {
                       </select>
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
-                      <label className="cf-modal-label">Country</label>
-                      <input aria-label="Country" className="cf-modal-select" value={reporter.country} onChange={e => setReporter(p => ({ ...p, country: e.target.value }))} placeholder="Country" />
+                      <label className="cf-modal-label" htmlFor="new-case-reporter-country">Country</label>
+                      <select id="new-case-reporter-country" className="cf-modal-select" value={reporter.country} onChange={e => setReporter(p => ({ ...p, country: e.target.value }))}>
+                        <option value="">— Select —</option>
+                        {listOptions('country')}
+                      </select>
                     </div>
                     <div className="cf-form-field" style={{ margin: 0, gridColumn: '1/-1' }}>
                       <label className="cf-modal-label">Organisation / Institution</label>

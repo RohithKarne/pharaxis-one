@@ -324,11 +324,11 @@
       "feature_key": "admin.organisations",
       "feature_group": "admin",
       "title": "Organisation Management",
-      "summary": "How platform admins create and manage organisations and sites.",
-      "content_html": "<h4>What is this?</h4><p>The Organisations section (Admin only) is where new pharmaceutical organisations and their sub-sites are created and managed within MIMS.</p><h4>When to use it</h4><p>Use this when onboarding a new client organisation, adding a site or subsidiary, or deactivating an organisation.</p><h4>How to do it</h4><ul><li>Go to <strong>MIMS Admin → Organizations</strong>.</li><li>Click <strong>+ New Organisation</strong>.</li><li>Enter the name, contact details, and select which modules to enable.</li><li>Add sites under the organisation if needed.</li></ul><h4>What happens next?</h4><p>The organisation is created. You can then set up users, assign admins, and configure module access for the organisation.</p>",
+      "summary": "How platform admins create and manage organisations.",
+      "content_html": "<h4>What is this?</h4><p>Platform admins use Organisations to set up and manage organisations in MIMS.</p><h4>How to do it</h4><ul><li>Go to <strong>MIMS Admin → Organisations</strong>.</li><li>Click <strong>+ New Organisation</strong> and enter its name.</li><li>Use the <strong>Setup Wizard</strong> to review onboarding and provision the first administrator.</li></ul><h4>What happens next?</h4><p>MIMS creates the organisation defaults automatically. Use <strong>Run Bootstrap</strong> if the readiness dashboard reports missing defaults.</p>",
       "audience": ["platform_admin"],
       "sort_order": 110,
-      "tags": ["admin","organisations","platform_admin","sites"]
+      "tags": ["admin","organisations","platform_admin"]
     }
   ]
 }

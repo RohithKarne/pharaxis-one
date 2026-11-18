@@ -4,7 +4,6 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV, RETIRED_SYSTEM_ITEMS, withoutAdvanced } from './configItems'
 import { ADVANCED_FORMS_KEY } from './CaseFieldsConfig'
-import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
 
@@ -38,30 +37,6 @@ function findFirstLeafValue(nav, predicate = () => true) {
     if (item.value && predicate(item.value)) return item.value
   }
   return ''
-}
-
-function AdminTenantPicker() {
-  const { tenants, tenantId, setTenantId, loading } = useAdminTenant()
-  // With one organisation there is nothing to choose (M-112).
-  if (loading || tenants.length <= 1) return null
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Tenant</span>
-      <select
-        value={tenantId}
-        onChange={e => setTenantId(e.target.value)}
-        style={{
-          minWidth: 200, padding: '6px 10px', border: '1px solid var(--border)',
-          borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)',
-        }}
-      >
-        {tenants.length === 0 && <option value="">— No tenants —</option>}
-        {tenants.map(t => (
-          <option key={t.id} value={t.id}>{t.name}</option>
-        ))}
-      </select>
-    </div>
-  )
 }
 
 const TABS = [
@@ -252,12 +227,8 @@ function AdminSideNav({ tree, leaves, current, open, onSelect }) {
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function MIMSAdminShell() {
-  const { token } = useAuth()
-  return (
-    <AdminTenantProvider token={token}>
-      <MIMSAdminShellInner />
-    </AdminTenantProvider>
-  )
+  const { orgId } = useAuth()
+  return <MIMSAdminShellInner key={orgId ?? 'platform'} />
 }
 
 // Which admin screen is open, read from the address. The address is the only
@@ -291,7 +262,7 @@ function readAdminAddress(search) {
 }
 
 function MIMSAdminShellInner() {
-  const { user } = useAuth()
+  const { user, orgId, switchingOrg } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [narrowNavOpen, setNarrowNavOpen] = useState(false)
@@ -381,7 +352,7 @@ function MIMSAdminShellInner() {
     || adminLeaves.find(l => l.tab === activeTab)
 
   return (
-    <div className="mims-admin-shell">
+    <div className="mims-admin-shell" inert={switchingOrg} aria-busy={switchingOrg}>
       <AdminSideNav
         tree={adminTree}
         leaves={adminLeaves}
@@ -401,9 +372,7 @@ function MIMSAdminShellInner() {
               </span>
             ))}
           </div>
-          {/* One unit, so when the bar wraps the picker and its help button move together. */}
           <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
-            <AdminTenantPicker />
             <HelpHint
               featureKey={helpKeyFor({ activeTab, systemItem, tablesItem })}
               label={helpLabelFor({ activeTab, systemItem })}
@@ -417,6 +386,9 @@ function MIMSAdminShellInner() {
             {activeTab === 'system' && systemItem && PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem) && !hasGlobalAdminScope(user)
                 // Reached by link or address: the menu hides these, the screen should too.
               ? <AdminAccessDenied label={PLATFORM_ONLY_LABELS[systemItem]} />
+              : !orgId && !['dashboard', 'organizations', 'service-log', 'system-activity', 'service-dashboard', 'help'].includes(activeTab)
+                && !(activeTab === 'system' && PLATFORM_ONLY_SYSTEM_ITEMS.has(systemItem))
+              ? <p role="status">Select an organisation in the header to open these settings.</p>
               : activeTab === 'service-log'
               ? <ServiceLogTab selectedItem={serviceItem} />
               : activeTab === 'system-activity'

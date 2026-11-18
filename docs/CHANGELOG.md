@@ -33,6 +33,36 @@ until he confirms it.
 
 ## Unreleased
 
+### Retired site controls in MIMS (2026-11-17)
+
+**Revalidation impact:** Partial (proposed). Revalidate organisation setup, case intake, content folders and API connections.
+- Admin users configure the organisation. MIMS manages its internal default automatically and preserves existing links on folders and API connections.
+
+### One organisation selector in MIMS Admin (MIMS — 2026-11-17)
+
+**Revalidation impact:** Full (proposed). Revalidate organisation switching and administration access for platform and organisation administrators.
+- Organisation-specific Admin settings now follow the header selection. Switching confirms before discarding unsaved settings. Platform-only reporting retains its existing scope.
+
+### Reporter erasure clears pending edits (MIMS — 2026-11-17)
+
+**Revalidation impact:** Partial (proposed). Revalidate reporter erasure, reopening the case, and rejection of stale reporter saves.
+- The reporter editor clears after erasure. The contact API prevents an erased reporter from being edited or added back to that case.
+
+### Expanded Primary Reporter details (MIMS — 2026-11-17)
+
+**Revalidation impact:** Partial (proposed). Revalidate Primary Reporter display, edit, Save Case and reason for change.
+- Reporter & Patient shows labelled Primary Reporter details. Pending reporter edits are submitted through Save Case.
+
+### Automatic owner on New Case (MIMS — 2026-11-17)
+
+**Revalidation impact:** Partial (proposed). Revalidate case ownership on manual MI, AE and PC intake.
+- MIMS sets the eligible creator as Case Owner on manual New Case and records the assignment in the audit trail.
+
+### Reporter Country on New Case (MIMS — 2026-11-17)
+
+**Revalidation impact:** Partial (proposed). Revalidate Reporter Country on manual MI, AE and PC intake.
+- The dropdown shows all 249 catalog entries as names with two-letter codes. Country is optional, and the create API rejects values outside the catalog.
+
 ### Access review closed — C1, A6, A4 (CP Portal and MIMS — 2026-11-13)
 
 **Revalidation impact:** Full — *proposed by engineering and confirmed by Saad Rahman (compliance owner), 2026-11-13.* Access control changed (21 CFR 11.10(d)): which screens a person has in each organisation; who can switch a portal off.

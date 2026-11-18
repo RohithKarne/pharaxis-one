@@ -56,6 +56,8 @@ export default function CaseFormPage() {
   // saves whatever changed in them — instead of showing "Saved" while their
   // edits stay unsaved.
   const sectionSaves = useRef(new Map())
+  const pendingSectionReason = useRef('')
+  const [reporterDirty, setReporterDirty] = useState(false)
   const registerSectionSave = useCallback((key, entry) => {
     sectionSaves.current.set(key, entry)
     return () => { if (sectionSaves.current.get(key) === entry) sectionSaves.current.delete(key) }
@@ -63,21 +65,34 @@ export default function CaseFormPage() {
 
   async function saveCaseAndSections() {
     // Compliance Controls: one reason covers everything this click saves.
-    const reason = await askSaveReason()
+    const registeredSections = [...sectionSaves.current.values()]
+    const reason = await askSaveReason(registeredSections.flatMap(section => section.changes?.() || []))
     if (reason === null) return
+    pendingSectionReason.current = reason
     if ((await saveInfo(false, reason ? { reason } : {})) === false) return
+    await saveRegisteredSections(registeredSections, reason)
+  }
+
+  async function saveRegisteredSections(registeredSections, reason) {
     const sections = [
-      ...sectionSaves.current.values(),
+      ...registeredSections,
       { label: 'Additional fields', isDirty: dynFieldsChanged, save: () => saveDynFields(reason) },
     ]
     const failed = []
     for (const section of sections.filter(s => s.isDirty())) {
-      if (!(await section.save())) failed.push(section.label)
+      if (!(await (section.changes ? section.save(reason) : section.save()))) failed.push(section.label)
     }
     if (failed.length) {
       setSavedMsg(`Not saved: ${failed.join(', ')}`)
       toast.error(`Case saved, but not: ${failed.join(', ')}`)
     }
+  }
+
+  async function resumeCaseSave(values) {
+    setChangeControlAsk(null)
+    const reason = values.reason || pendingSectionReason.current
+    if ((await saveInfo(false, { ...values, ...(reason ? { reason } : {}) })) === false) return
+    await saveRegisteredSections([...sectionSaves.current.values()], reason)
   }
 
   const routeTarget = useMemo(() => {
@@ -122,8 +137,8 @@ export default function CaseFormPage() {
   // B19 — unsaved-changes guard. `draftStatus` is set by useCaseForm whenever
   // there's an in-flight autosave; we treat that as the canonical "dirty" signal.
   const guard = useUnsavedChangesGuard()
-  useEffect(() => { guard.setDirty(!!draftStatus && draftStatus !== 'Saved') },
-    [draftStatus, guard])
+  useEffect(() => { guard.setDirty(reporterDirty || (!!draftStatus && draftStatus !== 'Saved')) },
+    [draftStatus, guard, reporterDirty])
 
   // Ctrl+S (Cmd+S on a Mac) does what Save Case does, from anywhere on the form,
   // instead of the browser's "save page" dialog.
@@ -273,15 +288,17 @@ export default function CaseFormPage() {
           saving={saving}
           onSave={saveCaseAndSections}
         >
-          {activeStep === 1 && (
+          <div hidden={activeStep !== 1}>
             <CaseContactsTab
-              id={id} headers={headers} readOnly={readOnly}
+              key={id} id={id} headers={headers} readOnly={readOnly}
               formConfig={formConfig}
               getFieldConfig={getFieldConfig}
               getPicklistOptions={getPicklistOptions}
+              registerSectionSave={registerSectionSave}
+              onReporterDirtyChange={setReporterDirty}
               onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
             />
-          )}
+          </div>
 
           {activeStep === 2 && (
             <>
@@ -385,7 +402,7 @@ export default function CaseFormPage() {
       <CaseChangeControlModal
         ask={changeControlAsk}
         onCancel={() => setChangeControlAsk(null)}
-        onSubmit={values => { setChangeControlAsk(null); saveInfo(false, values) }}
+        onSubmit={resumeCaseSave}
       />
       {/* Compliance Controls: one reason for the stored values this save changes. */}
       <ReasonForChangeModal

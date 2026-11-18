@@ -35,10 +35,10 @@ function AdminHome({ onNavigateTab, commonSettings }) {
   const [changes, setChanges] = useState(null)
 
   useEffect(() => {
-    if (!tenantId) return undefined
+    if (!tenantId && !platform) return undefined
     let cancelled = false
     const H = { Authorization: `Bearer ${token}` }
-    httpFetch(`/api/admin/orgs/${tenantId}/readiness`, { headers: H })
+    if (tenantId) httpFetch(`/api/admin/orgs/${tenantId}/readiness`, { headers: H })
       .then(async r => {
         const data = await r.json().catch(() => ({}))
         if (!r.ok) throw new Error(data.error || `Could not load setup checks (${r.status}).`)
@@ -50,7 +50,7 @@ function AdminHome({ onNavigateTab, commonSettings }) {
       .then(data => { if (!cancelled) setChanges((data.logs || []).slice(0, 5)) })
       .catch(() => { if (!cancelled) setChanges([]) })
     return () => { cancelled = true }
-  }, [tenantId, token])
+  }, [platform, tenantId, token])
 
   const orgName = readiness?.org_name || tenants.find(t => String(t.id) === String(tenantId))?.name || 'this organisation'
   const openSystem = value => onNavigateTab?.('system', 'system', value)
@@ -58,9 +58,10 @@ function AdminHome({ onNavigateTab, commonSettings }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 14 }}>
       <div className="card">
-        <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Setup checks for {orgName}</h3></div>
+        <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>{tenantId ? `Setup checks for ${orgName}` : 'Organisation setup checks'}</h3></div>
         <div className="card-body">
-          {!readiness && !readinessError && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+          {!tenantId && <div>Select an organisation in the header to see its setup checks.</div>}
+          {tenantId && !readiness && !readinessError && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
           {readinessError && <div style={{ color: '#b91c1c' }}>{readinessError}</div>}
           {readiness && (
             <>
@@ -296,7 +297,7 @@ export default function Dashboard({ onNavigateTab, commonSettings }) {
                   Ready: <b>{readiness.readyOrgs || 0}</b> · Need attention: <b>{readiness.attentionOrgs || 0}</b> · Average score: <b>{readiness.averageScore == null ? '—' : `${readiness.averageScore}%`}</b>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Activation depends on workflow, help, content, numbering, sites, and case data readiness.
+                  Activation depends on organisation defaults, workflow, help, content, numbering, and case data readiness.
                 </div>
                 <div>
                   <button

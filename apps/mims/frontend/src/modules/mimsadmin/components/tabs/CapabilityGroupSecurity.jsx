@@ -18,7 +18,7 @@ const isDefaultGroup = g => DEFAULT_GROUP_NAMES.includes(g.name)
  */
 export default function CapabilityGroupSecurity() {
   const { token } = useAuth()
-  const { tenantId } = useAdminTenant()   // selected tenant (org) from the admin TENANT picker
+  const { tenantId } = useAdminTenant()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const orgQ = tenantId ? `?org_id=${tenantId}` : ''
 

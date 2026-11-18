@@ -1464,6 +1464,25 @@
 .cf-contact-name-text { overflow-wrap: anywhere; }
 .cf-contact-card .cf-contact-meta { order: 3; flex: 1 1 100%; }
 
+.cf-contact-card.cf-primary-reporter { padding: 18px 20px; }
+.cf-primary-reporter-title { margin: 0; font-size: 16px; }
+.cf-primary-reporter-details {
+  order: 3;
+  flex: 1 1 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(280px, calc((100% - 24px) / 2))), 1fr));
+  gap: 16px 24px;
+  margin: 6px 0 0;
+}
+.cf-primary-reporter-details dt { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.cf-primary-reporter-details dd { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cf-primary-reporter-address { grid-column: 1 / -1; }
+.cf-primary-reporter > .cf-add-contact-form { order: 4; flex: 1 1 100%; min-width: 0; }
+.cf-primary-reporter .cf-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(240px, calc((100% - 14px) / 2))), 1fr));
+}
+
 .cf-add-contact-form {
   background: #f8fafc;
   border: 1px solid #d1d9e6;

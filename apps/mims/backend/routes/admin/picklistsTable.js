@@ -39,6 +39,10 @@ function ownOrgId(req) {
   return Number.isFinite(orgId) && orgId > 0 ? orgId : -1;
 }
 
+function picklistReferenceOrg(req) {
+  return ownOrgId(req) ?? (Number(req.user.orgId) || -1);
+}
+
 function canTouchOrg(req, orgId) {
   const own = ownOrgId(req);
   return own === null || Number(orgId) === own;
@@ -145,7 +149,7 @@ async function getWhereUsed(valueRow) {
 // Returns the 8 distinct categories (with row counts).
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/picklists-table/categories', authenticate, requireRole(...ROLE), async (req, res) => {
-  const own = ownOrgId(req);
+  const own = picklistReferenceOrg(req);
   try {
     const [rows] = await pool.execute(
       `SELECT category, COUNT(*) AS value_count
@@ -168,7 +172,7 @@ router.get('/picklists-table/categories', authenticate, requireRole(...ROLE), as
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/picklists-table/fields', authenticate, requireRole(...ROLE), async (req, res) => {
   const { category } = req.query;
-  const own = ownOrgId(req);
+  const own = picklistReferenceOrg(req);
   const orgSql = own === null ? '' : ' AND org_id = ?';
   try {
     const sql = category
@@ -192,7 +196,7 @@ router.get('/picklists-table/fields', authenticate, requireRole(...ROLE), async 
 // Returns distinct non-null departments for the filter dropdown.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/picklists-table/departments', authenticate, requireRole(...ROLE), async (req, res) => {
-  const own = ownOrgId(req);
+  const own = picklistReferenceOrg(req);
   try {
     const [rows] = await pool.execute(
       `SELECT DISTINCT department

@@ -14,12 +14,11 @@ export default function FolderManager({ show, onClose, token }) {
   )
   const [folders, setFolders] = useState([])
   const [products, setProducts] = useState([])
-  const [sites, setSites] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editFolder, setEditFolder] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', product_id: '', site_id: '', description: '', status: 'Active' })
+  const [form, setForm] = useState({ name: '', product_id: '', description: '', status: 'Active' })
   const [permFolder, setPermFolder] = useState(null)
   const [permissions, setPermissions] = useState([])
   const [secGroups, setSecGroups] = useState([])
@@ -30,14 +29,12 @@ export default function FolderManager({ show, onClose, token }) {
   async function refreshFolders() {
     setLoading(true)
     try {
-      const [fRes, pRes, sRes] = await Promise.all([
+      const [fRes, pRes] = await Promise.all([
         httpFetch('/api/cm/folders?include_inactive=true', { headers: authHeaders }),
         httpFetch('/api/cm/products', { headers: authHeaders }),
-        httpFetch('/api/cm/sites', { headers: authHeaders }),
       ])
       if (fRes.ok) setFolders((await fRes.json()).folders || [])
       if (pRes.ok) setProducts((await pRes.json()).products || [])
-      if (sRes.ok) setSites((await sRes.json()).sites || [])
     } catch { /* silent */ }
     setLoading(false)
   }
@@ -82,15 +79,13 @@ export default function FolderManager({ show, onClose, token }) {
     ;(async () => {
       setLoading(true)
       try {
-        const [fRes, pRes, sRes] = await Promise.all([
+        const [fRes, pRes] = await Promise.all([
           httpFetch('/api/cm/folders?include_inactive=true', { headers: authHeaders }),
           httpFetch('/api/cm/products', { headers: authHeaders }),
-          httpFetch('/api/cm/sites', { headers: authHeaders }),
         ])
         if (cancelled) return
         if (fRes.ok) setFolders((await fRes.json()).folders || [])
         if (pRes.ok) setProducts((await pRes.json()).products || [])
-        if (sRes.ok) setSites((await sRes.json()).sites || [])
       } catch {
         /* silent */
       } finally {
@@ -102,13 +97,13 @@ export default function FolderManager({ show, onClose, token }) {
 
   function openAdd() {
     setEditFolder(null)
-    setForm({ name: '', product_id: '', site_id: '', description: '', status: 'Active' })
+    setForm({ name: '', product_id: '', description: '', status: 'Active' })
     setShowForm(true)
   }
 
   function openEdit(f) {
     setEditFolder(f)
-    setForm({ name: f.name, product_id: f.product_id || '', site_id: f.site_id || '', description: f.description || '', status: f.status || 'Active' })
+    setForm({ name: f.name, product_id: f.product_id || '', description: f.description || '', status: f.status || 'Active' })
     setShowForm(true)
   }
 
@@ -161,13 +156,6 @@ export default function FolderManager({ show, onClose, token }) {
                   {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
                 </select>
               </div>
-              <div className="cm-form-group" style={{ margin: 0 }}>
-                <label className="cm-form-label">Site</label>
-                <select aria-label="Site" className="cm-form-select" value={form.site_id} onChange={e => setForm(p => ({ ...p, site_id: e.target.value }))}>
-                  <option value="">— None —</option>
-                  {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
               <div className="cm-form-group" style={{ margin: 0, gridColumn: '1/-1' }}>
                 <label className="cm-form-label">Description</label>
                 <textarea aria-label="Description" className="cm-form-textarea" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} />
@@ -190,7 +178,6 @@ export default function FolderManager({ show, onClose, token }) {
               <tr>
                 <th>Name</th>
                 <th>Product</th>
-                <th>Site</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -200,7 +187,6 @@ export default function FolderManager({ show, onClose, token }) {
                 <tr key={f.id}>
                   <td style={{ fontWeight: 500 }}>{f.name}</td>
                   <td>{f.product_name || '—'}</td>
-                  <td>{f.site_name || '—'}</td>
                   <td><StatusBadge status={f.status || 'Active'} /></td>
                   <td>
                     {canConfigure && <div className="cm-action-btns">

@@ -25,33 +25,25 @@ export default function PicklistsTable() {
   const { token } = useAuth()
   const H = useMemo(() => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }), [token])
 
-  // Global tenant from admin header
-  const { tenants: ctxTenants, tenantId: ctxTenantId } = useAdminTenant()
+  const { tenants, tenantId } = useAdminTenant()
+  const organisation = tenants.find(item => String(item.id) === tenantId)
 
   // Reference data
   const [categories,  setCategories]  = useState([])
   const [fields,      setFields]      = useState([])  // for the "field" filter (depends on category)
-  const [tenants,     setTenants]     = useState([])
   const [departments, setDepartments] = useState([])
 
-  // Filters — tenant_id defaults to the global picker; admin can still override to "All"
   const [filter, setFilter] = useState({
     category: '',
     field_type: '',
-    tenant_id: ctxTenantId || '',
     department: '',
     search: '',
   })
-  // When the global tenant changes, sync filter only if admin hasn't explicitly broadened to "All"
-  useEffect(() => {
-    setFilter(f => (f.tenant_id === '' ? f : { ...f, tenant_id: ctxTenantId || '' }))
-  }, [ctxTenantId])
-  useEffect(() => { setTenants(ctxTenants) }, [ctxTenants])
 
   // Grid data
   const [values,   setValues]   = useState([])
   const [total,    setTotal]    = useState(0)
-  const [loading,  setLoading]  = useState(false)
+  const [loading,  setLoading]  = useState(true)
   const [flash,    setFlash]    = useState(null)
   const [selected, setSelected] = useState([])
   const [page,     setPage]     = useState(0)
@@ -66,11 +58,9 @@ export default function PicklistsTable() {
   useEffect(() => {
     Promise.all([
       httpFetch(`${API}/categories`,  { headers: H }).then(r => r.json()),
-      httpFetch(`${API}/tenants`,     { headers: H }).then(r => r.json()),
       httpFetch(`${API}/departments`, { headers: H }).then(r => r.json()),
-    ]).then(([c, t, d]) => {
+    ]).then(([c, d]) => {
       setCategories(c.categories || [])
-      setTenants(t.tenants || [])
       setDepartments(d.departments || [])
     }).catch(() => {})
   }, [H])
@@ -93,7 +83,7 @@ export default function PicklistsTable() {
       const qs = new URLSearchParams()
       if (filter.category)   qs.set('category',   filter.category)
       if (filter.field_type) qs.set('field_type', filter.field_type)
-      if (filter.tenant_id)  qs.set('tenant_id',  filter.tenant_id)
+      if (tenantId) qs.set('tenant_id', tenantId)
       if (filter.department) qs.set('department', filter.department)
       if (filter.search)     qs.set('search',     filter.search)
       qs.set('limit', PAGE_SIZE)
@@ -109,7 +99,7 @@ export default function PicklistsTable() {
     } finally {
       setLoading(false)
     }
-  }, [filter, page, H])
+  }, [filter, page, H, tenantId])
 
   useEffect(() => { loadValues() }, [loadValues])
 
@@ -180,7 +170,7 @@ export default function PicklistsTable() {
       const qs = new URLSearchParams()
       if (filter.category)   qs.set('category',   filter.category)
       if (filter.field_type) qs.set('field_type', filter.field_type)
-      if (filter.tenant_id)  qs.set('tenant_id',  filter.tenant_id)
+      if (tenantId) qs.set('tenant_id', tenantId)
       if (filter.department) qs.set('department', filter.department)
       if (filter.search)     qs.set('search',     filter.search)
       const res = await httpFetch(`${API}/export?${qs}`, { headers: H })
@@ -328,7 +318,7 @@ export default function PicklistsTable() {
       <div className="ma-pt-header">
         <h1 className="ma-pt-title">Picklists — Table Manager</h1>
         <div className="ma-pt-sub">
-          Manage picklist values across all tenants. These values drive the dropdowns rendered in the Case Form.
+          Manage Case Form picklist values for {organisation?.name || 'the selected organisation'}.
         </div>
       </div>
 
@@ -362,21 +352,6 @@ export default function PicklistsTable() {
               <option key={`${f.category}|${f.field_type}`} value={f.field_type}>
                 {f.field_type}{!filter.category ? ` (${f.category})` : ''}
               </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ma-pt-filter">
-          <label htmlFor="ma-pt-f-tenant">Tenant</label>
-          <select
-            id="ma-pt-f-tenant"
-            className="ma-pt-select"
-            value={filter.tenant_id}
-            onChange={e => setF('tenant_id', e.target.value)}
-          >
-            <option value="">— All Tenants —</option>
-            {tenants.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </div>
@@ -538,7 +513,7 @@ export default function PicklistsTable() {
           row={modal.row}
           categories={categories}
           fields={fields}
-          tenants={tenants}
+          organisation={organisation}
           H={H}
           onClose={() => setModal(null)}
           onSaved={msg => { setModal(null); showFlash(msg); loadValues() }}
@@ -684,14 +659,14 @@ function ImportCsvModal({ H, onClose, onDone }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
-function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
+function ValueModal({ mode, row, categories, organisation, H, onClose, onSaved }) {
   const isEdit = mode === 'edit'
 
   const [form, setForm] = useState(() => ({
     category: row?.category || '',
     field_type: row?.field_type || '',
     value: row?.value || '',
-    org_id: row?.org_id ? String(row.org_id) : '',
+    org_id: row?.org_id ? String(row.org_id) : String(organisation?.id ?? ''),
     department: row?.department || '',
     description: row?.description || '',
     status: row?.status || 'Active',
@@ -745,7 +720,7 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
     if (!isEdit) {
       if (!form.category.trim()) return setErr('Category is required.')
       if (!form.field_type.trim()) return setErr('Field is required.')
-      if (!form.org_id) return setErr('Tenant is required (use "All Tenants" to bulk-apply).')
+      if (!form.org_id) return setErr('Select an organisation in the header first.')
     }
 
     const payload = {
@@ -823,14 +798,6 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Need a new field? Add it via Customize Forms first.</div>
                   </div>
 
-                  <div className="ma-pt-field">
-                    <label>Tenant <span className="req">*</span></label>
-                    <select className="ma-pt-select" value={form.org_id} onChange={e => set('org_id', e.target.value)}>
-                      <option value="">— Select tenant —</option>
-                      {tenants.length > 1 && <option value="all">All Tenants (bulk apply)</option>}
-                      {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  </div>
                 </>
               )}
 

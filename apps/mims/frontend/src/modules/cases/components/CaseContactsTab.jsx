@@ -71,6 +71,8 @@ export default function CaseContactsTab({
   getFieldConfig,
   getPicklistOptions,
   onCountChange,
+  registerSectionSave,
+  onReporterDirtyChange,
   readOnly = false,
 }) {
   const [contacts, setContacts] = useState([])
@@ -82,6 +84,9 @@ export default function CaseContactsTab({
   // A case contact can be edited in place; it could only be removed and added
   // again, e.g. to give the reporter a missing email (M-104).
   const [editingId, setEditingId] = useState(null)
+  const primaryReporter = contacts.find(c => c.is_primary && c.contact_role === 'reporter')
+  const editingContact = contacts.find(c => c.id === editingId)
+  const editingPrimary = !!primaryReporter && editingContact === primaryReporter
   // Compliance Controls: editing a stored contact detail asks for one reason at Save.
   const reasonOn = useFeatureFlag('cf.theme9_compliance')
   const [reasonRequest, setReasonRequest] = useState(null)
@@ -108,17 +113,18 @@ export default function CaseContactsTab({
       const parsed = JSON.parse(raw)
       setShowContactAdd(!!parsed?.showContactAdd)
       setContactSearch(parsed?.contactSearch || '')
+      setEditingId(parsed?.editingId ?? null)
     } catch {
       // no-op
     }
   }, [id])
   useEffect(() => {
     try {
-      sessionStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch }))
+      sessionStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch, editingId }))
     } catch {
       // no-op
     }
-  }, [contactSearch, id, showContactAdd])
+  }, [contactSearch, editingId, id, showContactAdd])
 
   useEffect(() => { loadContacts() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -136,7 +142,7 @@ export default function CaseContactsTab({
   const labelFor = useCallback((label) => fieldDef(label)?.custom_label || label, [fieldDef])
   const required = useCallback((label) => !!fieldDef(label)?.is_required, [fieldDef])
 
-  async function loadContacts() {
+  const loadContacts = useCallback(async () => {
     try {
       const res = await httpFetch(`${API}/cases/${id}/contacts`, { headers })
       const data = await res.json()
@@ -146,7 +152,7 @@ export default function CaseContactsTab({
     } catch {
       setContacts([])
     }
-  }
+  }, [headers, id, onCountChange])
 
   const searchContacts = useCallback(async (q) => {
     if (q.length < 2) { setContactHits([]); return }
@@ -192,29 +198,51 @@ export default function CaseContactsTab({
     setShowContactAdd(true)
   }
 
-  function closeContactForm() {
+  const closeContactForm = useCallback(() => {
     setShowContactAdd(false)
     setEditingId(null)
     setAddContactForm(BLANK_CONTACT)
+  }, [])
+
+  const clearContactDraft = useCallback(() => {
+    closeContactForm()
+    setContactSearch('')
+    setContactHits([])
+    try {
+      sessionStorage.removeItem(`mims_case_${id}_contact_draft`)
+      sessionStorage.removeItem(`mims_case_${id}_contact_ui`)
+    } catch { /* storage unavailable */ }
+  }, [closeContactForm, id])
+
+  useEffect(() => {
+    if (editingContact?.reporter_identity_erased) clearContactDraft()
+  }, [clearContactDraft, editingContact?.reporter_identity_erased])
+
+  function finishErasure() {
+    setErasing(false)
+    clearContactDraft()
+    setContacts(prev => prev.filter(contact => contact.contact_role !== 'reporter'))
+    loadContacts()
+    loadErasure()
   }
 
   // The stored details of the contact being edited that this save would change.
-  function contactChanges() {
+  const contactChanges = useCallback((storedOnly = true) => {
     const stored = contacts.find(c => c.id === editingId)
     if (!stored) return []
     const text = v => (typeof v === 'boolean' ? (v ? '1' : '0') : String(v ?? '').trim())
     return Object.keys(BLANK_CONTACT)
-      .filter(key => key !== 'contact_id' && text(stored[key]) !== '' && text(stored[key]) !== text(addContactForm[key]))
+      .filter(key => key !== 'contact_id' && (!storedOnly || text(stored[key]) !== '') && text(stored[key]) !== text(addContactForm[key]))
       .map(key => ({
         label: key.replace(/_/g, ' ').replace(/^./, ch => ch.toUpperCase()),
         oldValue: stored[key], newValue: addContactForm[key] ?? '',
       }))
-  }
+  }, [addContactForm, contacts, editingId])
 
-  async function saveContact() {
+  const saveContact = useCallback(async (caseReason) => {
     try {
-      let reason = ''
-      if (editingId && reasonOn) {
+      let reason = caseReason || ''
+      if (caseReason === undefined && editingId && reasonOn) {
         const changes = contactChanges()
         if (changes.length) {
           reason = await new Promise(resolve => setReasonRequest({ changes, resolve }))
@@ -228,11 +256,16 @@ export default function CaseContactsTab({
         body: JSON.stringify(reason ? { ...addContactForm, reason } : addContactForm),
       })
       const data = await res.json()
+      if (data.code === 'REPORTER_IDENTITY_ERASED') {
+        clearContactDraft()
+        setContacts(prev => prev.filter(contact => contact.contact_role !== 'reporter'))
+        loadContacts()
+      }
       if (!res.ok) throw new Error(data.error)
       if (editingId) {
         setContacts(prev => prev.map(c => (c.id === editingId ? { ...c, ...data } : c)))
         closeContactForm()
-        return
+        return true
       }
       const updated = [...contacts, data]
       setContacts(updated)
@@ -242,10 +275,24 @@ export default function CaseContactsTab({
       setContactSearch('')
       sessionStorage.removeItem(`mims_case_${id}_contact_draft`)
       sessionStorage.removeItem(`mims_case_${id}_contact_ui`)
+      return true
     } catch (err) {
       toast.error(err.message)
+      return false
     }
-  }
+  }, [addContactForm, clearContactDraft, closeContactForm, contactChanges, contacts, editingId, headers, id, loadContacts, onCountChange, reasonOn])
+
+  const reporterDirty = !readOnly && isSectionVisible && editingPrimary && !editingContact.reporter_identity_erased && contactChanges(false).length > 0
+  useEffect(() => { onReporterDirtyChange?.(reporterDirty) }, [onReporterDirtyChange, reporterDirty])
+  useEffect(() => {
+    if (!reporterDirty) return
+    return registerSectionSave?.('primary-reporter', {
+      label: 'Primary Reporter',
+      isDirty: () => true,
+      changes: contactChanges,
+      save: saveContact,
+    })
+  }, [contactChanges, registerSectionSave, reporterDirty, saveContact])
 
   async function removeContact(ccId) {
     if (!await confirm('Remove this contact from the case?')) return
@@ -271,45 +318,70 @@ export default function CaseContactsTab({
   const qualificationOptions = toOptions(getPicklistOptions?.(CONTACT_SECTION, 'Qualification'))
   const contactMethodOptions = toOptions(getPicklistOptions?.(CONTACT_SECTION, 'Preferred Contact Method'))
   const languageOptions = toOptions(getPicklistOptions?.(CONTACT_SECTION, 'Language Preference'))
+  const reporterFields = [
+    ['Prefix', 'prefix', prefixOptions], ['First Name', 'first_name'], ['Last Name', 'last_name'],
+    ['Reporter Type', 'reporter_type', reporterTypeOptions], ['Contact Type', 'contact_type', contactTypeOptions],
+    ['Institution', 'institution'], ['Specialty', 'specialty'], ['Qualification', 'qualification', qualificationOptions],
+    ['Email', 'email'], ['Phone', 'phone'], ['Country', 'country', countryOptions],
+    ['Country of Reporter', 'country_of_reporter', countryReporterOptions],
+    ['Preferred Contact Method', 'preferred_contact_method', contactMethodOptions],
+    ['Language Preference', 'language_preference', languageOptions], ['Source', 'source', sourceOptions],
+    ['Consent Status', 'consent_status', consentOptions], ['Address', 'address'],
+  ]
+  const displayedContacts = primaryReporter
+    ? [primaryReporter, ...contacts.filter(c => c !== primaryReporter)]
+    : contacts
 
   return (
     <div id="tab-contacts" className="cf-tab-pane">
       {!readOnly && (
         <div className="cf-section-header-row">
-          <button className="cf-add-btn" onClick={() => { setEditingId(null); setAddContactForm(BLANK_CONTACT); setShowContactAdd(true) }}>+ Add Contact</button>
+          <button className="cf-add-btn" disabled={reporterDirty} onClick={() => { setEditingId(null); setAddContactForm(BLANK_CONTACT); setShowContactAdd(true) }}>+ Add Contact</button>
         </div>
       )}
 
       {contacts.length === 0 && !showContactAdd && <div className="cf-empty-msg">No contacts added yet.</div>}
 
-      {contacts.map(c => (
-        <div key={c.id} className={`cf-contact-card ${c.is_primary ? 'primary' : ''}`}>
+      {displayedContacts.map(c => (
+        <section key={c.id} aria-label={c === primaryReporter ? 'Primary Reporter' : undefined}
+          className={`cf-contact-card ${c.is_primary ? 'primary' : ''} ${c === primaryReporter ? 'cf-primary-reporter' : ''}`}>
           <div className="cf-contact-name">
-            <span className="cf-contact-name-text">{[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}</span>
+            {c === primaryReporter
+              ? <h3 className="cf-primary-reporter-title">Primary Reporter</h3>
+              : <span className="cf-contact-name-text">{[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}</span>}
             {/* is_primary is 0/1 from MySQL: `0 && …` printed a stray "0" after every name (M-42) */}
-            {c.is_primary ? <span className="cf-primary-badge">Primary</span> : null}
+            {c.is_primary && c !== primaryReporter ? <span className="cf-primary-badge">Primary</span> : null}
             {c.do_not_update_master ? <span className="cf-dnumd-badge">DNUMD</span> : null}
           </div>
-          <div className="cf-contact-meta">
+          {c === primaryReporter ? (editingPrimary ? renderContactEditor() : (
+            <dl className="cf-primary-reporter-details">
+              {reporterFields.filter(([label]) => formConfig && visible(label)).map(([label, key, options]) => (
+                <div key={key} className={key === 'address' ? 'cf-primary-reporter-address' : undefined}>
+                  <dt>{labelFor(label)}</dt>
+                  <dd>{c[key] ? options?.find(option => option.value === c[key])?.label || c[key] : '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          )) : <div className="cf-contact-meta">
             <span>{c.contact_type || 'Contact'}</span>
             {c.reporter_type && c.reporter_type !== c.contact_type && <span> · {c.reporter_type}</span>}
             {c.specialty && <span> · {c.specialty}</span>}
             {c.institution && <span> · {c.institution}</span>}
             {c.email && <span> · {c.email}</span>}
             {c.phone && <span> · {c.phone}</span>}
-          </div>
+          </div>}
           {!readOnly && <>
-            <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
-            <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
+            {!c.reporter_identity_erased && <button className="cf-remove-btn" disabled={reporterDirty || editingId === c.id} onClick={() => startEdit(c)}>Edit</button>}
+            <button className="cf-remove-btn" disabled={reporterDirty && c === primaryReporter} onClick={() => removeContact(c.id)}>Remove</button>
           </>}
           {/* One action per case: it erases every reporter record on the case. */}
           {canErase && c.id === contacts.find(x => x.contact_role === 'reporter' && hasIdentity(x))?.id && (
-            <button className="cf-remove-btn" onClick={() => setErasing(true)}>Erase identity</button>
+            <button className="cf-remove-btn" disabled={reporterDirty} onClick={() => setErasing(true)}>Erase identity</button>
           )}
-          {c.contact_role === 'reporter' && !hasIdentity(c) && (
+          {!!c.reporter_identity_erased && (
             <span className="cf-dnumd-badge" style={{ marginLeft: 6 }}>Identity erased</span>
           )}
-        </div>
+        </section>
       ))}
       {canErase && erasure?.intake_identity && !contacts.some(c => c.contact_role === 'reporter' && hasIdentity(c)) && (
         <div className="cf-contact-card">
@@ -322,12 +394,25 @@ export default function CaseContactsTab({
       )}
       {erasing && (
         <ReporterErasureModal caseId={id} headers={headers} preview={erasure}
-          onDone={() => { setErasing(false); loadContacts(); loadErasure() }} onCancel={() => setErasing(false)} />
+          onDone={finishErasure} onCancel={() => setErasing(false)} />
       )}
 
-      {showContactAdd && (
+      {!editingPrimary && renderContactEditor()}
+      <ReasonForChangeModal
+        open={!!reasonRequest}
+        changes={reasonRequest?.changes}
+        onClose={() => reasonRequest?.resolve('')}
+        onConfirm={({ reason }) => reasonRequest?.resolve(reason)}
+      />
+    </div>
+  )
+
+  function renderContactEditor() {
+    if (readOnly || !showContactAdd || (editingId && (!editingContact || editingContact.reporter_identity_erased))) return null
+    return (
         <div className="cf-add-contact-form">
-          <h3 className="cf-subsection-title">{editingId ? 'Edit Contact' : 'Add Contact'}</h3>
+          <h3 className="cf-subsection-title">{editingPrimary ? 'Edit Primary Reporter' : editingId ? 'Edit Contact' : 'Add Contact'}</h3>
+          {editingPrimary && <p>Use Save Case to save reporter changes.</p>}
           {!editingId && <div className="cf-contact-search-row">
             <input
               className="cf-contact-search"
@@ -405,18 +490,11 @@ export default function CaseContactsTab({
           </div>
           <div className="cf-form-actions">
             <button className="cf-cancel-btn" onClick={closeContactForm}>Cancel</button>
-            <button className="cf-save-btn" onClick={saveContact}>{editingId ? 'Save Changes' : 'Add Contact'}</button>
+            {!editingPrimary && <button className="cf-save-btn" onClick={() => saveContact()}>{editingId ? 'Save Changes' : 'Add Contact'}</button>}
           </div>
         </div>
-      )}
-      <ReasonForChangeModal
-        open={!!reasonRequest}
-        changes={reasonRequest?.changes}
-        onClose={() => reasonRequest?.resolve('')}
-        onConfirm={({ reason }) => reasonRequest?.resolve(reason)}
-      />
-    </div>
-  )
+    )
+  }
 }
 
 function hasIdentity(c) {

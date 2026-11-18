@@ -186,8 +186,8 @@ router.put('/folders/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
       hasPlatformAdminScope(req)
-        ? 'SELECT id, org_id, status FROM cm_folders WHERE id = ?'
-        : 'SELECT id, org_id, status FROM cm_folders WHERE id = ? AND org_id = ?',
+        ? 'SELECT id, org_id, status, site_id FROM cm_folders WHERE id = ?'
+        : 'SELECT id, org_id, status, site_id FROM cm_folders WHERE id = ? AND org_id = ?',
       hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Folder not found.' });
@@ -196,6 +196,7 @@ router.put('/folders/:id', authenticate, async (req, res) => {
     const { name, product_id, site_id, description } = req.body;
     if (!String(name || '').trim()) return res.status(400).json({ error: 'name is required.' });
     const status = req.body.status === undefined ? existing.status : req.body.status;
+    const siteId = site_id === undefined ? existing.site_id : site_id || null;
     if (!FOLDER_STATUSES.includes(status)) return res.status(400).json({ error: 'Status must be Active or Inactive.' });
     if (status === 'Inactive' && existing.status !== 'Inactive') {
       const busy = await liveContent(id);
@@ -203,7 +204,7 @@ router.put('/folders/:id', authenticate, async (req, res) => {
     }
     await pool.execute(
       'UPDATE cm_folders SET name = ?, product_id = ?, site_id = ?, description = ?, org_id = ?, status = ?, updated_at = NOW() WHERE id = ?',
-      [String(name).trim(), product_id || null, site_id || null, description || null, orgId, status, id]
+      [String(name).trim(), product_id || null, siteId, description || null, orgId, status, id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_folder', Number(id), { name, status });
     res.json({ message: 'Folder updated.' });

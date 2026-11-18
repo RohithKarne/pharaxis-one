@@ -257,6 +257,42 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 |---|---|
 | Which cloud, and when | Rohith — unlocks a demo environment, deploys and real backups |
 
+## Now — Retire site controls in MIMS (locked by Rohith 2026-11-17)
+
+| Step | Who | Status |
+|---|---|---|
+| Remove site controls and make organisation setup use its existing automatic defaults. | Kiranmai | Implemented locally |
+| Verify onboarding, case intake, content folders, and API connections against the live database. | Kiranmai | Pending |
+
+## Now — One organisation selector in MIMS Admin (locked by Rohith 2026-11-17)
+
+| Step | Who | Status |
+|---|---|---|
+| Replace the separate Admin Tenant scope with the signed-in organisation. | Kiranmai | Implemented locally |
+| Verify the switch, cancelled or refused switch, and settings isolation in the running app. | Kiranmai | Live verification pending |
+
+## Now — MIMS Primary Reporter details (locked by Rohith 2026-11-17)
+
+| Step | Who | Status |
+|---|---|---|
+| Expand Primary Reporter details and save edits through Save Case. | Kiranmai | Implemented locally |
+| Verify display, editing, and reopening the saved case. | Rohith | Pending |
+
+## Now — MIMS New Case owner (locked by Rohith 2026-11-17)
+
+| Step | Who | Status |
+|---|---|---|
+| Save the eligible creator as Case Owner when they use manual New Case. | Kiranmai | Implemented locally |
+| Create a new case and confirm the saved owner on the case header. | Rohith | Pending |
+
+## Now — MIMS New Case Reporter Country (locked by Rohith 2026-11-17)
+
+| Step | Who | Status |
+|---|---|---|
+| Offer all 249 catalog entries with names and two-letter codes. Accept a listed code or a blank on creation. | Kiranmai | Implemented locally |
+| Verify save and reopen on the running app with a local test agent. | Kiranmai | Pending |
+| Review the code and full workflow evidence. | Varun | Pending |
+
 ## Now — Full QA verification of MIMS case form complete module (no Jira; locked by Rohith 2026-11-16)
 
 | # | Step | Who | Done |

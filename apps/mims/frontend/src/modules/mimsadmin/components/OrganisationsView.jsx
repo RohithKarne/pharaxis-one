@@ -15,11 +15,7 @@ export default function OrganisationsView({ H, flash }) {
   const [cloneForm, setCloneForm] = useState({ source_org_id: '', target_name: '' })
   const [editingOrg, setEditingOrg] = useState(null)
   const [editOrgName, setEditOrgName] = useState('')
-  const [showSiteForm, setShowSiteForm] = useState(null)
-  const [siteForm, setSiteForm] = useState({ name: '', country: '', is_primary: false })
   const [selectedOrgIds, setSelectedOrgIds] = useState(new Set())
-  const [editingSite, setEditingSite] = useState(null)
-  const [siteEditForm, setSiteEditForm] = useState({ name: '', country: '' })
   const [orgLogos, setOrgLogos] = useState({})
   const logoInputRefs = useRef({})
   const [pendingOrgAction, setPendingOrgAction] = useState(null)
@@ -104,51 +100,6 @@ export default function OrganisationsView({ H, flash }) {
     load()
   }
 
-  async function toggleSite(site) {
-    const res = await guardedFetch(`${API_BASE}/sites/${site.id}`, {
-      method: 'PUT', headers: H,
-      body: JSON.stringify({ name: site.name, country: site.country, is_primary: site.is_primary, is_active: site.is_active ? 0 : 1 })
-    })
-    if (!res.ok) return flash('Failed to update site.', 'error')
-    flash(`Site "${site.name}" ${site.is_active ? 'deactivated' : 'activated'}.`)
-    load()
-  }
-
-  async function createSite(e) {
-    e.preventDefault()
-    if (!siteForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await guardedFetch(`${API_BASE}/orgs/${showSiteForm}/sites`, {
-      method: 'POST', headers: H, body: JSON.stringify(siteForm)
-    })
-    const data = await res.json()
-    if (!res.ok) return flash(data.error || 'Failed to create site.', 'error')
-    flash('Site created.')
-    setShowSiteForm(null)
-    setSiteForm({ name: '', country: '', is_primary: false })
-    load()
-  }
-
-  async function saveSiteEdit() {
-    if (!editingSite) return
-    if (!siteEditForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await guardedFetch(`${API_BASE}/sites/${editingSite.id}`, {
-      method: 'PUT',
-      headers: H,
-      body: JSON.stringify({
-        name: siteEditForm.name.trim(),
-        country: siteEditForm.country.trim(),
-        is_primary: editingSite.is_primary,
-        is_active: editingSite.is_active,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) return flash(data.error || 'Failed to update site.', 'error')
-    flash(`Site "${siteEditForm.name.trim()}" updated.`)
-    setEditingSite(null)
-    setSiteEditForm({ name: '', country: '' })
-    load()
-  }
-
   async function uploadOrgLogo(orgId, file) {
     if (!file) return
     const formData = new FormData()
@@ -215,7 +166,7 @@ export default function OrganisationsView({ H, flash }) {
     <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <h3>Organisations & Sites</h3>
+          <h3>Organisations</h3>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {selectedOrgIds.size > 0 && (
               <>
@@ -305,9 +256,6 @@ export default function OrganisationsView({ H, flash }) {
               />
             <div>
               <strong style={{ fontSize: 14 }}>{org.name}</strong>
-              <span style={{ fontSize: 11, marginLeft: 10, color: 'var(--text-muted)' }}>
-                {(org.sites || []).length} site{(org.sites || []).length !== 1 ? 's' : ''}
-              </span>
               <span style={{
                 fontSize: 11, marginLeft: 8, padding: '1px 7px', borderRadius: 10,
                 background: ready ? '#d4edda' : '#fff3cd',
@@ -458,117 +406,6 @@ export default function OrganisationsView({ H, flash }) {
                   </div>
                 )}
               </div>
-              <table className="admin-table" style={{ marginBottom: 8 }}>
-                <thead>
-                  <tr><th>Site</th><th>Country</th><th>Primary</th><th>Status</th><th>Action</th></tr>
-                </thead>
-                <tbody>
-                  {(org.sites || []).length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No sites yet.</td></tr>
-                  )}
-                  {(org.sites || []).map(s => (
-                    <React.Fragment key={s.id}>
-                      <tr>
-                        <td style={{ fontSize: 13 }}>{s.name}</td>
-                        <td style={{ fontSize: 12 }}>{s.country || '—'}</td>
-                        <td style={{ fontSize: 12 }}>{s.is_primary ? 'Yes' : 'No'}</td>
-                        <td><span style={{
-                          fontSize: 11, padding: '1px 7px', borderRadius: 10,
-                          background: s.is_active ? '#d4edda' : '#f8d7da',
-                          color: s.is_active ? '#155724' : '#721c24',
-                        }}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <button
-                              className="btn btn-outline"
-                              style={{ fontSize: 11, padding: '2px 8px' }}
-                              title="Edit site"
-                              onClick={() => {
-                                if (editingSite?.id === s.id) {
-                                  setEditingSite(null)
-                                  setSiteEditForm({ name: '', country: '' })
-                                } else {
-                                  setEditingSite(s)
-                                  setSiteEditForm({ name: s.name, country: s.country || '' })
-                                }
-                              }}
-                            >Edit</button>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.is_active ? 'Active' : 'Inactive'}</span>
-                            <div onClick={() => toggleSite(s)} style={{
-                              width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
-                              background: s.is_active ? '#28a745' : '#ccc',
-                              position: 'relative', transition: 'background 0.2s', flexShrink: 0
-                            }}>
-                              <div style={{
-                                width: 14, height: 14, borderRadius: '50%', background: '#fff',
-                                position: 'absolute', top: 3,
-                                left: s.is_active ? 19 : 3,
-                                transition: 'left 0.2s'
-                              }} />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                      {editingSite?.id === s.id && (
-                        <tr>
-                          <td colSpan={5} style={{ background: 'var(--bg-secondary)', padding: '10px 12px', borderBottom: '2px solid var(--primary)' }}>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                              <div>
-                                <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Site Name</label>
-                                <input aria-label="Site Name"
-                                  className="form-control"
-                                  style={{ fontSize: 13, minWidth: 180 }}
-                                  value={siteEditForm.name}
-                                  onChange={e => setSiteEditForm(f => ({ ...f, name: e.target.value }))}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Country</label>
-                                <input aria-label="Country"
-                                  className="form-control"
-                                  style={{ fontSize: 13, minWidth: 140 }}
-                                  value={siteEditForm.country}
-                                  onChange={e => setSiteEditForm(f => ({ ...f, country: e.target.value }))}
-                                  placeholder="e.g. India"
-                                />
-                              </div>
-                              <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveSiteEdit}>Save</button>
-                              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => { setEditingSite(null); setSiteEditForm({ name: '', country: '' }) }}>Cancel</button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-              {/* L4: timeout and two-step are set on Sign-in & Security. */}
-              {showSiteForm === org.id ? (
-                <form onSubmit={createSite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div>
-                    <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Site Name *</label>
-                    <input aria-label="Site Name" className="form-control" style={{ fontSize: 13 }} value={siteForm.name}
-                      onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mumbai HQ" />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Country</label>
-                    <input aria-label="Country" className="form-control" style={{ fontSize: 13 }} value={siteForm.country}
-                      onChange={e => setSiteForm(f => ({ ...f, country: e.target.value }))} placeholder="India" />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
-                    <input type="checkbox" id={`primary-${org.id}`} checked={siteForm.is_primary}
-                      onChange={e => setSiteForm(f => ({ ...f, is_primary: e.target.checked }))} />
-                    <label htmlFor={`primary-${org.id}`} style={{ fontSize: 12 }}>Primary site</label>
-                  </div>
-                  <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Add Site</button>
-                  <button className="btn btn-secondary" type="button" style={{ fontSize: 12 }}
-                    onClick={() => { setShowSiteForm(null); setSiteForm({ name: '', country: '', is_primary: false }) }}>Cancel</button>
-                </form>
-              ) : (
-                <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setShowSiteForm(org.id)}>
-                  + Add Site
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -585,7 +422,7 @@ export default function OrganisationsView({ H, flash }) {
           }}>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Edit Organisation</div>
             <div style={{ fontSize: 12, color: '#666', marginBottom: 16 }}>
-              Update organisation name. Status and sites remain in their own controls; sign-in settings are on Sign-in & Security.
+              Update the organisation name. Sign-in settings are on Sign-in & Security.
             </div>
             <div className="form-group">
               <label>Organisation Name</label>
