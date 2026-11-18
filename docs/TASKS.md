@@ -161,7 +161,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 6 | Walk on the sealed copy — client admin view, failing paths, nightly job | Kiranmai | ✅ |
 | 7 | See the platform admin's view of Sign-in & Security on screen | Kiranmai | ⏳ |
 | 8 | Push and open the pull request | Varun | ⏳ Rohith's word |
-| 9 | Next from the access review: A2/A3 (an org admin's changes reach other orgs), C1 (CP client admin can switch off the portal), A4 (screens per organisation) | Tim | ⏳ |
+| 9 | Next from the access review: A2/A3 (an org admin's changes reach other orgs), C1 (CP client admin can switch off the portal), A4 (screens per organisation) — done in #822 and #823 | Varun | ✅ |
 
 ## Now — A0/A2/A3: an organisation admin acts only inside their own organisation (no Jira; locked by Rohith 2026-11-13)
 
@@ -359,5 +359,17 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 8 | Ticket 7: Integrate `enforce_safety_screening_gate` into `miResponseSettings.js` backend and UI toggle in `MiResponseSettings.jsx` | Kiranmai, Saad | ✅ |
 | 9 | Verify end-to-end with 29 automated tests, live browser walk on Chrome (0 errors, 5 screenshots), and compile final report | Tim, Saad, John, Varun, Kiranmai | ✅ |
 
+## Now — four teams, no Chief of Staff (no Jira; locked by Rohith 2026-11-18)
 
-
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | RULES.md › Who does what: Product (Saad), Development (Varun), QA (Kiranmai), Med-affairs (John); all report to Rohith; Tim, Meera, Daniel removed | Saad | ✅ |
+| 2 | RULES.md: who answers by area; Varun builds, Kiranmai tests and reads the code; compliance and revalidation flag to Kiranmai; new session-opening prompt | Saad | ✅ |
+| 3 | CLAUDE.md, the four commands; delete `/tim`, `/meera`, `/daniel` | Varun | ✅ |
+| 4 | Compliance-owner lines in the three routine documents; PROGRESS.md gaps | Kiranmai | ✅ |
+| 5 | Check every link, heading reference and leftover name in the changed files | Kiranmai | ✅ |
+| 5b | Katrina joins the chart: simulated client persona reporting to Rohith, client acceptance view on call, `/katrina`, Calder Therapeutics test organisation | Saad | ✅ |
+| 5c | Create Katrina's test user in Calder Therapeutics on the local copy of each app, the first time she walks a screen | Kiranmai | ⏳ |
+| 5d | RULES.md › How we talk holds Rohith's full prompt, updated for the new team; *Found while working* aligned to its section 7 | Saad | ✅ |
+| 6 | Rohith uses the updated prompt from RULES.md › How we talk | Rohith | ✅ given in chat 2026-11-18 |
+| 7 | Push and open the pull request | Varun | ⏳ Rohith's word |

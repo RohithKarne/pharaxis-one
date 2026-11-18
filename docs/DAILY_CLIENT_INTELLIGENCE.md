@@ -50,7 +50,7 @@ Queries `DCI`, `MIMS` and `CP`, requesting only the `summary` field, **paginatin
 
 ## 3. The voice — Katrina Mehra
 
-Senior Director, Client Excellence. Defined in RULES.md › How we talk. **Simulated in this routine, always.**
+Senior Director, Client Excellence. Defined in RULES.md › Who does what. **Simulated in this routine, always.**
 
 She writes like an **operator**, not a product manager. She describes what her team could not do. She does not propose implementations, name files, or estimate effort. Two to five short paragraphs.
 
@@ -251,7 +251,7 @@ If that count is ever lower than the number of issues in `DCI`, an item has esca
 - **Saad Rahman** — also owns the routine's configuration, schedule, and prompt from 2026-09-29 (Bala Kaviti's until then); blocks work that skipped the lock (RULES.md › How work flows).
 - **Mark Antony** — owns the evaluation: a weekly sample checked for anchor accuracy, quote fidelity, relevance, persona discipline, and labelling. **Pulls the routine above a 5% failure rate.**
 - **Kiranmai Avuluri** — full audit of every filed ticket in week 1; spot checks thereafter.
-- **Saad Rahman** — owns the simulation control in rule 4 from 2026-10-01 (Vasu Ranabothu's until then). Vasu flagged that the routine files under Rohith's own Atlassian identity, so automated and human actions are not distinguishable in the audit history — the same flag he raised on `docs/PRODUCT_AUDIT.md`, now doubled in volume. Accepted for now; to be revisited before any client audit.
+- **Kiranmai Avuluri** (QA, compliance owner) — owns the simulation control in rule 4 from 2026-11-18 (Saad Rahman's from 2026-10-01, Vasu Ranabothu's before). Vasu flagged that the routine files under Rohith's own Atlassian identity, so automated and human actions are not distinguishable in the audit history — the same flag he raised on `docs/PRODUCT_AUDIT.md`, now doubled in volume. Accepted for now; to be revisited before any client audit.
 - **Sowmya** — owns the MI/PV boundary constraint in rule 10.
 
 ### Known constraints

@@ -36,10 +36,10 @@ The New Case dropdown lists all 249 catalog entries with country names and two-l
 
 ```
 CP Portal ── active development ── local only ── last merged: #795 (27 Oct review, E1–E5, F1–F5)
-MIMS ─────── active development ── local only ── open PR: #826 (Case Form Drops 1-3, Reports REP-1/4, Admin Remediation)
+MIMS ─────── active development ── local only ── last merged: #826 (Case Form Drops 1-3, Reports REP-1/4, Admin Remediation)
 Bridge ───── live between the two, locally ── watched by Sync Health and the Inquiry Ledger
 Documents ── six core files replace the SOP (#802)
-Team ─────── restructured 2026-11-10: Rohith → Tim → Technology (Varun) and Medical Affairs (John)
+Team ─────── restructured 2026-11-18: Rohith → Product (Saad) · Development (Varun) · QA (Kiranmai) · Med-affairs (John)
 ```
 
 | | CP Portal | MIMS |
@@ -47,6 +47,10 @@ Team ─────── restructured 2026-11-10: Rohith → Tim → Technolog
 | Last full screen walk | 10 Oct 2026, every admin screen and portal page | 14 Oct 2026, access review and revalidation pass |
 | Revalidation flag (Unreleased) | Full | Partial |
 | Tagged release | None — tags paused by Rohith, 2026-10-04 | None |
+
+## Done — 2026-11-18: four teams, no Chief of Staff (locked by Rohith)
+
+Rohith restructured the team. Four teams, one person each, all reporting to him: **Product** Saad, **Development** Varun, **QA** Kiranmai, **Med-affairs** John. Tim (Chief of Staff), Meera and Daniel are removed. An ask with no name goes to the person whose area it is. Varun now writes the code; Kiranmai tests it on screen and reads it as second reader. Compliance, validation and the revalidation flag move from Saad to Kiranmai. Changed: RULES.md › Who does what, How work flows, the session-opening prompt; CLAUDE.md; the four commands; `/tim`, `/meera`, `/daniel` deleted; compliance-owner lines in the three routine documents. Same day: **Katrina** (Katrina Mehra, simulated client persona) joins the chart, reporting to Rohith. She uses MIMS and CP Portal in the Calder Therapeutics test organisation and gives the client acceptance view when Rohith calls for it; `/katrina` added. Older entries below keep the names of the time. **Not checked:** the new commands invoked in a fresh session; Katrina's test users are not created yet.
 
 ## Done — 2026-11-16: MIMS Admin Clinical Governance & Regulatory Capabilities Remediation (Phases 1 & 2, locked by Rohith)
 
@@ -271,11 +275,13 @@ What our way of working does not yet enforce, said openly.
 | **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see RULES.md › Who does what), so this is still a build task with a name against it. | Varun |
 | **Releases are not tagged** | Paused by Rohith on 2026-10-04 (RULES.md › Getting a change to main); the old `v1.0.0` tag is deleted. Changes are logged in `docs/CHANGELOG.md` under Unreleased, with their revalidation flags. The release workflows have never run. | Varun |
 | **No automated test is written any more** | RULES.md › Proving it works retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
-| **The tester is the author** | Since 2026-09-28 Kiranmai writes and tests most changes, and Varun reviews the code and signs. FDA's General Principles of Software Validation (section 4.9, independence of review) calls self-validation extremely difficult; our independence rests on Varun's reading of her evidence, not on a separate tester. **Replaces** the 2026-09-20 gap *"the author is usually the reviewer"*, which closed the same day. | Rohith |
+| ~~**The tester is the author**~~ | **Closed 2026-11-18.** Varun writes the code; Kiranmai (QA) tests it and does not write it. Before: since 2026-09-28 Kiranmai wrote and tested most changes, and Varun reviewed the code and signed. FDA's General Principles of Software Validation (section 4.9, independence of review) calls self-validation extremely difficult; our independence rests on Varun's reading of her evidence, not on a separate tester. **Replaces** the 2026-09-20 gap *"the author is usually the reviewer"*, which closed the same day. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. The regulatory position — Saad's from 2026-10-01, Vasu's before — is stated and never tested from outside. | Rohith |
-| **Compliance is held by the product owner** | Vasu left 2026-10-01 and Saad took compliance, validation and GxP alongside product. The person who defines a feature also rules on its compliance and confirms its revalidation flag; a client's supplier audit looks for those two to be independent. **From 2026-11-10 Saad also reports to the Head of Technology**, so compliance sits inside engineering's own line. Rohith set it; Saad said so once. Rohith's sign-off is the control that remains. | Rohith |
-| **Work found mid-build skips the lock** | From 2026-10-01 (RULES.md › How work flows, *Found while working*) a defect, a miss or a new feature found while working is built in the same session without Rohith's prior approval. It is still its own ticket and its own commit, checked on the real screen, named in the report, and not pushed until he says so — but nobody outside the session agrees it before it is built. | Rohith |
-| **AI governance is unstaffed** | Mark Antony left 2026-09-20. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** Clinical judgement, unstaffed from 2026-09-20 (Sowmya), moved to John's Medical Affairs team on 2026-11-10. | Rohith |
+| ~~**Compliance is held by the product owner**~~ | **Closed 2026-11-18:** compliance moved to Kiranmai (QA), who reports to Rohith, not to engineering. Before: Vasu left 2026-10-01 and Saad took compliance, validation and GxP alongside product. The person who defines a feature also rules on its compliance and confirms its revalidation flag; a client's supplier audit looks for those two to be independent. **From 2026-11-10 Saad also reports to the Head of Technology**, so compliance sits inside engineering's own line. Rohith set it; Saad said so once. Rohith's sign-off is the control that remains. | Rohith |
+| **Work found mid-build skips the lock** | From 2026-10-01 (RULES.md › How work flows, *Found while working*) a defect, a miss or a new feature found while working is built in the same session without Rohith's prior approval. It is still its own ticket and its own commit, checked on the real screen, named in the report, and not pushed until he says so — but nobody outside the session agrees it before it is built. **Narrowed 2026-11-18:** only finds inside the agreed scope; a significant product decision, architecture change, wider scope or risk goes to Rohith first. | Rohith |
+| **AI governance is unstaffed** | Mark Antony left 2026-09-20. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** Clinical judgement, unstaffed from 2026-09-20 (Sowmya), moved to John's Medical Affairs team on 2026-11-10; John alone from 2026-11-18. | Rohith |
+| **The code reviewer is the author** | From 2026-11-18 Varun writes and reviews his own code. Independence rests on Kiranmai's second reading and screen walk, not on a second engineer. | Rohith |
+| **One medical voice** | From 2026-11-18 John alone holds clinical judgement, medical information and safety, and medical-legal review. No one checks his medical view except Rohith; safety and promotional review sit with one person. | Rohith |
 
 
 ---
