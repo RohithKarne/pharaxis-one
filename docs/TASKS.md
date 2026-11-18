@@ -334,5 +334,6 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 5 | Check every link, heading reference and leftover name in the changed files | Kiranmai | ✅ |
 | 5b | Katrina joins the chart: simulated client persona reporting to Rohith, client acceptance view on call, `/katrina`, Calder Therapeutics test organisation | Saad | ✅ |
 | 5c | Create Katrina's test user in Calder Therapeutics on the local copy of each app, the first time she walks a screen | Kiranmai | ⏳ |
-| 6 | Rohith updates his own session-opening prompt from RULES.md › How we talk | Rohith | ⏳ |
+| 5d | RULES.md › How we talk holds Rohith's full prompt, updated for the new team; *Found while working* aligned to its section 7 | Saad | ✅ |
+| 6 | Rohith uses the updated prompt from RULES.md › How we talk | Rohith | ✅ given in chat 2026-11-18 |
 | 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
