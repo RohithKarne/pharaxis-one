@@ -461,7 +461,7 @@ export default function AdminProductsPanel({ H, flash }) {
         </div></div>
         <div className="card"><div className="card-header"><h3>Add Downstream Assignment</h3></div><div className="card-body">
           <form onSubmit={addGroupAssignment} style={{ display: 'grid', gap: 10 }}>
-            <select className="form-control" value={assignmentForm.target_type} onChange={e => setAssignmentForm(f => ({ ...f, target_type: e.target.value }))}>{(targetTypes.length ? targetTypes : [{ key: 'transmission_rule' }, { key: 'report_definition' }, { key: 'case_form_definition' }, { key: 'cm_template' }, { key: 'site_response_template' }]).map(t => <option key={t.key} value={t.key}>{t.key}</option>)}</select>
+            <select className="form-control" value={assignmentForm.target_type} onChange={e => setAssignmentForm(f => ({ ...f, target_type: e.target.value }))}>{(targetTypes.length ? targetTypes : [{ key: 'transmission_rule' }, { key: 'report_definition' }, { key: 'case_form_definition' }, { key: 'cm_template' }]).filter(t => t.key !== 'site_response_template').map(t => <option key={t.key} value={t.key}>{t.key}</option>)}</select>
             <input className="form-control" placeholder="Target ID (optional for rule placeholder)" value={assignmentForm.target_id} onChange={e => setAssignmentForm(f => ({ ...f, target_id: e.target.value }))} />
             <input className="form-control" placeholder="Label / rule name" value={assignmentForm.label} onChange={e => setAssignmentForm(f => ({ ...f, label: e.target.value }))} />
             <button className="btn btn-primary" type="submit">Add Assignment</button>

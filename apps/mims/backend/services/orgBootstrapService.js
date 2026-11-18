@@ -163,7 +163,8 @@ async function ensureDefaultSite(conn, orgId) {
   if (existing?.id) return existing.id;
 
   const [insertResult] = await conn.execute(
-    'INSERT INTO sites (org_id, name, country, is_primary, is_active) VALUES (?, ?, ?, 1, 1)',
+    `INSERT INTO sites (org_id, name, country, is_primary, is_active) VALUES (?, ?, ?, 1, 1)
+     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_primary = 1, is_active = 1`,
     [orgId, 'Primary Site', 'United States']
   );
   return insertResult.insertId;
@@ -403,7 +404,6 @@ async function getOrgReadinessWithConnection(conn, orgId) {
   ] = await Promise.all([
     conn.execute(
       `SELECT
-         COUNT(*) AS total_sites,
          SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_sites
        FROM sites
        WHERE org_id = ?`,
@@ -478,9 +478,9 @@ async function getOrgReadinessWithConnection(conn, orgId) {
   const checks = [
     {
       key: 'sites',
-      label: 'Active site baseline',
+      label: 'Organisation defaults',
       ok: counts.sites > 0,
-      detail: counts.sites > 0 ? `${counts.sites} active site(s)` : 'No active site configured.',
+      detail: counts.sites > 0 ? 'Defaults configured.' : 'Run Bootstrap to restore the organisation defaults.',
     },
     {
       key: 'workflow',
@@ -518,9 +518,6 @@ async function getOrgReadinessWithConnection(conn, orgId) {
   const warnings = [];
   if (counts.helpCoverage > 0 && counts.helpCoverage < counts.helpTotal) {
     warnings.push(`Help coverage is partial at ${counts.helpCoverage}/${counts.helpTotal}.`);
-  }
-  if ((siteCounts?.total_sites || 0) > counts.sites) {
-    warnings.push('One or more sites exist but are inactive.');
   }
 
   const passedChecks = checks.filter((check) => check.ok).length;

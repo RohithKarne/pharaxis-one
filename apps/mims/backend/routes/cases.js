@@ -858,6 +858,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
 // active governed values that POST /cases checks the intake against. The screen
 // used its own fixed lists, most of which the check refuses (360 walk M-49).
 const INTAKE_LISTS = ['reporter_type', 'age_unit', 'gender', 'route_of_admin', 'ae_outcome', 'pc_category'];
+const INTAKE_COUNTRY_CODES = new Set(ISO_COUNTRIES.map(([code]) => code));
 router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('case.create'), async (req, res) => {
   try {
     // Same org resolution as POST /cases, so the lists match what it checks.
@@ -876,6 +877,7 @@ router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('c
     );
     const lists = Object.fromEntries(INTAKE_LISTS.map((name) => [name, []]));
     for (const row of rows) lists[row.list].push({ value: row.value, label: row.label || row.value });
+    lists.country = ISO_COUNTRIES.map(([code, name]) => ({ value: code, label: `${name} (${code})` }));
     return res.json(lists);
   } catch (err) {
     logger.error({ err, route: '/api/cases/intake-lists', user_id: req.user?.userId }, 'Failed to load intake lists');
@@ -1233,6 +1235,10 @@ router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) =
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
 router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), forwardErrors(async (req, res) => {
+  const reporterCountry = req.body.reporter?.country;
+  if (reporterCountry != null && reporterCountry !== '' && !INTAKE_COUNTRY_CODES.has(reporterCountry)) {
+    return res.status(400).json({ error: 'Select a valid country from the Country list.' });
+  }
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1254,13 +1260,26 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       description,
       internal_notes,
     } = req.body;
-    const ownerId = assign_to_me === true ? req.user.userId : null;
-
     const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
-    const org_id = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
+    const globalAdmin = hasGlobalAdminScope(req.user);
+    const org_id = globalAdmin ? requestedOrgId : req.user.orgId;
     if (!org_id) {
       await conn.rollback(); /* WP2: release handled by the finally — was double-released, which could hand the same pooled connection to two requests */
       return res.status(400).json({ error: 'org_id is required' });
+    }
+    let ownerId = assign_to_me === true ? req.user.userId : null;
+    if (ownerId && intake_channel === 'manual') {
+      const [[eligibleOwner]] = await conn.execute(
+        `SELECT u.id FROM users u
+         WHERE u.id = ? AND u.is_active = 1
+           AND (? = 1 OR EXISTS (
+             SELECT 1 FROM user_org_access uoa
+             WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
+           ))
+         LIMIT 1`,
+        [ownerId, globalAdmin ? 1 : 0, org_id]
+      );
+      ownerId = eligibleOwner?.id ?? null;
     }
     // Site concept retired from the UI. Users no longer pick a site, so resolve
     // the org's default (primary) site behind the scenes to keep site-scoped

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import OrganisationSwitcher from '../../../shared/components/OrganisationSwitcher'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSAdminShell from '../components/MIMSAdminShell'
 
@@ -45,6 +46,7 @@ function MIMSAdminStandaloneHeader() {
       </div>
 
       <div className="mims-admin-standalone-meta">
+        <OrganisationSwitcher />
         <div className="mims-admin-standalone-user">
           <button
             type="button"

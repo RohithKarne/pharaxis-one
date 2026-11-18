@@ -1,7 +1,7 @@
 /**
  * Organizations.jsx — MIMS Admin top-level tab
  *
- * Manages tenants (organisations) + sites + per-org 2FA + session timeout + logos.
+ * Manages organisations and their onboarding, status and logos.
  * Reuses OrganisationsView from the legacy admin-compatibility folder (will be moved
  * inline once the platform admin module cleanup is complete). Canonical backend route
  * is `/api/admin/platform/orgs*`.

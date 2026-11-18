@@ -183,7 +183,7 @@ export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
                 window_minutes: option?.mode === 'threshold' ? (f.window_minutes || 15) : 0,
               }))
             }}>
-              {ALERT_EVENT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {ALERT_EVENT_OPTIONS.filter(option => option.value !== 'site_deactivated' || form.event_type === 'site_deactivated').map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select></div>
             <div><label style={{ fontSize: 12 }}>Severity</label><select aria-label="Severity" className="form-control" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}><option value="medium">Medium</option><option value="high">High</option></select></div>
             <div><label style={{ fontSize: 12 }}>Channels</label><select aria-label="Channels" className="form-control" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))}><option value="email">Email only</option><option value="in_app">In-app only</option><option value="email,in_app">Email + In-app</option></select></div>

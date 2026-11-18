@@ -8,26 +8,25 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
 import Icon from './Icon'
+import OrganisationSwitcher from './OrganisationSwitcher'
 
 export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menuOpen = false }) {
-  const { user, token, orgName, orgId, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials } = useAuth()
+  const { user, token, orgName, orgId, refreshOrgAccess, logout, getInitials } = useAuth()
   const navigate = useNavigate()
 
-  const [orgLogoUrl, setOrgLogoUrl] = useState(null)
+  const [orgLogo, setOrgLogo] = useState(null)
+  const orgLogoUrl = orgLogo?.orgId === orgId ? orgLogo?.url : null
   const [userOpen,     setUserOpen]     = useState(false)
-  const [orgOpen,      setOrgOpen]      = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordMsg, setPasswordMsg] = useState({ type: '', text: '' })
   const [savingPassword, setSavingPassword] = useState(false)
   const userRef     = useRef(null)
-  const orgRef      = useRef(null)
 
   // Close dropdowns on outside click
   useEffect(() => {
     function handler(e) {
       if (userRef.current    && !userRef.current.contains(e.target))    setUserOpen(false)
-      if (orgRef.current     && !orgRef.current.contains(e.target))     setOrgOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -41,10 +40,12 @@ export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menu
 
   useEffect(() => {
     if (!token) return
+    let active = true
     httpFetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.logo_url) setOrgLogoUrl(data.logo_url) })
+      .then(data => { if (active) setOrgLogo({ orgId, url: data?.logo_url || null }) })
       .catch(() => {})
+    return () => { active = false }
   }, [orgId, token])
 
   const today = new Date().toLocaleDateString('en-US', {
@@ -163,31 +164,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick, onMenuClick, menu
 
         <div className="mims-header-divider" />
 
-        {/* Org — clickable switcher if user has multiple orgs */}
-        <div className="mims-header-meta" ref={orgRef}
-          style={{ cursor: allOrgs.length > 1 ? 'pointer' : 'default', position: 'relative', userSelect: 'none' }}
-          onClick={() => allOrgs.length > 1 && setOrgOpen(o => !o)}
-        >
-          <span className="mims-meta-label">
-            Organization {allOrgs.length > 1 && <span style={{ fontSize: 10 }}>▾</span>}
-          </span>
-          <span className="mims-meta-value">
-            {orgName || 'MIMS'}
-          </span>
-          {orgOpen && allOrgs.length > 1 && (
-            <div className="mims-dropdown" style={{ minWidth: 180, top: '100%', left: 0 }}>
-              {allOrgs.map(o => (
-                <div key={o.orgId} className="mims-dropdown-item"
-                  style={{ fontWeight: o.orgName === orgName ? 700 : 400 }}
-                  onClick={() => { setOrgOpen(false); if (o.orgName !== orgName) switchOrg(o.orgId) }}
-                >
-                  {o.orgName === orgName && <span style={{ marginRight: 6 }}>✓</span>}
-                  {o.orgName}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <OrganisationSwitcher />
 
         {/* Primary Site removed — site concept retired from the application. */}
 

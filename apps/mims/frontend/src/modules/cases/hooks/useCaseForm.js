@@ -224,9 +224,9 @@ export default function useCaseForm(id, token) {
 
   // Save Case asks once for everything it is about to save. Returns the reason,
   // '' when none is needed, or null when the user cancelled.
-  async function askSaveReason() {
+  async function askSaveReason(sectionChanges = []) {
     if (!reasonOn) return ''
-    const changes = [...coreChanges(), ...(dynFieldsChanged() ? dynChanges() : [])]
+    const changes = [...coreChanges(), ...(dynFieldsChanged() ? dynChanges() : []), ...sectionChanges]
     if (!changes.length) return ''
     const reason = await askReason(changes)
     if (!reason) {
@@ -276,7 +276,7 @@ export default function useCaseForm(id, token) {
         if (!isAutoSave) setChangeControlAsk({ needs: data.code === 'PASSWORD_REQUIRED' ? 'password' : 'reason', message: data.error })
         heldReason.current = data.code === 'PASSWORD_REQUIRED' ? (changeControl.reason || '') : ''
         setSavedMsg('')
-        return
+        return false
       }
       heldReason.current = ''
       if (!res.ok) {
@@ -325,6 +325,7 @@ export default function useCaseForm(id, token) {
         if (why) toast.error(`Save failed${why}`)
         setTimeout(() => setSavedMsg(''), why ? 8000 : 3000)
       }
+      return false
     } finally {
       setSaving(false)
     }

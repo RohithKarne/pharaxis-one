@@ -458,7 +458,18 @@ async function getActiveOrgRowsForUser(userId) {
 }
 
 async function resolvePlatformAdminContext(user, requestedOrgId = null) {
-  const orgRows = await getActiveOrgRowsForUser(user.id);
+  // Platform admins already administer all active organisations. Include ones
+  // without a personal membership so a single selector can reach them too.
+  const [orgRows] = await pool.execute(
+    `SELECT o.id AS org_id, o.name AS org_name, uoa.primary_site_id, s.name AS site_name,
+            uoa.user_id AS membership_user_id
+     FROM organisations o
+     LEFT JOIN user_org_access uoa ON uoa.org_id = o.id AND uoa.user_id = ? AND uoa.is_active = 1
+     LEFT JOIN sites s ON s.id = uoa.primary_site_id
+     WHERE o.is_active = 1
+     ORDER BY (uoa.user_id IS NULL), uoa.last_accessed_at DESC, o.name, o.id`,
+    [user.id]
+  );
   const allOrgs = orgRows.map((row) => ({
     orgId: row.org_id,
     orgName: row.org_name,
@@ -469,7 +480,7 @@ async function resolvePlatformAdminContext(user, requestedOrgId = null) {
 
   const selected = requestedOrgId
     ? orgRows.find((row) => Number(row.org_id) === Number(requestedOrgId)) || null
-    : orgRows[0] || null;
+    : orgRows.find(row => row.membership_user_id != null) || null;
 
   return {
     orgRows,
@@ -2046,7 +2057,9 @@ const authController = {
       const { orgId } = req.body;
       if (!orgId) return res.status(400).json({ error: 'orgId is required.' });
 
-      const [[access]] = await pool.execute(
+      const platformAdmin = hasGlobalAdminScope(req.user);
+      const platformContext = platformAdmin ? await resolvePlatformAdminContext({ id: req.user.userId }, orgId) : null;
+      const [[membership]] = platformAdmin ? [[]] : await pool.execute(
         `SELECT uoa.primary_site_id, uoa.role_at_org, uoa.site_permission,
                 o.name AS org_name, o.session_timeout_minutes, s.name AS site_name
          FROM user_org_access uoa
@@ -2055,11 +2068,12 @@ const authController = {
          WHERE uoa.user_id = ? AND uoa.org_id = ? AND uoa.is_active = 1 AND o.is_active = 1`,
         [req.user.userId, orgId]
       );
+      const access = platformAdmin ? platformContext.selected : membership;
 
       if (!access) return res.status(403).json({ error: 'You do not have access to this organisation.' });
 
-      const orgRows = await getActiveOrgRowsForUser(req.user.userId);
-      const allOrgs = orgRows.map(o => ({
+      const orgRows = platformAdmin ? [] : await getActiveOrgRowsForUser(req.user.userId);
+      const allOrgs = platformContext?.allOrgs ?? orgRows.map(o => ({
         orgId: o.org_id,
         orgName: o.org_name,
         siteId: o.primary_site_id,
@@ -2073,14 +2087,15 @@ const authController = {
       );
 
       const siteId = access.primary_site_id;
-      const roleForOrg = access.role_at_org || req.user.role;
+      const roleForOrg = platformAdmin ? 'admin' : access.role_at_org || req.user.role;
+      const modules = await getUserModules(req.user.userId, platformAdmin ? undefined : Number(orgId));
       const token = issueToken({
         userId: req.user.userId,
         email: req.user.email,
-        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
+        role: platformAdmin ? 'platform_admin' : roleForOrg,
         orgId: Number(orgId),
         siteId,
-        ...(hasGlobalAdminScope(req.user) ? { platformAdmin: true } : {}),
+        ...(platformAdmin ? { platformAdmin: true } : {}),
       });
       await trackSessionToken(req.user.userId, token);
       const { sessionTimeout: platformTimeout } = await getPlatformSignIn(); // L4: one timeout
@@ -2089,7 +2104,7 @@ const authController = {
       await logLoginAudit({
         userId: req.user.userId,
         userName: req.user.email,
-        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
+        role: platformAdmin ? 'platform_admin' : roleForOrg,
         status: 'success',
         authEvent: 'org_switch',
         metadata: { fromOrgId: req.user.orgId, toOrgId: Number(orgId) },
@@ -2103,6 +2118,7 @@ const authController = {
         orgName: access.org_name,
         siteName: access.site_name,
         allOrgs,
+        modules,
         sessionTimeout: platformTimeout,
         role: roleForOrg,
       });

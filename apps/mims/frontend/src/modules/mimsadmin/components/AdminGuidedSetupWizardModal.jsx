@@ -13,10 +13,9 @@ async function send(url, H, method, body) {
 
 export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, onComplete }) {
   const [step, setStep] = useState(1)
-  const primary = (org?.sites || []).find(s => s.is_primary) || (org?.sites || [])[0] || null
 
   // States for different steps
-  const [orgDetails, setOrgDetails] = useState({ name: org?.name || '', country: primary?.country || '', primarySite: primary?.name || '' })
+  const [orgName, setOrgName] = useState(org?.name || '')
   const [adminUser, setAdminUser] = useState({ userId: '', email: '', fullName: '' })
   const [readiness, setReadiness] = useState(org?.readiness || null)
   const [error, setError] = useState('')
@@ -24,7 +23,7 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
   const [loading, setLoading] = useState(false)
 
   const steps = [
-    { id: 1, title: 'Org Details & Primary Site' },
+    { id: 1, title: 'Organisation Details' },
     { id: 2, title: 'User Provisioning' },
     { id: 3, title: 'Picklists & Product Dictionary' },
     { id: 4, title: 'Workflow States & Transitions' },
@@ -42,7 +41,7 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
   const adminStarted = !!(adminUser.userId.trim() || adminUser.email.trim() || adminUser.fullName.trim())
 
   function stepError() {
-    if (step === 1 && (!orgDetails.name.trim() || !orgDetails.primarySite.trim())) return 'Organisation name and primary site name are required.'
+    if (step === 1 && !orgName.trim()) return 'Organisation name is required.'
     if (step === 2 && adminStarted && (!adminUser.userId.trim() || !adminUser.email.trim() || !adminUser.fullName.trim())) {
       return 'Fill in User ID, email and full name, or leave all three empty to add the admin later.'
     }
@@ -61,19 +60,9 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
     setError('')
     const done = []
     try {
-      if (orgDetails.name.trim() !== org.name) {
-        await send(`/api/admin/platform/orgs/${org.id}`, H, 'PUT', { name: orgDetails.name.trim() })
+      if (orgName.trim() !== org.name) {
+        await send(`/api/admin/platform/orgs/${org.id}`, H, 'PUT', { name: orgName.trim() })
         done.push('organisation renamed')
-      }
-      const site = { name: orgDetails.primarySite.trim(), country: orgDetails.country.trim() || null, is_primary: 1 }
-      if (primary) {
-        if (site.name !== primary.name || (site.country || '') !== (primary.country || '')) {
-          await send(`/api/admin/platform/sites/${primary.id}`, H, 'PUT', { ...site, is_active: primary.is_active ? 1 : 0 })
-          done.push('primary site updated')
-        }
-      } else {
-        await send(`/api/admin/platform/orgs/${org.id}/sites`, H, 'POST', site)
-        done.push('primary site added')
       }
       if (adminStarted) {
         const { groups = [] } = await send('/api/admin/users/security-groups', H, 'GET')
@@ -91,7 +80,7 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
       const result = await send(`/api/admin/platform/orgs/${org.id}/bootstrap`, H, 'POST')
       if (result?.readiness) setReadiness(result.readiness)
       done.push('baseline seeded')
-      flash(`Setup saved for ${orgDetails.name.trim()}: ${done.join(', ')}.`)
+      flash(`Setup saved for ${orgName.trim()}: ${done.join(', ')}.`)
       onComplete?.()
       onClose()
     } catch (e) {
@@ -149,18 +138,10 @@ export default function AdminGuidedSetupWizardModal({ org, onClose, H, flash, on
         <div style={{ flex: 1, overflowY: 'auto', marginBottom: 24 }}>
           {step === 1 && (
             <div>
-              <h4 style={{ marginBottom: 16 }}>Step 1: Org Details & Primary Site</h4>
+              <h4 style={{ marginBottom: 16 }}>Step 1: Organisation Details</h4>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Organisation Name *</label>
-                <input aria-label="Organisation Name" className="form-control" style={{ width: '100%' }} value={orgDetails.name} onChange={e => setOrgDetails({...orgDetails, name: e.target.value})} />
-              </div>
-              <div className="form-group" style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Country</label>
-                <input aria-label="Country" className="form-control" style={{ width: '100%' }} value={orgDetails.country} onChange={e => setOrgDetails({...orgDetails, country: e.target.value})} placeholder="e.g. India" />
-              </div>
-              <div className="form-group" style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Primary Site Name *</label>
-                <input aria-label="Primary Site Name" className="form-control" style={{ width: '100%' }} value={orgDetails.primarySite} onChange={e => setOrgDetails({...orgDetails, primarySite: e.target.value})} placeholder="e.g. HQ" />
+                <input aria-label="Organisation Name" className="form-control" style={{ width: '100%' }} value={orgName} onChange={e => setOrgName(e.target.value)} />
               </div>
             </div>
           )}

@@ -83,6 +83,8 @@ async function erasurePreview(exec, caseId) {
  * the portal is told, even if someone had already removed the details by hand).
  */
 async function eraseReporterIdentity(conn, caseId, { userId, userName, note, always = false }) {
+  // Serialize with guarded reporter-contact writes against this case.
+  await conn.execute('SELECT id FROM cases WHERE id = ? FOR UPDATE', [caseId]);
   // Read who the reporter is before any of it is blanked: the notes are scrubbed with it.
   const [reporters] = await conn.execute(
     'SELECT first_name, last_name, email, phone, organisation FROM case_reporter WHERE case_id = ?', [caseId]);

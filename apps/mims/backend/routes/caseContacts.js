@@ -19,11 +19,15 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 // Verify parent case belongs to requesting user's org
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 const { CONTACT_FIELDS, missingRequiredFields } = require('../services/requiredFields');
-const { writeCaseAudit } = require('../services/caseHelpers');
+const { withTxn, writeCaseAudit } = require('../services/caseHelpers');
 
 // Contact changes go into the case audit trail (M-110): a reporter's details
 // could be added, changed or removed with no record.
 const contactLabel = (c) => [c?.first_name, c?.last_name].filter(Boolean).join(' ') || `contact ${c?.id || ''}`.trim();
+const erasedReporterConflict = res => res.status(409).json({
+  code: 'REPORTER_IDENTITY_ERASED',
+  error: 'The reporter identity was erased. These reporter details cannot be saved.',
+});
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -64,8 +68,10 @@ router.get('/cases/:id/contacts', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     const [rows] = await pool.execute(
-      `SELECT cc.*, c.email AS master_email, c.phone AS master_phone
+      `SELECT cc.*, c.email AS master_email, c.phone AS master_phone,
+              (cc.contact_role = 'reporter' AND cs.reporter_erased_at IS NOT NULL) AS reporter_identity_erased
        FROM case_contacts cc
+       JOIN cases cs ON cs.id = cc.case_id
        LEFT JOIN contacts c ON cc.contact_id = c.id
        WHERE cc.case_id = ?
        ORDER BY cc.is_primary DESC, cc.id ASC`,
@@ -99,27 +105,36 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
     }
 
     // The admin's required fields (Customize Forms) are enforced here, not only shown.
-    const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [req.params.id]);
+    const [[caseRow]] = await pool.execute('SELECT org_id, reporter_erased_at FROM cases WHERE id = ?', [req.params.id]);
+    if (caseRow?.reporter_erased_at && String(contact_role).trim().toLowerCase() === 'reporter') {
+      return erasedReporterConflict(res);
+    }
     const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', req.body, CONTACT_FIELDS);
     if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
 
-    const [result] = await pool.execute(
-      `INSERT INTO case_contacts
-        (case_id, contact_id, contact_role, do_not_update_master, is_primary,
-         first_name, last_name, contact_type, prefix, reporter_type, source, consent_status,
-         specialty, institution, country, country_of_reporter, qualification,
-         preferred_contact_method, language_preference, phone, email, address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.params.id, contact_id || null, contact_role,
-        do_not_update_master ? 1 : 0, is_primary ? 1 : 0,
-        first_name || null, last_name || null, contact_type || null,
-        prefix || null, reporter_type || null, source || null, consent_status || null,
-        specialty || null, institution || null, country || null, country_of_reporter || null,
-        qualification || null, preferred_contact_method || null, language_preference || null,
-        phone || null, email || null, address || null
-      ]
-    );
+    const result = await withTxn(async conn => {
+      const [[lockedCase]] = await conn.execute('SELECT reporter_erased_at FROM cases WHERE id = ? FOR UPDATE', [req.params.id]);
+      if (lockedCase?.reporter_erased_at && String(contact_role).trim().toLowerCase() === 'reporter') return null;
+      const [inserted] = await conn.execute(
+        `INSERT INTO case_contacts
+          (case_id, contact_id, contact_role, do_not_update_master, is_primary,
+           first_name, last_name, contact_type, prefix, reporter_type, source, consent_status,
+           specialty, institution, country, country_of_reporter, qualification,
+           preferred_contact_method, language_preference, phone, email, address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          req.params.id, contact_id || null, contact_role,
+          do_not_update_master ? 1 : 0, is_primary ? 1 : 0,
+          first_name || null, last_name || null, contact_type || null,
+          prefix || null, reporter_type || null, source || null, consent_status || null,
+          specialty || null, institution || null, country || null, country_of_reporter || null,
+          qualification || null, preferred_contact_method || null, language_preference || null,
+          phone || null, email || null, address || null
+        ]
+      );
+      return inserted;
+    });
+    if (!result) return erasedReporterConflict(res);
 
     // DNUMD sync-back: if master updates are allowed and contact exists, sync fields back
     if (!do_not_update_master && contact_id) {
@@ -169,12 +184,18 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
     const [[before]] = await pool.execute('SELECT * FROM case_contacts WHERE id = ?', [req.params.ccId]);
+    if (!before) return res.status(404).json({ error: 'Contact not found.' });
+    const [[caseRow]] = await pool.execute('SELECT org_id, reporter_erased_at FROM cases WHERE id = ?', [before.case_id]);
+    const currentRole = String(before.contact_role ?? '').trim().toLowerCase();
+    const nextRole = String(body.contact_role ?? currentRole).trim().toLowerCase();
+    if (caseRow?.reporter_erased_at && (currentRole === 'reporter' || nextRole === 'reporter')) {
+      return erasedReporterConflict(res);
+    }
     if (body.first_name !== undefined && !String(body.first_name || '').trim()) {
       return res.status(400).json({ error: 'First name is required.' });
     }
     // The admin's Required tick holds on Edit as on Add (case form clean-up PR 4):
     // checked on the contact as it will be after this save.
-    const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [before?.case_id]);
     const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', { ...before, ...body }, CONTACT_FIELDS);
     if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
     // Compliance Controls on: changing a stored contact detail needs a reason,
@@ -192,7 +213,17 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
         code: 'REASON_REQUIRED', reason_required: true,
       });
     }
-    await pool.execute(`UPDATE case_contacts SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.ccId]);
+    const result = await withTxn(async conn => {
+      const [[lockedCase]] = await conn.execute('SELECT reporter_erased_at FROM cases WHERE id = ? FOR UPDATE', [before.case_id]);
+      const [[lockedContact]] = await conn.execute('SELECT contact_role FROM case_contacts WHERE id = ? FOR UPDATE', [req.params.ccId]);
+      if (!lockedContact) return 'missing';
+      const lockedRole = String(lockedContact.contact_role).trim().toLowerCase();
+      if (lockedCase?.reporter_erased_at && (lockedRole === 'reporter' || nextRole === 'reporter')) return 'erased';
+      await conn.execute(`UPDATE case_contacts SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.ccId]);
+      return 'updated';
+    });
+    if (result === 'missing') return res.status(404).json({ error: 'Contact not found.' });
+    if (result === 'erased') return erasedReporterConflict(res);
     if (reasonOn) {
       for (const [key, was, now] of storedChanges) {
         await require('../services/complianceService').recordReason({
@@ -332,14 +363,14 @@ async function syncBackToMaster(contactId, fields, req) {
     if (req?.user?.role === 'platform_admin') {
       params.push(contactId);
       await pool.execute(
-        `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+        `UPDATE contacts SET ${updates.join(', ')} WHERE id = ? AND is_active = 1`,
         params
       );
       return;
     }
     params.push(contactId, req.user.orgId);
     await pool.execute(
-      `UPDATE contacts SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`,
+      `UPDATE contacts SET ${updates.join(', ')} WHERE id = ? AND org_id = ? AND is_active = 1`,
       params
     );
   }

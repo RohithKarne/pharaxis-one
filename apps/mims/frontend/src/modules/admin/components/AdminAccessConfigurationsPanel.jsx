@@ -7,7 +7,6 @@ import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 const TAB_LABELS = [
   ['overview', 'Overview'],
   ['users', 'Users'],
-  ['sites', 'Sites'],
   ['groups', 'Groups'],
   ['privileges', 'Privileges'],
   ['requests', 'Requests'],
@@ -111,7 +110,6 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [selectedPrivilegeKeys, setSelectedPrivilegeKeys] = useState([])
   const [reason, setReason] = useState('Initial enterprise access configuration update')
-  const [siteAccessForm, setSiteAccessForm] = useState({ user_id: '', site_id: '', access_level: 'full', is_primary: false })
   const [authForm, setAuthForm] = useState(buildEmptyAuthForm)
   const [requestForm, setRequestForm] = useState({ target_type: 'security_group', target_id: '', action: 'grant_access', reason: '', e_signature_required: true })
   const [snapshotName, setSnapshotName] = useState('')
@@ -237,27 +235,6 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     } catch (err) { flash?.(err.message, 'error') }
   }
 
-  async function saveSiteAccess() {
-    if (!siteAccessForm.user_id || !siteAccessForm.site_id) return
-    try {
-      await postJson('/api/admin/access-config/site-access', { ...siteAccessForm, reason })
-      setSiteAccessForm({ user_id: '', site_id: '', access_level: 'full', is_primary: false })
-      flash?.('Site access saved.')
-      await loadOverview()
-    } catch (err) { flash?.(err.message, 'error') }
-  }
-
-  async function deactivateSiteAccess(accessId) {
-    try {
-      await httpFetch(`/api/admin/access-config/site-access/${accessId}?org_id=${selectedOrgId}`, { method: 'DELETE', headers: H, body: JSON.stringify({ reason }) }).then(async r => {
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(data.error || 'Failed to deactivate site access.')
-      })
-      flash?.('Site access deactivated.')
-      await loadOverview()
-    } catch (err) { flash?.(err.message, 'error') }
-  }
-
   async function saveAuthPolicy() {
     try {
       // L4: this panel saves the company login only.
@@ -369,7 +346,6 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
         <div className="summary-line">
           {[
             ['Users', summary.users || 0],
-            ['Sites', summary.sites || 0],
             ['Groups', summary.groups || 0],
             ['Pending requests', summary.pending_requests || 0],
             ['Validation issues', summary.validation_issues || 0],
@@ -400,54 +376,17 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     return (
       <div style={cardStyle('#2563eb')}>
         <h3 style={{ marginTop: 0 }}>User Access Lifecycle</h3>
-        <table className="admin-table"><thead><tr><th>User</th><th>Role</th><th>Primary Site</th><th>Groups</th><th>Expires</th><th>Status</th></tr></thead><tbody>
+        <table className="admin-table"><thead><tr><th>User</th><th>Role</th><th>Groups</th><th>Expires</th><th>Status</th></tr></thead><tbody>
           {asArray(overview?.users).map(user => (
             <tr key={user.id}>
               <td><strong>{user.name}</strong><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.email}</div></td>
               <td>{user.role_at_org || user.role}</td>
-              <td>{user.primary_site_name || '-'}</td>
               <td style={{ maxWidth: 260 }}>{user.groups || '-'}</td>
               <td>{user.access_expires_at ? formatDate(user.access_expires_at) : '-'}</td>
               <td><StatusPill active={user.is_active} /></td>
             </tr>
           ))}
         </tbody></table>
-      </div>
-    )
-  }
-
-  function renderSites() {
-    return (
-      <div style={{ display: 'grid', gap: 18 }}>
-        <div style={cardStyle('#2563eb')}>
-          <h3 style={{ marginTop: 0 }}>Site Access Assignment</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
-            <select className="form-control" value={siteAccessForm.user_id} onChange={e => setSiteAccessForm(prev => ({ ...prev, user_id: e.target.value }))}>
-              <option value="">Select user</option>
-              {asArray(overview?.users).map(user => <option key={user.id} value={user.id}>{user.name} ({user.email})</option>)}
-            </select>
-            <select className="form-control" value={siteAccessForm.site_id} onChange={e => setSiteAccessForm(prev => ({ ...prev, site_id: e.target.value }))}>
-              <option value="">Select site</option>
-              {asArray(overview?.sites).map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
-            </select>
-            <select className="form-control" value={siteAccessForm.access_level} onChange={e => setSiteAccessForm(prev => ({ ...prev, access_level: e.target.value }))}>
-              <option value="full">Full</option><option value="read_only">Read only</option><option value="case_intake">Case intake</option><option value="review_only">Review only</option>
-            </select>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={siteAccessForm.is_primary} onChange={e => setSiteAccessForm(prev => ({ ...prev, is_primary: e.target.checked }))} /> Primary site</label>
-            <button style={buttonStyle(true)} onClick={saveSiteAccess}>Save Site Access</button>
-          </div>
-          <table className="admin-table"><thead><tr><th>User</th><th>Site</th><th>Level</th><th>Primary</th><th>Status</th><th>Action</th></tr></thead><tbody>
-            {asArray(overview?.site_access).map(row => (
-              <tr key={row.id}><td>{row.user_name}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{row.email}</div></td><td>{row.site_name}</td><td>{row.access_level}</td><td>{boolText(row.is_primary)}</td><td><StatusPill active={row.is_active} /></td><td><button style={buttonStyle()} onClick={() => deactivateSiteAccess(row.id)}>Deactivate</button></td></tr>
-            ))}
-          </tbody></table>
-        </div>
-        <div style={cardStyle('#0f766e')}>
-          <h3 style={{ marginTop: 0 }}>Site Rules Snapshot</h3>
-          <table className="admin-table"><thead><tr><th>Site</th><th>Country</th><th>Default Case Country</th><th>DPPR Off</th><th>RTF</th><th>Assigned Users</th></tr></thead><tbody>
-            {asArray(overview?.sites).map(site => <tr key={site.id}><td>{site.name}</td><td>{site.country || '-'}</td><td>{site.default_country_for_case || site.default_country || '-'}</td><td>{boolText(site.dppr_disabled)}</td><td>{boolText(site.right_to_forget_enabled)}</td><td>{site.assigned_user_count}</td></tr>)}
-          </tbody></table>
-        </div>
       </div>
     )
   }
@@ -507,7 +446,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
         <div style={cardStyle('#d97706')}>
           <h3 style={{ marginTop: 0 }}>Create Access Request</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            <select className="form-control" value={requestForm.target_type} onChange={e => setRequestForm(prev => ({ ...prev, target_type: e.target.value }))}><option value="security_group">Security Group</option><option value="user_site_access">User Site Access</option><option value="report_access">Report Access</option><option value="auth_policy">Auth Policy</option></select>
+            <select className="form-control" value={requestForm.target_type} onChange={e => setRequestForm(prev => ({ ...prev, target_type: e.target.value }))}><option value="security_group">Security Group</option><option value="report_access">Report Access</option><option value="auth_policy">Auth Policy</option></select>
             <input className="form-control" value={requestForm.target_id} onChange={e => setRequestForm(prev => ({ ...prev, target_id: e.target.value }))} placeholder="Target ID" />
             <input className="form-control" value={requestForm.action} onChange={e => setRequestForm(prev => ({ ...prev, action: e.target.value }))} placeholder="Action" />
             <input className="form-control" value={requestForm.reason} onChange={e => setRequestForm(prev => ({ ...prev, reason: e.target.value }))} placeholder="Reason" />
@@ -643,7 +582,6 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
       )
     }
     if (activeTab === 'users') return renderUsers()
-    if (activeTab === 'sites') return renderSites()
     if (activeTab === 'groups') return renderGroups()
     if (activeTab === 'privileges') return renderPrivileges()
     if (activeTab === 'requests') return renderRequests()
@@ -654,7 +592,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   return (
     <div style={{ padding: 24, maxWidth: 1320 }}>
-      <SectionHeader title="Access Configurations" desc="Organisation, site, group, privilege, report, sign-in and audit settings." />
+      <SectionHeader title="Access Configurations" desc="Organisation, group, privilege, report, sign-in and audit settings." />
       {renderOrgSelector()}
       {renderTabs()}
       {renderActiveTab()}

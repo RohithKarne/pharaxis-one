@@ -118,6 +118,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   const [orgName,  setOrgName]  = useState(() => initState('orgName'))
   const [siteName, setSiteName] = useState(() => initState('siteName'))
   const [allOrgs,       setAllOrgs]       = useState(() => initState('allOrgs'))
+  const [switchingOrg, setSwitchingOrg] = useState(false)
   const [securityAccess, setSecurityAccess] = useState(() => createUnresolvedSecurityAccess())
   // True while a cookie-backed session MAY exist but the in-memory token hasn't
   // been rehydrated yet (persisted user, no token, non-public path). ProtectedRoute
@@ -206,37 +207,23 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   // Switch active org — calls API, stores new token + org info, reloads app
   async function switchOrg(newOrgId) {
-    const res  = await httpFetch('/api/auth/switch-org', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ orgId: newOrgId })
-    })
-    if (!res.ok) return
-    const data = await res.json()
-    const meRes = await httpFetch('/api/auth/me', {
-      headers: data.token ? { Authorization: `Bearer ${data.token}` } : undefined,
-    })
-    if (meRes.ok) {
-      const meData = await meRes.json()
-      applyAuthState(meData)
+    setSwitchingOrg(true)
+    try {
+      const res = await httpFetch('/api/auth/switch-org', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ orgId: newOrgId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not switch organisation.')
+      applyAuthState({ ...data, user: { ...user, role: data.role } })
       setSecurityAccess(createUnresolvedSecurityAccess())
-      return
+    } finally {
+      setSwitchingOrg(false)
     }
-    applyAuthState({
-      user,
-      token: data.token || COOKIE_SESSION,
-      modules,
-      orgId: data.orgId,
-      siteId: data.siteId,
-      orgName: data.orgName,
-      siteName: data.siteName,
-      allOrgs: data.allOrgs || [],
-      sessionTimeout: data.sessionTimeout ?? 30,
-    })
-    setSecurityAccess(createUnresolvedSecurityAccess())
   }
 
   // Session restore / validation. Runs on load whenever we have EITHER an
@@ -396,7 +383,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   return (
     <AuthContext.Provider value={{
-      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess, restoring, serverUnreachable,
+      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, switchingOrg, sessionTimeout, securityAccess, restoring, serverUnreachable,
       login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasCapability
     }}>
       {children}

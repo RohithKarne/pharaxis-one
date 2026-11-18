@@ -38,7 +38,7 @@ export default function DeveloperApiAdmin() {
 
   async function save(client, changes) {
     setMsg('')
-    const body = { default_site_id: client.default_site_id || null, initial_status_id: client.initial_status_id || null, status: client.status, ...changes }
+    const body = { initial_status_id: client.initial_status_id || null, status: client.status, ...changes }
     const res = await httpFetch(`/api/admin/api-clients/${client.id}`, { method: 'PUT', headers, body: JSON.stringify(body) })
     const d = await res.json().catch(() => ({}))
     if (!res.ok) { setMsg(d.error || 'Could not save.'); return }
@@ -60,27 +60,21 @@ export default function DeveloperApiAdmin() {
   return (
     <div className="ma-ai-config">
       <h1>API connections</h1>
-      <p>Systems allowed to send cases into this organisation, such as a CP Portal. Each case they send lands in the site and status set here.</p>
+      <p>Systems allowed to send cases into this organisation, such as a CP Portal. Set the starting status for cases they send.</p>
       {error && <div className="cp-error" style={{ color: '#b91c1c', marginBottom: 12 }}>{error}</div>}
       {msg && <div style={{ marginBottom: 12, fontSize: 13 }}>{msg}</div>}
 
       {data && (
         <table className="admin-table" style={{ width: '100%', marginBottom: 24 }}>
           <thead>
-            <tr><th>Name</th><th>Can</th><th>New cases land in</th><th>Starting status</th><th>Last 24 h</th><th>Cases sent</th><th /></tr>
+            <tr><th>Name</th><th>Can</th><th>Starting status</th><th>Last 24 h</th><th>Cases sent</th><th /></tr>
           </thead>
           <tbody>
-            {data.clients.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 16 }}>No connections yet.</td></tr>}
+            {data.clients.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 16 }}>No connections yet.</td></tr>}
             {data.clients.map(c => (
               <tr key={c.id} style={{ opacity: c.status === 'active' ? 1 : 0.55 }}>
                 <td><strong>{c.name}</strong><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.client_id}</div></td>
                 <td style={{ fontSize: 12 }}>{c.scopes.join(', ')}</td>
-                <td>
-                  <select value={c.default_site_id || ''} disabled={c.status !== 'active'} onChange={e => save(c, { default_site_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">First site{data.sites[0] ? ` (${data.sites[0].name})` : ''}</option>
-                    {data.sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </td>
                 <td>
                   <select value={c.initial_status_id || ''} disabled={c.status !== 'active'} onChange={e => save(c, { initial_status_id: e.target.value ? Number(e.target.value) : null })}>
                     <option value="">"New"</option>

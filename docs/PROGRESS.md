@@ -4,6 +4,34 @@ What is done, what broke, what is next. Newest first. Updated by whoever does th
 
 > Built 2026-11-10 from the version histories, sprint records, status and known issues in PRD.md / ARCHITECTURE_AND_SYSTEM_DESIGN.md (then ARCHITECTURE.md) › CP Portal and PRD.md / ARCHITECTURE_AND_SYSTEM_DESIGN.md › MIMS, and the open-gaps table in RULES.md › Getting a change to main. The controlled record of every change, with its revalidation flag, stays in [CHANGELOG.md](CHANGELOG.md).
 
+## In verification — 2026-11-17: Site controls retired in MIMS
+
+Organisations, the Setup Wizard, Folder Manager, and API connections no longer show site controls. Legacy site-access and new site-specific rules or assignment options were removed from their forms. Setup uses Bootstrap to supply its internal default. Folder and API connection edits preserve stored site links when the field is omitted. Historical records and compatibility routes remain.
+
+Frontend build and backend syntax checks passed. A browser preview with sample responses verified the Organisations page, wizard completion through Bootstrap, and folder and API settings saves without site fields. Live database workflows and already-imported Help articles remain unverified.
+
+## In verification — 2026-11-17: One organisation selector in MIMS Admin
+
+MIMS Admin follows the signed-in organisation in the header. Switching keeps the settings page address and reloads its content for the new organisation. Admin asks before switching so unsaved work can be saved first. Platform admins can select active organisations without requiring a separate membership. Ordinary users still need active membership. Platform-wide panels keep their scope.
+
+Backend syntax and frontend build checks passed. A browser preview with sample API responses confirmed the setup checks followed the selected organisation, the Admin workspace was disabled during the switch, cancel and refusal kept the prior selection, and standalone Admin used the same selector. Live role checks and saving settings in both organisations remain unverified.
+
+## Awaiting Rohith's verification — 2026-11-17: MIMS reporter erasure and stale edits
+
+Successful erasure clears the contact editor and its browser draft. MIMS checks the saved erasure status when opening the reporter and rejects contact writes that would restore the erased reporter. Live erasure, stale-tab save, and reopen were left for Rohith to verify.
+
+## Awaiting Rohith's verification — 2026-11-17: MIMS Primary Reporter details
+
+Reporter & Patient shows a full-width Primary Reporter section. Save Case submits pending reporter edits through the existing contact update route and includes those edits in the reason-for-change prompt when required. No live screen or database workflow was run.
+
+## Awaiting Rohith's verification — 2026-11-17: MIMS New Case owner
+
+Manual New Case requests assignment to its creator. MIMS checks the creator against the existing owner eligibility rules and records an eligible creator as Case Owner during creation. Rohith will verify the change in MIMS. No tests or screen checks were run, per his request.
+
+## In verification — 2026-11-17: MIMS New Case Reporter Country
+
+The New Case dropdown lists all 249 catalog entries with country names and two-letter codes. The create route accepts a listed code or a blank. The frontend build passed. The browser preview with test API responses showed the full list and allowed selection of India and United States on MI, AE and PC. The create route rejected invalid values before database access in an isolated check. Saving and reopening a case against the running database remains unverified.
+
 ## Where things stand — 2026-11-10
 
 ```
