@@ -332,5 +332,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 3 | CLAUDE.md, the four commands; delete `/tim`, `/meera`, `/daniel` | Varun | ✅ |
 | 4 | Compliance-owner lines in the three routine documents; PROGRESS.md gaps | Kiranmai | ✅ |
 | 5 | Check every link, heading reference and leftover name in the changed files | Kiranmai | ✅ |
+| 5b | Katrina joins the chart: simulated client persona reporting to Rohith, client acceptance view on call, `/katrina`, Calder Therapeutics test organisation | Saad | ✅ |
+| 5c | Create Katrina's test user in Calder Therapeutics on the local copy of each app, the first time she walks a screen | Kiranmai | ⏳ |
 | 6 | Rohith updates his own session-opening prompt from RULES.md › How we talk | Rohith | ⏳ |
 | 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
