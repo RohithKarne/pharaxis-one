@@ -15,17 +15,11 @@ Six documents, one job each:
 
 Records stay where they are and are not rewritten here: the change log, validation, compliance, postmortems and accessibility reports (see PROGRESS.md › *Records*).
 
-> Replaced `docs/TEAM_OPERATING_SOP.md`, `docs/lessons.md` and the rules in `CLAUDE.md` on 2026-11-10 (Rohith). The old text is in git history.
->
-> 2026-11-11 (Rohith): `ARCHITECTURE.md` renamed `ARCHITECTURE_AND_SYSTEM_DESIGN.md` and split into Architecture and System Design; the MIMS entry-point rule no longer names the deleted legacy files.
-
 ---
 
 ## 1. Who does what
 
-> **Restructured 2026-11-22 by Rohith.** Four teams, each with a head reporting to Rohith and team members under the head. **Every team member is a simulated persona** voiced by Claude. None has a GitHub account, sign-in or real identity. Swaroop becomes head of QA & Compliance, so Kiranmai moves under Swaroop as Functional QA Engineer. Developers build, and Varun (CTO) designs, reviews and merges. Katrina now reports to John, but her client acceptance view still goes straight to Rohith.
->
-> Before: 2026-11-18 (four teams, one person each; Varun wrote the code; Kiranmai owned QA and compliance; Katrina reported to Rohith). 2026-11-10 (Tim as Chief of Staff; Meera and Daniel under John). The old text is in git history.
+> **Every team member is a simulated persona** voiced by Claude, with no GitHub account, sign-in or real identity. Earlier team structures are in git history.
 
 ```
                                 Rohith Karne (Founder & CEO)

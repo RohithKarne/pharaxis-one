@@ -2,7 +2,7 @@
 
 What we build, and for whom. Two products, one repository, sold separately.
 
-> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Built 2026-11-10 from the old SOP's CP Portal and MIMS sections and the old project overview (now in git history).
+> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Earlier versions are in git history.
 
 ```
             Pharma company (one "client" / "organisation")

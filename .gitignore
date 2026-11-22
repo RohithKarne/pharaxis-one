@@ -38,7 +38,7 @@ apps/cp-portal/e2e/.e2e-seed.json
 .playwright-cli/
 .playwright-mcp/
 .claude/worktrees/
-docs/tasks/todo.md
+docs/tasks/
 
 # Local generated backup/archive artifacts
 apps/**/backend/scripts/cleanup-backups/
