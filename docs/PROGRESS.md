@@ -4,6 +4,14 @@ What is done, what broke, what is next. Newest first. Updated by whoever does th
 
 > Trimmed 2026-11-22 on Rohith's word: finished work is one line each; old version and sprint histories and closed gaps are in git history. The controlled record of every change, with its revalidation flag, stays in [CHANGELOG.md](CHANGELOG.md).
 
+## Locally verified — 2026-11-22: MIMS webhook delivery visibility
+
+Integration Health Monitor shows recent outbound results for the selected organisation. Admins can page through history and see each event, API client, status, attempt count, latest HTTP result and scheduled retry. The read-only endpoint returns operational metadata.
+
+Kiranmai walked the running app with synthetic records on isolated MySQL. She verified delivery states, retry time, pagination, inbound status, cancel and confirm when switching organisations, empty history, a simulated load error and refresh recovery. An agent and an admin without the MIMS Admin module both saw Access Denied, and the endpoint refused both requests. She also checked sign-in, wrong password, forced reset and logout. Swaroop accepted the local QA evidence.
+
+The frontend build, backend syntax, security scan and 16 existing tests passed. Targeted lint reported one existing warning in the inbound monitor. External delivery, site-specific contexts, platform-admin sign-in and post-merge behaviour were not checked. The branch is local and awaits Rohith's push approval before PR checks.
+
 ## In verification — 2026-11-17: Site controls retired in MIMS
 
 Organisations, the Setup Wizard, Folder Manager, and API connections no longer show site controls. Legacy site-access and new site-specific rules or assignment options were removed from their forms. Setup uses Bootstrap to supply its internal default. Folder and API connection edits preserve stored site links when the field is omitted. Historical records and compatibility routes remain.

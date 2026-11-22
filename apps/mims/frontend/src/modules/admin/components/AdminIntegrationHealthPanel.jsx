@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import AdminWebhookDeliveries from './AdminWebhookDeliveries'
 
 export default function AdminIntegrationHealthPanel({ H }) {
   const [integrations, setIntegrations] = useState([])
   const [connections, setConnections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [deliveryRefresh, setDeliveryRefresh] = useState(0)
 
   const fetchHealth = async () => {
     setLoading(true)
@@ -35,7 +37,10 @@ export default function AdminIntegrationHealthPanel({ H }) {
     <div style={{ padding: 24, maxWidth: 1000 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h2 style={{ margin: 0 }}>Integration Status</h2>
-        <button className="btn btn-outline" onClick={fetchHealth} disabled={loading}>
+        <button type="button" className="btn btn-outline" disabled={loading} onClick={() => {
+          fetchHealth()
+          setDeliveryRefresh(version => version + 1)
+        }}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
       </div>
@@ -130,6 +135,7 @@ export default function AdminIntegrationHealthPanel({ H }) {
           })}
         </div>
       )}
+      <AdminWebhookDeliveries key={deliveryRefresh} />
     </div>
   )
 }

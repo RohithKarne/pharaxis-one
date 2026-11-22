@@ -49,4 +49,4 @@ async function deliverPendingWebhooks(limit = 50) {
   return results;
 }
 
-module.exports = { deliverPendingWebhooks };
+module.exports = { deliverPendingWebhooks, MAX_ATTEMPTS };

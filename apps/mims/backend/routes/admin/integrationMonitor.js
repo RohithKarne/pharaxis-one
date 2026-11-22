@@ -1,10 +1,12 @@
 'use strict';
 
 const express = require('express');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireModule } = require('../../middleware/auth');
 const pool = require('../../database/db');
+const { MAX_ATTEMPTS } = require('../../services/api-platform/webhookDeliveryWorker');
 
 const router = express.Router();
+const WEBHOOK_PAGE_SIZE = 25;
 
 const INTEGRATION_NAMES = {
   crm: 'CRM Sync',
@@ -74,6 +76,50 @@ router.get('/integrations/health', authenticate, requireRole('admin', 'platform_
     res.status(500).json({ error: 'Failed to fetch integration health' });
   }
 });
+
+router.get('/integrations/webhook-deliveries', authenticate, requireRole('admin', 'platform_admin'),
+  requireModule('admin_console'), async (req, res) => {
+    const orgId = req.user.orgId;
+    if (orgId == null) return res.status(403).json({ error: 'Select an organisation first.' });
+
+    const before = req.query.before;
+    if (before !== undefined && (typeof before !== 'string' || !/^[1-9]\d*$/.test(before)
+        || !Number.isSafeInteger(Number(before)))) {
+      return res.status(400).json({ error: 'Invalid delivery history cursor.' });
+    }
+
+    try {
+      const hasCursor = before !== undefined;
+      const [rows] = await pool.query(
+        `SELECT d.id, c.name AS clientName, d.event, d.attempt_count AS attemptCount,
+                d.response_status AS responseStatus, d.next_retry_at AS nextRetryAt,
+                CASE
+                  WHEN d.delivered_at IS NOT NULL THEN 'delivered'
+                  WHEN d.attempt_count >= ? THEN 'exhausted'
+                  WHEN s.status = 'paused' THEN 'paused'
+                  WHEN s.status = 'revoked' THEN 'revoked'
+                  WHEN d.attempt_count = 0 THEN 'queued'
+                  ELSE 'retrying'
+                END AS status
+           FROM webhook_deliveries d
+           JOIN webhook_subscriptions s ON s.id = d.subscription_id
+           JOIN api_clients c ON c.id = s.client_id
+          WHERE c.org_id = ? ${hasCursor ? 'AND d.id < ?' : ''}
+          ORDER BY d.id DESC LIMIT ${WEBHOOK_PAGE_SIZE + 1}`,
+        hasCursor ? [MAX_ATTEMPTS, orgId, Number(before)] : [MAX_ATTEMPTS, orgId]
+      );
+      const deliveries = rows.slice(0, WEBHOOK_PAGE_SIZE).map(row => ({
+        ...row,
+        nextRetryAt: row.status === 'retrying' ? row.nextRetryAt : null,
+      }));
+      const nextCursor = rows.length > WEBHOOK_PAGE_SIZE ? deliveries.at(-1).id : null;
+      res.set('Cache-Control', 'no-store');
+      res.json({ deliveries, nextCursor });
+    } catch (error) {
+      req.log?.error({ err: error }, 'Failed to load webhook delivery history');
+      res.status(500).json({ error: 'Failed to load webhook delivery history.' });
+    }
+  });
 
 router.post('/integrations/:key/test', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
