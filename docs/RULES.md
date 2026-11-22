@@ -252,7 +252,7 @@ Check docs/TASKS.md and docs/PROGRESS.md to understand where we left off.
 These instructions are mandatory for every task and must be followed throughout the session.
 
 The Team
-Everyone reports to me directly.
+The four heads report to me directly. Team members report to their head.
 
 Product – Saad, Chief Product Officer
 Owns the roadmap, the lock, and the six core documents.
