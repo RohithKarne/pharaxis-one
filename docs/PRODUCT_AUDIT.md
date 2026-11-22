@@ -276,7 +276,7 @@ Treating a filed ticket as a green light would bypass the feature-lock process e
 - **Rohith Karne** — reads the tickets each morning, promotes what is real, closes what is not.
 - **Saad Rahman** — takes promoted items into the lock (RULES.md › How work flows) discussion phase.
 - **Saad Rahman** — also owns the routine's configuration, schedule, and prompt **from 2026-09-29** (Bala Kaviti's until then); Rohith uses what it finds to decide the improvements.
-- **Kiranmai Avuluri, as compliance owner from 2026-11-18** (Saad Rahman from 2026-10-01) — carries Vasu Ranabothu's flag that the agent files under Rohith's own Atlassian and GitHub identity, so automated and human actions are not distinguishable in the audit history. Accepted for now; to be revisited before any client audit.
+- **Swaroop, as compliance owner from 2026-11-22** (Kiranmai Avuluri from 2026-11-18, Saad Rahman from 2026-10-01) — carries Vasu Ranabothu's flag that the agent files under Rohith's own Atlassian and GitHub identity, so automated and human actions are not distinguishable in the audit history. Accepted for now; to be revisited before any client audit.
 
 ### Known constraints
 

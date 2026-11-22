@@ -251,7 +251,7 @@ If that count is ever lower than the number of issues in `DCI`, an item has esca
 - **Saad Rahman** — also owns the routine's configuration, schedule, and prompt from 2026-09-29 (Bala Kaviti's until then); blocks work that skipped the lock (RULES.md › How work flows).
 - **Mark Antony** — owns the evaluation: a weekly sample checked for anchor accuracy, quote fidelity, relevance, persona discipline, and labelling. **Pulls the routine above a 5% failure rate.**
 - **Kiranmai Avuluri** — full audit of every filed ticket in week 1; spot checks thereafter.
-- **Kiranmai Avuluri** (QA, compliance owner) — owns the simulation control in rule 4 from 2026-11-18 (Saad Rahman's from 2026-10-01, Vasu Ranabothu's before). Vasu flagged that the routine files under Rohith's own Atlassian identity, so automated and human actions are not distinguishable in the audit history — the same flag he raised on `docs/PRODUCT_AUDIT.md`, now doubled in volume. Accepted for now; to be revisited before any client audit.
+- **Swaroop** (Head of QA & Compliance, compliance owner) — owns the simulation control in rule 4 from 2026-11-22 (Kiranmai Avuluri's from 2026-11-18, Saad Rahman's from 2026-10-01, Vasu Ranabothu's before). Vasu flagged that the routine files under Rohith's own Atlassian identity, so automated and human actions are not distinguishable in the audit history — the same flag he raised on `docs/PRODUCT_AUDIT.md`, now doubled in volume. Accepted for now; to be revisited before any client audit.
 - **Sowmya** — owns the MI/PV boundary constraint in rule 10.
 
 ### Known constraints
