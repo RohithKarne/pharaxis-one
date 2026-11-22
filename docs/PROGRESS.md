@@ -53,7 +53,7 @@ One line per finished piece of work, newest first. The full write-ups are in git
 
 | Date | What | Pull request |
 |---|---|---|
-| 2026-11-22 | Team with heads and members: 17 simulated personas; shorter session-opening prompt | Not yet pushed |
+| 2026-11-22 | Team with heads and members: 17 simulated personas; shorter session-opening prompt | #829 |
 | 2026-11-18 | Four teams, no Chief of Staff; Katrina as simulated client | #827 |
 | 2026-11-16 | MIMS Admin clinical governance and regulatory capabilities (two-signer off-label, tiered SLAs, regional labels, emergency safety directory, screening gate) | #826 |
 | 2026-11-16 | Case form Drops 1–3: seriousness and regulatory clocks, split and link, four-factor gate, safety-term interception, solicited off-label gate, 3-day FAR clock | #826 |

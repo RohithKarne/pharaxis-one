@@ -64,7 +64,7 @@ Finished blocks were removed on Rohith's word, 2026-11-22. Their summaries are i
 | 4 | Compliance-owner lines in the three routine documents move to Swaroop | Swaroop | ✅ |
 | 5 | Check every link, heading reference, table and leftover name in the changed files | Kiranmai | ✅ |
 | 5b | Session-opening prompt shortened (1,632 → 1,016 words, same rules) on Rohith's word | Saad | ✅ |
-| 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 6 | Push and open the pull request | Varun | ✅ #829, merged |
 | 7 | Open a fresh session and try the new commands | Rohith | ⏳ |
 | 8 | Decide: CP-PM panel and audit-routine persona titles for Bhavya, Anirudh, Kiranmai | Rohith | ⏳ |
 
@@ -79,5 +79,5 @@ Finished blocks were removed on Rohith's word, 2026-11-22. Their summaries are i
 | 5 | PROGRESS.md: each Done entry one line; old version and sprint histories and closed gaps removed | Saad | ✅ |
 | 6 | RULES, ARCHITECTURE, PRD: dated history notes removed; features kept. Found: ARCHITECTURE's "forced reset before two-step" gap was already fixed in the code — note corrected | Saad | ✅ |
 | 7 | Check links and leftovers | Kiranmai | ✅ |
-| 8 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 8 | Push and open the pull request | Varun | ✅ #830 |
 | 9 | Agent worktree `fix/mims-case-comments-and-bulk-update` has 7 uncommitted files from 2026-09-27: keep or discard | Rohith | ⏳ |
