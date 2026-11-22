@@ -383,6 +383,7 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 3 | CLAUDE.md; 12 new commands, 5 updated | Saad | ✅ |
 | 4 | Compliance-owner lines in the three routine documents move to Swaroop | Swaroop | ✅ |
 | 5 | Check every link, heading reference, table and leftover name in the changed files | Kiranmai | ✅ |
+| 5b | Session-opening prompt shortened (1,632 → 1,016 words, same rules) on Rohith's word | Saad | ✅ |
 | 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
 | 7 | Open a fresh session and try the new commands | Rohith | ⏳ |
 | 8 | Decide: CP-PM panel and audit-routine persona titles for Bhavya, Anirudh, Kiranmai | Rohith | ⏳ |
