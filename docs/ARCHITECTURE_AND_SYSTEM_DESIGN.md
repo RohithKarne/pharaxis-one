@@ -2,7 +2,7 @@
 
 What the system is made of and why (Part A), then how each part works (Part B). One document for the whole repository.
 
-> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Renamed from `ARCHITECTURE.md` and split into two parts on 2026-11-11 (Rohith); every fact below was checked against `main` that day. Built 2026-11-10 from the old SOP's CP Portal and MIMS sections, the old architecture and database notes, the backup and bridge runbooks, the MIMS help index and the two app READMEs (all in git history).
+> Changes only when Rohith confirms (RULES.md › Keeping these documents current). Earlier versions are in git history.
 
 **How to read it.** If a statement would stay true after the code was rewritten in another language, it belongs in Part A. If it names a table, route, job, setting or file, it belongs in Part B.
 
@@ -100,7 +100,7 @@ Versions are those in each `package.json` after the toolchain upgrade (2026-11-1
 | Records | Audit trail of admin actions; reader confirmations of safety letters; consent records | Field-level case audit, transmission audit, login audit (kept 7 years), general audit; MI answers and content signed with password and reason (21 CFR Part 11) |
 | Data at rest | Integration secrets, cached MIMS token and visitors' private links encrypted (`CP_SECRET_ENCRYPTION_KEY`) | Mailbox passwords AES-256-GCM; SSO provider secrets encrypted (`SSO_CONFIG_ENCRYPTION_KEY`); outbound keys encrypted |
 | Inputs and outputs | Every upload virus-checked before download or forwarding; HTML sanitised; outbound calls refused to private addresses unless named (`CP_INTERNAL_INTEGRATION_HOSTS`); rate limits; `nosniff`, `SAMEORIGIN` headers | Rate limits on sign-in and account creation; security headers with a content-security policy (report-only by default); one mail gate: alert mail off unless `MIMS_ALERT_EMAIL` is on |
-| Password rules | History blocks reuse; reset by emailed link | Current + last 5 blocked; forced reset on first sign-in (known gap: it is asked before the two-step code — Varun) |
+| Password rules | History blocks reuse; reset by emailed link | Current + last 5 blocked; forced reset on first sign-in — asked after the two-step code |
 
 ## A6. The bridge
 
@@ -436,7 +436,7 @@ This section described the integration as a future plan long after it shipped. C
 - **What MIMS receives besides the fields:** every other answer under its question, a product it could not match, and, on a question answered "No" to the side-effect screen whose text mentions one, a line quoting those words. MIMS shows these under the case header.
 - **Admin surface:** Integration page (credentials, field mapping, test connection) and the Sync Health page
 
-`other_inquiry` stays CP-only by design. See Version History 2026-07-15.
+`other_inquiry` stays CP-only by design.
 
 **Bridge watch (Rohith, 2026-10-27; CPPM-157 to CPPM-163, MIPM-223).** Nothing the bridge carries can be lost unseen:
 - **Bridge heartbeat** — Sync Health shows when each bridge job last ran; one that misses three runs alerts every client with a MIMS connection, and the alert closes itself when the job runs.
@@ -533,7 +533,7 @@ if (req.user.role !== 'platform_admin') {
 
 #### Password Reset Flow
 1. A user with `password_reset_required = 1` signs in with email and password.
-2. The server sets a 10-minute reset cookie and answers `{ passwordResetRequired: true }`; the screen opens `/reset-password`. (Known gap: this comes before the two-step code — Varun.)
+2. The server sets a 10-minute reset cookie and answers `{ passwordResetRequired: true }`; the screen opens `/reset-password`. This comes only after the two-step code, or when two-step sign-in is off.
 3. The new password must not match the current or last five.
 4. The flag clears; the person signs in again, now with the two-step code.
 
@@ -629,7 +629,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET/POST/DELETE | `/api/cases/ae/versions/:versionId/medical-history` | AE medical history multi-row CRUD |
 | GET/POST/DELETE | `/api/cases/ae/versions/:versionId/product-info` | AE product info multi-row CRUD |
 | GET/POST/PUT | `/api/cases/:id/pc/versions` | PC version control |
-| GET | `/api/cases/mi-responses/log` | Response Log — all MI responses cross-case, filterable by status/date/search (Sprint 19) |
+| GET | `/api/cases/mi-responses/log` | Response Log — all MI responses cross-case, filterable by status/date/search |
 | GET | `/api/cases/dashboard-summary` | Dashboard stats + MI KPIs (pending, pending_approval, sent_today, sla_breached) + recent cases + alerts |
 | GET | `/api/cases/:id/mi-responses` | List MI responses with workflow status |
 | POST | `/api/cases/:id/mi-responses` | Create MI response (always DRAFT — 21 CFR Part 11) |
@@ -828,8 +828,8 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | `users` | System users — email, role, password hash, active, password_reset_required |
 | `sessions` | Active login session tracking |
 | `login_audit` | Login/logout + auth event records for 21 CFR Part 11 |
-| `notifications` | In-app notifications. Sprint 9. Platform-admin alert-triggered, read/unread state. Platform-admin inbox reads this table. |
-| `user_org_access` | Multi-org: maps user → org → site → role → permission (Sprint 7) |
+| `notifications` | In-app notifications. Platform-admin alert-triggered, read/unread state. Platform-admin inbox reads this table. |
+| `user_org_access` | Multi-org: maps user → org → site → role → permission |
 | `user_module_permissions` | Per-user module access — overrides default role permissions |
 | `user_password_history` | Previous password hashes. Blocks reuse of current + last 5. |
 | `user_2fa_settings` | Per-user, per-org 2FA enrollment, method, TOTP secret, fail count, lock state |
@@ -932,8 +932,8 @@ Accessible at `/mims-admin?standalone=1` with legacy `/admin/platform` alias com
 | Table | Purpose |
 |-------|---------|
 | `audit_logs` | General audit — case operations + entity changes |
-| `platform_admin_alert_rules` | Sprint 9. Alert rule master data — event type, severity, delivery channels (email/in-app), recipients, threshold, time window, cooldown, active/inactive |
-| `platform_admin_alert_events` | Sprint 9. Each fired alert event — per-channel delivery status (email delivered/failed, in-app created/failed) |
+| `platform_admin_alert_rules` | Alert rule master data — event type, severity, delivery channels (email/in-app), recipients, threshold, time window, cooldown, active/inactive |
+| `platform_admin_alert_events` | Each fired alert event — per-channel delivery status (email delivered/failed, in-app created/failed) |
 | `case_audit_trail` | Immutable field-level change log per case (F-09) |
 | `transmission_audit_trail` | Immutable outbound transmission log per case (F-10) |
 | `service_logs` | Platform-wide service events |
