@@ -144,7 +144,7 @@ Labels: `dci-simulated`, `persona-katrina`, `<app>`, `query`, `<class-slug>`
 
 ### Routing
 
-Vasu (regulatory, validation, audit, privacy) · Sowmya (clinical, safety workflow, adverse events) · Mark (AI capability and governance) · Anirudh (cross-app architecture, auth, platform) · Kiranmai (test strategy and evidence) · Varun (technical direction) · Bhavya (implementation detail; confirming what does or does not exist in code) · Saad (product and scope).
+Vasu (regulatory, validation, audit, privacy) · Sowmya (clinical, safety workflow, adverse events) · Mark (AI capability and governance) · Anirudh (full-stack: cross-app features, auth, platform) · Kiranmai (test strategy and evidence) · Varun (technical direction) · Bhavya (implementation detail; confirming what does or does not exist in code) · Saad (product and scope).
 
 Anything touching adverse events routes to **Sowmya**. The agent may flag a clinical question; it may never resolve one.
 

@@ -194,10 +194,10 @@ Print the table **verbatim**. The *"will not"* column is the teaching surface: i
 | **Senior BA** *(Saad)* | Craft — is this requirement atomic, testable, free of design? URS vs FRS boundary | Decide priority or worth | Any time |
 | **Product Owner** *(Saad)* | Slicing, MoSCoW, what is in this release, resolving conflicting asks | Fix your wording | Once requirements exist |
 | **Product Manager** *(Saad)* | Whether this is the right problem, the outcome, the metric, the case for **no** | Sequence your backlog | Before you specify |
-| **Bhavya** *(Eng Manager)* | Feasibility, cost, what the code does **today** | Tell you what to build | **After** you have written the requirement — never before |
-| **Varun** *(Head of Dev)* | Architecture direction, technical trade-off, whether an approach is sound | Write your FRS for you | When a requirement forces a design choice |
-| **Anirudh** *(Solution Architect)* | What else this touches — CP→MIMS integration, shared auth, the mobile surface | Flag it unprompted, at L2+ | When data leaves the screen |
-| **Kiranmai** *(Director of QA)* | Is this criterion testable? What coverage would it need? | Accept "should work well" | While writing acceptance criteria |
+| **Bhavya** *(Backend Developer)* | Feasibility, cost, what the code does **today** | Tell you what to build | **After** you have written the requirement — never before |
+| **Varun** *(CTO)* | Architecture direction, technical trade-off, whether an approach is sound | Write your FRS for you | When a requirement forces a design choice |
+| **Anirudh** *(Full-stack Developer)* | What else this touches — CP→MIMS integration, shared auth, the mobile surface | Flag it unprompted, at L2+ | When data leaves the screen |
+| **Kiranmai** *(Functional QA Engineer)* | Is this criterion testable? What coverage would it need? | Accept "should work well" | While writing acceptance criteria |
 | **Krishnapriya** *(Lead Test Eng)* | How a real HCP or patient breaks this — negative and boundary paths | Supply your happy path | Before you call criteria complete |
 | **Vasu** *(CCO)* | The named regulation, audit trail, retention, validation impact | Approve your document | Any time — earlier is better |
 | **Mark** *(Chief AI Officer)* | Whether an AI capability is warranted, and how it would be evaluated | Endorse a model because it is impressive | When you are tempted to propose one |
