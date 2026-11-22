@@ -28,9 +28,18 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 
 ---
 
-## Now
+## Now — MIMS webhook delivery visibility (locked by Rohith, 2026-11-22)
 
-Nothing in hand. The 13 steps carried over from earlier work were removed on Rohith's word, 2026-11-22; they are recorded as a known gap in PROGRESS.md › Still open — known gaps, and listed in this file's git history.
+| Step | Owner | Status |
+|---|---|---|
+| Build the organisation-scoped delivery history endpoint | Bhavya | Complete |
+| Add the read-only Outbound webhooks table to Integration Health Monitor | Vivek | Complete |
+| Walk successful and failing paths on the running app | Kiranmai | Complete |
+| Review the changes and verification evidence | Varun | Complete |
+| Review the local QA evidence for sign-off | Swaroop | Complete |
+| Open the pull request after Rohith approves the push | Varun | Waiting |
+| Read CI on the pull request | Varun | Pending |
+| Repeat the screen walk after merge | Kiranmai | Pending |
 
 ## Waiting on a decision
 
