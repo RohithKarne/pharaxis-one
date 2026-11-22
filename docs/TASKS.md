@@ -373,3 +373,17 @@ Rohith asks ─► overview approved (lock) ─► steps written here ─► one
 | 5d | RULES.md › How we talk holds Rohith's full prompt, updated for the new team; *Found while working* aligned to its section 7 | Saad | ✅ |
 | 6 | Rohith uses the updated prompt from RULES.md › How we talk | Rohith | ✅ given in chat 2026-11-18 |
 | 7 | Push and open the pull request | Varun | ⏳ Rohith's word |
+
+## Now — team with heads and members (no Jira; locked by Rohith 2026-11-22)
+
+| # | Step | Who | Done |
+|---|---|---|---|
+| 1 | RULES.md › Who does what: four heads, 13 members, all simulated, no GitHub accounts; Varun CTO, John CMO; Katrina under John, acceptance straight to Rohith | Saad | ✅ |
+| 2 | RULES.md: workflow, overview views, owner per step, merge gate (Kiranmai's screen evidence + Swaroop's QA sign-off), session-opening prompt | Saad | ✅ |
+| 3 | CLAUDE.md; 12 new commands, 5 updated | Saad | ✅ |
+| 4 | Compliance-owner lines in the three routine documents move to Swaroop | Swaroop | ✅ |
+| 5 | Check every link, heading reference, table and leftover name in the changed files | Kiranmai | ✅ |
+| 5b | Session-opening prompt shortened (1,632 → 1,016 words, same rules) on Rohith's word | Saad | ✅ |
+| 6 | Push and open the pull request | Varun | ⏳ Rohith's word |
+| 7 | Open a fresh session and try the new commands | Rohith | ⏳ |
+| 8 | Decide: CP-PM panel and audit-routine persona titles for Bhavya, Anirudh, Kiranmai | Rohith | ⏳ |

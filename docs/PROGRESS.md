@@ -39,7 +39,7 @@ CP Portal ── active development ── local only ── last merged: #795 (
 MIMS ─────── active development ── local only ── last merged: #826 (Case Form Drops 1-3, Reports REP-1/4, Admin Remediation)
 Bridge ───── live between the two, locally ── watched by Sync Health and the Inquiry Ledger
 Documents ── six core files replace the SOP (#802)
-Team ─────── restructured 2026-11-18: Rohith → Product (Saad) · Development (Varun) · QA (Kiranmai) · Med-affairs (John)
+Team ─────── restructured 2026-11-22: Rohith → Product (Saad) · Development (Varun) · QA & Compliance (Swaroop) · Medical Affairs (John); 17 simulated personas
 ```
 
 | | CP Portal | MIMS |
@@ -47,6 +47,20 @@ Team ─────── restructured 2026-11-18: Rohith → Product (Saad) ·
 | Last full screen walk | 10 Oct 2026, every admin screen and portal page | 14 Oct 2026, access review and revalidation pass |
 | Revalidation flag (Unreleased) | Full | Partial |
 | Tagged release | None — tags paused by Rohith, 2026-10-04 | None |
+
+## Done — 2026-11-22: four teams with heads and team members (locked by Rohith)
+
+Rohith restructured the team. The four teams stay, each head reports to him, and team members sit under the heads. **Product:** Saad (Chief Product Officer), Vanaja (Product Manager), Vinay (Business Analyst), Ajay (UI/UX Designer). **Development:** Varun (Chief Technology Officer), Bhavya (Backend Developer), Vivek (Frontend Developer), Anirudh (Full-stack Developer), Radhika (DevOps & AI Engineer). **QA & Compliance:** Swaroop (Head), Kiranmai (Functional QA Engineer), Venkatesh (QA Automation Engineer), Rajesh (Validation & Compliance Specialist). **Medical Affairs:** John (Chief Medical Officer), Carol (MI & Safety Specialist), Lauren (Medical Writer / MLR Reviewer), and Katrina (simulated client), who now reports to John. Her client acceptance view still goes straight to Rohith.
+
+Everyone except Rohith is a simulated persona with no GitHub account. Developers write the code, and Varun designs, reviews and merges. Swaroop now owns compliance, gives QA sign-off before a merge, and confirms the revalidation flag that Rajesh drafts. Kiranmai keeps the screen walks and second reading. Radhika takes the first pass on AI governance. The "no new automated tests" rule stays, and Venkatesh keeps the existing CI tests green. An ask with no name goes to the head of that area. A team member speaks in their own area or when named. There is one `/command` per person (17).
+
+Changed: RULES.md › Who does what, How work flows, Getting a change to `main`, How we talk (the session-opening prompt), How the AI works, Keeping these documents current; CLAUDE.md; 12 new commands and 5 updated; compliance-owner lines in the three routine documents.
+
+**Not checked:** the 12 new commands have not been invoked in a fresh session yet (a running session does not see new commands).
+
+**Open:**
+1. The CP-PM exercise panel and the two audit routines still use earlier persona titles for Bhavya ("Eng Manager"), Anirudh ("Solution Architect") and Kiranmai ("Director of QA"). They were left for Rohith to decide.
+2. Katrina's test users are still not created.
 
 ## Done — 2026-11-18: four teams, no Chief of Staff (locked by Rohith)
 
