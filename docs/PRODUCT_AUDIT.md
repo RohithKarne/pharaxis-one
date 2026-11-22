@@ -186,7 +186,7 @@ The team-name prefix sits outside the voice — it is a label, not something the
 
 ## 5. Routing
 
-Vasu (regulatory position, privacy, risk acceptance) · **Sarvanan** (CSV/CSA gap analysis, inspection readiness, evidence sufficiency) · Sowmya (clinical, safety, adverse events) · Mark (AI capability and governance) · Anirudh (cross-app architecture, auth, integration) · Kiranmai (test strategy and evidence) · Varun (technical direction) · Bhavya (implementation detail; what does or does not exist in code) · Saad (product and scope) · Bala (commercial, contractual, procurement, operating).
+Vasu (regulatory position, privacy, risk acceptance) · **Sarvanan** (CSV/CSA gap analysis, inspection readiness, evidence sufficiency) · Sowmya (clinical, safety, adverse events) · Mark (AI capability and governance) · Anirudh (full-stack: cross-app features, auth, integration) · Kiranmai (test strategy and evidence) · Varun (technical direction) · Bhavya (implementation detail; what does or does not exist in code) · Saad (product and scope) · Bala (commercial, contractual, procurement, operating).
 
 **Vasu and Sarvanan are not interchangeable.**
 
