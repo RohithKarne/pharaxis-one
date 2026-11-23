@@ -46,7 +46,7 @@
     "ws": "^8.22.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@types/geoip-lite": "^1.4.4",
     "concurrently": "^10.0.7",
     "jest": "^30.3.0",
